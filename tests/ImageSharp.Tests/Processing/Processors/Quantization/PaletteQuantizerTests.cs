@@ -167,16 +167,20 @@ public class PaletteQuantizerTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void GetQuantizedColorReturnsNearestPaletteEntry(bool clustered)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void GetQuantizedColorReturnsNearestPaletteEntry(bool clustered, bool duplicated)
     {
         // A clustered palette packs every entry into a few levels per channel, so many entries compete for each color.
+        // A duplicated palette repeats a few colors many times, as quantizers do when they pad unused entries.
         var random = new Random(21);
         var colors = new Color[256];
         for (int i = 0; i < colors.Length; i++)
         {
-            colors[i] = clustered
+            colors[i] = duplicated && i >= 4
+                ? colors[i % 4]
+                : clustered
                 ? new Color(new Rgba32((byte)random.Next(96, 112), (byte)random.Next(96, 112), (byte)random.Next(96, 112), (byte)random.Next(200, 216)))
                 : new Color(new Rgba32((uint)random.NextInt64(1L << 32)));
         }

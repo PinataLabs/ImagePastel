@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Memory;
@@ -22,6 +23,11 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private Rgba32[] rgbaPalette;
+
+    // The index of the first entry of each distinct color, in palette order. A later entry with the same
+    // color can never be the nearest, as equal distances resolve to the lowest index, so searches skip it.
+    // Quantizers pad unused palette entries with one color, which would otherwise crowd out the others.
+    private int[] distinctIndices;
 
     // The palette sorted by the channel that varies most across it, so a search can start
     // near the color it is matching and stop early. See SearchSortedPalette.
@@ -77,7 +83,7 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
         // Compare against the palette entries that can be nearest to any color in this color's cell.
         // Cells with too many such entries, and palettes too large for the cache, fall back to a search.
         int index;
-        if (this.cache.TryGetCandidates(rgba, this.rgbaPalette, out ReadOnlySpan<byte> candidates))
+        if (this.cache.TryGetCandidates(rgba, this.rgbaPalette, this.distinctIndices, out ReadOnlySpan<byte> candidates))
         {
             index = candidates[0];
             int leastDistance = DistanceSquared(rgba, this.rgbaPalette[index]);
@@ -140,13 +146,26 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
             }
         }
 
-        int length = this.rgbaPalette.Length;
+        var seen = new HashSet<Rgba32>();
+        var distinct = new List<int>();
+        for (int i = 0; i < this.rgbaPalette.Length; i++)
+        {
+            if (seen.Add(this.rgbaPalette[i]))
+            {
+                distinct.Add(i);
+            }
+        }
+
+        this.distinctIndices = distinct.ToArray();
+
+        int length = this.distinctIndices.Length;
         this.sortedKeys = new byte[length];
         this.sortedIndices = new int[length];
         for (int i = 0; i < length; i++)
         {
-            this.sortedKeys[i] = GetChannel(this.rgbaPalette[i], this.sortChannel);
-            this.sortedIndices[i] = i;
+            int index = this.distinctIndices[i];
+            this.sortedKeys[i] = GetChannel(this.rgbaPalette[index], this.sortChannel);
+            this.sortedIndices[i] = index;
         }
 
         Array.Sort(this.sortedKeys, this.sortedIndices);
@@ -298,7 +317,7 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
         }
 
         [MethodImpl(InliningOptions.ShortMethod)]
-        public bool TryGetCandidates(Rgba32 rgba, Rgba32[] palette, out ReadOnlySpan<byte> candidates)
+        public bool TryGetCandidates(Rgba32 rgba, Rgba32[] palette, int[] distinctIndices, out ReadOnlySpan<byte> candidates)
         {
             if (palette.Length is 0 or > 256)
             {
@@ -315,7 +334,7 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
             byte count = row[0];
             if (count == Unknown)
             {
-                count = FillRow(row, rgba, palette);
+                count = FillRow(row, rgba, palette, distinctIndices);
             }
 
             if (count == Overflow)
@@ -334,7 +353,7 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
         [MethodImpl(InliningOptions.ShortMethod)]
         public void Clear() => this.table.GetSpan().Clear();
 
-        private static byte FillRow(byte* row, Rgba32 rgba, Rgba32[] palette)
+        private static byte FillRow(byte* row, Rgba32 rgba, Rgba32[] palette, int[] distinctIndices)
         {
             // The darkest, most transparent corner of the cell.
             const int mask = ~(CellSize - 1);
@@ -358,7 +377,7 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
 
             Span<int> kept = stackalloc int[palette.Length];
             int keptCount = 0;
-            for (int i = 0; i < palette.Length; i++)
+            foreach (int i in distinctIndices)
             {
                 if (nearest[i] <= threshold)
                 {
