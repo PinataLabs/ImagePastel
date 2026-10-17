@@ -22,6 +22,10 @@ _Avoid_: original ICC, source profile
 The ICC profile that describes a decoded image's pixels. When an image has none, its pixels are gamma-encoded sRGB.
 _Avoid_: output profile, image profile
 
+**Extra channel**:
+A per-pixel channel of a JPEG XL image beyond its colour channels, such as alpha, black, a spot colour or depth. The image header describes each one by type.
+_Avoid_: auxiliary channel, additional plane
+
 ### JPEG XL testing
 
 **Conformance vector**:
