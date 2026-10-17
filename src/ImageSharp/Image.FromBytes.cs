@@ -311,7 +311,7 @@ public abstract partial class Image
     {
         fixed (byte* ptr = &data.GetPinnableReference())
         {
-            using (var stream = new UnmanagedMemoryStream(ptr, data.Length))
+            using (Stream stream = CreateSpanStream(ptr, data.Length))
             {
                 return Load<TPixel>(configuration, stream);
             }
@@ -338,7 +338,7 @@ public abstract partial class Image
     {
         fixed (byte* ptr = &data.GetPinnableReference())
         {
-            using (var stream = new UnmanagedMemoryStream(ptr, data.Length))
+            using (Stream stream = CreateSpanStream(ptr, data.Length))
             {
                 return Load<TPixel>(configuration, stream, decoder);
             }
@@ -365,7 +365,7 @@ public abstract partial class Image
     {
         fixed (byte* ptr = &data.GetPinnableReference())
         {
-            using (var stream = new UnmanagedMemoryStream(ptr, data.Length))
+            using (Stream stream = CreateSpanStream(ptr, data.Length))
             {
                 return Load<TPixel>(configuration, stream, out format);
             }
@@ -519,7 +519,7 @@ public abstract partial class Image
     {
         fixed (byte* ptr = &data.GetPinnableReference())
         {
-            using (var stream = new UnmanagedMemoryStream(ptr, data.Length))
+            using (Stream stream = CreateSpanStream(ptr, data.Length))
             {
                 return Load(configuration, stream, decoder);
             }
@@ -544,10 +544,23 @@ public abstract partial class Image
     {
         fixed (byte* ptr = &data.GetPinnableReference())
         {
-            using (var stream = new UnmanagedMemoryStream(ptr, data.Length))
+            using (Stream stream = CreateSpanStream(ptr, data.Length))
             {
                 return Load(configuration, stream, out format);
             }
         }
     }
+
+    /// <summary>
+    /// Creates a read-only stream over pinned span data.
+    /// An empty span pins to a null pointer, which <see cref="UnmanagedMemoryStream"/> rejects,
+    /// so an empty memory stream is returned for empty data.
+    /// </summary>
+    /// <param name="data">The pointer to the pinned data.</param>
+    /// <param name="length">The length of the data in bytes.</param>
+    /// <returns>The <see cref="Stream"/>.</returns>
+    private static unsafe Stream CreateSpanStream(byte* data, int length)
+        => length == 0
+        ? new MemoryStream(Array.Empty<byte>(), false)
+        : new UnmanagedMemoryStream(data, length);
 }
