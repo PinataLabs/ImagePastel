@@ -4,6 +4,8 @@
 using System;
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.DotNet.RemoteExecutor;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities
@@ -47,6 +49,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
         {
             options ??= new RemoteInvokeOptions();
 
+            // These overwrite any caller-supplied Start and stream redirection settings.
             // RemoteInvocation starts the process once the output handlers are attached.
             options.Start = false;
             options.StartInfo.RedirectStandardOutput = true;
@@ -60,30 +63,69 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
         /// </summary>
         public sealed class RemoteInvocation : IDisposable
         {
+            // How long to keep reading the redirected streams once the child has exited.
+            // A grandchild that inherited the pipes could otherwise keep them open indefinitely.
+            private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(10);
+
             private readonly RemoteInvokeHandle handle;
+            private readonly Process process;
             private readonly StringBuilder standardOutput = new();
             private readonly StringBuilder standardError = new();
+            private readonly TaskCompletionSource standardOutputClosed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource standardErrorClosed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             internal RemoteInvocation(RemoteInvokeHandle handle)
             {
                 this.handle = handle;
+                this.process = handle.Process;
 
-                Process process = handle.Process;
-                process.OutputDataReceived += (_, e) => Append(this.standardOutput, e.Data);
-                process.ErrorDataReceived += (_, e) => Append(this.standardError, e.Data);
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
+                try
+                {
+                    this.process.OutputDataReceived += (_, e) => Append(this.standardOutput, this.standardOutputClosed, e.Data);
+                    this.process.ErrorDataReceived += (_, e) => Append(this.standardError, this.standardErrorClosed, e.Data);
+                    this.process.Start();
+                    this.process.BeginOutputReadLine();
+                    this.process.BeginErrorReadLine();
+                }
+                catch
+                {
+                    try
+                    {
+                        this.process.Kill();
+                    }
+                    catch
+                    {
+                    }
+
+                    try
+                    {
+                        // Removes the exception file and temporary runtime configuration.
+                        handle.Dispose();
+                    }
+                    catch
+                    {
+                    }
+
+                    this.process.Dispose();
+                    throw;
+                }
             }
 
             public void Dispose()
             {
-                // The handle disposes the process, so drain the redirected streams first.
-                // On a timeout the handle reports the hang itself.
-                Process process = this.handle.Process;
-                if (process != null && process.WaitForExit(this.handle.Options.TimeOut))
+                // The handle disposes the process, which stops the stream readers, so the output has
+                // to be drained before the handle runs. Wait for the first half of the timeout here.
+                // If the child is still running, the handle waits for the rest of it (in its usual two
+                // halves, with its hang diagnostics in between), so the total wait stays at TimeOut.
+                RemoteInvokeOptions options = this.handle.Options;
+                int firstHalf = options.TimeOut == Timeout.Infinite ? Timeout.Infinite : options.TimeOut / 2;
+                if (this.process.WaitForExit(firstHalf))
                 {
-                    process.WaitForExit();
+                    this.DrainStreams();
+                }
+                else
+                {
+                    options.TimeOut /= 2;
                 }
 
                 try
@@ -96,10 +138,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 }
             }
 
-            private static void Append(StringBuilder builder, string line)
+            private static void Append(StringBuilder builder, TaskCompletionSource closed, string line)
             {
                 if (line is null)
                 {
+                    closed.TrySetResult();
                     return;
                 }
 
@@ -108,6 +151,9 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                     builder.AppendLine(line);
                 }
             }
+
+            private void DrainStreams()
+                => Task.WaitAll(new[] { this.standardOutputClosed.Task, this.standardErrorClosed.Task }, DrainTimeout);
 
             private string FormatOutput()
             {

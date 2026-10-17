@@ -130,8 +130,8 @@ namespace SixLabors.ImageSharp.Tests
 
             RemoteExecutionException ex = Assert.ThrowsAny<RemoteExecutionException>(() => RemoteExecutorRunner.Invoke(FailingCode).Dispose());
 
-            // The child's captured stderr carries the remote failure.
-            Assert.Contains("Assert.False() Failure", ex.Message);
+            // RemoteExecutor puts the remote exception in StackTrace; the captured stderr is in Message.
+            Assert.Contains("Assert.False() Failure", ex.Message + ex.StackTrace);
         }
     }
 }
