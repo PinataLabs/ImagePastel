@@ -4,7 +4,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Xunit.Abstractions;
+using Xunit;
 
 namespace SixLabors.ImageSharp.Tests
 {

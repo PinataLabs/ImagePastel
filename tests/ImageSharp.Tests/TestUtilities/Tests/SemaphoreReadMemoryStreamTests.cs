@@ -26,7 +26,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public async Task ReadAsync_BeforeWaitLimit_ShouldFinish()
         {
             using Stream stream = this.CreateTestStream();
-            int read = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+            int read = await stream.ReadAsync(this.buffer, 0, this.buffer.Length, TestContext.Current.CancellationToken);
             Assert.Equal(this.buffer.Length, read);
         }
 
@@ -48,10 +48,10 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                 },
                 TaskCreationOptions.LongRunning);
 
-            await Task.Delay(5);
+            await Task.Delay(5, TestContext.Current.CancellationToken);
             Assert.False(readTask.IsCompleted);
-            await this.notifyWaitPositionReachedSemaphore.WaitAsync();
-            await Task.Delay(5);
+            await this.notifyWaitPositionReachedSemaphore.WaitAsync(TestContext.Current.CancellationToken);
+            await Task.Delay(5, TestContext.Current.CancellationToken);
             Assert.False(readTask.IsCompleted);
             this.continueSemaphore.Release();
             await readTask;
@@ -61,7 +61,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public async Task ReadAsync_AfterWaitLimit_ShouldPause()
         {
             using Stream stream = this.CreateTestStream();
-            _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+            _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length, TestContext.Current.CancellationToken);
 
             Task readTask = Task.Factory.StartNew(
                 async () =>
@@ -73,10 +73,10 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                     _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
                 },
                 TaskCreationOptions.LongRunning);
-            await Task.Delay(5);
+            await Task.Delay(5, TestContext.Current.CancellationToken);
             Assert.False(readTask.IsCompleted);
-            await this.notifyWaitPositionReachedSemaphore.WaitAsync();
-            await Task.Delay(5);
+            await this.notifyWaitPositionReachedSemaphore.WaitAsync(TestContext.Current.CancellationToken);
+            await Task.Delay(5, TestContext.Current.CancellationToken);
             Assert.False(readTask.IsCompleted);
             this.continueSemaphore.Release();
             await readTask;

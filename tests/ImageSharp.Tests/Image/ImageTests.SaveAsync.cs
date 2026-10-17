@@ -28,7 +28,7 @@ namespace SixLabors.ImageSharp.Tests
 
                 using (var image = new Image<Rgba32>(10, 10))
                 {
-                    await image.SaveAsync(file);
+                    await image.SaveAsync(file, cancellationToken: TestContext.Current.CancellationToken);
                 }
 
                 using (Image.Load(file, out IImageFormat mime))
@@ -48,7 +48,7 @@ namespace SixLabors.ImageSharp.Tests
                         {
                             using (var image = new Image<Rgba32>(10, 10))
                             {
-                                await image.SaveAsync(file);
+                                await image.SaveAsync(file, cancellationToken: TestContext.Current.CancellationToken);
                             }
                         });
             }
@@ -61,7 +61,7 @@ namespace SixLabors.ImageSharp.Tests
 
                 using (var image = new Image<Rgba32>(10, 10))
                 {
-                    await image.SaveAsync(file, new PngEncoder());
+                    await image.SaveAsync(file, new PngEncoder(), cancellationToken: TestContext.Current.CancellationToken);
                 }
 
                 using (Image.Load(file, out IImageFormat mime))
@@ -88,11 +88,11 @@ namespace SixLabors.ImageSharp.Tests
                     using (var stream = new MemoryStream())
                     {
                         var asyncStream = new AsyncStreamWrapper(stream, () => false);
-                        await image.SaveAsync(asyncStream, format);
+                        await image.SaveAsync(asyncStream, format, cancellationToken: TestContext.Current.CancellationToken);
 
                         stream.Position = 0;
 
-                        (Image Image, IImageFormat Format) imf = await Image.LoadWithFormatAsync(stream);
+                        (Image Image, IImageFormat Format) imf = await Image.LoadWithFormatAsync(stream, TestContext.Current.CancellationToken);
 
                         Assert.Equal(format, imf.Format);
                         Assert.Equal(mimeType, imf.Format.DefaultMimeType);
@@ -110,7 +110,7 @@ namespace SixLabors.ImageSharp.Tests
                 IImageEncoder encoder = Mock.Of<IImageEncoder>();
                 using (var stream = new MemoryStream())
                 {
-                    await Assert.ThrowsAsync<ObjectDisposedException>(async () => await image.SaveAsync(stream, encoder));
+                    await Assert.ThrowsAsync<ObjectDisposedException>(async () => await image.SaveAsync(stream, encoder, TestContext.Current.CancellationToken));
                 }
             }
 
@@ -129,7 +129,7 @@ namespace SixLabors.ImageSharp.Tests
                     using (var stream = new MemoryStream())
                     {
                         var asyncStream = new AsyncStreamWrapper(stream, () => false);
-                        await image.SaveAsync(asyncStream, encoder);
+                        await image.SaveAsync(asyncStream, encoder, TestContext.Current.CancellationToken);
                     }
                 }
             }

@@ -12,7 +12,6 @@ using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
-using Xunit.Abstractions;
 
 // ReSharper disable InconsistentNaming
 namespace SixLabors.ImageSharp.Tests
@@ -122,9 +121,9 @@ namespace SixLabors.ImageSharp.Tests
 
         // RemoteExecutor does not work with "dotnet xunit" used to run tests on 32 bit .NET Framework:
         // https://github.com/SixLabors/ImageSharp/blob/381dff8640b721a34b1227c970fcf6ad6c5e3e72/ci-test.ps1#L30
-        public static bool IsNot32BitNetFramework = !TestEnvironment.IsFramework || TestEnvironment.Is64BitProcess;
+        public static bool IsNot32BitNetFramework => !TestEnvironment.IsFramework || TestEnvironment.Is64BitProcess;
 
-        [ConditionalFact(nameof(IsNot32BitNetFramework))]
+        [Fact(Skip = "Not supported on 32-bit .NET Framework.", SkipUnless = nameof(IsNot32BitNetFramework))]
         public void RemoteExecutor_FailingRemoteTestShouldFailLocalTest()
         {
             static void FailingCode()

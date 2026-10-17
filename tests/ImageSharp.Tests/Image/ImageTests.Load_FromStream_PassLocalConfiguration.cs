@@ -51,7 +51,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task NonSeekableStreamAsync()
             {
                 var stream = new NonSeekableStream(this.DataStream);
-                Image<Rgba32> img = await Image.LoadAsync<Rgba32>(this.TopLevelConfiguration, stream);
+                Image<Rgba32> img = await Image.LoadAsync<Rgba32>(this.TopLevelConfiguration, stream, TestContext.Current.CancellationToken);
 
                 Assert.NotNull(img);
 

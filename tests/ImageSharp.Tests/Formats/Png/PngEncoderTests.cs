@@ -292,7 +292,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
 
                 var decoder = new PngDecoder();
 
-                Image image = decoder.Decode(Configuration.Default, stream, default);
+                Image image = decoder.Decode(Configuration.Default, stream, TestContext.Current.CancellationToken);
 
                 PngMetadata metadata = image.Metadata.GetPngMetadata();
                 Assert.Equal(pngColorType, metadata.ColorType);

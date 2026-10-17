@@ -13,7 +13,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
 
 using Xunit;
-using Xunit.Abstractions;
 
 // ReSharper disable InconsistentNaming
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg
@@ -59,7 +58,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: default);
 
             // This would parse entire image
-            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: default);
+            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: TestContext.Current.CancellationToken);
             VerifyJpeg.SaveSpectralImage(provider, debugConverter.SpectralData);
         }
 
@@ -88,7 +87,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: default);
 
             // This would parse entire image
-            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: default);
+            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: TestContext.Current.CancellationToken);
 
             // Actual verification
             this.VerifySpectralCorrectnessImpl(libJpegData, debugConverter.SpectralData);

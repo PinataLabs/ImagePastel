@@ -5,7 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
+using Xunit;
 using Xunit.Sdk;
+using Xunit.v3;
 
 namespace SixLabors.ImageSharp.Tests
 {
@@ -31,7 +34,11 @@ namespace SixLabors.ImageSharp.Tests
         protected ImageDataAttributeBase(string memberName, PixelTypes pixelTypes, object[] additionalParameters)
         {
             this.PixelTypes = pixelTypes;
-            this.AdditionalParameters = additionalParameters;
+
+            // A single null argument binds to the params array itself, e.g. [WithFile(file, pixelTypes, null)].
+            // xUnit v2 rebuilt the arguments from attribute metadata and passed it as one null value;
+            // v3 uses the attribute instance as-is, so restore that meaning here.
+            this.AdditionalParameters = additionalParameters ?? new object[] { null };
             this.MemberName = memberName;
         }
 
@@ -45,11 +52,26 @@ namespace SixLabors.ImageSharp.Tests
         /// </summary>
         public Type MemberType { get; set; }
 
+        /// <inheritdoc/>
+        public override ValueTask<IReadOnlyCollection<ITheoryDataRow>> GetData(MethodInfo testMethod, DisposalTracker disposalTracker)
+        {
+            ITheoryDataRow[] rows = this.GetDataRows(testMethod).Select(this.ConvertDataRow).ToArray();
+            return new ValueTask<IReadOnlyCollection<ITheoryDataRow>>(rows);
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the data can be enumerated during discovery.
+        /// Every row is deterministic and every <see cref="TestImageProvider{TPixel}"/> is serializable,
+        /// so each row is discovered as its own test case.
+        /// </summary>
+        /// <returns>Always <see langword="true"/>.</returns>
+        public override bool SupportsDiscoveryEnumeration() => true;
+
         /// <summary>Returns the data to be used to test the theory.</summary>
         /// <param name="testMethod">The method that is being tested</param>
         /// <returns>One or more sets of theory data. Each invocation of the test method
         /// is represented by a single object array.</returns>
-        public override IEnumerable<object[]> GetData(MethodInfo testMethod)
+        private IEnumerable<object[]> GetDataRows(MethodInfo testMethod)
         {
             IEnumerable<object[]> addedRows = Enumerable.Empty<object[]>().ToArray();
             if (!string.IsNullOrWhiteSpace(this.MemberName))
@@ -62,7 +84,8 @@ namespace SixLabors.ImageSharp.Tests
                     object obj = accessor();
                     if (obj is IEnumerable<object> memberItems)
                     {
-                        addedRows = memberItems.Select(x => x as object[]);
+                        // TheoryData yields ITheoryDataRow instances rather than object arrays.
+                        addedRows = memberItems.Select(x => x is ITheoryDataRow row ? row.GetData() : x as object[]);
                         if (addedRows.Any(x => x == null))
                         {
                             addedRows = memberItems.Select(x => new[] { x });

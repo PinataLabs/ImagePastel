@@ -5,7 +5,6 @@ using System.IO;
 using SixLabors.ImageSharp.Processing;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.ProfilingBenchmarks
 {

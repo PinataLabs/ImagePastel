@@ -98,7 +98,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
         public async Task DecodeAsync_NonGeneric_CreatesCorrectImageType(string path, Type type)
         {
             string file = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, path);
-            using Image image = await Image.LoadAsync(file);
+            using Image image = await Image.LoadAsync(file, TestContext.Current.CancellationToken);
             Assert.IsType(type, image);
         }
 

@@ -10,8 +10,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
     using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
     using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 
-    using Xunit.Abstractions;
-
     public class MagickReferenceCodecTests
     {
         public MagickReferenceCodecTests(ITestOutputHelper output) => this.Output = output;

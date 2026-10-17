@@ -171,7 +171,7 @@ namespace SixLabors.ImageSharp.Tests
                 using (var stream = new MemoryStream(ActualImageBytes))
                 {
                     var asyncStream = new AsyncStreamWrapper(stream, () => false);
-                    IImageInfo info = await Image.IdentifyAsync(asyncStream);
+                    IImageInfo info = await Image.IdentifyAsync(asyncStream, TestContext.Current.CancellationToken);
 
                     Assert.NotNull(info);
                 }
@@ -183,7 +183,7 @@ namespace SixLabors.ImageSharp.Tests
                 using (var stream = new MemoryStream(ActualImageBytes))
                 {
                     var asyncStream = new AsyncStreamWrapper(stream, () => false);
-                    (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(asyncStream);
+                    (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(asyncStream, TestContext.Current.CancellationToken);
 
                     Assert.Equal(ExpectedImageSize, res.ImageInfo.Size());
                     Assert.Equal(ExpectedGlobalFormat, res.Format);
@@ -197,7 +197,7 @@ namespace SixLabors.ImageSharp.Tests
                 using var nonSeekableStream = new NonSeekableStream(stream);
 
                 var asyncStream = new AsyncStreamWrapper(nonSeekableStream, () => false);
-                IImageInfo info = await Image.IdentifyAsync(asyncStream);
+                IImageInfo info = await Image.IdentifyAsync(asyncStream, TestContext.Current.CancellationToken);
 
                 Assert.NotNull(info);
             }
@@ -209,7 +209,7 @@ namespace SixLabors.ImageSharp.Tests
                 using var nonSeekableStream = new NonSeekableStream(stream);
 
                 var asyncStream = new AsyncStreamWrapper(nonSeekableStream, () => false);
-                (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(asyncStream);
+                (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(asyncStream, TestContext.Current.CancellationToken);
 
                 Assert.Equal(ExpectedImageSize, res.ImageInfo.Size());
                 Assert.Equal(ExpectedGlobalFormat, res.Format);
@@ -237,21 +237,21 @@ namespace SixLabors.ImageSharp.Tests
                         0x00, 0x00, 0x00, 0x00
                     }));
                 using Stream stream = zipFile.Entries[0].Open();
-                IImageInfo info = await Image.IdentifyAsync(stream);
+                IImageInfo info = await Image.IdentifyAsync(stream, TestContext.Current.CancellationToken);
                 Assert.Null(info);
             }
 
             [Fact]
             public async Task FromPathAsync_CustomConfiguration()
             {
-                IImageInfo info = await Image.IdentifyAsync(this.LocalConfiguration, this.MockFilePath);
+                IImageInfo info = await Image.IdentifyAsync(this.LocalConfiguration, this.MockFilePath, TestContext.Current.CancellationToken);
                 Assert.Equal(this.LocalImageInfo, info);
             }
 
             [Fact]
             public async Task IdentifyWithFormatAsync_FromPath_CustomConfiguration()
             {
-                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(this.LocalConfiguration, this.MockFilePath);
+                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(this.LocalConfiguration, this.MockFilePath, TestContext.Current.CancellationToken);
                 Assert.NotNull(info.ImageInfo);
                 Assert.Equal(this.LocalImageFormat, info.Format);
             }
@@ -259,7 +259,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public async Task IdentifyWithFormatAsync_FromPath_GlobalConfiguration()
             {
-                (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(ActualImagePath);
+                (IImageInfo ImageInfo, IImageFormat Format) res = await Image.IdentifyWithFormatAsync(ActualImagePath, TestContext.Current.CancellationToken);
 
                 Assert.Equal(ExpectedImageSize, res.ImageInfo.Size());
                 Assert.Equal(ExpectedGlobalFormat, res.Format);
@@ -268,7 +268,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public async Task FromPathAsync_GlobalConfiguration()
             {
-                IImageInfo info = await Image.IdentifyAsync(ActualImagePath);
+                IImageInfo info = await Image.IdentifyAsync(ActualImagePath, TestContext.Current.CancellationToken);
 
                 Assert.Equal(ExpectedImageSize, info.Size());
             }
@@ -277,7 +277,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task FromStreamAsync_CustomConfiguration()
             {
                 var asyncStream = new AsyncStreamWrapper(this.DataStream, () => false);
-                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(this.LocalConfiguration, asyncStream);
+                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(this.LocalConfiguration, asyncStream, TestContext.Current.CancellationToken);
 
                 Assert.Equal(this.LocalImageInfo, info.ImageInfo);
                 Assert.Equal(this.LocalImageFormat, info.Format);
@@ -287,7 +287,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task WhenNoMatchingFormatFoundAsync_ReturnsNull()
             {
                 var asyncStream = new AsyncStreamWrapper(this.DataStream, () => false);
-                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(new Configuration(), asyncStream);
+                (IImageInfo ImageInfo, IImageFormat Format) info = await Image.IdentifyWithFormatAsync(new Configuration(), asyncStream, TestContext.Current.CancellationToken);
 
                 Assert.Null(info.ImageInfo);
             }

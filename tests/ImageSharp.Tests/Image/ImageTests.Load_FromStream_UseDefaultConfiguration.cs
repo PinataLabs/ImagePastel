@@ -95,7 +95,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_OutFormat_Agnostic()
             {
                 this.AllowSynchronousIO = false;
-                var formattedImage = await Image.LoadWithFormatAsync(this.Stream);
+                var formattedImage = await Image.LoadWithFormatAsync(this.Stream, TestContext.Current.CancellationToken);
                 using (formattedImage.Image)
                 {
                     VerifyDecodedImage(formattedImage.Image);
@@ -107,7 +107,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_Specific()
             {
                 this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync<Rgba32>(this.Stream))
+                using (var img = await Image.LoadAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken))
                 {
                     VerifyDecodedImage(img);
                 }
@@ -117,7 +117,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_Agnostic()
             {
                 this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync(this.Stream))
+                using (var img = await Image.LoadAsync(this.Stream, TestContext.Current.CancellationToken))
                 {
                     VerifyDecodedImage(img);
                 }
@@ -127,7 +127,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_OutFormat_Specific()
             {
                 this.AllowSynchronousIO = false;
-                var formattedImage = await Image.LoadWithFormatAsync<Rgba32>(this.Stream);
+                var formattedImage = await Image.LoadWithFormatAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken);
                 using (formattedImage.Image)
                 {
                     VerifyDecodedImage(formattedImage.Image);
@@ -139,7 +139,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_Decoder_Specific()
             {
                 this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync<Rgba32>(this.Stream, new BmpDecoder()))
+                using (var img = await Image.LoadAsync<Rgba32>(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
                 {
                     VerifyDecodedImage(img);
                 }
@@ -149,7 +149,7 @@ namespace SixLabors.ImageSharp.Tests
             public async Task Async_Stream_Decoder_Agnostic()
             {
                 this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync(this.Stream, new BmpDecoder()))
+                using (var img = await Image.LoadAsync(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
                 {
                     VerifyDecodedImage(img);
                 }

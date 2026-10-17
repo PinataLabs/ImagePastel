@@ -7,7 +7,7 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.Intrinsics.X86;
 using Xunit;
-using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
 {

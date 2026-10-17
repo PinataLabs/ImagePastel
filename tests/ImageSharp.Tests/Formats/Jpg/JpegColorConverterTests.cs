@@ -11,7 +11,6 @@ using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Tests.Colorspaces.Conversion;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 {

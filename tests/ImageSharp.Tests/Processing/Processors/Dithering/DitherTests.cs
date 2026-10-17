@@ -44,11 +44,11 @@ namespace SixLabors.ImageSharp.Tests.Processing.Processors.Dithering
             };
 
         public static readonly TheoryData<IDither> DefaultInstanceDitherers
-            = new TheoryData<IDither>
+            = new TheoryData<IDither>(new IDither[]
             {
                 default(ErrorDither),
                 default(OrderedDither)
-            };
+            });
 
         private static readonly ImageComparer ValidatorComparer = ImageComparer.TolerantPercentage(0.05f);
 

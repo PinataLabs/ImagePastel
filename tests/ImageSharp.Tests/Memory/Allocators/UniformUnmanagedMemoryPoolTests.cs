@@ -12,7 +12,6 @@ using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Memory.Internals;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
 {
@@ -245,10 +244,10 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             cleanup.Register(b1);
         }
 
-        public static readonly bool IsNotMacOS = !TestEnvironment.IsMacOS;
+        public static bool IsNotMacOS => !TestEnvironment.IsMacOS;
 
         // TODO: Investigate macOS failures
-        [ConditionalTheory(nameof(IsNotMacOS))]
+        [Theory(Skip = "Fails on macOS.", SkipUnless = nameof(IsNotMacOS))]
         [InlineData(false)]
         [InlineData(true)]
         public void RentReturnRelease_SubsequentRentReturnsDifferentHandles(bool multiple)

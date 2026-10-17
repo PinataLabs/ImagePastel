@@ -8,7 +8,7 @@ using SixLabors.ImageSharp.Memory.Internals;
 using SixLabors.ImageSharp.Tests.Formats.Jpg;
 using SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations;
 using SixLabors.ImageSharp.Tests.ProfilingBenchmarks;
-using Xunit.Abstractions;
+using Xunit;
 
 // in this file, comments are used for disabling stuff for local execution
 #pragma warning disable SA1515
@@ -20,6 +20,13 @@ namespace SixLabors.ImageSharp.Tests.ProfilingSandbox
     {
         private class ConsoleOutput : ITestOutputHelper
         {
+            // Output goes straight to the console, so nothing is buffered.
+            public string Output => string.Empty;
+
+            public void Write(string message) => Console.Write(message);
+
+            public void Write(string format, params object[] args) => Console.Write(format, args);
+
             public void WriteLine(string message) => Console.WriteLine(message);
 
             public void WriteLine(string format, params object[] args) => Console.WriteLine(format, args);
@@ -88,10 +95,9 @@ namespace SixLabors.ImageSharp.Tests.ProfilingSandbox
         {
             Console.WriteLine("RunDecodeJpegProfilingTests...");
             var benchmarks = new JpegProfilingBenchmarks(new ConsoleOutput());
-            foreach (object[] data in JpegProfilingBenchmarks.DecodeJpegData)
+            foreach (TheoryDataRow<string, int> data in JpegProfilingBenchmarks.DecodeJpegData)
             {
-                string fileName = (string)data[0];
-                int executionCount = (int)data[1];
+                (string fileName, int executionCount) = data.Data;
                 benchmarks.DecodeJpeg(fileName, executionCount);
             }
 

@@ -3,7 +3,7 @@
 
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
-using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace SixLabors.ImageSharp.Tests
 {
@@ -19,16 +19,16 @@ namespace SixLabors.ImageSharp.Tests
 
             public virtual void Deserialize(IXunitSerializationInfo info)
             {
-                info.AddValue(nameof(this.Length), this.Length);
-                info.AddValue(nameof(this.Name), this.Name);
-                info.AddValue(nameof(this.Lives), this.Lives);
+                this.Length = info.GetValue<double>(nameof(this.Length));
+                this.Name = info.GetValue<string>(nameof(this.Name));
+                this.Lives = info.GetValue<int>(nameof(this.Lives));
             }
 
             public virtual void Serialize(IXunitSerializationInfo info)
             {
-                this.Length = info.GetValue<double>(nameof(this.Length));
-                this.Name = info.GetValue<string>(nameof(this.Name));
-                this.Lives = info.GetValue<int>(nameof(this.Lives));
+                info.AddValue(nameof(this.Length), this.Length);
+                info.AddValue(nameof(this.Name), this.Name);
+                info.AddValue(nameof(this.Lives), this.Lives);
             }
         }
 
@@ -36,9 +36,12 @@ namespace SixLabors.ImageSharp.Tests
         {
             public double Strength { get; set; }
 
+            public PixelTypes PixelType { get; set; }
+
             public override void Deserialize(IXunitSerializationInfo info)
             {
                 this.Strength = info.GetValue<double>(nameof(this.Strength));
+                this.PixelType = info.GetValue<PixelTypes>(nameof(this.PixelType));
                 base.Deserialize(info);
             }
 
@@ -46,13 +49,14 @@ namespace SixLabors.ImageSharp.Tests
             {
                 base.Serialize(info);
                 info.AddValue(nameof(this.Strength), this.Strength);
+                info.AddValue(nameof(this.PixelType), this.PixelType);
             }
         }
 
         [Fact]
         public void SerializeDeserialize_ShouldPreserveValues()
         {
-            var obj = new DerivedObj() { Length = 123.1, Name = "Lol123!", Lives = 7, Strength = 4.8 };
+            var obj = new DerivedObj() { Length = 123.1, Name = "Lol:123!", Lives = 7, Strength = 4.8, PixelType = PixelTypes.Rgba32 };
 
             string str = BasicSerializer.Serialize(obj);
             BaseObj mirrorBase = BasicSerializer.Deserialize<BaseObj>(str);
@@ -62,6 +66,7 @@ namespace SixLabors.ImageSharp.Tests
             Assert.Equal(obj.Name, mirror.Name);
             Assert.Equal(obj.Lives, mirror.Lives);
             Assert.Equal(obj.Strength, mirror.Strength);
+            Assert.Equal(obj.PixelType, mirror.PixelType);
         }
     }
 }

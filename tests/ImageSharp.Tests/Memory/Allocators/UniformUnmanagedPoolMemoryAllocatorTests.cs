@@ -435,7 +435,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             }
         }
 
-        [ConditionalFact(typeof(Environment), nameof(Environment.Is64BitProcess))]
+        [Fact(Skip = "Requires a 64-bit process.", SkipType = typeof(Environment), SkipUnless = nameof(Environment.Is64BitProcess))]
         public void MemoryAllocator_Create_SetHighLimit()
         {
             RemoteExecutor.Invoke(RunTest).Dispose();

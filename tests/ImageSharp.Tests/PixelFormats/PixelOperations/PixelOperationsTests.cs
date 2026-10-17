@@ -13,7 +13,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Common;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations
 {
@@ -320,7 +319,7 @@ namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations
                 (s, d) => this.Operations.ToVector4(this.Configuration, s, d.GetSpan()));
         }
 
-        public static readonly TheoryData<object> Generic_To_Data = new()
+        public static readonly TheoryData<object> Generic_To_Data = new(new object[]
         {
             new TestPixel<A8>(),
             new TestPixel<Abgr32>(),
@@ -351,7 +350,7 @@ namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations
             new TestPixel<RgbaVector>(),
             new TestPixel<Short2>(),
             new TestPixel<Short4>(),
-        };
+        });
 
         [Theory]
         [MemberData(nameof(Generic_To_Data))]
