@@ -10,14 +10,14 @@
 
   <!-- Common NuGet package settings. -->
   <PropertyGroup>
-    <Copyright>Copyright © Six Labors</Copyright>
-    <Authors>Six Labors and contributors</Authors>
-    <Company>Six Labors</Company>
+    <Copyright>Copyright © Six Labors and contributors. Copyright © Pinata Labs.</Copyright>
+    <Authors>Pinata Labs</Authors>
+    <Company>Pinata Labs</Company>
     <VersionPrefix>0.0.1</VersionPrefix>
     <VersionPrefix Condition="'$(packageversion)' != ''">$(PackageVersion)</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <RepositoryType>git</RepositoryType>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
 

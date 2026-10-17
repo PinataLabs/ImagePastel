@@ -1,11 +1,10 @@
 ### Prerequisites
 
-- [ ] I have written a descriptive pull-request title
-- [ ] I have verified that there are no overlapping [pull-requests](https://github.com/SixLabors/ImageSharp/pulls) open
-- [ ] I have verified that I am following the existing coding patterns and practice as demonstrated in the repository. These follow strict Stylecop rules :cop:.
-- [ ] I have provided test coverage for my change (where applicable)
+- [ ] The pull request title describes the change.
+- [ ] No open [pull request](https://github.com/PinataLabs/ImageSharp/pulls) contains the same change.
+- [ ] The code follows the coding patterns of the repository. StyleCop rules apply.
+- [ ] The change has tests, where possible.
+- [ ] The public API is the same (`pwsh ./ci-apicompat.ps1` passes).
 
 ### Description
-<!-- A description of the changes proposed in the pull-request -->
-
-<!-- Thanks for contributing to ImageSharp! -->
+<!-- Describe the problem and the change. Give the related issue number. -->
