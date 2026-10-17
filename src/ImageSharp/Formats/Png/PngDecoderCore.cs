@@ -432,6 +432,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// <param name="data">The data containing physical data.</param>
     private void ReadPhysicalChunk(ImageMetadata metadata, ReadOnlySpan<byte> data)
     {
+        if (data.Length < PhysicalChunkData.Size)
+        {
+            // Ignore invalid physical chunks.
+            return;
+        }
+
         var physicalChunk = PhysicalChunkData.Parse(data);
 
         metadata.ResolutionUnits = physicalChunk.UnitSpecifier == byte.MinValue
@@ -993,6 +999,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// <param name="data">The <see cref="T:ReadOnlySpan{byte}"/> containing data.</param>
     private void ReadHeaderChunk(PngMetadata pngMetadata, ReadOnlySpan<byte> data)
     {
+        if (data.Length < PngHeader.Size)
+        {
+            PngThrowHelper.ThrowInvalidHeader();
+        }
+
         this.header = PngHeader.Parse(data);
 
         this.header.Validate();

@@ -19,6 +19,9 @@ internal static class PngThrowHelper
     public static void ThrowNoHeader() => throw new InvalidImageContentException("PNG Image does not contain a header chunk");
 
     [MethodImpl(InliningOptions.ColdPath)]
+    public static void ThrowInvalidHeader() => throw new InvalidImageContentException("PNG header chunk is too short");
+
+    [MethodImpl(InliningOptions.ColdPath)]
     public static void ThrowNoData() => throw new InvalidImageContentException("PNG Image does not contain a data chunk");
 
     [MethodImpl(InliningOptions.ColdPath)]

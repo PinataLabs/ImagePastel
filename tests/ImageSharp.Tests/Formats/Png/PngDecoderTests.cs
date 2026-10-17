@@ -2,9 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
+using SixLabors.ImageSharp.Compression.Zlib;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -542,5 +545,55 @@ public partial class PngDecoderTests
         using Image<TPixel> image = provider.GetImage(PngDecoder);
         image.DebugSave(provider);
         image.CompareToReferenceOutput(provider);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(8)]
+    [InlineData(12)]
+    public void Decode_ShortHeaderChunk_ThrowsException(int length)
+    {
+        byte[] data = [.. PngConstants.HeaderBytes, .. CreateChunk("IHDR", new byte[length])];
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
+        Assert.Contains("PNG header chunk is too short", ex.Message);
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(8)]
+    public void Decode_ShortPhysicalChunk_IsIgnored(int length)
+    {
+        using MemoryStream stream = new();
+        using (Image<Rgba32> source = new(4, 3))
+        {
+            source.SaveAsPng(stream);
+        }
+
+        // Put the short pHYs chunk straight after the signature and the IHDR chunk.
+        byte[] png = stream.ToArray();
+        const int headerEnd = 8 + 4 + 4 + PngHeader.Size + 4;
+        byte[] data = [.. png.AsSpan(0, headerEnd), .. CreateChunk("pHYs", new byte[length]), .. png.AsSpan(headerEnd)];
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        Assert.Equal(4, image.Width);
+        Assert.Equal(3, image.Height);
+
+        IImageInfo info = Image.Identify(data);
+        Assert.Equal(4, info.Width);
+        Assert.Equal(3, info.Height);
+    }
+
+    private static byte[] CreateChunk(string type, byte[] chunkData)
+    {
+        byte[] chunk = new byte[4 + 4 + chunkData.Length + 4];
+        BinaryPrimitives.WriteInt32BigEndian(chunk, chunkData.Length);
+        Encoding.ASCII.GetBytes(type, chunk.AsSpan(4));
+        chunkData.CopyTo(chunk, 8);
+        BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(8 + chunkData.Length), Crc32.Calculate(chunk.AsSpan(4, 4 + chunkData.Length)));
+        return chunk;
     }
 }
