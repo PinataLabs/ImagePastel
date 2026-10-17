@@ -14,13 +14,6 @@ namespace SixLabors.ImageSharp.Compression.Zlib;
 internal sealed class ZlibInflateStream : Stream
 {
     /// <summary>
-    /// Used to read the Adler-32 and Crc-32 checksums.
-    /// We don't actually use this for anything so it doesn't
-    /// have to be threadsafe.
-    /// </summary>
-    private static readonly byte[] ChecksumBuffer = new byte[4];
-
-    /// <summary>
     /// A default delegate to get more data from the inner stream.
     /// </summary>
     private static readonly Func<int> GetDataNoOp = () => 0;
@@ -116,6 +109,11 @@ internal sealed class ZlibInflateStream : Stream
     /// <inheritdoc/>
     public override int ReadByte()
     {
+        if (!this.TryGetDataRemaining())
+        {
+            return -1;
+        }
+
         this.currentDataRemaining--;
         return this.innerStream.ReadByte();
     }
@@ -123,49 +121,18 @@ internal sealed class ZlibInflateStream : Stream
     /// <inheritdoc/>
     public override int Read(byte[] buffer, int offset, int count)
     {
-        if (this.currentDataRemaining == 0)
-        {
-            // Last buffer was read in its entirety, let's make sure we don't actually have more in additional IDAT chunks.
-            this.currentDataRemaining = this.getData();
-
-            if (this.currentDataRemaining == 0)
-            {
-                return 0;
-            }
-        }
-
-        int bytesToRead = Math.Min(count, this.currentDataRemaining);
-        this.currentDataRemaining -= bytesToRead;
-        int totalBytesRead = this.innerStream.Read(buffer, offset, bytesToRead);
-        long innerStreamLength = this.innerStream.Length;
-
         // Keep reading data until we've reached the end of the stream or filled the buffer.
-        int bytesRead = 0;
-        offset += totalBytesRead;
-        while (this.currentDataRemaining == 0 && totalBytesRead < count)
+        int totalBytesRead = 0;
+        while (totalBytesRead < count && this.TryGetDataRemaining())
         {
-            this.currentDataRemaining = this.getData();
-
-            if (this.currentDataRemaining == 0)
+            int bytesToRead = Math.Min(count - totalBytesRead, this.currentDataRemaining);
+            int bytesRead = this.innerStream.Read(buffer, offset + totalBytesRead, bytesToRead);
+            if (bytesRead <= 0)
             {
-                return totalBytesRead;
+                break;
             }
 
-            offset += bytesRead;
-
-            if (offset >= innerStreamLength || offset >= count)
-            {
-                return totalBytesRead;
-            }
-
-            bytesToRead = Math.Min(count - totalBytesRead, this.currentDataRemaining);
-            this.currentDataRemaining -= bytesToRead;
-            bytesRead = this.innerStream.Read(buffer, offset, bytesToRead);
-            if (bytesRead == 0)
-            {
-                return totalBytesRead;
-            }
-
+            this.currentDataRemaining -= bytesRead;
             totalBytesRead += bytesRead;
         }
 
@@ -220,11 +187,17 @@ internal sealed class ZlibInflateStream : Stream
         // +---+---+
         // |CMF|FLG|
         // +---+---+
-        int cmf = this.innerStream.ReadByte();
-        int flag = this.innerStream.ReadByte();
-        this.currentDataRemaining -= 2;
+        //
+        // The header may be split across frames, so read it through this stream rather than the inner one.
+        int cmf = this.ReadByte();
+        int flag = this.ReadByte();
         if (cmf == -1 || flag == -1)
         {
+            if (isCriticalChunk)
+            {
+                throw new ImageFormatException("Unexpected end of data in ZLIB header.");
+            }
+
             return false;
         }
 
@@ -260,17 +233,37 @@ internal sealed class ZlibInflateStream : Stream
         {
             // We don't need this for inflate so simply skip by the next four bytes.
             // https://tools.ietf.org/html/rfc1950#page-6
-            if (this.innerStream.Read(ChecksumBuffer, 0, 4) != 4)
+            for (int i = 0; i < 4; i++)
             {
-                return false;
-            }
+                if (this.ReadByte() == -1)
+                {
+                    if (isCriticalChunk)
+                    {
+                        throw new ImageFormatException("Unexpected end of data in ZLIB header.");
+                    }
 
-            this.currentDataRemaining -= 4;
+                    return false;
+                }
+            }
         }
 
         // Initialize the deflate BufferedReadStream.
         this.CompressedStream = new DeflateStream(this, CompressionMode.Decompress, true);
 
         return true;
+    }
+
+    /// <summary>
+    /// Ensures there is data left to read, moving on to the next frame when the current one is exhausted.
+    /// </summary>
+    /// <returns><see langword="true"/> if there is data left to read; otherwise, <see langword="false"/>.</returns>
+    private bool TryGetDataRemaining()
+    {
+        if (this.currentDataRemaining <= 0)
+        {
+            this.currentDataRemaining = Math.Max(this.getData(), 0);
+        }
+
+        return this.currentDataRemaining > 0;
     }
 }

@@ -240,7 +240,9 @@ internal static class PngScanlineProcessor
         byte[] paletteAlpha)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        if (palette.IsEmpty)
+        // A palette shorter than one entry is as unusable as a missing one.
+        ReadOnlySpan<Rgb24> palettePixels = MemoryMarshal.Cast<byte, Rgb24>(palette);
+        if (palettePixels.IsEmpty)
         {
             PngThrowHelper.ThrowMissingPalette();
         }
@@ -248,7 +250,6 @@ internal static class PngScanlineProcessor
         TPixel pixel = default;
         ref byte scanlineSpanRef = ref MemoryMarshal.GetReference(scanlineSpan);
         ref TPixel rowSpanRef = ref MemoryMarshal.GetReference(rowSpan);
-        ReadOnlySpan<Rgb24> palettePixels = MemoryMarshal.Cast<byte, Rgb24>(palette);
         ref Rgb24 palettePixelsRef = ref MemoryMarshal.GetReference(palettePixels);
         int maxIndex = palettePixels.Length - 1;
 
@@ -292,11 +293,18 @@ internal static class PngScanlineProcessor
         byte[] paletteAlpha)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        // A palette shorter than one entry is as unusable as a missing one.
+        ReadOnlySpan<Rgb24> palettePixels = MemoryMarshal.Cast<byte, Rgb24>(palette);
+        if (palettePixels.IsEmpty)
+        {
+            PngThrowHelper.ThrowMissingPalette();
+        }
+
         TPixel pixel = default;
         ref byte scanlineSpanRef = ref MemoryMarshal.GetReference(scanlineSpan);
         ref TPixel rowSpanRef = ref MemoryMarshal.GetReference(rowSpan);
-        ReadOnlySpan<Rgb24> palettePixels = MemoryMarshal.Cast<byte, Rgb24>(palette);
         ref Rgb24 palettePixelsRef = ref MemoryMarshal.GetReference(palettePixels);
+        int maxIndex = palettePixels.Length - 1;
 
         if (paletteAlpha?.Length > 0)
         {
@@ -306,7 +314,7 @@ internal static class PngScanlineProcessor
             ref byte paletteAlphaRef = ref paletteAlpha[0];
             for (int x = pixelOffset, o = 0; x < header.Width; x += increment, o++)
             {
-                int index = Unsafe.Add(ref scanlineSpanRef, o);
+                int index = Numerics.Clamp(Unsafe.Add(ref scanlineSpanRef, o), 0, maxIndex);
                 rgba.A = paletteAlpha.Length > index ? Unsafe.Add(ref paletteAlphaRef, index) : byte.MaxValue;
                 rgba.Rgb = Unsafe.Add(ref palettePixelsRef, index);
 
@@ -318,7 +326,7 @@ internal static class PngScanlineProcessor
         {
             for (int x = pixelOffset, o = 0; x < header.Width; x += increment, o++)
             {
-                int index = Unsafe.Add(ref scanlineSpanRef, o);
+                int index = Numerics.Clamp(Unsafe.Add(ref scanlineSpanRef, o), 0, maxIndex);
                 Rgb24 rgb = Unsafe.Add(ref palettePixelsRef, index);
 
                 pixel.FromRgb24(rgb);

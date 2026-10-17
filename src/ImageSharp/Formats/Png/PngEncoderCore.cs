@@ -864,10 +864,11 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
         {
             if (pngMetadata.TransparentRgb48.HasValue && this.use16Bit)
             {
+                // PNG stores 16-bit samples big-endian.
                 Rgb48 rgb = pngMetadata.TransparentRgb48.Value;
-                BinaryPrimitives.WriteUInt16LittleEndian(alpha, rgb.R);
-                BinaryPrimitives.WriteUInt16LittleEndian(alpha.Slice(2, 2), rgb.G);
-                BinaryPrimitives.WriteUInt16LittleEndian(alpha.Slice(4, 2), rgb.B);
+                BinaryPrimitives.WriteUInt16BigEndian(alpha, rgb.R);
+                BinaryPrimitives.WriteUInt16BigEndian(alpha.Slice(2, 2), rgb.G);
+                BinaryPrimitives.WriteUInt16BigEndian(alpha.Slice(4, 2), rgb.B);
 
                 this.WriteChunk(stream, PngChunkType.Transparency, this.chunkDataBuffer, 0, 6);
             }
@@ -885,7 +886,7 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
         {
             if (pngMetadata.TransparentL16.HasValue && this.use16Bit)
             {
-                BinaryPrimitives.WriteUInt16LittleEndian(alpha, pngMetadata.TransparentL16.Value.PackedValue);
+                BinaryPrimitives.WriteUInt16BigEndian(alpha, pngMetadata.TransparentL16.Value.PackedValue);
                 this.WriteChunk(stream, PngChunkType.Transparency, this.chunkDataBuffer, 0, 2);
             }
             else if (pngMetadata.TransparentL8.HasValue)

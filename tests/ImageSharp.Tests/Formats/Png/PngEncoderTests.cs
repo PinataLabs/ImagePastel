@@ -515,6 +515,38 @@ public partial class PngEncoderTests
         }
     }
 
+    [Fact]
+    public void Encode_16BitGrayscaleTransparency_IsWrittenBigEndian()
+    {
+        using var image = new Image<Rgba64>(2, 1);
+        PngMetadata metadata = image.Metadata.GetPngMetadata();
+        metadata.ColorType = PngColorType.Grayscale;
+        metadata.BitDepth = PngBitDepth.Bit16;
+        metadata.HasTransparency = true;
+        metadata.TransparentL16 = new L16(0x0102);
+
+        byte[] png = EncodeToBytes(image, new PngEncoder { ColorType = PngColorType.Grayscale, BitDepth = PngBitDepth.Bit16 });
+
+        Assert.Equal(new byte[] { 0x01, 0x02 }, PngTestFileBuilder.ReadChunks(png).Single(c => c.Type == "tRNS").Data);
+        Assert.Equal(new L16(0x0102), Image.Identify(png).Metadata.GetPngMetadata().TransparentL16);
+    }
+
+    [Fact]
+    public void Encode_16BitRgbTransparency_IsWrittenBigEndian()
+    {
+        using var image = new Image<Rgba64>(2, 1);
+        PngMetadata metadata = image.Metadata.GetPngMetadata();
+        metadata.ColorType = PngColorType.Rgb;
+        metadata.BitDepth = PngBitDepth.Bit16;
+        metadata.HasTransparency = true;
+        metadata.TransparentRgb48 = new Rgb48(0x0102, 0x0304, 0x0506);
+
+        byte[] png = EncodeToBytes(image, new PngEncoder { ColorType = PngColorType.Rgb, BitDepth = PngBitDepth.Bit16 });
+
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }, PngTestFileBuilder.ReadChunks(png).Single(c => c.Type == "tRNS").Data);
+        Assert.Equal(new Rgb48(0x0102, 0x0304, 0x0506), Image.Identify(png).Metadata.GetPngMetadata().TransparentRgb48);
+    }
+
     [Theory]
     [WithTestPatternImages(587, 821, PixelTypes.Rgba32)]
     [WithTestPatternImages(677, 683, PixelTypes.Rgba32)]
@@ -627,5 +659,13 @@ public partial class PngEncoderTests
                 ImageComparer.Exact.VerifySimilarity(referenceImage, imageSharpImage);
             }
         }
+    }
+
+    private static byte[] EncodeToBytes<TPixel>(Image<TPixel> image, PngEncoder encoder)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        return stream.ToArray();
     }
 }

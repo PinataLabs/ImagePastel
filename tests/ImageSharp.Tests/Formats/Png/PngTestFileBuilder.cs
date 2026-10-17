@@ -1,0 +1,150 @@
+// Copyright (c) Six Labors.
+// Licensed under the Apache License, Version 2.0.
+
+using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Text;
+using SixLabors.ImageSharp.Compression.Zlib;
+using SixLabors.ImageSharp.Formats.Png;
+
+namespace SixLabors.ImageSharp.Tests.Formats.Png;
+
+/// <summary>
+/// Builds PNG files chunk by chunk, with valid CRCs, so tests can control the exact chunk layout.
+/// </summary>
+internal static class PngTestFileBuilder
+{
+    private static readonly byte[] Signature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+
+    // The Adam7 pass layout from the PNG specification, section 8.2.
+    private static readonly int[] PassFirstColumn = { 0, 4, 0, 2, 0, 1, 0 };
+    private static readonly int[] PassFirstRow = { 0, 0, 4, 0, 2, 0, 1 };
+    private static readonly int[] PassColumnIncrement = { 8, 8, 4, 4, 2, 2, 1 };
+    private static readonly int[] PassRowIncrement = { 8, 8, 8, 4, 4, 2, 2 };
+
+    /// <summary>
+    /// Concatenates the signature and the given chunks into a PNG file.
+    /// </summary>
+    public static byte[] Build(params byte[][] chunks)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(Signature);
+        foreach (byte[] chunk in chunks)
+        {
+            stream.Write(chunk);
+        }
+
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Encodes a chunk: big-endian length, type, data and the CRC over type and data.
+    /// </summary>
+    public static byte[] Chunk(string type, ReadOnlySpan<byte> data)
+    {
+        byte[] chunk = new byte[data.Length + 12];
+        BinaryPrimitives.WriteInt32BigEndian(chunk, data.Length);
+        Encoding.ASCII.GetBytes(type, chunk.AsSpan(4, 4));
+        data.CopyTo(chunk.AsSpan(8));
+
+        uint crc = Crc32.Calculate(chunk.AsSpan(4, data.Length + 4));
+        BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(data.Length + 8), crc);
+        return chunk;
+    }
+
+    /// <summary>
+    /// Encodes an IHDR chunk with compression method 0 and filter method 0.
+    /// </summary>
+    public static byte[] Header(int width, int height, byte bitDepth, PngColorType colorType, PngInterlaceMode interlaceMode = PngInterlaceMode.None)
+    {
+        byte[] data = new byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(data, width);
+        BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(4), height);
+        data[8] = bitDepth;
+        data[9] = (byte)colorType;
+        data[12] = (byte)interlaceMode;
+        return Chunk("IHDR", data);
+    }
+
+    /// <summary>
+    /// Encodes an IEND chunk.
+    /// </summary>
+    public static byte[] End() => Chunk("IEND", default);
+
+    /// <summary>
+    /// Compresses filtered scanline data into a single zlib stream.
+    /// </summary>
+    public static byte[] Zlib(byte[] scanlines)
+    {
+        using var output = new MemoryStream();
+        using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, true))
+        {
+            zlib.Write(scanlines);
+        }
+
+        return output.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the unfiltered scanlines of an image with one byte per pixel, as used by 8-bit palette images.
+    /// </summary>
+    /// <param name="width">The image width.</param>
+    /// <param name="height">The image height.</param>
+    /// <param name="interlaced">Whether to lay the scanlines out in the seven Adam7 passes.</param>
+    /// <param name="pixel">Returns the byte for the pixel at x, y.</param>
+    public static byte[] Scanlines(int width, int height, bool interlaced, Func<int, int, byte> pixel)
+    {
+        var data = new List<byte>();
+        if (!interlaced)
+        {
+            AddPass(data, width, height, 0, 0, 1, 1, pixel);
+            return data.ToArray();
+        }
+
+        for (int pass = 0; pass < 7; pass++)
+        {
+            AddPass(data, width, height, PassFirstColumn[pass], PassFirstRow[pass], PassColumnIncrement[pass], PassRowIncrement[pass], pixel);
+        }
+
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Reads the chunks of a PNG file, in order, without checking their CRCs.
+    /// </summary>
+    public static List<(string Type, byte[] Data)> ReadChunks(byte[] png)
+    {
+        var chunks = new List<(string Type, byte[] Data)>();
+        int offset = Signature.Length;
+        while (offset + 12 <= png.Length)
+        {
+            int length = BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(offset));
+            string type = Encoding.ASCII.GetString(png, offset + 4, 4);
+            chunks.Add((type, png.AsSpan(offset + 8, length).ToArray()));
+            offset += length + 12;
+        }
+
+        return chunks;
+    }
+
+    private static void AddPass(List<byte> data, int width, int height, int firstColumn, int firstRow, int columnIncrement, int rowIncrement, Func<int, int, byte> pixel)
+    {
+        if (firstColumn >= width || firstRow >= height)
+        {
+            // Passes with no pixels contribute no scanlines.
+            return;
+        }
+
+        for (int y = firstRow; y < height; y += rowIncrement)
+        {
+            data.Add(0); // Filter type None.
+            for (int x = firstColumn; x < width; x += columnIncrement)
+            {
+                data.Add(pixel(x, y));
+            }
+        }
+    }
+}

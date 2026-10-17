@@ -432,6 +432,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// <param name="data">The data containing physical data.</param>
     private void ReadPhysicalChunk(ImageMetadata metadata, ReadOnlySpan<byte> data)
     {
+        if (data.Length < PhysicalChunkData.Size)
+        {
+            // Ignore invalid physical chunks.
+            return;
+        }
+
         var physicalChunk = PhysicalChunkData.Parse(data);
 
         metadata.ResolutionUnits = physicalChunk.UnitSpecifier == byte.MinValue
@@ -577,13 +583,21 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
         DeflateStream dataStream = deframeStream.CompressedStream;
 
-        if (this.header.InterlaceMethod == PngInterlaceMode.Adam7)
+        try
         {
-            this.DecodeInterlacedPixelData(dataStream, image, pngMetadata);
+            if (this.header.InterlaceMethod == PngInterlaceMode.Adam7)
+            {
+                this.DecodeInterlacedPixelData(dataStream, image, pngMetadata);
+            }
+            else
+            {
+                this.DecodePixelData(dataStream, image, pngMetadata);
+            }
         }
-        else
+        catch (InvalidDataException ex)
         {
-            this.DecodePixelData(dataStream, image, pngMetadata);
+            // The deflate stream reports corrupt compressed data with a generic exception.
+            PngThrowHelper.ThrowInvalidImageContentException("PNG image data is corrupt.", ex);
         }
     }
 
@@ -940,7 +954,8 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// Decodes and assigns marker colors that identify transparent pixels in non indexed images.
+    /// Decodes and assigns marker colors that identify transparent pixels in non indexed images,
+    /// and flags indexed images that have palette alpha values as transparent.
     /// </summary>
     /// <param name="alpha">The alpha tRNS array.</param>
     /// <param name="pngMetadata">The png metadata.</param>
@@ -952,9 +967,10 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             {
                 if (this.header.BitDepth == 16)
                 {
-                    ushort rc = BinaryPrimitives.ReadUInt16LittleEndian(alpha.Slice(0, 2));
-                    ushort gc = BinaryPrimitives.ReadUInt16LittleEndian(alpha.Slice(2, 2));
-                    ushort bc = BinaryPrimitives.ReadUInt16LittleEndian(alpha.Slice(4, 2));
+                    // PNG stores 16-bit samples big-endian.
+                    ushort rc = BinaryPrimitives.ReadUInt16BigEndian(alpha.Slice(0, 2));
+                    ushort gc = BinaryPrimitives.ReadUInt16BigEndian(alpha.Slice(2, 2));
+                    ushort bc = BinaryPrimitives.ReadUInt16BigEndian(alpha.Slice(4, 2));
 
                     pngMetadata.TransparentRgb48 = new Rgb48(rc, gc, bc);
                     pngMetadata.HasTransparency = true;
@@ -974,7 +990,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             {
                 if (this.header.BitDepth == 16)
                 {
-                    pngMetadata.TransparentL16 = new L16(BinaryPrimitives.ReadUInt16LittleEndian(alpha.Slice(0, 2)));
+                    pngMetadata.TransparentL16 = new L16(BinaryPrimitives.ReadUInt16BigEndian(alpha.Slice(0, 2)));
                 }
                 else
                 {
@@ -983,6 +999,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
                 pngMetadata.HasTransparency = true;
             }
+        }
+        else if (this.pngColorType == PngColorType.Palette && alpha.Length > 0)
+        {
+            // The alpha values themselves are stored as the palette alpha by the caller.
+            pngMetadata.HasTransparency = true;
         }
     }
 
@@ -1054,6 +1075,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
         int zeroIndex = data.IndexOf((byte)0);
         if (zeroIndex < PngConstants.MinTextKeywordLength || zeroIndex > PngConstants.MaxTextKeywordLength)
+        {
+            return;
+        }
+
+        // The keyword must be followed by the compression method.
+        if (data.Length < zeroIndex + 2)
         {
             return;
         }
@@ -1269,6 +1296,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             return;
         }
 
+        // The keyword must be followed by the compression flag and the compression method.
+        if (data.Length < zeroIndexKeyword + 3)
+        {
+            return;
+        }
+
         byte compressionFlag = data[zeroIndexKeyword + 1];
         if (!(compressionFlag == 0 || compressionFlag == 1))
         {
@@ -1293,6 +1326,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
         int translatedKeywordStartIdx = langStartIdx + languageLength + 1;
         int translatedKeywordLength = data.Slice(translatedKeywordStartIdx).IndexOf((byte)0);
+        if (translatedKeywordLength < 0)
+        {
+            return;
+        }
+
         string translatedKeyword = PngConstants.TranslatedEncoding.GetString(data.Slice(translatedKeywordStartIdx, translatedKeywordLength));
 
         ReadOnlySpan<byte> keywordBytes = data.Slice(0, zeroIndexKeyword);
@@ -1368,20 +1406,29 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             return 0;
         }
 
-        this.currentStream.Read(this.buffer, 0, 4);
-
-        if (this.TryReadChunk(out PngChunk chunk))
+        // Zero-length IDAT chunks are valid, so skip them rather than treating them as the end of the data.
+        while (true)
         {
-            if (chunk.Type == PngChunkType.Data)
+            // Skip the CRC of the previous chunk.
+            this.currentStream.Read(this.buffer, 0, 4);
+
+            if (!this.TryReadChunk(out PngChunk chunk))
             {
-                chunk.Data?.Dispose();
-                return chunk.Length;
+                return 0;
             }
 
-            this.nextChunk = chunk;
-        }
+            if (chunk.Type != PngChunkType.Data)
+            {
+                this.nextChunk = chunk;
+                return 0;
+            }
 
-        return 0;
+            chunk.Data?.Dispose();
+            if (chunk.Length > 0)
+            {
+                return chunk.Length;
+            }
+        }
     }
 
     /// <summary>
