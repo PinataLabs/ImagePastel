@@ -84,6 +84,12 @@ internal struct HuffmanScanBuffer
     [MethodImpl(InliningOptions.ShortMethod)]
     public bool HasBadMarker() => this.Marker != JpegConstants.Markers.XFF && !this.HasRestartMarker();
 
+    /// <summary>
+    /// Whether a marker with a reserved code has been detected, I.E. One below SOF0, which cannot appear in a valid scan.
+    /// </summary>
+    [MethodImpl(InliningOptions.ShortMethod)]
+    public bool HasReservedMarker() => this.Marker < JpegConstants.Markers.SOF0;
+
     [MethodImpl(InliningOptions.AlwaysInline)]
     public void FillBuffer()
     {
