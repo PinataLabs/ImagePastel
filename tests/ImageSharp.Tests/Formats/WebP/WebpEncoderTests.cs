@@ -212,6 +212,38 @@ public class WebpEncoderTests
         Assert.Equal(height, decoded.Height);
     }
 
+    [Theory]
+    [InlineData(16, 4)]
+    [InlineData(16, 5)]
+    [InlineData(15, 14)]
+    public void Encode_Lossy_WithOneTransparentPixel_KeepsAlpha(int height, int transparentRow)
+    {
+        using var image = new Image<Rgba32>(16, height, new Rgba32(255, 0, 0));
+        image[5, transparentRow] = new Rgba32(255, 0, 0, 0);
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+        Assert.True(memStream.ToArray().AsSpan().IndexOf("ALPH"u8) >= 0, "The ALPH chunk is missing.");
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+
+        Assert.Equal(0, decoded[5, transparentRow].A);
+        Assert.Equal(255, decoded[5, transparentRow == 4 ? 5 : 4].A);
+    }
+
+    [Fact]
+    public void Encode_Lossy_WithOpaqueImage_WritesNoAlpha()
+    {
+        using var image = new Image<Rgba32>(16, 15, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+
+        Assert.True(memStream.ToArray().AsSpan().IndexOf("ALPH"u8) < 0, "An opaque image has an ALPH chunk.");
+    }
+
     [Fact]
     public void Encode_Lossy_WithNoisyImage_AllocatesInProportionToImageSize()
     {
