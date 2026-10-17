@@ -8,9 +8,8 @@
         <DataCollectors>
             <DataCollector friendlyName="XPlat code coverage">
                 <Configuration>
-                    <Format>lcov</Format>
+                    <Format>lcov,cobertura</Format>
                     <Include>[PinataLabs.ImageSharp]*</Include>
-                    <UseSourceLink>true</UseSourceLink>
                 </Configuration>
             </DataCollector>
         </DataCollectors>
