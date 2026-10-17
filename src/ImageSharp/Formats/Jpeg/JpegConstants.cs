@@ -53,6 +53,11 @@ internal static class JpegConstants
         public const byte EOI = 0xD9;
 
         /// <summary>
+        /// The temporary private use marker used in arithmetic coding. Like RSTn it stands alone, without a length field.
+        /// </summary>
+        public const byte TEM = 0x01;
+
+        /// <summary>
         /// Application specific marker for marking the jpeg format.
         /// <see href="http://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html"/>
         /// </summary>

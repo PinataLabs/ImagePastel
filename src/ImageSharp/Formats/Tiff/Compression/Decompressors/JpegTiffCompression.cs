@@ -70,13 +70,13 @@ internal sealed class JpegTiffCompression : TiffBaseDecompressor
                     break;
                 }
 
-                // If the PhotometricInterpretation is YCbCr we explicitly assume the JPEG data is in RGB color space.
-                // There seems no other way to determine that the JPEG data is RGB colorspace (no APP14 marker, componentId's are not RGB).
+                // The PhotometricInterpretation, not the JPEG stream, gives the color space of the JPEG data, so the components
+                // are passed through unconverted. Such streams usually have neither an APP14 marker nor RGB componentId's.
+                // YCbCr is converted to RGB later on by the TIFF color decoder.
                 case TiffPhotometricInterpretation.YCbCr:
                 case TiffPhotometricInterpretation.Rgb:
                 {
-                    using SpectralConverter<Rgb24> spectralConverter = this.photometricInterpretation == TiffPhotometricInterpretation.YCbCr ?
-                        new RgbJpegSpectralConverter<Rgb24>(this.configuration) : new SpectralConverter<Rgb24>(this.configuration);
+                    using SpectralConverter<Rgb24> spectralConverter = new RgbJpegSpectralConverter<Rgb24>(this.configuration);
                     var scanDecoder = new HuffmanScanDecoder(stream, spectralConverter, CancellationToken.None);
                     jpegDecoder.LoadTables(this.jpegTables, scanDecoder);
                     jpegDecoder.ParseStream(stream, scanDecoder, CancellationToken.None);

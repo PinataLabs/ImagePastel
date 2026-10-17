@@ -105,6 +105,11 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     private HuffmanScanDecoder scanDecoder;
 
     /// <summary>
+    /// Whether a start of scan segment has been decoded.
+    /// </summary>
+    private bool hasScan;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="JpegDecoderCore" /> class.
     /// </summary>
     /// <param name="configuration">The configuration.</param>
@@ -335,7 +340,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!fileMarker.Invalid)
+            if (!fileMarker.Invalid && !IsStandaloneMarker(fileMarker.Marker))
             {
                 // Get the marker length.
                 int markerContentByteSize = this.ReadUint16(stream) - 2;
@@ -467,6 +472,12 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             // Read on.
             fileMarker = FindNextFileMarker(this.markerBuffer, stream);
         }
+
+        // Without a scan the frame components never allocate their spectral blocks, so there is nothing to convert.
+        if (!metadataOnly && !this.hasScan)
+        {
+            JpegThrowHelper.ThrowInvalidImageContentException("No readable SOS (Start Of Scan) marker found.");
+        }
     }
 
     /// <inheritdoc/>
@@ -530,21 +541,8 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
                 return JpegColorSpace.RGB;
             }
 
-            // If these values are 1-3 for a 3-channel image, then the image is assumed to be YCbCr.
-            if (this.Components[2].Id == 3 && this.Components[1].Id == 2 && this.Components[0].Id == 1)
-            {
-                return JpegColorSpace.YCbCr;
-            }
-
-            // 3-channel non-subsampled images are assumed to be RGB.
-            if (this.Components[2].VerticalSamplingFactor == 1 && this.Components[1].VerticalSamplingFactor == 1 && this.Components[0].VerticalSamplingFactor == 1 &&
-                this.Components[2].HorizontalSamplingFactor == 1 && this.Components[1].HorizontalSamplingFactor == 1 && this.Components[0].HorizontalSamplingFactor == 1)
-            {
-                return JpegColorSpace.RGB;
-            }
-
-            // Some images are poorly encoded and contain incorrect colorspace transform metadata.
-            // We ignore that and always fall back to the default colorspace.
+            // Any other ids, whether the JFIF 1-3 or e.g. 0-2, are assumed to be YCbCr, as libjpeg does.
+            // Sampling factors say nothing about the colorspace: plenty of marker-less YCbCr images are not subsampled.
             return JpegColorSpace.YCbCr;
         }
 
@@ -1340,6 +1338,8 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             JpegThrowHelper.ThrowInvalidImageContentException("No readable SOFn (Start Of Frame) marker found.");
         }
 
+        this.hasScan = true;
+
         // 1 byte: Number of components in scan
         int selectorsCount = stream.ReadByte();
 
@@ -1425,6 +1425,16 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
 
         this.scanDecoder.ParseEntropyCodedData(selectorsCount);
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the marker stands alone, without a length field (RSTn and TEM, see ITU T.81 B.1.1.4).
+    /// Stray ones between marker segments carry no data and are skipped.
+    /// </summary>
+    /// <param name="marker">The marker code.</param>
+    /// <returns>Whether the marker has no length field.</returns>
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static bool IsStandaloneMarker(byte marker)
+        => marker == JpegConstants.Markers.TEM || (marker >= JpegConstants.Markers.RST0 && marker <= JpegConstants.Markers.RST7);
 
     /// <summary>
     /// Reads a <see cref="ushort"/> from the stream advancing it by two bytes
