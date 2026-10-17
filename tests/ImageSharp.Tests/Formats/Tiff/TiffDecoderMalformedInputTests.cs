@@ -217,6 +217,26 @@ public class TiffDecoderMalformedInputTests
     }
 
     [Fact]
+    public void Decode_BigTiffStripOffsetPastEndOfFile_DecodesEveryBandAsZero()
+    {
+        // The strip starts past the end of the file, so all of its data is missing. Adding a later band's
+        // position to the strip offset must not wrap around to the start of the file and decode those bytes.
+        const int width = 1024;
+        const int height = 700;
+        byte[] tiff = BuildBigTiffWithStripOffset(width, height, ulong.MaxValue);
+
+        using Image<L8> image = Decode<L8>(tiff, CreateConfiguration(allocationLimitMegabytes: 1));
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                Assert.Equal(0, image[x, y].PackedValue);
+            }
+        }
+    }
+
+    [Fact]
     public void Decode_CompressedStripLargerThan2GB_ThrowsWithStripSizeInMessage()
     {
         // A Deflate strip cannot be decoded in bands, so its 2_147_745_792 byte buffer is reported.
@@ -439,6 +459,49 @@ public class TiffDecoderMalformedInputTests
         }
 
         return tiff;
+    }
+
+    /// <summary>
+    /// Writes a little-endian BigTIFF with one uncompressed strip of 3 x 16-bit RGB samples at the given offset.
+    /// The file is padded with 0xFF bytes to more than the strip size, so a wrapped offset lands inside it.
+    /// </summary>
+    private static byte[] BuildBigTiffWithStripOffset(int width, int height, ulong stripOffset)
+    {
+        ulong stripByteCount = (ulong)width * (ulong)height * 6;
+        (ExifTagValue Tag, ExifDataType Type, ulong Count, ulong Value)[] entries =
+        {
+            (ExifTagValue.ImageWidth, ExifDataType.Long, 1, (ulong)width),
+            (ExifTagValue.ImageLength, ExifDataType.Long, 1, (ulong)height),
+            (ExifTagValue.BitsPerSample, ExifDataType.Short, 3, 16 | (16UL << 16) | (16UL << 32)),
+            (ExifTagValue.Compression, ExifDataType.Short, 1, (ulong)TiffCompression.None),
+            (ExifTagValue.PhotometricInterpretation, ExifDataType.Short, 1, (ulong)TiffPhotometricInterpretation.Rgb),
+            (ExifTagValue.StripOffsets, ExifDataType.Long8, 1, stripOffset),
+            (ExifTagValue.SamplesPerPixel, ExifDataType.Short, 1, 3),
+            (ExifTagValue.RowsPerStrip, ExifDataType.Long, 1, (ulong)height),
+            (ExifTagValue.StripByteCounts, ExifDataType.Long8, 1, stripByteCount),
+        };
+
+        // Header: byte order, version 43, offset size 8, reserved, first IFD offset.
+        List<byte> bytes = new() { 0x49, 0x49, 43, 0, 8, 0, 0, 0 };
+        AddUInt64(bytes, 16);
+        AddUInt64(bytes, (ulong)entries.Length);
+        foreach ((ExifTagValue tag, ExifDataType type, ulong count, ulong value) in entries)
+        {
+            AddUInt16(bytes, (ushort)tag);
+            AddUInt16(bytes, (ushort)type);
+            AddUInt64(bytes, count);
+            AddUInt64(bytes, value);
+        }
+
+        AddUInt64(bytes, 0);
+        bytes.AddRange(Enumerable.Repeat((byte)0xFF, (int)stripByteCount));
+        return bytes.ToArray();
+    }
+
+    private static void AddUInt64(List<byte> bytes, ulong value)
+    {
+        AddUInt32(bytes, (uint)value);
+        AddUInt32(bytes, (uint)(value >> 32));
     }
 
     private static void AddUInt16(List<byte> bytes, ushort value)

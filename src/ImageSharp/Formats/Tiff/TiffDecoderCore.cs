@@ -409,9 +409,13 @@ internal class TiffDecoderCore : IImageDecoderInternals
             ulong skippedBytes = (ulong)(bandTop * bytesPerRow);
             ulong bandBytes = (ulong)(bandHeight * bytesPerRow);
             ulong streamLength = (ulong)this.inputStream.Length;
-            stripOffset += skippedBytes;
+
+            // Measure the data left in the file from the strip offset before adding the band position,
+            // so a malformed offset near the end of the 64-bit range cannot wrap around to the file start.
+            ulong availableBytes = stripOffset < streamLength ? streamLength - stripOffset : 0;
             stripByteCount = stripByteCount > skippedBytes ? Math.Min(stripByteCount - skippedBytes, bandBytes) : 0;
-            stripByteCount = stripOffset < streamLength ? Math.Min(stripByteCount, streamLength - stripOffset) : 0;
+            stripByteCount = availableBytes > skippedBytes ? Math.Min(stripByteCount, availableBytes - skippedBytes) : 0;
+            stripOffset += skippedBytes;
 
             // Do not decode stale rows of the previous band when the strip, or the file, holds less data than the band needs.
             if (stripByteCount < bandBytes)
