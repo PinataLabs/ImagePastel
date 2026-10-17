@@ -37,7 +37,11 @@ internal abstract class TiffBaseDecompressor : TiffBaseCompression
     public void Decompress(BufferedReadStream stream, ulong stripOffset, ulong stripByteCount, int stripHeight, Span<byte> buffer)
     {
         DebugGuard.MustBeLessThanOrEqualTo(stripOffset, (ulong)long.MaxValue, nameof(stripOffset));
-        DebugGuard.MustBeLessThanOrEqualTo(stripByteCount, (ulong)long.MaxValue, nameof(stripByteCount));
+
+        if (stripByteCount > int.MaxValue)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException($"The TIFF strip byte count of {stripByteCount} bytes is too large.");
+        }
 
         stream.Seek((long)stripOffset, SeekOrigin.Begin);
         this.Decompress(stream, (int)stripByteCount, stripHeight, buffer);

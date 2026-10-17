@@ -302,6 +302,19 @@ public class TiffDecoderMalformedInputTests
         Assert.Contains("2147745792", ex.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(TiffCompression.Deflate)]
+    [InlineData(TiffCompression.PackBits)]
+    [InlineData(TiffCompression.Lzw)]
+    public void Decode_CompressedStripByteCountAboveIntMaxValue_ThrowsInvalidImageContentException(TiffCompression compression)
+    {
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[16] });
+        page.Compression = compression;
+        page.StripByteCounts = new[] { 0x90000000u };
+
+        Assert.Throws<InvalidImageContentException>(() => Decode<L8>(BuildTiff(page)).Dispose());
+    }
+
     [Fact]
     public void Decode_FrameAboveAllocationLimit_ThrowsWithRealDimensions()
     {
