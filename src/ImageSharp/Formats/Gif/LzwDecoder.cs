@@ -70,6 +70,16 @@ internal sealed class LzwDecoder : IDisposable
     private int first;
 
     /// <summary>
+    /// Whether the end of the frame data has been reached. No further indices are decoded once it is.
+    /// </summary>
+    private bool endOfData;
+
+    /// <summary>
+    /// Whether the data sub-blocks have been read up to and including the block terminator.
+    /// </summary>
+    private bool blocksConsumed;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="LzwDecoder"/> class
     /// and sets the stream, where the compressed data should be read from.
     /// </summary>
@@ -147,12 +157,37 @@ internal sealed class LzwDecoder : IDisposable
     public void SkipIndices(int length) => this.DecodeIndices(default, length);
 
     /// <summary>
+    /// Skips the frame data sub-blocks that have not been read, up to and including the block terminator.
+    /// </summary>
+    public void SkipRemainingBlocks()
+    {
+        if (this.blocksConsumed)
+        {
+            return;
+        }
+
+        int blockSize;
+        while ((blockSize = this.stream.ReadByte()) > 0)
+        {
+            this.stream.Skip(blockSize);
+        }
+
+        this.blocksConsumed = true;
+    }
+
+    /// <summary>
     /// Decodes and decompresses the next pixel indices from the stream.
     /// </summary>
     /// <param name="indices">The buffer to decode to, or an empty span to discard the decoded indices.</param>
     /// <param name="length">The number of indices to decode.</param>
     private void DecodeIndices(Span<byte> indices, int length)
     {
+        // Once the frame data has ended, reading on would consume the blocks that follow the frame.
+        if (this.endOfData)
+        {
+            return;
+        }
+
         bool discard = indices.IsEmpty;
 
         // Get span values from the owners.
@@ -178,6 +213,7 @@ internal sealed class LzwDecoder : IDisposable
         int code = this.code;
         int clearCode = this.clearCode;
         int endCode = this.endCode;
+        bool endOfData = false;
 
         int i = 0;
         while (i < length)
@@ -193,6 +229,8 @@ internal sealed class LzwDecoder : IDisposable
                         count = ReadBlock(stream, buffer);
                         if (count == 0)
                         {
+                            this.blocksConsumed = true;
+                            endOfData = true;
                             break;
                         }
 
@@ -212,7 +250,13 @@ internal sealed class LzwDecoder : IDisposable
                 bits -= codeSize;
 
                 // Interpret the code
-                if (code > availableCode || code == endCode)
+                if (code == endCode)
+                {
+                    endOfData = true;
+                    break;
+                }
+
+                if (code > availableCode)
                 {
                     break;
                 }
@@ -298,6 +342,7 @@ internal sealed class LzwDecoder : IDisposable
         this.count = count;
         this.bufferIndex = bufferIndex;
         this.code = code;
+        this.endOfData = endOfData;
     }
 
     /// <summary>

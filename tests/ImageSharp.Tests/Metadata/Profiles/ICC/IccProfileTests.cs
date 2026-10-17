@@ -83,6 +83,29 @@ public class IccProfileTests
         Assert.Equal(new uint[] { 0x00010000, 0xFFFE0000 }, array.Data);
     }
 
+    [Fact]
+    public void Entries_WithFix16ArrayTag_ReadsRealValues()
+    {
+        byte[] data = CreateSingleTagProfile("sf32", 16);
+
+        IccTagDataEntry entry = Assert.Single(new IccProfile(data).Entries);
+
+        var array = Assert.IsType<IccFix16ArrayTagDataEntry>(entry);
+        Assert.Equal(new float[] { 1, -2 }, array.Data);
+    }
+
+    [Fact]
+    public void ToByteArray_WithFix16ArrayTag_WritesRealValues()
+    {
+        var entry = new IccFix16ArrayTagDataEntry(new float[] { 1, -2 }, IccProfileTag.ChromaticAdaptation);
+        var profile = new IccProfile(new IccProfileHeader(), new IccTagDataEntry[] { entry });
+
+        byte[] output = profile.ToByteArray();
+
+        byte[] expected = { 0x73, 0x66, 0x33, 0x32, 0, 0, 0, 0, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xFE, 0x00, 0x00 };
+        Assert.Equal(expected, output.AsSpan(output.Length - 16).ToArray());
+    }
+
     // A 160 byte profile with one tag at offset 144: the type signature, 4 reserved bytes,
     // and the 32-bit values 0x00010000 and 0xFFFE0000.
     private static byte[] CreateSingleTagProfile(string type, uint size)

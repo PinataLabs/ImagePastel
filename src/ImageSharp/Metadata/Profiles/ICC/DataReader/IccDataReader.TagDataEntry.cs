@@ -654,7 +654,7 @@ internal sealed partial class IccDataReader
         float[] arrayData = new float[count];
         for (int i = 0; i < count; i++)
         {
-            arrayData[i] = this.ReadFix16() / 256f;
+            arrayData[i] = this.ReadFix16();
         }
 
         return new IccFix16ArrayTagDataEntry(arrayData);

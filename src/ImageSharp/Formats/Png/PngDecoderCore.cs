@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
@@ -392,12 +393,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// Attempts to convert a byte array to a new array where each value in the original array is represented by the
     /// specified number of bits.
     /// </summary>
-    /// <param name="source">The bytes to convert from. Cannot be empty.</param>
-    /// <param name="bytesPerScanline">The number of bytes per scanline</param>
+    /// <param name="source">The bytes of one scanline, without the filter byte. Cannot be empty.</param>
     /// <param name="bits">The number of bits per value.</param>
     /// <param name="buffer">The new array.</param>
-    /// <returns>The resulting <see cref="ReadOnlySpan{Byte}"/> array.</returns>
-    private bool TryScaleUpTo8BitArray(ReadOnlySpan<byte> source, int bytesPerScanline, int bits, out IMemoryOwner<byte> buffer)
+    /// <returns>True if the bytes were scaled into <paramref name="buffer"/>; false if no scaling is needed.</returns>
+    private bool TryScaleUpTo8BitArray(ReadOnlySpan<byte> source, int bits, out IMemoryOwner<byte> buffer)
     {
         if (bits >= 8)
         {
@@ -405,15 +405,14 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             return false;
         }
 
-        buffer = this.memoryAllocator.Allocate<byte>(bytesPerScanline * 8 / bits, AllocationOptions.Clean);
-        ref byte sourceRef = ref MemoryMarshal.GetReference(source);
+        buffer = this.memoryAllocator.Allocate<byte>(source.Length * 8 / bits, AllocationOptions.Clean);
         ref byte resultRef = ref buffer.GetReference();
         int mask = 0xFF >> (8 - bits);
         int resultOffset = 0;
 
-        for (int i = 0; i < bytesPerScanline; i++)
+        for (int i = 0; i < source.Length; i++)
         {
-            byte b = Unsafe.Add(ref sourceRef, i);
+            byte b = source[i];
             for (int shift = 0; shift < 8; shift += bits)
             {
                 int colorIndex = (b >> (8 - bits - shift)) & mask;
@@ -593,6 +592,10 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             {
                 this.DecodePixelData(dataStream, image, pngMetadata);
             }
+
+            // The deflate stream stops reading once the rows are decoded, so skip what is left of the
+            // image data (the zlib checksum, padding and any further data chunks) to reach the next chunk.
+            deframeStream.SkipRemainingData();
         }
         catch (InvalidDataException ex)
         {
@@ -736,7 +739,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                 }
 
                 Span<TPixel> rowSpan = imageBuffer.DangerousGetRowSpan(this.currentRow);
-                this.ProcessInterlacedDefilteredScanline(this.scanline.GetSpan(), rowSpan, pngMetadata, Adam7.FirstColumn[pass], Adam7.ColumnIncrement[pass]);
+                this.ProcessInterlacedDefilteredScanline(scanSpan, rowSpan, pngMetadata, Adam7.FirstColumn[pass], Adam7.ColumnIncrement[pass]);
 
                 this.SwapScanlineBuffers();
 
@@ -782,7 +785,6 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         {
             ReadOnlySpan<byte> scanlineSpan = this.TryScaleUpTo8BitArray(
                 trimmed,
-                this.bytesPerScanline - 1,
                 this.header.BitDepth,
                 out buffer)
             ? buffer.GetSpan()
@@ -874,7 +876,6 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         {
             ReadOnlySpan<byte> scanlineSpan = this.TryScaleUpTo8BitArray(
                 trimmed,
-                this.bytesPerScanline,
                 this.header.BitDepth,
                 out buffer)
             ? buffer.GetSpan()
@@ -1143,7 +1144,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         ReadOnlySpan<char> dataSpan = data.AsSpan();
         dataSpan = dataSpan.TrimStart();
 
-        if (!StringEqualsInsensitive(dataSpan.Slice(0, 4), "exif".AsSpan()))
+        if (dataSpan.Length < 4 || !StringEqualsInsensitive(dataSpan.Slice(0, 4), "exif".AsSpan()))
         {
             // "exif" identifier is missing from the beginning of the text chunk
             return false;
@@ -1152,7 +1153,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         // Skip to the data length
         dataSpan = dataSpan.Slice(4).TrimStart();
         int dataLengthEnd = dataSpan.IndexOf('\n');
-        int dataLength = ParseInt32(dataSpan.Slice(0, dataSpan.IndexOf('\n')));
+        if (dataLengthEnd < 0 || !TryParseInt32(dataSpan.Slice(0, dataLengthEnd), out int dataLength))
+        {
+            // The data length is missing, unterminated or not a number
+            return false;
+        }
 
         // Skip to the hex-encoded data
         dataSpan = dataSpan.Slice(dataLengthEnd).Trim();
@@ -1164,6 +1169,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         if (dataLength < exifHeader.Length)
         {
             // Not enough room for the required exif header, this data couldn't possibly be valid
+            return false;
+        }
+
+        if (dataLength > dataSpan.Length / 2)
+        {
+            // Each byte takes two hex digits, so the text is too short to hold the declared length
             return false;
         }
 
@@ -1192,7 +1203,8 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             dataLength -= exifHeader.Length;
 
             // Load the hex-encoded data, one line at a time
-            for (int i = 0; i < dataLength;)
+            int i = 0;
+            while (i < dataLength)
             {
                 ReadOnlySpan<char> lineSpan = dataSpan;
 
@@ -1204,7 +1216,19 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
                 i += HexConverter.HexStringToBytes(lineSpan, exifBlob.AsSpan().Slice(i));
 
+                if (newlineIndex == -1)
+                {
+                    // That was the last line
+                    break;
+                }
+
                 dataSpan = dataSpan.Slice(newlineIndex + 1);
+            }
+
+            if (i < dataLength)
+            {
+                // The hex data ends before the declared length
+                return false;
             }
         }
         catch
@@ -1231,16 +1255,13 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// int.Parse() a ReadOnlySpan&lt;char&gt;, with a fallback for older frameworks.
+    /// int.TryParse() a ReadOnlySpan&lt;char&gt; holding a non-negative decimal number.
     /// </summary>
-    /// <param name="span">The <see cref="int"/> to parse.</param>
-    /// <returns>The parsed <see cref="int"/>.</returns>
-    private static int ParseInt32(ReadOnlySpan<char> span)
-    {
-#pragma warning disable IDE0022 // Use expression body for methods
-        return int.Parse(span);
-#pragma warning restore IDE0022 // Use expression body for methods
-    }
+    /// <param name="span">The characters to parse.</param>
+    /// <param name="value">The parsed <see cref="int"/>.</param>
+    /// <returns>True if the characters hold a number that fits in an <see cref="int"/>.</returns>
+    private static bool TryParseInt32(ReadOnlySpan<char> span, out int value)
+        => int.TryParse(span, NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out value);
 
     /// <summary>
     /// Sets the <see cref="ExifProfile"/> in <paramref name="metadata"/> to <paramref name="newProfile"/>,

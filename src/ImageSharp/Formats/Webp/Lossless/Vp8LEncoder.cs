@@ -110,6 +110,10 @@ internal class Vp8LEncoder : IDisposable
         bool nearLossless,
         int nearLosslessQuality)
     {
+        // The VP8L header stores each dimension minus one in 14 bits.
+        Guard.MustBeLessThanOrEqualTo(width, WebpConstants.Vp8LMaxDimension, nameof(width));
+        Guard.MustBeLessThanOrEqualTo(height, WebpConstants.Vp8LMaxDimension, nameof(height));
+
         int pixelCount = width * height;
         int initialSize = pixelCount * 2;
 
@@ -298,9 +302,6 @@ internal class Vp8LEncoder : IDisposable
     /// <param name="inputImgHeight">The input image height.</param>
     private void WriteImageSize(int inputImgWidth, int inputImgHeight)
     {
-        Guard.MustBeLessThan(inputImgWidth, WebpConstants.MaxDimension, nameof(inputImgWidth));
-        Guard.MustBeLessThan(inputImgHeight, WebpConstants.MaxDimension, nameof(inputImgHeight));
-
         uint width = (uint)inputImgWidth - 1;
         uint height = (uint)inputImgHeight - 1;
 

@@ -182,6 +182,39 @@ public class WebpEncoderTests
     }
 
     [Theory]
+    [InlineData(16383, 4)]
+    [InlineData(4, 16383)]
+    [InlineData(16384, 4)]
+    [InlineData(4, 16384)]
+    public void Encode_Lossless_WithMaximumDimension_Works(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+
+        Assert.Equal(width, decoded.Width);
+        Assert.Equal(height, decoded.Height);
+        Assert.Equal(new Rgba32(255, 0, 0), decoded[width - 1, height - 1]);
+    }
+
+    [Theory]
+    [InlineData(16385, 4)]
+    [InlineData(4, 16385)]
+    public void Encode_Lossless_WithDimensionAboveMaximum_Throws(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.SaveAsWebp(memStream, encoder));
+        Assert.Equal(0, memStream.Length);
+    }
+
+    [Theory]
     [InlineData(16384, 4)]
     [InlineData(4, 16384)]
     [InlineData(20000, 4)]
@@ -212,6 +245,38 @@ public class WebpEncoderTests
         Assert.Equal(height, decoded.Height);
     }
 
+    [Theory]
+    [InlineData(16, 4)]
+    [InlineData(16, 5)]
+    [InlineData(15, 14)]
+    public void Encode_Lossy_WithOneTransparentPixel_KeepsAlpha(int height, int transparentRow)
+    {
+        using var image = new Image<Rgba32>(16, height, new Rgba32(255, 0, 0));
+        image[5, transparentRow] = new Rgba32(255, 0, 0, 0);
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+        Assert.True(memStream.ToArray().AsSpan().IndexOf("ALPH"u8) >= 0, "The ALPH chunk is missing.");
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+
+        Assert.Equal(0, decoded[5, transparentRow].A);
+        Assert.Equal(255, decoded[5, transparentRow == 4 ? 5 : 4].A);
+    }
+
+    [Fact]
+    public void Encode_Lossy_WithOpaqueImage_WritesNoAlpha()
+    {
+        using var image = new Image<Rgba32>(16, 15, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+
+        Assert.True(memStream.ToArray().AsSpan().IndexOf("ALPH"u8) < 0, "An opaque image has an ALPH chunk.");
+    }
+
     [Fact]
     public void Encode_Lossy_WithNoisyImage_AllocatesInProportionToImageSize()
     {
@@ -238,10 +303,10 @@ public class WebpEncoderTests
         image.SaveAsWebp(memStream, encoder);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
-        // The encoder allocates scratch data for each macroblock, so allocations grow with the image size.
-        // A bit writer that copies its buffer each time the output grows by 1 KiB allocates over 200 MB here.
+        // A bit writer that copies its buffer each time the output grows by 1 KiB allocates over 200 MB here,
+        // and mode selection that creates scratch objects for each macroblock allocates about 14 times the pixel and output size.
         long pixelBytes = width * height * 3;
-        Assert.True(allocated < 32 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
+        Assert.True(allocated < 4 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
     }
 
     [Theory]

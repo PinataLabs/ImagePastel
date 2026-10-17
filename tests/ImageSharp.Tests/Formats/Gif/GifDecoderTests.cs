@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,7 @@ using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 
@@ -449,6 +451,165 @@ public class GifDecoderTests
         Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
     }
 
+    [Fact]
+    public void Decode_FrameDataEndsBeforeFrameIsFull_DoesNotReadNextFrame()
+    {
+        // The first frame's only sub-block holds a clear code, index 1 and two bits of a third code.
+        // Its block terminator follows, so the rest of the frame has no data.
+        byte[] first = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, new byte[] { 0x4C });
+        byte[] second = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, EncodeLzw(Enumerable.Repeat((byte)2, 16).ToArray()));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(AppendFrame(first, second));
+
+        Assert.Equal(2, image.Frames.Count);
+        AssertFramePixels(image.Frames[0], (x, y) => x == 0 && y == 0 ? GlobalColorTable[1] : GlobalColorTable[0]);
+        AssertFramePixels(image.Frames[1], (_, _) => GlobalColorTable[2]);
+    }
+
+    [Fact]
+    public void Decode_FrameDataEndCodeBeforeFrameIsFull_IgnoresCodesAfterEndCode()
+    {
+        // Codes after the end code are not frame data, even inside the same sub-block.
+        byte[] lzwData = PackThreeBitCodes(4, 1, 5, 4, 2, 2, 4, 2, 2, 4, 2, 2, 5);
+        byte[] first = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, lzwData);
+        byte[] second = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, EncodeLzw(Enumerable.Repeat((byte)3, 16).ToArray()));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(AppendFrame(first, second));
+
+        Assert.Equal(2, image.Frames.Count);
+        AssertFramePixels(image.Frames[0], (x, y) => x == 0 && y == 0 ? GlobalColorTable[1] : GlobalColorTable[0]);
+        AssertFramePixels(image.Frames[1], (_, _) => GlobalColorTable[3]);
+    }
+
+    [Fact]
+    public void Decode_FrameWithoutColorTable_SkipsItsDataAndDecodesNextFrame()
+    {
+        // The first frame has no color table to draw with. The second frame has a local one.
+        using MemoryStream stream = new();
+        stream.Write("GIF89a"u8);
+        WriteUInt16(stream, 4);
+        WriteUInt16(stream, 4);
+        stream.Write(new byte[] { 0, 0, 0 });
+        WriteImageDescriptor(stream, 4, 4, 0);
+        WriteImageData(stream, EncodeLzw(Enumerable.Repeat((byte)1, 16).ToArray()));
+        WriteImageDescriptor(stream, 4, 4, 0x81);
+        foreach (Rgb24 color in GlobalColorTable)
+        {
+            stream.Write(new[] { color.R, color.G, color.B });
+        }
+
+        WriteImageData(stream, EncodeLzw(Enumerable.Repeat((byte)2, 16).ToArray()));
+        stream.WriteByte(0x3B);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(stream.ToArray());
+
+        Assert.Equal(2, image.Frames.Count);
+        AssertFramePixels(image.Frames[1], (_, _) => GlobalColorTable[2]);
+    }
+
+    [Fact]
+    public void Decode_TruncatedGraphicControlExtensionAfterFirstFrame_ThrowsAndReleasesImage()
+    {
+        // The class level ValidateDisposedMemoryAllocations attribute checks that the
+        // first frame's pixel buffer is returned when decoding fails.
+        byte[] first = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, EncodeLzw(new byte[16]));
+        byte[] data = [.. first.AsSpan(0, first.Length - 1), 0x21, 0xF9, 0x04, 0x00];
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
+    }
+
+    [Fact]
+    public void Decode_OutOfMemoryForLaterFrame_ThrowsInvalidImageContentExceptionAndReleasesImage()
+    {
+        // The allocator runs out of memory when the second frame's canvas is allocated.
+        byte[] first = CreateGif(100, 100, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 1 }));
+        byte[] second = CreateGif(100, 100, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2 }));
+        OutOfMemoryAllocator allocator = new(largeLength: 100 * 100, allowedLargeAllocations: 1);
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = new(new GifConfigurationModule()) { MemoryAllocator = allocator };
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(
+            () => Image.Load<Rgba32>(configuration, AppendFrame(first, second)));
+
+        Assert.IsType<OutOfMemoryException>(ex.InnerException);
+        Assert.Equal(allocator.AllocationLog.Count, allocator.ReturnLog.Count);
+    }
+
+    [Fact]
+    public void Decode_LogicalScreenOverAllocatorLimit_ThrowsInvalidImageContentException()
+    {
+        byte[] first = CreateGif(65535, 65535, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 1 }));
+        byte[] second = CreateGif(65535, 65535, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2 }));
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(
+            () => Image.Load<Rgba32>(AppendFrame(first, second)));
+
+        Assert.IsType<InvalidMemoryOperationException>(ex.InnerException);
+    }
+
+    // Appends the image descriptor and data of a second file made by CreateGif to the first.
+    private static byte[] AppendFrame(byte[] first, byte[] second)
+    {
+        int frameStart = 6 + 7 + (GlobalColorTable.Length * 3);
+        return [.. first.AsSpan(0, first.Length - 1), .. second.AsSpan(frameStart)];
+    }
+
+    private static void AssertFramePixels(ImageFrame<Rgba32> frame, Func<int, int, Rgb24> expected)
+    {
+        for (int y = 0; y < frame.Height; y++)
+        {
+            for (int x = 0; x < frame.Width; x++)
+            {
+                Assert.Equal(expected(x, y), frame[x, y].Rgb);
+            }
+        }
+    }
+
+    private static void WriteImageDescriptor(Stream stream, int width, int height, byte flags)
+    {
+        stream.WriteByte(0x2C);
+        WriteUInt16(stream, 0);
+        WriteUInt16(stream, 0);
+        WriteUInt16(stream, width);
+        WriteUInt16(stream, height);
+        stream.WriteByte(flags);
+    }
+
+    // Writes a minimum code size of 2 and the data in a single sub-block.
+    private static void WriteImageData(Stream stream, byte[] lzwData)
+    {
+        stream.WriteByte(2);
+        stream.WriteByte((byte)lzwData.Length);
+        stream.Write(lzwData);
+        stream.WriteByte(0);
+    }
+
+    // Packs 3-bit LZW codes, least significant bit first.
+    private static byte[] PackThreeBitCodes(params int[] codes)
+    {
+        List<byte> output = new();
+        int buffer = 0;
+        int bits = 0;
+        foreach (int code in codes)
+        {
+            buffer |= code << bits;
+            bits += 3;
+            while (bits >= 8)
+            {
+                output.Add((byte)buffer);
+                buffer >>= 8;
+                bits -= 8;
+            }
+        }
+
+        if (bits > 0)
+        {
+            output.Add((byte)buffer);
+        }
+
+        return output.ToArray();
+    }
+
     // Creates a 4x4 GIF whose frame has a minimum code size of 12 and a single 13-bit code of 4098.
     // The clear code is 4096, so 4098 cannot be looked up in the 4096-entry code tables.
     private static byte[] CreateLzwCodePastCodeTablesGif()
@@ -564,5 +725,29 @@ public class GifDecoderTests
     {
         stream.WriteByte((byte)value);
         stream.WriteByte((byte)(value >> 8));
+    }
+
+    // Throws OutOfMemoryException for allocations of at least largeLength elements once
+    // allowedLargeAllocations of them have been made.
+    private sealed class OutOfMemoryAllocator : TestMemoryAllocator
+    {
+        private readonly int largeLength;
+        private int allowedLargeAllocations;
+
+        public OutOfMemoryAllocator(int largeLength, int allowedLargeAllocations)
+        {
+            this.largeLength = largeLength;
+            this.allowedLargeAllocations = allowedLargeAllocations;
+        }
+
+        public override IMemoryOwner<T> Allocate<T>(int length, AllocationOptions options = AllocationOptions.None)
+        {
+            if (length >= this.largeLength && this.allowedLargeAllocations-- <= 0)
+            {
+                throw new OutOfMemoryException();
+            }
+
+            return base.Allocate<T>(length, options);
+        }
     }
 }

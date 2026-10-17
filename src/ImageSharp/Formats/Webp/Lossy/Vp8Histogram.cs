@@ -35,7 +35,12 @@ internal sealed class Vp8Histogram
     /// <summary>
     /// Initializes a new instance of the <see cref="Vp8Histogram" /> class.
     /// </summary>
-    public Vp8Histogram()
+    public Vp8Histogram() => this.Reset();
+
+    /// <summary>
+    /// Resets the histogram to its initial, empty state.
+    /// </summary>
+    public void Reset()
     {
         this.maxValue = 0;
         this.lastNonZero = 1;

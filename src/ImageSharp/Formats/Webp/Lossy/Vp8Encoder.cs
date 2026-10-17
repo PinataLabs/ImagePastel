@@ -292,6 +292,16 @@ internal class Vp8Encoder : IDisposable
     private int MbHeaderLimit { get; }
 
     /// <summary>
+    /// Gets the global susceptibility averaged over the macroblocks. It is set by <see cref="Encode{TPixel}"/>.
+    /// </summary>
+    internal int AverageAlpha => this.alpha;
+
+    /// <summary>
+    /// Gets the U/V quantization susceptibility averaged over the macroblocks. It is set by <see cref="Encode{TPixel}"/>.
+    /// </summary>
+    internal int AverageUvAlpha => this.uvAlpha;
+
+    /// <summary>
     /// Encodes the image to the specified stream from the <see cref="Image{TPixel}"/>.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
@@ -314,7 +324,7 @@ internal class Vp8Encoder : IDisposable
         var it = new Vp8EncIterator(this.YTop, this.UvTop, this.Nz, this.MbInfo, this.Preds, this.TopDerr, this.Mbw, this.Mbh);
         int[] alphas = new int[WebpConstants.MaxAlpha + 1];
         this.alpha = this.MacroBlockAnalysis(width, height, it, y, u, v, yStride, uvStride, alphas, out this.uvAlpha);
-        int totalMb = this.Mbw * this.Mbw;
+        int totalMb = this.Mbw * this.Mbh;
         this.alpha /= totalMb;
         this.uvAlpha /= totalMb;
 
@@ -495,6 +505,7 @@ internal class Vp8Encoder : IDisposable
         it.Init();
         this.SetLoopParams(stats.Q);
         var info = new Vp8ModeScore();
+        var residual = new Vp8Residual();
         do
         {
             info.Clear();
@@ -505,7 +516,7 @@ internal class Vp8Encoder : IDisposable
                 ++this.Proba.NbSkip;
             }
 
-            this.RecordResiduals(it, info);
+            this.RecordResiduals(it, info, residual);
             size += info.R + info.H;
             sizeP0 += info.H;
             distortion += info.D;
@@ -1039,10 +1050,9 @@ internal class Vp8Encoder : IDisposable
     /// Same as CodeResiduals, but doesn't actually write anything.
     /// Instead, it just records the event distribution.
     /// </summary>
-    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd)
+    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd, Vp8Residual residual)
     {
         int x, y, ch;
-        var residual = new Vp8Residual();
         bool i16 = it.CurrentMacroBlockInfo.MacroBlockType == Vp8MacroBlockType.I16X16;
 
         it.NzToBytes();

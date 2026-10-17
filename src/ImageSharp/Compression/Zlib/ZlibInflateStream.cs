@@ -103,6 +103,18 @@ internal sealed class ZlibInflateStream : Stream
         return true;
     }
 
+    /// <summary>
+    /// Skips the compressed data that has not been read yet, in the current frame and in the frames after it.
+    /// </summary>
+    public void SkipRemainingData()
+    {
+        while (this.TryGetDataRemaining())
+        {
+            this.innerStream.Skip(this.currentDataRemaining);
+            this.currentDataRemaining = 0;
+        }
+    }
+
     /// <inheritdoc/>
     public override void Flush() => throw new NotSupportedException();
 

@@ -860,7 +860,10 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
         }
 
         Span<byte> alpha = this.chunkDataBuffer.AsSpan();
-        if (pngMetadata.ColorType == PngColorType.Rgb)
+
+        // Only write the transparent color that matches the color type being encoded. Palette images get their
+        // transparency from the palette, written with the palette chunk.
+        if (this.options.ColorType == PngColorType.Rgb)
         {
             if (pngMetadata.TransparentRgb48.HasValue && this.use16Bit)
             {
@@ -882,7 +885,7 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
                 this.WriteChunk(stream, PngChunkType.Transparency, this.chunkDataBuffer, 0, 6);
             }
         }
-        else if (pngMetadata.ColorType == PngColorType.Grayscale)
+        else if (this.options.ColorType == PngColorType.Grayscale)
         {
             if (pngMetadata.TransparentL16.HasValue && this.use16Bit)
             {

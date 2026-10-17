@@ -89,24 +89,25 @@ internal static class PngTestFileBuilder
     }
 
     /// <summary>
-    /// Builds the unfiltered scanlines of an image with one byte per pixel, as used by 8-bit palette images.
+    /// Builds the unfiltered scanlines of an image with one sample per pixel, as used by palette and grayscale images.
     /// </summary>
     /// <param name="width">The image width.</param>
     /// <param name="height">The image height.</param>
     /// <param name="interlaced">Whether to lay the scanlines out in the seven Adam7 passes.</param>
-    /// <param name="pixel">Returns the byte for the pixel at x, y.</param>
-    public static byte[] Scanlines(int width, int height, bool interlaced, Func<int, int, byte> pixel)
+    /// <param name="pixel">Returns the sample for the pixel at x, y.</param>
+    /// <param name="bitDepth">The bits per sample: 1, 2, 4 or 8. Samples under 8 bits are packed from the high bits down.</param>
+    public static byte[] Scanlines(int width, int height, bool interlaced, Func<int, int, byte> pixel, int bitDepth = 8)
     {
         var data = new List<byte>();
         if (!interlaced)
         {
-            AddPass(data, width, height, 0, 0, 1, 1, pixel);
+            AddPass(data, width, height, 0, 0, 1, 1, pixel, bitDepth);
             return data.ToArray();
         }
 
         for (int pass = 0; pass < 7; pass++)
         {
-            AddPass(data, width, height, PassFirstColumn[pass], PassFirstRow[pass], PassColumnIncrement[pass], PassRowIncrement[pass], pixel);
+            AddPass(data, width, height, PassFirstColumn[pass], PassFirstRow[pass], PassColumnIncrement[pass], PassRowIncrement[pass], pixel, bitDepth);
         }
 
         return data.ToArray();
@@ -130,7 +131,7 @@ internal static class PngTestFileBuilder
         return chunks;
     }
 
-    private static void AddPass(List<byte> data, int width, int height, int firstColumn, int firstRow, int columnIncrement, int rowIncrement, Func<int, int, byte> pixel)
+    private static void AddPass(List<byte> data, int width, int height, int firstColumn, int firstRow, int columnIncrement, int rowIncrement, Func<int, int, byte> pixel, int bitDepth)
     {
         if (firstColumn >= width || firstRow >= height)
         {
@@ -141,9 +142,24 @@ internal static class PngTestFileBuilder
         for (int y = firstRow; y < height; y += rowIncrement)
         {
             data.Add(0); // Filter type None.
+            int packed = 0;
+            int packedBits = 0;
             for (int x = firstColumn; x < width; x += columnIncrement)
             {
-                data.Add(pixel(x, y));
+                packed = (packed << bitDepth) | (pixel(x, y) & ((1 << bitDepth) - 1));
+                packedBits += bitDepth;
+                if (packedBits == 8)
+                {
+                    data.Add((byte)packed);
+                    packed = 0;
+                    packedBits = 0;
+                }
+            }
+
+            if (packedBits > 0)
+            {
+                // Pad the last byte of the row with zero bits.
+                data.Add((byte)(packed << (8 - packedBits)));
             }
         }
     }

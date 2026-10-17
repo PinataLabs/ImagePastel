@@ -774,7 +774,7 @@ internal sealed partial class IccDataWriter
         int count = 0;
         for (int i = 0; i < value.Data.Length; i++)
         {
-            count += this.WriteFix16(value.Data[i] * 256d);
+            count += this.WriteFix16(value.Data[i]);
         }
 
         return count;

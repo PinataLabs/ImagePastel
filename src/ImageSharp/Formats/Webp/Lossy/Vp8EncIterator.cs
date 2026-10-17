@@ -25,6 +25,9 @@ internal class Vp8EncIterator
 
     private const int DefaultAlpha = -1;
 
+    // All intra4 modes set to DC4.
+    private static readonly byte[] Dc4Modes = new byte[16];
+
     private readonly int mbw;
 
     private readonly int mbh;
@@ -42,6 +45,13 @@ internal class Vp8EncIterator
         9,  13, 17, 21,
         5,   9, 13, 17
     };
+
+    // Scratch data for the macroblock analysis, reused for each macroblock.
+    private readonly byte[] analysisModesI4 = new byte[16];
+
+    private readonly Vp8Histogram[] analysisHistograms = { new Vp8Histogram(), new Vp8Histogram() };
+
+    private readonly Vp8Histogram analysisTotalHistogram = new Vp8Histogram();
 
     private int currentMbIdx;
 
@@ -83,6 +93,10 @@ internal class Vp8EncIterator
         this.Scratch = new byte[WebpConstants.Bps * 16];
         this.Scratch2 = new short[17 * 16];
         this.Scratch3 = new int[16];
+        this.ModeScoreScratch = new Vp8ModeScore();
+        this.ModeScoreScratch2 = new Vp8ModeScore();
+        this.ModeScoreScratch3 = new Vp8ModeScore();
+        this.ResidualScratch = new Vp8Residual();
 
         // To match the C initial values of the reference implementation, initialize all with 204.
         byte defaultInitVal = 204;
@@ -232,6 +246,27 @@ internal class Vp8EncIterator
     /// </summary>
     public int[] Scratch3 { get; }
 
+    /// <summary>
+    /// Gets or sets the mode score scratch used during mode selection.
+    /// <see cref="QuantEnc.PickBestIntra16"/> swaps it with the macroblock's score, so it is never the score being decided.
+    /// </summary>
+    public Vp8ModeScore ModeScoreScratch { get; set; }
+
+    /// <summary>
+    /// Gets the second mode score scratch used during mode selection.
+    /// </summary>
+    public Vp8ModeScore ModeScoreScratch2 { get; }
+
+    /// <summary>
+    /// Gets the third mode score scratch used during mode selection.
+    /// </summary>
+    public Vp8ModeScore ModeScoreScratch3 { get; }
+
+    /// <summary>
+    /// Gets the residual scratch used to compute coefficient costs during mode selection.
+    /// </summary>
+    public Vp8Residual ResidualScratch { get; }
+
     public Vp8MacroBlockInfo CurrentMacroBlockInfo => this.Mb[this.currentMbIdx];
 
     private Vp8MacroBlockInfo[] Mb { get; }
@@ -377,8 +412,7 @@ internal class Vp8EncIterator
         }
         else
         {
-            byte[] modes = new byte[16];  // DC4
-            this.SetIntra4Mode(modes);
+            this.SetIntra4Mode(Dc4Modes);
         }
 
         return 0;
@@ -392,9 +426,9 @@ internal class Vp8EncIterator
         int bestMode = 0;
 
         this.MakeLuma16Preds();
+        Vp8Histogram histo = this.analysisHistograms[0];
         for (mode = 0; mode < maxMode; mode++)
         {
-            var histo = new Vp8Histogram();
             histo.CollectHistogram(this.YuvIn.AsSpan(YOffEnc), this.YuvP.AsSpan(Vp8Encoding.Vp8I16ModeOffsets[mode]), 0, 16);
             int alpha = histo.GetAlpha();
             if (alpha > bestAlpha)
@@ -410,22 +444,22 @@ internal class Vp8EncIterator
 
     public int MbAnalyzeBestIntra4Mode(int bestAlpha)
     {
-        byte[] modes = new byte[16];
+        byte[] modes = this.analysisModesI4;
         int maxMode = MaxIntra4Mode;
-        var totalHisto = new Vp8Histogram();
+        Vp8Histogram[] histos = this.analysisHistograms;
+        Vp8Histogram totalHisto = this.analysisTotalHistogram;
+        totalHisto.Reset();
         int curHisto = 0;
         this.StartI4();
         do
         {
             int mode;
             int bestModeAlpha = DefaultAlpha;
-            var histos = new Vp8Histogram[2];
             Span<byte> src = this.YuvIn.AsSpan(YOffEnc + WebpLookupTables.Vp8Scan[this.I4]);
 
             this.MakeIntra4Preds();
             for (mode = 0; mode < maxMode; ++mode)
             {
-                histos[curHisto] = new Vp8Histogram();
                 histos[curHisto].CollectHistogram(src, this.YuvP.AsSpan(Vp8Encoding.Vp8I4ModeOffsets[mode]), 0, 1);
 
                 int alpha = histos[curHisto].GetAlpha();
@@ -463,9 +497,9 @@ internal class Vp8EncIterator
         int mode;
 
         this.MakeChroma8Preds();
+        Vp8Histogram histo = this.analysisHistograms[0];
         for (mode = 0; mode < maxMode; ++mode)
         {
-            var histo = new Vp8Histogram();
             histo.CollectHistogram(this.YuvIn.AsSpan(UOffEnc), this.YuvP.AsSpan(Vp8Encoding.Vp8UvModeOffsets[mode]), 16, 16 + 4 + 4);
             int alpha = histo.GetAlpha();
             if (alpha > bestAlpha)

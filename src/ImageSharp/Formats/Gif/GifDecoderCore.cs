@@ -181,6 +181,21 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                 }
             }
         }
+        catch (OutOfMemoryException ex)
+        {
+            // Every frame is a copy of the logical screen, so a file that claims a large screen
+            // can ask for more memory than is available while each frame is within the allocator limit.
+            image?.Dispose();
+            GifThrowHelper.ThrowInvalidImageContentException(
+                $"Not enough memory to decode the frames of a {this.logicalScreenDescriptor.Width}x{this.logicalScreenDescriptor.Height} logical screen",
+                ex);
+        }
+        catch
+        {
+            // Return the pixel buffers of the frames decoded so far.
+            image?.Dispose();
+            throw;
+        }
         finally
         {
             this.globalColorTable?.Dispose();
@@ -470,13 +485,10 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
 
         ReadOnlySpan<Rgb24> colorTable = MemoryMarshal.Cast<byte, Rgb24>(rawColorTable);
         this.ReadFrameColors(stream, ref image, ref previousFrame, colorTable, this.imageDescriptor);
-
-        // Skip any remaining blocks
-        SkipBlock(stream);
     }
 
     /// <summary>
-    /// Reads the frames colors, mapping indices to colors.
+    /// Reads the frames colors, mapping indices to colors. The frame data is read up to and including its block terminator.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="stream">The <see cref="BufferedReadStream"/> containing image data.</param>
@@ -535,11 +547,6 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
             this.RestoreToBackground(imageFrame);
         }
 
-        if (colorTable.Length == 0)
-        {
-            return;
-        }
-
         int interlacePass = 0; // The interlace pass
         int interlaceIncrement = 8; // The interlacing line increment
         int interlaceY = 0; // The current interlaced line
@@ -550,16 +557,16 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
         byte transIndex = this.graphicsControlExtension.TransparencyIndex;
         int colorTableMaxIdx = colorTable.Length - 1;
 
-        // For a properly encoded gif the descriptor dimensions will never exceed the logical screen dimensions.
-        // However we have images that exceed this that can be decoded by other libraries. #1530
-        using IMemoryOwner<byte> indicesRowOwner = this.memoryAllocator.Allocate<byte>(descriptor.Width);
-        Span<byte> indicesRow = indicesRowOwner.Memory.Span;
-        ref byte indicesRowRef = ref MemoryMarshal.GetReference(indicesRow);
-
-        // A frame that starts below the canvas has nothing to draw. Its data is skipped with the remaining blocks.
+        // A frame without a color table, or that starts below the canvas, has nothing to draw. Its data is skipped.
         int minCodeSize = stream.ReadByte();
-        if (descriptorTop < imageHeight && LzwDecoder.IsValidMinCodeSize(minCodeSize))
+        if (colorTable.Length > 0 && descriptorTop < imageHeight && LzwDecoder.IsValidMinCodeSize(minCodeSize))
         {
+            // For a properly encoded gif the descriptor dimensions will never exceed the logical screen dimensions.
+            // However we have images that exceed this that can be decoded by other libraries. #1530
+            using IMemoryOwner<byte> indicesRowOwner = this.memoryAllocator.Allocate<byte>(descriptor.Width);
+            Span<byte> indicesRow = indicesRowOwner.Memory.Span;
+            ref byte indicesRowRef = ref MemoryMarshal.GetReference(indicesRow);
+
             using LzwDecoder lzwDecoder = new(this.configuration.MemoryAllocator, stream, minCodeSize);
 
             for (int y = descriptorTop; y < descriptorBottom; y++)
@@ -646,6 +653,12 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                     }
                 }
             }
+
+            lzwDecoder.SkipRemainingBlocks();
+        }
+        else
+        {
+            SkipBlock(stream);
         }
 
         if (prevFrame != null)
@@ -681,22 +694,14 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
             stream.Read(this.currentLocalColorTable.GetSpan().Slice(0, length));
         }
 
-        // Skip the frame indices. Pixels length + mincode size.
-        // The gif format does not tell us the length of the compressed data beforehand.
-        int minCodeSize = stream.ReadByte();
-        if (LzwDecoder.IsValidMinCodeSize(minCodeSize))
-        {
-            using LzwDecoder lzwDecoder = new(this.configuration.MemoryAllocator, stream, minCodeSize);
-            lzwDecoder.SkipIndices(this.imageDescriptor.Width * this.imageDescriptor.Height);
-        }
+        // Skip the minimum code size and the frame data sub-blocks.
+        stream.Skip(1);
+        SkipBlock(stream);
 
         ImageFrameMetadata currentFrame = new();
         frameMetadata.Add(currentFrame);
         this.SetFrameMetadata(currentFrame);
         previousFrame = currentFrame;
-
-        // Skip any remaining blocks
-        SkipBlock(stream);
     }
 
     /// <summary>

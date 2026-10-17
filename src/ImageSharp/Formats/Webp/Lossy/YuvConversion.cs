@@ -344,7 +344,7 @@ internal static class YuvConversion
             PixelOperations<TPixel>.Instance.ToBgra32(configuration, rowSpan, bgraRow0);
             PixelOperations<TPixel>.Instance.ToBgra32(configuration, nextRowSpan, bgraRow1);
 
-            bool rowsHaveAlpha = WebpCommonUtils.CheckNonOpaque(bgraRow0) && WebpCommonUtils.CheckNonOpaque(bgraRow1);
+            bool rowsHaveAlpha = WebpCommonUtils.CheckNonOpaque(bgraRow0) || WebpCommonUtils.CheckNonOpaque(bgraRow1);
             if (rowsHaveAlpha)
             {
                 hasAlpha = true;
