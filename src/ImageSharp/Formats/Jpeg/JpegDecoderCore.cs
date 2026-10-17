@@ -159,11 +159,14 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     /// Finds the next file marker within the byte stream, skipping any bytes before it one at a time.
     /// </summary>
     /// <param name="stream">The input stream.</param>
+    /// <param name="cancellationToken">The token to monitor cancellation while skipping bytes.</param>
     /// <returns>The <see cref="JpegFileMarker"/></returns>
-    public static JpegFileMarker FindNextFileMarker(BufferedReadStream stream)
+    public static JpegFileMarker FindNextFileMarker(BufferedReadStream stream, CancellationToken cancellationToken)
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             int b = stream.ReadByte();
             if (b == -1)
             {
@@ -328,7 +331,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             JpegThrowHelper.ThrowInvalidImageContentException("Missing SOI marker.");
         }
 
-        fileMarker = FindNextFileMarker(stream);
+        fileMarker = FindNextFileMarker(stream, cancellationToken);
         this.QuantizationTables ??= new Block8x8F[4];
 
         while (fileMarker.Marker != JpegConstants.Markers.EOI)
@@ -468,7 +471,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             }
 
             // Read on.
-            fileMarker = FindNextFileMarker(stream);
+            fileMarker = FindNextFileMarker(stream, cancellationToken);
         }
 
         // Without a scan the frame components never allocate their spectral blocks, so there is nothing to convert.

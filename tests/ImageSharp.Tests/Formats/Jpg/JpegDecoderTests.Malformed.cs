@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -165,6 +166,23 @@ public partial class JpegDecoderTests
         using Image<Rgba32> expected = Image.Load<Rgba32>(original);
         using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    [Fact]
+    public void Identify_CancelledWhileSkippingJunkBytes_StopsReading()
+    {
+        const int junkLength = 16 * 1024 * 1024;
+        const int cancelAfter = 1024 * 1024;
+        byte[] original = EncodeTestJpeg(JpegColorType.YCbCrRatio420);
+        byte[] corrupt = Insert(original, SegmentEnd(original, 2), new byte[junkLength]);
+
+        using var cts = new CancellationTokenSource();
+        using var stream = new CancellingStream(corrupt, cancelAfter, cts);
+
+        Assert.ThrowsAny<OperationCanceledException>(() => JpegDecoder.Identify(Configuration.Default, stream, cts.Token));
+
+        // The search for the next marker must notice the cancellation instead of reading the rest of the junk.
+        Assert.True(stream.Position < cancelAfter * 2, $"Read {stream.Position} bytes after cancelling at {cancelAfter}.");
     }
 
     [Theory]
@@ -335,5 +353,48 @@ public partial class JpegDecoderTests
         Buffer.BlockCopy(bytes, 0, result, offset, bytes.Length);
         Buffer.BlockCopy(data, offset, result, offset + bytes.Length, data.Length - offset);
         return result;
+    }
+
+    // Cancels the token once the given number of bytes has been read.
+    private sealed class CancellingStream : MemoryStream
+    {
+        private readonly long cancelAfter;
+        private readonly CancellationTokenSource cts;
+
+        public CancellingStream(byte[] data, long cancelAfter, CancellationTokenSource cts)
+            : base(data)
+        {
+            this.cancelAfter = cancelAfter;
+            this.cts = cts;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            int read = base.Read(buffer, offset, count);
+            this.CancelIfPast();
+            return read;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            int read = base.Read(buffer);
+            this.CancelIfPast();
+            return read;
+        }
+
+        public override int ReadByte()
+        {
+            int read = base.ReadByte();
+            this.CancelIfPast();
+            return read;
+        }
+
+        private void CancelIfPast()
+        {
+            if (this.Position >= this.cancelAfter)
+            {
+                this.cts.Cancel();
+            }
+        }
     }
 }

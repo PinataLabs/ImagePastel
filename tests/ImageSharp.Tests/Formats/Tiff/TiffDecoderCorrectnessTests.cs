@@ -147,7 +147,8 @@ public class TiffDecoderCorrectnessTests
 
         jpegTables = jpegTables.Take(dht).Concat(new byte[] { 0xFF, marker }).Concat(jpegTables.Skip(dht)).ToArray();
 
-        byte[] tiff = CreateJpegCompressedTiff(jpeg, jpegTables, size, 1, 1);
+        // Leave the tables out of the strip, so the decoder can only get them from JPEGTables.
+        byte[] tiff = CreateJpegCompressedTiff(RemoveJpegTables(jpeg), jpegTables, size, 1, 1);
 
         using Image<Rgb24> expected = Image.Load<Rgb24>(jpeg);
         using Image<Rgb24> actual = Image.Load<Rgb24>(tiff);
@@ -305,6 +306,28 @@ public class TiffDecoderCorrectnessTests
         tables.Add(0xFF);
         tables.Add(0xD9);
         return tables.ToArray();
+    }
+
+    /// <summary>
+    /// Removes the DQT and DHT segments before the first SOS from a JPEG file, as in a strip that relies on JPEGTables.
+    /// </summary>
+    private static byte[] RemoveJpegTables(byte[] jpeg)
+    {
+        var result = new List<byte> { 0xFF, 0xD8 };
+        int offset = 2;
+        while (jpeg[offset + 1] != 0xDA)
+        {
+            int segmentLength = 2 + BinaryPrimitives.ReadUInt16BigEndian(jpeg.AsSpan(offset + 2));
+            if (jpeg[offset + 1] is not (0xDB or 0xC4))
+            {
+                result.AddRange(jpeg.AsSpan(offset, segmentLength).ToArray());
+            }
+
+            offset += segmentLength;
+        }
+
+        result.AddRange(jpeg.AsSpan(offset).ToArray());
+        return result.ToArray();
     }
 
     /// <summary>
