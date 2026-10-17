@@ -95,6 +95,7 @@ internal abstract class BaseExifReader
     private List<ExifTag> invalidTags;
 
     private List<ulong> subIfds;
+    private HashSet<ulong> subIfdOffsets;
 
     protected BaseExifReader(Stream stream, MemoryAllocator allocator)
     {
@@ -539,7 +540,8 @@ internal abstract class BaseExifReader
         // Each sub-IFD is read once, so pointers that form a cycle end.
         ulong offset = Convert.ToUInt64(val);
         this.subIfds ??= new List<ulong>();
-        if (!this.subIfds.Contains(offset))
+        this.subIfdOffsets ??= new HashSet<ulong>();
+        if (this.subIfdOffsets.Add(offset))
         {
             this.subIfds.Add(offset);
         }

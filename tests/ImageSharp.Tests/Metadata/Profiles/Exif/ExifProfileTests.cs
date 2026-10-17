@@ -674,6 +674,35 @@ public class ExifProfileTests
         Assert.Equal(new short[] { 9 }, profile.GetValue(ExifTag.TimeZoneOffset).Value);
     }
 
+    [Fact]
+    public void TimeZoneOffset_StoredAsLongPair_ReadsValues()
+    {
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.Long, 2, builder.Long(44)));
+        builder.WriteBytes(builder.Long(9));
+        builder.WriteBytes(builder.Long(10));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Equal(new short[] { 9, 10 }, profile.GetValue(ExifTag.TimeZoneOffset).Value);
+    }
+
+    [Theory]
+    [InlineData(40000U)]
+    [InlineData(0xFFFFFFF7U)]
+    public void TimeZoneOffset_StoredAsLongOutOfRange_IsSkipped(uint offset)
+    {
+        // LONG is unsigned, so a large value must not be reinterpreted as a negative offset.
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.Long, 1, builder.Long(offset)));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Null(profile.GetValue(ExifTag.TimeZoneOffset));
+    }
+
     internal static ExifProfile GetExifProfile()
     {
         using Image<Rgba32> image = TestFile.Create(TestImages.Jpeg.Baseline.Floorplan).CreateRgba32Image();

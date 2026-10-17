@@ -580,6 +580,22 @@ public class ExifValuesTests
     }
 
     [Theory]
+    [MemberData(nameof(SignedShortArrayTags))]
+    public void ExifSignedShortArray_UnsignedArray_IsRangeChecked(ExifTag tag)
+    {
+        ExifValue value = ExifValues.Create(tag);
+
+        Assert.True(value.TrySetValue(new uint[] { 0, (uint)short.MaxValue }));
+        Assert.Equal(new short[] { 0, short.MaxValue }, ((ExifSignedShortArray)value).Value);
+
+        Assert.False(value.TrySetValue(new uint[] { (uint)short.MaxValue + 1 }));
+        Assert.False(value.TrySetValue(new uint[] { uint.MaxValue }));
+
+        Assert.True(value.TrySetValue(new int[] { -1, short.MinValue }));
+        Assert.Equal(new short[] { -1, short.MinValue }, ((ExifSignedShortArray)value).Value);
+    }
+
+    [Theory]
     [MemberData(nameof(StringTags))]
     public void ExifStringTests(ExifTag tag)
     {
