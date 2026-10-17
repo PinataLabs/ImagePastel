@@ -21,3 +21,9 @@ _Avoid_: original ICC, source profile
 **Pixel profile**:
 The ICC profile that describes a decoded image's pixels. When an image has none, its pixels are gamma-encoded sRGB.
 _Avoid_: output profile, image profile
+
+### JPEG XL testing
+
+**Conformance vector**:
+One test case from the JPEG XL conformance suite: a codestream, its reference decoded output, and the error thresholds a decoder must meet against that output.
+_Avoid_: test vector, conformance image
