@@ -8,7 +8,7 @@ PinataLabs.ImageSharp is a fully managed, cross-platform 2D graphics library for
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
 
 > [!IMPORTANT]
-> This fork exists only to fix security issues in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
+> This fork exists only to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
 > Pinata Labs does not offer support for this package.
 > For a supported version, use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package from [Six Labors](https://github.com/SixLabors/ImageSharp).
 
