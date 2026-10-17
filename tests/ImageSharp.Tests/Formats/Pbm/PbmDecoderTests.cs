@@ -249,6 +249,24 @@ public class PbmDecoderTests
         }
     }
 
+    [Theory]
+    [InlineData("P1\n4 2\n0101\n1100\n")]
+    [InlineData("P1\n4 2\n0 1 0 1\n1 1 0 0\n")]
+    [InlineData("P1\n4 2\n01 0\n1110\n0")]
+    [InlineData("P1\n4 2\n01# comment\n0111 00")]
+    public void Decode_PlainBlackAndWhite_ReadsEachBitAsOneCharacter(string data)
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes(data);
+
+        using Image<L8> image = Image.Load<L8>(bytes);
+
+        byte[] expected = { 255, 0, 255, 0, 0, 0, 255, 255 };
+        for (int i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i], image[i % 4, i / 4].PackedValue);
+        }
+    }
+
     [Fact]
     public void Decode_PlainHeaderFollowedByWhitespaceAndComments_SkipsThem()
     {
