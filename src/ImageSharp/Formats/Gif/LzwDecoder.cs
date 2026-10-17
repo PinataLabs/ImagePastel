@@ -209,6 +209,13 @@ internal sealed class LzwDecoder : IDisposable
                     continue;
                 }
 
+                // A minimum code size of 12 leaves no room in the code tables,
+                // so any code past the clear and end codes cannot be looked up.
+                if (code >= MaxStackSize)
+                {
+                    break;
+                }
+
                 if (oldCode == NullCode)
                 {
                     pixelStack[top++] = suffix[code];
@@ -348,6 +355,13 @@ internal sealed class LzwDecoder : IDisposable
                     availableCode = clearCode + 2;
                     oldCode = NullCode;
                     continue;
+                }
+
+                // A minimum code size of 12 leaves no room in the code tables,
+                // so any code past the clear and end codes cannot be looked up.
+                if (code >= MaxStackSize)
+                {
+                    break;
                 }
 
                 if (oldCode == NullCode)

@@ -128,6 +128,12 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
         {
             this.ReadLogicalScreenDescriptorAndGlobalColorTable(stream);
 
+            // Every frame is drawn onto the logical screen so it must have an area.
+            if (this.logicalScreenDescriptor.Width == 0 || this.logicalScreenDescriptor.Height == 0)
+            {
+                GifThrowHelper.ThrowInvalidImageContentException("Logical screen width or height should not be 0");
+            }
+
             // Loop though the respective gif parts and read the data.
             int nextFlag = stream.ReadByte();
             while (nextFlag != GifConstants.Terminator)
@@ -550,12 +556,13 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
         Span<byte> indicesRow = indicesRowOwner.Memory.Span;
         ref byte indicesRowRef = ref MemoryMarshal.GetReference(indicesRow);
 
+        // A frame that starts below the canvas has nothing to draw. Its data is skipped with the remaining blocks.
         int minCodeSize = stream.ReadByte();
-        if (LzwDecoder.IsValidMinCodeSize(minCodeSize))
+        if (descriptorTop < imageHeight && LzwDecoder.IsValidMinCodeSize(minCodeSize))
         {
             using LzwDecoder lzwDecoder = new(this.configuration.MemoryAllocator, stream, minCodeSize);
 
-            for (int y = descriptorTop; y < descriptorBottom && y < imageHeight; y++)
+            for (int y = descriptorTop; y < descriptorBottom; y++)
             {
                 // Check if this image is interlaced.
                 int writeY; // the target y offset to write to
@@ -564,7 +571,8 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                     // If so then we read lines at predetermined offsets.
                     // When an entire image height worth of offset lines has been read we consider this a pass.
                     // With each pass the number of offset lines changes and the starting line changes.
-                    if (interlaceY >= descriptor.Height)
+                    // Short frames can have passes with no lines at all.
+                    while (interlaceY >= descriptor.Height && interlacePass < 3)
                     {
                         interlacePass++;
                         switch (interlacePass)
@@ -583,12 +591,25 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                         }
                     }
 
-                    writeY = Math.Min(interlaceY + descriptor.Top, image.Height);
+                    writeY = interlaceY + descriptorTop;
                     interlaceY += interlaceIncrement;
                 }
                 else
                 {
                     writeY = y;
+                }
+
+                // Lines only move down within a pass, so once a line falls below the canvas the rest of the
+                // frame can be ignored, unless it is interlaced and later passes still have lines to write.
+                if (writeY >= imageHeight)
+                {
+                    if (!descriptor.InterlaceFlag || interlacePass == 3)
+                    {
+                        break;
+                    }
+
+                    lzwDecoder.SkipIndices(descriptor.Width);
+                    continue;
                 }
 
                 lzwDecoder.DecodePixelRow(indicesRow);
