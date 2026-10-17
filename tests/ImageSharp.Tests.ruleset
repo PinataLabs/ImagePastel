@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <RuleSet Name="ImageSharp.Tests" ToolsVersion="17.0">
-  <Include Path="..\shared-infrastructure\sixlabors.tests.ruleset" Action="Default" />
+  <Include Path="..\build\sixlabors.tests.ruleset" Action="Default" />
   <Rules AnalyzerId="StyleCop.Analyzers" RuleNamespace="StyleCop.Analyzers">
     <Rule Id="SA1313" Action="None" />
   </Rules>

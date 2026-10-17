@@ -11,7 +11,7 @@
   -->
 
   <!-- Import the shared tests .targets file -->
-  <Import Project="$(MSBuildThisFileDirectory)..\shared-infrastructure\msbuild\targets\SixLabors.Tests.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\msbuild\targets\SixLabors.Tests.targets" />
 
   <!-- Import the solution .targets file. -->
   <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.targets" />

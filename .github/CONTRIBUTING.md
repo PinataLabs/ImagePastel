@@ -22,13 +22,13 @@
 
 #### **Building**
 
- * When first cloning the repo, make sure to run `git submodule update --init --recursive` otherwise the submodules (e.g. `shared-infrastructure`) will be missing.
+ * Make sure [Git LFS](https://git-lfs.com/) is installed before cloning, otherwise the test images will be missing.
 
  * Run `dotnet build` in the root of the repo, or open the ImageSharp.sln file in Visual Studio and build from there.
 
 #### **Running tests and Debugging**
 
-* Expected test output is pulled in as a submodule from the [ImageSharp.Tests.Images repository](https://github.com/SixLabors/Imagesharp.Tests.Images/tree/main/ReferenceOutput). To succesfully run tests, make sure that you have updated the submodules!
+* Expected test output lives in `tests/Images/External` and is stored in Git LFS. To successfully run tests, make sure you have run `git lfs pull`.
 * Debugging (running tests in Debug mode) is only supported on .NET Core 2.1+, because of JIT Code Generation bugs like [dotnet/coreclr#16443](https://github.com/dotnet/coreclr/issues/16443) or [dotnet/coreclr#20657](https://github.com/dotnet/coreclr/issues/20657)
 
 #### **Do you have questions about consuming the library or the source code?**
