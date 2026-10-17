@@ -1,0 +1,81 @@
+name: SonarQube
+
+# Analyzes the solution with SonarQube Cloud (project PinataLabs_ImageSharp).
+# Kept apart from ci.yml so an analysis failure never blocks a release:
+# require-green-ci.sh only looks at the CI workflow.
+#
+# Needs the SONAR_TOKEN repository secret. Pull requests from forks and from
+# Dependabot get no secrets, so the job skips them.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  analyze:
+    name: Build and analyze
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.actor != 'dependabot[bot]')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history gives SonarQube blame data for new-code detection.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore NuGet cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'nuget.config', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # The scanner downloads its analyzers and a Java runtime into this folder.
+      - name: Restore SonarQube cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      # The scanner version is pinned in dotnet-tools.json.
+      - name: Build and analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::error::The SONAR_TOKEN secret is not set."
+            exit 1
+          fi
+          dotnet tool restore
+          dotnet tool run dotnet-sonarscanner begin /k:"PinataLabs_ImageSharp" /o:"pinatalabs" /d:sonar.token="$SONAR_TOKEN"
+          dotnet build ImageSharp.slnx -c Release
+          dotnet tool run dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
