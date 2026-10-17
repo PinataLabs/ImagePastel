@@ -292,6 +292,16 @@ internal class Vp8Encoder : IDisposable
     private int MbHeaderLimit { get; }
 
     /// <summary>
+    /// Gets the global susceptibility averaged over the macroblocks. It is set by <see cref="Encode{TPixel}"/>.
+    /// </summary>
+    internal int AverageAlpha => this.alpha;
+
+    /// <summary>
+    /// Gets the U/V quantization susceptibility averaged over the macroblocks. It is set by <see cref="Encode{TPixel}"/>.
+    /// </summary>
+    internal int AverageUvAlpha => this.uvAlpha;
+
+    /// <summary>
     /// Encodes the image to the specified stream from the <see cref="Image{TPixel}"/>.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
@@ -314,7 +324,7 @@ internal class Vp8Encoder : IDisposable
         var it = new Vp8EncIterator(this.YTop, this.UvTop, this.Nz, this.MbInfo, this.Preds, this.TopDerr, this.Mbw, this.Mbh);
         int[] alphas = new int[WebpConstants.MaxAlpha + 1];
         this.alpha = this.MacroBlockAnalysis(width, height, it, y, u, v, yStride, uvStride, alphas, out this.uvAlpha);
-        int totalMb = this.Mbw * this.Mbw;
+        int totalMb = this.Mbw * this.Mbh;
         this.alpha /= totalMb;
         this.uvAlpha /= totalMb;
 
