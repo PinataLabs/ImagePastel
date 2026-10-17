@@ -8,9 +8,6 @@
 // #define TEST
 #if TEST
 
-// ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +16,9 @@ using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
+
+// ReSharper disable InconsistentNaming
+namespace SixLabors.ImageSharp.Benchmarks.Codecs;
 
 internal class Assert
 {
