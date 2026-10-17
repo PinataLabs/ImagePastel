@@ -61,12 +61,28 @@ public abstract partial class Image
     /// <exception cref="ArgumentNullException">The stream is null.</exception>
     /// <exception cref="NotSupportedException">The stream is not readable.</exception>
     /// <returns>A <see cref="Task{IImageFormat}"/> representing the asynchronous operation.</returns>
-    public static Task<IImageFormat> DetectFormatAsync(Configuration configuration, Stream stream, CancellationToken cancellationToken = default)
-        => WithSeekableStreamAsync(
+    public static async Task<IImageFormat> DetectFormatAsync(Configuration configuration, Stream stream, CancellationToken cancellationToken = default)
+    {
+        Guard.NotNull(configuration, nameof(configuration));
+        Guard.NotNull(stream, nameof(stream));
+
+        // Only the header is needed, so a seekable stream is read in place rather than copied to memory.
+        if (stream.CanRead && stream.CanSeek)
+        {
+            if (configuration.ReadOrigin == ReadOrigin.Begin)
+            {
+                stream.Position = 0;
+            }
+
+            return await InternalDetectFormatAsync(stream, configuration, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await WithSeekableStreamAsync(
             configuration,
             stream,
             (s, _) => InternalDetectFormat(s, configuration),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Reads the raw image information from the specified stream without fully decoding it.

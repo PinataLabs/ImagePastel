@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
@@ -49,9 +50,9 @@ public abstract partial class Image
     /// <returns>The mime type or null if none found.</returns>
     private static IImageFormat InternalDetectFormat(Stream stream, Configuration config)
     {
-        // We take a minimum of the stream length vs the max header size and always check below
+        // We take a minimum of the remaining stream length vs the max header size and always check below
         // to ensure that only formats that headers fit within the given buffer length are tested.
-        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length);
+        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length - stream.Position);
         if (headerSize <= 0)
         {
             return null;
@@ -76,13 +77,59 @@ public abstract partial class Image
 
         stream.Position = startPosition;
 
+        // Only test the bytes actually read so unread buffer space is never mistaken for header data.
+        return InternalDetectFormat(headersBuffer.Slice(0, n), config);
+    }
+
+    /// <summary>
+    /// By asynchronously reading the header on the provided seekable stream this calculates the images format.
+    /// The stream position is restored once the header has been read.
+    /// </summary>
+    /// <param name="stream">The seekable image stream to read the header from.</param>
+    /// <param name="config">The configuration.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>The mime type or null if none found.</returns>
+    private static async Task<IImageFormat> InternalDetectFormatAsync(Stream stream, Configuration config, CancellationToken cancellationToken)
+    {
+        // Sized the same way as InternalDetectFormat(Stream, Configuration) so both paths test the same formats.
+        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length - stream.Position);
+        if (headerSize <= 0)
+        {
+            return null;
+        }
+
+        byte[] headersBuffer = new byte[headerSize];
+        long startPosition = stream.Position;
+
+        int n = 0;
+        int i;
+        do
+        {
+            i = await stream.ReadAsync(headersBuffer, n, headerSize - n, cancellationToken).ConfigureAwait(false);
+            n += i;
+        }
+        while (n < headerSize && i > 0);
+
+        stream.Position = startPosition;
+
+        return InternalDetectFormat(headersBuffer.AsSpan(0, n), config);
+    }
+
+    /// <summary>
+    /// Calculates the images format from the given header bytes.
+    /// </summary>
+    /// <param name="headersBuffer">The header bytes.</param>
+    /// <param name="config">The configuration.</param>
+    /// <returns>The mime type or null if none found.</returns>
+    private static IImageFormat InternalDetectFormat(ReadOnlySpan<byte> headersBuffer, Configuration config)
+    {
         // Does the given stream contain enough data to fit in the header for the format
         // and does that data match the format specification?
         // Individual formats should still check since they are public.
         IImageFormat format = null;
         foreach (IImageFormatDetector formatDetector in config.ImageFormatsManager.FormatDetectors)
         {
-            if (formatDetector.HeaderSize <= headerSize)
+            if (formatDetector.HeaderSize <= headersBuffer.Length)
             {
                 IImageFormat attemptFormat = formatDetector.DetectFormat(headersBuffer);
                 if (attemptFormat != null)
