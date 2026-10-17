@@ -171,9 +171,14 @@ internal static class WebpConstants
     public const int TransformPresent = 1;
 
     /// <summary>
-    /// The maximum allowed width or height of a webp image.
+    /// The maximum allowed width or height of a lossy webp image.
     /// </summary>
     public const int MaxDimension = 16383;
+
+    /// <summary>
+    /// The maximum allowed width or height of a lossless webp image.
+    /// </summary>
+    public const int Vp8LMaxDimension = 16384;
 
     public const int MaxAllowedCodeLength = 15;
 

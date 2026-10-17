@@ -182,6 +182,39 @@ public class WebpEncoderTests
     }
 
     [Theory]
+    [InlineData(16383, 4)]
+    [InlineData(4, 16383)]
+    [InlineData(16384, 4)]
+    [InlineData(4, 16384)]
+    public void Encode_Lossless_WithMaximumDimension_Works(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+
+        Assert.Equal(width, decoded.Width);
+        Assert.Equal(height, decoded.Height);
+        Assert.Equal(new Rgba32(255, 0, 0), decoded[width - 1, height - 1]);
+    }
+
+    [Theory]
+    [InlineData(16385, 4)]
+    [InlineData(4, 16385)]
+    public void Encode_Lossless_WithDimensionAboveMaximum_Throws(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.SaveAsWebp(memStream, encoder));
+        Assert.Equal(0, memStream.Length);
+    }
+
+    [Theory]
     [InlineData(16384, 4)]
     [InlineData(4, 16384)]
     [InlineData(20000, 4)]
