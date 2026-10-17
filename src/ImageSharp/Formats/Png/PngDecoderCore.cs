@@ -592,6 +592,10 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             {
                 this.DecodePixelData(dataStream, image, pngMetadata);
             }
+
+            // The deflate stream stops reading once the rows are decoded, so skip what is left of the
+            // image data (the zlib checksum, padding and any further data chunks) to reach the next chunk.
+            deframeStream.SkipRemainingData();
         }
         catch (InvalidDataException ex)
         {
