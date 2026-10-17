@@ -35,6 +35,8 @@ public class PbmEncoderTests
             { RgbPlain, PbmColorType.Rgb },
         };
 
+    public static readonly TheoryData<int> BlackAndWhiteWidths = new() { 1, 7, 8, 9, 10, 13, 17 };
+
     [Theory]
     [MemberData(nameof(PbmColorTypeFiles))]
     public void PbmEncoder_PreserveColorType(string imagePath, PbmColorType pbmColorType)
@@ -85,6 +87,42 @@ public class PbmEncoderTests
                     Assert.Equal(pbmColorType, meta.ColorType);
                 }
             }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(BlackAndWhiteWidths))]
+    public void PbmEncoder_P4_PadsEachRowToByteBoundary(int width)
+    {
+        const int height = 3;
+        using Image<L8> image = new(width, height, new L8(0));
+        var encoder = new PbmEncoder
+        {
+            ColorType = PbmColorType.BlackAndWhite,
+            ComponentType = PbmComponentType.Byte,
+            Encoding = PbmEncoding.Binary
+        };
+
+        using var memStream = new MemoryStream();
+        image.Save(memStream, encoder);
+        byte[] data = memStream.ToArray();
+
+        int headerLength = $"P4\n{width} {height}\n".Length;
+        int bytesPerRow = (width + 7) / 8;
+        Assert.Equal(headerLength + (bytesPerRow * height), data.Length);
+
+        // Every pixel is black, so every used bit is set and every padding bit must be zero.
+        int usedBitsInLastByte = width - ((bytesPerRow - 1) * 8);
+        byte expectedLastByte = (byte)(0xFF << (8 - usedBitsInLastByte));
+        for (int y = 0; y < height; y++)
+        {
+            int rowStart = headerLength + (y * bytesPerRow);
+            for (int i = 0; i < bytesPerRow - 1; i++)
+            {
+                Assert.Equal(0xFF, data[rowStart + i]);
+            }
+
+            Assert.Equal(expectedLastByte, data[rowStart + bytesPerRow - 1]);
         }
     }
 

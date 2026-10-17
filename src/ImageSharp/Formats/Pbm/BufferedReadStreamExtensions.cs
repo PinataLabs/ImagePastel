@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using SixLabors.ImageSharp.IO;
 
@@ -79,7 +80,8 @@ internal static class BufferedReadStreamExtensions
                 break;
             }
 
-            value = (value * 10) + current;
+            // Saturate instead of wrapping, so oversized values cannot pass range checks.
+            value = (int)Math.Min(((long)value * 10) + current, int.MaxValue);
         }
 
         return true;

@@ -7,7 +7,6 @@ using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 
 namespace SixLabors.ImageSharp.Formats.Pbm;
 
@@ -55,8 +54,6 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     Size IImageDecoderInternals.Dimensions => this.PixelSize;
 
-    private bool NeedsUpscaling => this.ColorType != PbmColorType.BlackAndWhite && this.maxPixelValue is not 255 and not 65535;
-
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -68,10 +65,6 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
         Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
 
         this.ProcessPixels(stream, pixels);
-        if (this.NeedsUpscaling)
-        {
-            this.ProcessUpscaling(image);
-        }
 
         return image;
     }
@@ -156,6 +149,12 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
                 ThrowPrematureEof();
             }
 
+            // The Netpbm specification requires 0 < maxval < 65536.
+            if (this.maxPixelValue is <= 0 or > 65535)
+            {
+                throw new InvalidImageContentException($"Invalid maximum pixel value {this.maxPixelValue}; it must be between 1 and 65535.");
+            }
+
             if (this.maxPixelValue > 255)
             {
                 this.ComponentType = PbmComponentType.Short;
@@ -187,19 +186,11 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
     {
         if (this.Encoding == PbmEncoding.Binary)
         {
-            BinaryDecoder.Process(this.Configuration, pixels, stream, this.ColorType, this.ComponentType);
+            BinaryDecoder.Process(this.Configuration, pixels, stream, this.ColorType, this.ComponentType, this.maxPixelValue);
         }
         else
         {
-            PlainDecoder.Process(this.Configuration, pixels, stream, this.ColorType, this.ComponentType);
+            PlainDecoder.Process(this.Configuration, pixels, stream, this.ColorType, this.ComponentType, this.maxPixelValue);
         }
-    }
-
-    private void ProcessUpscaling<TPixel>(Image<TPixel> image)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        int maxAllocationValue = this.ComponentType == PbmComponentType.Short ? 65535 : 255;
-        float factor = maxAllocationValue / this.maxPixelValue;
-        image.Mutate(x => x.Brightness(factor));
     }
 }

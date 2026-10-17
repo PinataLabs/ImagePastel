@@ -26,32 +26,33 @@ internal class BinaryDecoder
     /// <param name="stream">The stream to read the data from.</param>
     /// <param name="colorType">The ColorType to decode.</param>
     /// <param name="componentType">Data type of the pixles components.</param>
+    /// <param name="maxPixelValue">The maximum sample value declared in the header.</param>
     /// <exception cref="InvalidImageContentException">
     /// Thrown if an invalid combination of setting is requested.
     /// </exception>
-    public static void Process<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, PbmColorType colorType, PbmComponentType componentType)
+    public static void Process<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, PbmColorType colorType, PbmComponentType componentType, int maxPixelValue)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         if (colorType == PbmColorType.Grayscale)
         {
             if (componentType == PbmComponentType.Byte)
             {
-                ProcessGrayscale(configuration, pixels, stream);
+                ProcessGrayscale(configuration, pixels, stream, maxPixelValue);
             }
             else
             {
-                ProcessWideGrayscale(configuration, pixels, stream);
+                ProcessWideGrayscale(configuration, pixels, stream, maxPixelValue);
             }
         }
         else if (colorType == PbmColorType.Rgb)
         {
             if (componentType == PbmComponentType.Byte)
             {
-                ProcessRgb(configuration, pixels, stream);
+                ProcessRgb(configuration, pixels, stream, maxPixelValue);
             }
             else
             {
-                ProcessWideRgb(configuration, pixels, stream);
+                ProcessWideRgb(configuration, pixels, stream, maxPixelValue);
             }
         }
         else
@@ -60,7 +61,7 @@ internal class BinaryDecoder
         }
     }
 
-    private static void ProcessGrayscale<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream)
+    private static void ProcessGrayscale<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, int maxPixelValue)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         const int bytesPerPixel = 1;
@@ -77,6 +78,8 @@ internal class BinaryDecoder
                 return;
             }
 
+            SampleScaler.ScaleBytes(rowSpan, maxPixelValue);
+
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);
             PixelOperations<TPixel>.Instance.FromL8Bytes(
                 configuration,
@@ -86,7 +89,7 @@ internal class BinaryDecoder
         }
     }
 
-    private static void ProcessWideGrayscale<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream)
+    private static void ProcessWideGrayscale<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, int maxPixelValue)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         const int bytesPerPixel = 2;
@@ -103,6 +106,8 @@ internal class BinaryDecoder
                 return;
             }
 
+            SampleScaler.ScaleShorts(rowSpan, maxPixelValue);
+
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);
             PixelOperations<TPixel>.Instance.FromL16Bytes(
                 configuration,
@@ -112,7 +117,7 @@ internal class BinaryDecoder
         }
     }
 
-    private static void ProcessRgb<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream)
+    private static void ProcessRgb<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, int maxPixelValue)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         const int bytesPerPixel = 3;
@@ -129,6 +134,8 @@ internal class BinaryDecoder
                 return;
             }
 
+            SampleScaler.ScaleBytes(rowSpan, maxPixelValue);
+
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);
             PixelOperations<TPixel>.Instance.FromRgb24Bytes(
                 configuration,
@@ -138,7 +145,7 @@ internal class BinaryDecoder
         }
     }
 
-    private static void ProcessWideRgb<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream)
+    private static void ProcessWideRgb<TPixel>(Configuration configuration, Buffer2D<TPixel> pixels, BufferedReadStream stream, int maxPixelValue)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         const int bytesPerPixel = 6;
@@ -154,6 +161,8 @@ internal class BinaryDecoder
             {
                 return;
             }
+
+            SampleScaler.ScaleShorts(rowSpan, maxPixelValue);
 
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);
             PixelOperations<TPixel>.Instance.FromRgb48Bytes(
