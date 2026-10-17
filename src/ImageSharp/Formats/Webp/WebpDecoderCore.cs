@@ -283,16 +283,19 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         var info = new WebpImageInfo();
         try
         {
-            while (this.currentStream.Position < this.riffEnd)
+            // A chunk header that does not fit before the RIFF end is not part of the file.
+            while (this.riffEnd - this.currentStream.Position >= WebpConstants.ChunkHeaderSize)
             {
                 WebpChunkType chunkType = this.ReadChunkType();
-                if (chunkType == WebpChunkType.Vp8)
+                if (chunkType is WebpChunkType.Vp8 or WebpChunkType.Vp8L)
                 {
-                    info = this.ReadVp8Header(features);
-                }
-                else if (chunkType == WebpChunkType.Vp8L)
-                {
-                    info = this.ReadVp8LHeader(features);
+                    WebpImageInfo imageInfo = chunkType == WebpChunkType.Vp8 ? this.ReadVp8Header(features) : this.ReadVp8LHeader(features);
+
+                    // A later image chunk replaces an earlier one, so release the earlier image data.
+                    // The alpha data belongs to the shared features and stays.
+                    info.Vp8BitReader?.Dispose();
+                    info.Vp8LBitReader?.Dispose();
+                    info = imageInfo;
                 }
                 else if (IsOptionalVp8XChunk(chunkType))
                 {
@@ -484,7 +487,25 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         }
 
         var bitReader = new Vp8LBitReader(this.currentStream, imageDataSize, this.memoryAllocator);
+        try
+        {
+            return this.ReadVp8LHeaderFields(bitReader, features);
+        }
+        catch
+        {
+            bitReader.Dispose();
+            throw;
+        }
+    }
 
+    /// <summary>
+    /// Reads the VP8L header fields from the bit reader.
+    /// </summary>
+    /// <param name="bitReader">The bit reader positioned at the VP8L signature.</param>
+    /// <param name="features">Webp image features.</param>
+    /// <returns>Information about this image.</returns>
+    private WebpImageInfo ReadVp8LHeaderFields(Vp8LBitReader bitReader, WebpFeatures features)
+    {
         // One byte signature, should be 0x2f.
         uint signature = bitReader.ReadValue(8);
         if (signature != WebpConstants.Vp8LHeaderMagicByte)
@@ -586,7 +607,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             return;
         }
 
-        while (this.currentStream.Position < this.riffEnd)
+        while (this.riffEnd - this.currentStream.Position >= WebpConstants.ChunkHeaderSize)
         {
             // Read chunk header.
             WebpChunkType chunkType = this.ReadChunkType();

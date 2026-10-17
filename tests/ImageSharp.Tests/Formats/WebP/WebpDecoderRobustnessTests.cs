@@ -131,6 +131,37 @@ public class WebpDecoderRobustnessTests
         }
     }
 
+    [Fact]
+    public void Decode_ChunkHeaderSplitAcrossRiffEnd_IsIgnored()
+    {
+        // The RIFF payload ends with "VP", and "8L" plus a lossless chunk for another image follow it.
+        // Reading the chunk header across the RIFF end would replace the image with the trailing one.
+        byte[] original = Encode(SampleKind.LossyWithAlpha);
+
+        using var other = new Image<Rgba32>(5, 3);
+        using var otherStream = new MemoryStream();
+        other.Save(otherStream, new WebpEncoder { FileFormat = WebpFileFormatType.Lossless });
+        byte[] otherChunk = otherStream.ToArray().AsSpan(FindChunk(otherStream.ToArray(), "VP8L")).ToArray();
+
+        byte[] patched = [.. original, .. otherChunk];
+        uint riffSize = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4));
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), riffSize + 2);
+
+        AssertSameImage(original, patched);
+    }
+
+    [Theory]
+    [InlineData(SampleKind.SimpleLossless)]
+    [InlineData(SampleKind.LosslessWithIcc)]
+    public void Decode_InvalidVp8LSignature_ThrowsAndReleasesBuffers(SampleKind kind)
+    {
+        byte[] data = Encode(kind);
+        data[FindChunk(data, "VP8L") + 8] = 0;
+
+        Assert.ThrowsAny<ImageFormatException>(() => Image.Load<Rgba32>(data));
+        Assert.ThrowsAny<ImageFormatException>(() => Image.Identify(data));
+    }
+
     [Theory]
     [InlineData(SampleKind.LosslessWithExif)]
     [InlineData(SampleKind.LossyWithExifAndXmp)]
