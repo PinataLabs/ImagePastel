@@ -590,15 +590,24 @@ internal static class IccTestDataTagDataEntry
         new object[] { ResponseCurveSet16_Arr, ResponseCurveSet16_Val },
     };
 
-    public static readonly IccFix16ArrayTagDataEntry Fix16Array_Val = new IccFix16ArrayTagDataEntry(new float[] { 1 / 256f, 2 / 256f, 3 / 256f });
+    public static readonly IccFix16ArrayTagDataEntry Fix16Array_Val = new IccFix16ArrayTagDataEntry(new float[] { 1, 2, 3 });
     public static readonly byte[] Fix16Array_Arr = ArrayHelper.Concat(
         IccTestDataPrimitives.Fix16_1,
         IccTestDataPrimitives.Fix16_2,
         IccTestDataPrimitives.Fix16_3);
 
+    public static readonly IccFix16ArrayTagDataEntry Fix16Array_FractionalVal = new IccFix16ArrayTagDataEntry(new float[] { 0.5f, -1.5f, -2 });
+    public static readonly byte[] Fix16Array_FractionalArr =
+    {
+        0x00, 0x00, 0x80, 0x00,
+        0xFF, 0xFE, 0x80, 0x00,
+        0xFF, 0xFE, 0x00, 0x00,
+    };
+
     public static readonly object[][] Fix16ArrayTagDataEntryTestData =
     {
         new object[] { Fix16Array_Arr, Fix16Array_Val, 20u },
+        new object[] { Fix16Array_FractionalArr, Fix16Array_FractionalVal, 20u },
     };
 
     public static readonly IccSignatureTagDataEntry Signature_Val = new IccSignatureTagDataEntry("ABCD");
