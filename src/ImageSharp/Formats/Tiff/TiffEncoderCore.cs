@@ -337,13 +337,30 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
 
     private void SanitizeAndSetEncoderOptions(TiffBitsPerPixel? bitsPerPixel, int inputBitsPerPixel, TiffPhotometricInterpretation? photometricInterpretation, TiffCompression compression, TiffPredictor predictor)
     {
+        // CCITT compression can only encode bilevel data.
+        if (IsCcittCompression(compression) && bitsPerPixel.HasValue && bitsPerPixel != TiffBitsPerPixel.Bit1)
+        {
+            if (this.CompressionType.HasValue)
+            {
+                // The compression was set in the encoder options, so the bit depth has to follow it.
+                bitsPerPixel = TiffBitsPerPixel.Bit1;
+            }
+            else
+            {
+                // The compression comes from the metadata and does not fit the bit depth, so it is not used.
+                // A photometric interpretation from the metadata describes the CCITT data, so it is not used either.
+                compression = DefaultCompression;
+                photometricInterpretation = this.PhotometricInterpretation;
+            }
+        }
+
         // BitsPerPixel should be the primary source of truth for the encoder options.
         if (bitsPerPixel.HasValue)
         {
             switch (bitsPerPixel)
             {
                 case TiffBitsPerPixel.Bit1:
-                    if (compression == TiffCompression.Ccitt1D || compression == TiffCompression.CcittGroup3Fax || compression == TiffCompression.CcittGroup4Fax)
+                    if (IsCcittCompression(compression))
                     {
                         // The “normal” PhotometricInterpretation for bilevel CCITT compressed data is WhiteIsZero.
                         this.SetEncoderOptions(bitsPerPixel, TiffPhotometricInterpretation.WhiteIsZero, compression, TiffPredictor.None);
@@ -378,6 +395,14 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
             return;
         }
 
+        // CCITT compression can only encode bilevel data, whatever the input pixel format is.
+        // As with an explicit Bit1, the photometric interpretation is the "normal" WhiteIsZero.
+        if (IsCcittCompression(compression))
+        {
+            this.SetEncoderOptions(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, compression, TiffPredictor.None);
+            return;
+        }
+
         // If no photometric interpretation was chosen, the input image bit per pixel should be preserved.
         if (!photometricInterpretation.HasValue)
         {
@@ -396,18 +421,8 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         {
             case TiffPhotometricInterpretation.BlackIsZero:
             case TiffPhotometricInterpretation.WhiteIsZero:
-                if (this.CompressionType == TiffCompression.Ccitt1D ||
-                    this.CompressionType == TiffCompression.CcittGroup3Fax ||
-                    this.CompressionType == TiffCompression.CcittGroup4Fax)
-                {
-                    this.SetEncoderOptions(TiffBitsPerPixel.Bit1, photometricInterpretation, compression, TiffPredictor.None);
-                    return;
-                }
-                else
-                {
-                    this.SetEncoderOptions(TiffBitsPerPixel.Bit8, photometricInterpretation, compression, predictor);
-                    return;
-                }
+                this.SetEncoderOptions(TiffBitsPerPixel.Bit8, photometricInterpretation, compression, predictor);
+                return;
 
             case TiffPhotometricInterpretation.PaletteColor:
                 this.SetEncoderOptions(TiffBitsPerPixel.Bit8, photometricInterpretation, compression, predictor);
@@ -420,6 +435,9 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
 
         this.SetEncoderOptions(DefaultBitsPerPixel, DefaultPhotometricInterpretation, compression, predictor);
     }
+
+    private static bool IsCcittCompression(TiffCompression compression)
+        => compression is TiffCompression.Ccitt1D or TiffCompression.CcittGroup3Fax or TiffCompression.CcittGroup4Fax;
 
     private void SetEncoderOptions(TiffBitsPerPixel? bitsPerPixel, TiffPhotometricInterpretation? photometricInterpretation, TiffCompression compression, TiffPredictor predictor)
     {

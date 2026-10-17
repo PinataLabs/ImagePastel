@@ -17,7 +17,7 @@ internal class NonSeekableStream : Stream
 
     public override bool CanSeek => false;
 
-    public override bool CanWrite => false;
+    public override bool CanWrite => this.dataStream.CanWrite;
 
     public override long Length => throw new NotSupportedException();
 
@@ -38,5 +38,5 @@ internal class NonSeekableStream : Stream
         => throw new NotSupportedException();
 
     public override void Write(byte[] buffer, int offset, int count)
-        => throw new NotImplementedException();
+        => this.dataStream.Write(buffer, offset, count);
 }
