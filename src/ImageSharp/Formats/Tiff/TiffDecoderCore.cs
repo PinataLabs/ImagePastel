@@ -445,6 +445,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
     {
         int stripsPerPixel = this.BitsPerSample.Channels;
         int stripsPerPlane = stripOffsets.Length / stripsPerPixel;
+        if (stripsPerPlane == 0)
+        {
+            TiffThrowHelper.ThrowImageFormatException("The planar TIFF image has fewer StripOffsets than planes.");
+        }
+
         int bitsPerPixel = this.BitsPerPixel;
 
         Buffer2D<TPixel> pixels = frame.PixelBuffer;

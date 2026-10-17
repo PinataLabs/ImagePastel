@@ -107,6 +107,17 @@ public class TiffDecoderMalformedInputTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Decode_PlanarWithFewerStripOffsetsThanPlanes_ThrowsImageFormatException(int stripCount)
+    {
+        byte[][] strips = Enumerable.Range(0, stripCount).Select(_ => new byte[4]).ToArray();
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8, 8, 8 }, TiffPhotometricInterpretation.Rgb, true, null, strips);
+
+        Assert.Throws<ImageFormatException>(() => Decode<Rgb24>(BuildTiff(page)).Dispose());
+    }
+
+    [Theory]
     [InlineData(0, 2)]
     [InlineData(2, 0)]
     [InlineData(0, 0)]
