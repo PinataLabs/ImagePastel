@@ -394,7 +394,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
                     }
                 });
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         private static void RunDecodeLossyWithHorizontalFilter()
         {
             var provider = TestImageProvider<Rgba32>.File(TestImageLossyHorizontalFilterPath);
@@ -446,6 +445,5 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
         [Fact]
         public void DecodeLossyWithComplexFilterTest_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDecodeLossyWithComplexFilterTest, HwIntrinsics.DisableHWIntrinsic);
-#endif
     }
 }

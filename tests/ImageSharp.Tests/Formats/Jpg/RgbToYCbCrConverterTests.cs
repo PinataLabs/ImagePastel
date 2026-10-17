@@ -4,10 +4,8 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-#endif
 using SixLabors.ImageSharp.ColorSpaces;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 using SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
@@ -104,7 +102,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             Verify420(data, yBlocks, ref cb, ref cr, new ApproximateFloatComparer(1F));
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Theory]
         [InlineData(1)]
         [InlineData(2)]
@@ -140,7 +137,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                 return 0.25f * (data[upIdx] + data[upIdx + 1] + data[lowIdx] + data[lowIdx + 1]);
             }
         }
-#endif
 
         private static void Verify444(
             ReadOnlySpan<Rgb24> data,

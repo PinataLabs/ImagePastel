@@ -5,9 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics.X86;
-#endif
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,8 +17,9 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
             new TheoryData<HwIntrinsics, string[]>
             {
                 { HwIntrinsics.DisableAES | HwIntrinsics.AllowAll, new string[] { "EnableAES", "AllowAll" } },
-                { HwIntrinsics.DisableSIMD | HwIntrinsics.DisableHWIntrinsic, new string[] { "FeatureSIMD", "EnableHWIntrinsic" } },
-                { HwIntrinsics.DisableSSE42 | HwIntrinsics.DisableAVX, new string[] { "EnableSSE42", "EnableAVX" } }
+                { HwIntrinsics.DisableSIMD | HwIntrinsics.DisableHWIntrinsic, new string[] { "EnableHWIntrinsic", "EnableHWIntrinsic" } },
+                { HwIntrinsics.DisableSSE42 | HwIntrinsics.DisableAVX, new string[] { "EnableSSE42", "EnableAVX" } },
+                { HwIntrinsics.DisableSSE41 | HwIntrinsics.DisableBMI2, new string[] { "EnableSSE42", "EnableAVX2" } }
             };
 
         [Theory]
@@ -63,7 +62,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                 HwIntrinsics.DisableSIMD);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Fact]
         public void CanLimitHwIntrinsicBaseFeatures()
         {
@@ -90,7 +88,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                 AssertDisabled,
                 HwIntrinsics.DisableHWIntrinsic);
         }
-#endif
 
         [Fact]
         public void CanLimitHwIntrinsicFeaturesWithIntrinsicsParam()
@@ -104,7 +101,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                     case HwIntrinsics.DisableSIMD:
                         Assert.False(Vector.IsHardwareAccelerated);
                         break;
-#if SUPPORTS_RUNTIME_INTRINSICS
                     case HwIntrinsics.DisableHWIntrinsic:
                         Assert.False(Sse.IsSupported);
                         Assert.False(Sse2.IsSupported);
@@ -167,7 +163,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                     case HwIntrinsics.DisableLZCNT:
                         Assert.False(Lzcnt.IsSupported);
                         break;
-#endif
                 }
             }
 
@@ -185,9 +180,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                 Assert.NotNull(serializable);
                 Assert.NotNull(FeatureTestRunner.DeserializeForXunit<FakeSerializable>(serializable));
 
-#if SUPPORTS_RUNTIME_INTRINSICS
                 Assert.False(Sse.IsSupported);
-#endif
             }
 
             FeatureTestRunner.RunWithHwIntrinsicsFeature(
@@ -209,7 +202,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                     case HwIntrinsics.DisableSIMD:
                         Assert.False(Vector.IsHardwareAccelerated, nameof(Vector.IsHardwareAccelerated));
                         break;
-#if SUPPORTS_RUNTIME_INTRINSICS
                     case HwIntrinsics.DisableHWIntrinsic:
                         Assert.False(Sse.IsSupported);
                         Assert.False(Sse2.IsSupported);
@@ -272,7 +264,6 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
                     case HwIntrinsics.DisableLZCNT:
                         Assert.False(Lzcnt.IsSupported);
                         break;
-#endif
                 }
             }
 

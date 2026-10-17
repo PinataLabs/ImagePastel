@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+#nullable enable
+
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -30,12 +32,12 @@ namespace SixLabors.ImageSharp.Formats.Gif
         /// <summary>
         /// The global color table.
         /// </summary>
-        private IMemoryOwner<byte> globalColorTable;
+        private IMemoryOwner<byte>? globalColorTable;
 
         /// <summary>
         /// The current local color table.
         /// </summary>
-        private IMemoryOwner<byte> currentLocalColorTable;
+        private IMemoryOwner<byte>? currentLocalColorTable;
 
         /// <summary>
         /// Gets the size in bytes of the current local color table.
@@ -85,12 +87,12 @@ namespace SixLabors.ImageSharp.Formats.Gif
         /// <summary>
         /// The abstract metadata.
         /// </summary>
-        private ImageMetadata metadata;
+        private ImageMetadata? metadata;
 
         /// <summary>
         /// The gif specific metadata.
         /// </summary>
-        private GifMetadata gifMetadata;
+        private GifMetadata? gifMetadata;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GifDecoderCore"/> class.
@@ -120,8 +122,8 @@ namespace SixLabors.ImageSharp.Formats.Gif
             where TPixel : unmanaged, IPixel<TPixel>
         {
             uint frameCount = 0;
-            Image<TPixel> image = null;
-            ImageFrame<TPixel> previousFrame = null;
+            Image<TPixel>? image = null;
+            ImageFrame<TPixel>? previousFrame = null;
             try
             {
                 this.ReadLogicalScreenDescriptorAndGlobalColorTable(stream);
@@ -777,18 +779,18 @@ namespace SixLabors.ImageSharp.Formats.Gif
                     Span<byte> globalColorTableSpan = this.globalColorTable.GetSpan();
                     stream.Read(globalColorTableSpan);
 
-                    //Color[] colorTable = new Color[this.logicalScreenDescriptor.GlobalColorTableSize];
-                    //ReadOnlySpan<Rgb24> rgbTable = MemoryMarshal.Cast<byte, Rgb24>(globalColorTableSpan);
-                    //for (int i = 0; i < colorTable.Length; i++)
-                    //{
+                    // Color[] colorTable = new Color[this.logicalScreenDescriptor.GlobalColorTableSize];
+                    // ReadOnlySpan<Rgb24> rgbTable = MemoryMarshal.Cast<byte, Rgb24>(globalColorTableSpan);
+                    // for (int i = 0; i < colorTable.Length; i++)
+                    // {
                     //    colorTable[i] = new Color(rgbTable[i]);
-                    //}
+                    // }
 
-                    //this.gifMetadata.GlobalColorTable = colorTable;
+                    // this.gifMetadata.GlobalColorTable = colorTable;
                 }
             }
 
-            //this.gifMetadata.BackgroundColorIndex = this.logicalScreenDescriptor.BackgroundColorIndex;
+            // this.gifMetadata.BackgroundColorIndex = this.logicalScreenDescriptor.BackgroundColorIndex;
         }
     }
 }

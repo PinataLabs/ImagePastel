@@ -1,109 +1,99 @@
-<h1 align="center">
+# PinataLabs.ImageSharp
 
-<img src="https://github.com/SixLabors/Branding/raw/main/icons/imagesharp/sixlabors.imagesharp.svg?sanitize=true" alt="SixLabors.ImageSharp" width="256"/>
-<br/>
-SixLabors.ImageSharp
-</h1>
+[![CI](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImageSharp.svg)](https://www.nuget.org/packages/PinataLabs.ImageSharp/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE)
 
-<div align="center">
+PinataLabs.ImageSharp is a fully managed, cross-platform 2D graphics library for .NET.
+It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
 
-[![Build Status](https://img.shields.io/github/workflow/status/SixLabors/ImageSharp/Build/main)](https://github.com/SixLabors/ImageSharp/actions)
-[![Code coverage](https://codecov.io/gh/SixLabors/ImageSharp/branch/main/graph/badge.svg)](https://codecov.io/gh/SixLabors/ImageSharp)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=flat&logo=twitter)](https://twitter.com/intent/tweet?hashtags=imagesharp,dotnet,oss&text=ImageSharp.+A+new+cross-platform+2D+graphics+API+in+C%23&url=https%3a%2f%2fgithub.com%2fSixLabors%2fImageSharp&via=sixlabors)
+> **Community fork.** This package is a fork of [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) 2.1.x, the last release line under the Apache License 2.0.
+> Pinata Labs maintains the fork. Pinata Labs is not affiliated with Six Labors, and Six Labors does not endorse this package.
 
-</div>
+## Security
 
-### **ImageSharp** is a new, fully featured, fully managed, cross-platform, 2D graphics API. 
+This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
+Pinata Labs does not port security fixes that Six Labors publishes after that date.
 
-ImageSharp is a new, fully featured, fully managed, cross-platform, 2D graphics library. Designed to simplify image processing, ImageSharp brings you an incredibly powerful yet beautifully simple API.
+To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md).
 
-ImageSharp is designed from the ground up to be flexible and extensible. The library provides API endpoints for common image processing operations and the building blocks to allow for the development of additional operations.
+## Install
 
-Built against [.NET Standard 2.0](https://docs.microsoft.com/en-us/dotnet/standard/net-standard), ImageSharp can be used in device, cloud, and embedded/IoT scenarios.
+Add the package to your project:
 
+```bash
+dotnet add package PinataLabs.ImageSharp
+```
 
-## License
-  
-- ImageSharp is licensed under the [Apache License, Version 2.0](https://opensource.org/licenses/Apache-2.0)  
-- An alternative Six Labors License can be purchased **for projects and applications requiring developer support**.
-Please visit https://sixlabors.com/pricing for details.
+## Move from SixLabors.ImageSharp 2.1.x
 
-## Support Six Labors
+The public API and the `SixLabors.ImageSharp` namespace are the same as in SixLabors.ImageSharp 2.1.13.
+You do not have to change your code.
 
-Support the efforts of the development of the Six Labors projects. 
- - [Purchase a Commercial Support License :heart:](https://sixlabors.com/pricing/)
- - [Become a sponsor via GitHub Sponsors :heart:]( https://github.com/sponsors/SixLabors)
- - [Become a sponsor via Open Collective :heart:](https://opencollective.com/sixlabors)
+1. Remove the `SixLabors.ImageSharp` package reference.
+2. Add the `PinataLabs.ImageSharp` package reference.
+3. Build and test your application.
+
+Do not reference both packages in one application.
+The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
+
+## Target frameworks
+
+| Target | For |
+|---|---|
+| `net10.0` | .NET 10 and later. This build uses hardware intrinsics (SSE, AVX, AVX2). |
+| `netstandard2.1` | Other .NET runtimes, for example .NET 8, .NET 9, Mono, and Unity. This build does not use hardware intrinsics. |
+
+The package does not support .NET Framework.
+
+## Differences from SixLabors.ImageSharp 2.1.13
+
+- The package ID and the assembly name are `PinataLabs.ImageSharp`.
+- The strong-name key is different. The public key token is `4ebeb91ace1f6a56`.
+- The package targets `net10.0` and `netstandard2.1` only.
+- The dependencies are current versions.
+- The public API is the same. CI compares it with SixLabors.ImageSharp 2.1.13 in strict mode on each change.
+
+## Versions
+
+Versions continue the 2.x line and start at 2.2.0. The project uses [semantic versioning](https://semver.org/).
+
+Each push to `main` publishes a prerelease package to [GitHub Packages](https://github.com/PinataLabs/ImageSharp/packages).
+Each `v*` tag publishes a release to [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
 
 ## Documentation
 
-- [Detailed documentation](https://sixlabors.github.io/docs/) for the ImageSharp API is available. This includes additional conceptual documentation to help you get started.
-- Our [Samples Repository](https://github.com/SixLabors/Samples/tree/main/ImageSharp) is also available containing buildable code samples demonstrating common activities.
+Documentation for SixLabors.ImageSharp 2.1.x applies to this package.
+The source of that version is on the [`release/2.1.x` branch](https://github.com/SixLabors/ImageSharp/tree/release/2.1.x) of the Six Labors repository.
+Later Six Labors versions have a different API, so their documentation does not always apply.
 
-## Questions
+## Build from source
 
-- Do you have questions? We are happy to help! Simply purchase a [Six Labors License](https://sixlabors.com/pricing) for developer support. Please do not open issues for questions or misuse our [Discussions Forum](https://github.com/SixLabors/ImageSharp/discussions).
-- For feature ideas please [join our Discussions Forum](https://github.com/SixLabors/ImageSharp/discussions/categories/ideas) and we'll be happy to discuss.  
-- Please read our [Contribution Guide](https://github.com/SixLabors/ImageSharp/blob/main/.github/CONTRIBUTING.md) before opening issues or pull requests!
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Git LFS](https://git-lfs.com/).
+The test images are in Git LFS.
 
-## Code of Conduct  
-This project has adopted the code of conduct defined by the [Contributor Covenant](https://contributor-covenant.org/) to clarify expected behavior in our community.
-For more information, see the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
+1. On Windows, enable long file paths in Git: `git config --system core.longpaths true`.
+2. Clone the repository: `git clone https://github.com/PinataLabs/ImageSharp`.
+3. Get the test images: `git lfs pull`.
+4. Build the solution: `dotnet build ImageSharp.sln -c Release`.
+5. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
 
-## Installation 
+The build treats all warnings as errors.
 
-Install stable releases via Nuget; development releases are available via MyGet.
+## Contributing
 
-| Package Name                   | Release (NuGet) | Nightly (MyGet) |
-|--------------------------------|-----------------|-----------------|
-| `SixLabors.ImageSharp`         | [![NuGet](https://img.shields.io/nuget/v/SixLabors.ImageSharp.svg)](https://www.nuget.org/packages/SixLabors.ImageSharp/) | [![MyGet](https://img.shields.io/myget/sixlabors/vpre/SixLabors.ImageSharp.svg)](https://www.myget.org/feed/sixlabors/package/nuget/SixLabors.ImageSharp) |
+Read the [contribution guide](https://github.com/PinataLabs/ImageSharp/blob/main/.github/CONTRIBUTING.md) before you open an issue or a pull request.
 
-## Manual build
+This project uses the code of conduct of the [Contributor Covenant](https://contributor-covenant.org/).
+For more information, read the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
 
-If you prefer, you can compile ImageSharp yourself (please do and help!)
+## License
 
-- Using [Visual Studio 2019](https://visualstudio.microsoft.com/vs/)
-  - Make sure you have the latest version installed
-  - Make sure you have [the .NET 5 SDK](https://www.microsoft.com/net/core#windows) installed
+PinataLabs.ImageSharp is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
+The [NOTICE](https://github.com/PinataLabs/ImageSharp/blob/main/NOTICE) file gives the origin of the code and the changes that Pinata Labs made.
+Third-party code is listed in [THIRD-PARTY-NOTICES.TXT](https://github.com/PinataLabs/ImageSharp/blob/main/THIRD-PARTY-NOTICES.TXT).
 
-Alternatively, you can work from command line and/or with a lightweight editor on **both Linux/Unix and Windows**:
+## Credits
 
-- [Visual Studio Code](https://code.visualstudio.com/) with [C# Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.csharp)
-- [.NET Core](https://www.microsoft.com/net/core#linuxubuntu)
-
-To clone ImageSharp locally, click the "Clone in [YOUR_OS]" button above or run the following git commands:
-
-```bash
-git clone https://github.com/SixLabors/ImageSharp
-```
-
-If working with Windows please ensure that you have enabled long file paths in git (run as Administrator).
-
-```bash
-git config --system core.longpaths true
-```
-
-This repository uses [Git Large File Storage](https://docs.github.com/en/github/managing-large-files/installing-git-large-file-storage). Please follow the linked instructions to ensure you have it set up in your environment.
-
-This repository contains [Git Submodules](https://blog.github.com/2016-02-01-working-with-submodules/). To add the submodules to the project, navigate to the repository root and type:
-
-``` bash
-git submodule update --init --recursive
-```
-
-## How can you help?
-
-Please... Spread the word, contribute algorithms, submit performance improvements, unit tests, no input is too little. Make sure to read our [Contribution Guide](https://github.com/SixLabors/ImageSharp/blob/main/.github/CONTRIBUTING.md) before opening a PR.
-
-## The ImageSharp Team
-
-- [James Jackson-South](https://github.com/jimbobsquarepants)
-- [Dirk Lemstra](https://github.com/dlemstra)
-- [Anton Firsov](https://github.com/antonfirsov)
-- [Scott Williams](https://github.com/tocsoft)
-- [Brian Popow](https://github.com/brianpopow)
-
-
-
-
+James Jackson-South, Dirk Lemstra, Anton Firsov, Scott Williams, Brian Popow, and the other contributors at Six Labors wrote ImageSharp.
+This fork exists because of their work.

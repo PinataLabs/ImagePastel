@@ -18,15 +18,3 @@ https://github.com/icsharpcode/SharpZipLib
 Crc32 and Adler32 SIMD implementation adapted from Chromium.
 Licensed under BSD 3-Clause "New" or "Revised" License.
 https://github.com/chromium/chromium
-
-
-License notice for Stream Read/Write Extensions
------
-
-Licensed to the .NET Foundation under one or more agreements.
-The .NET Foundation licenses this file to you under the MIT license.
-See the LICENSE file in the CoreFX project root for more information.
-
-https://github.com/dotnet/corefx/blob/17300169760c61a90cab8d913636c1058a30a8c1/LICENSE.TXT
-https://github.com/dotnet/corefx/blob/17300169760c61a90cab8d913636c1058a30a8c1/src/Common/src/CoreLib/System/IO/Stream.cs#L742
-https://github.com/dotnet/corefx/blob/17300169760c61a90cab8d913636c1058a30a8c1/src/Common/src/CoreLib/System/IO/Stream.cs#L775

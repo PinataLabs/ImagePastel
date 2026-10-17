@@ -1,0 +1,29 @@
+PinataLabs.ImageSharp
+Copyright (c) Pinata Labs.
+
+This product is a modified version of SixLabors.ImageSharp 2.1.x.
+SixLabors.ImageSharp is Copyright (c) Six Labors and contributors, and is
+licensed under the Apache License, Version 2.0.
+
+Original source: https://github.com/SixLabors/ImageSharp
+Branch release/2.1.x, commit 14efb84e8 (2026-03-18).
+
+Pinata Labs changed the original work. The main changes are:
+
+- The build targets net10.0 and netstandard2.1 only. Code for the removed
+  target frameworks is removed.
+- The shared build infrastructure of Six Labors is copied into this
+  repository.
+- The dependencies are updated to current versions.
+- The code is changed to remove all compiler and analyzer warnings.
+- The package ID and the assembly name are PinataLabs.ImageSharp, and the
+  assembly is signed with a Pinata Labs strong-name key.
+- The build, test, and publish pipeline is replaced.
+
+The Git history of https://github.com/PinataLabs/ImageSharp records each
+change.
+
+Pinata Labs is not affiliated with Six Labors. "Six Labors" and "ImageSharp"
+are names of Six Labors.
+
+This product includes third-party code. See THIRD-PARTY-NOTICES.TXT.

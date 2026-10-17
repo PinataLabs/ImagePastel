@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <RuleSet Name="ImageSharp.Tests" ToolsVersion="17.0">
-  <Include Path="..\shared-infrastructure\sixlabors.tests.ruleset" Action="Default" />
+  <Include Path="..\build\sixlabors.tests.ruleset" Action="Default" />
   <Rules AnalyzerId="StyleCop.Analyzers" RuleNamespace="StyleCop.Analyzers">
     <Rule Id="SA1313" Action="None" />
   </Rules>
@@ -9,5 +9,9 @@
     <Rule Id="xUnit1013" Action="None" />
     <Rule Id="xUnit1026" Action="None" />
     <Rule Id="xUnit2013" Action="None" />
+    <!-- Generic theories take TheoryData<object, ...>; xunit infers TPixel from the runtime argument type. -->
+    <Rule Id="xUnit1039" Action="None" />
+    <!-- Raised on the abstract TestImageProvider<TPixel>; its concrete providers have parameterless constructors. -->
+    <Rule Id="xUnit3001" Action="None" />
   </Rules>
 </RuleSet>

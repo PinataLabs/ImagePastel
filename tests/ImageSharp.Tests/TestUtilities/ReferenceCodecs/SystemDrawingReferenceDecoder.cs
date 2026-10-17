@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
+using System.Runtime.Versioning;
 using System.Threading;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Metadata;
@@ -9,6 +10,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs
 {
+    [SupportedOSPlatform("windows6.1")]
     public class SystemDrawingReferenceDecoder : IImageDecoder, IImageInfoDetector
     {
         public static SystemDrawingReferenceDecoder Instance { get; } = new SystemDrawingReferenceDecoder();

@@ -1,9 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics.X86;
-#endif
 using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Jobs;
 
@@ -64,7 +62,6 @@ namespace SixLabors.ImageSharp.Benchmarks
                         new EnvironmentVariable(FeatureSIMD, Off))
                     .WithId("1. No HwIntrinsics").AsBaseline());
 
-#if SUPPORTS_RUNTIME_INTRINSICS
                 if (Sse.IsSupported)
                 {
                     this.AddJob(Job.Default.WithRuntime(CoreRuntime.Core31)
@@ -77,7 +74,6 @@ namespace SixLabors.ImageSharp.Benchmarks
                     this.AddJob(Job.Default.WithRuntime(CoreRuntime.Core31)
                         .WithId("3. AVX"));
                 }
-#endif
             }
         }
     }

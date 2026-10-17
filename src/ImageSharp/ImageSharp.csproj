@@ -2,60 +2,48 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>SixLabors.ImageSharp</AssemblyName>
-    <AssemblyTitle>SixLabors.ImageSharp</AssemblyTitle>
+    <AssemblyName>PinataLabs.ImageSharp</AssemblyName>
+    <AssemblyTitle>PinataLabs.ImageSharp</AssemblyTitle>
     <RootNamespace>SixLabors.ImageSharp</RootNamespace>
-    <PackageId>SixLabors.ImageSharp</PackageId>
-    <PackageIcon>sixlabors.imagesharp.128.png</PackageIcon>
+    <PackageId>PinataLabs.ImageSharp</PackageId>
+    <PackageIcon>pinatalabs.imagesharp.128.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/SixLabors/ImageSharp/</RepositoryUrl>
+    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/PinataLabs/ImageSharp/</RepositoryUrl>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <PackageTags>Image Resize Crop Gif Jpg Jpeg Bitmap Pbm Png Tga Tiff WebP NetCore</PackageTags>
-    <Description>A new, fully featured, fully managed, cross-platform, 2D graphics API for .NET</Description>
+    <Description>A fully managed, cross-platform 2D graphics library for .NET. A community fork of SixLabors.ImageSharp 2.1.x under the Apache License 2.0. Not affiliated with Six Labors.</Description>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
 
   <PropertyGroup>
-    <!--Bump to V2 prior to tagged release.-->
-    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+    <!-- Versions continue the Apache-2.0 2.1.x line. -->
+    <MinVerMinimumMajorMinor>2.2</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
   <Choose>
-    <When Condition="$(SIXLABORS_TESTING_PREVIEW) == true">
-      <PropertyGroup>
-        <TargetFrameworks>net6.0;net5.0;netcoreapp3.1;netcoreapp2.1;netstandard2.1;netstandard2.0;net472</TargetFrameworks>
-      </PropertyGroup>
-    </When>
-    <When Condition="$(SIXLABORS_TESTING) == true">
-      <PropertyGroup>
-        <TargetFrameworks>net5.0;netcoreapp3.1;netcoreapp2.1;netstandard2.1;netstandard2.0;net472</TargetFrameworks>
-      </PropertyGroup>
-    </When>
     <When Condition="$(Configuration.EndsWith('InnerLoop')) == true">
       <PropertyGroup>
-        <TargetFrameworks>netcoreapp3.1</TargetFrameworks>
+        <TargetFrameworks>net10.0</TargetFrameworks>
       </PropertyGroup>
     </When>
     <Otherwise>
       <PropertyGroup>
-        <TargetFrameworks>netcoreapp3.1;netcoreapp2.1;netstandard2.1;netstandard2.0;net472</TargetFrameworks>
+        <TargetFrameworks>net10.0;netstandard2.1</TargetFrameworks>
       </PropertyGroup>
     </Otherwise>
   </Choose>
 
   <ItemGroup>
-    <None Include="..\..\shared-infrastructure\branding\icons\imagesharp\sixlabors.imagesharp.128.png" Pack="true" PackagePath="" />
+    <None Include="..\..\build\branding\pinatalabs.imagesharp.128.png" Pack="true" PackagePath="" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" />
+    <None Include="..\..\NOTICE" Pack="true" PackagePath="" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="5.0.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" $(TargetFramework.StartsWith('netstandard')) OR '$(TargetFramework)' == 'net472'">
-    <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
-    <PackageReference Include="System.Buffers" Version="4.5.1" />
-    <PackageReference Include="System.Memory" Version="4.5.4" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
+    <PackageReference Include="System.Text.Encoding.CodePages" />
   </ItemGroup>
 
   <ItemGroup>
@@ -239,5 +227,5 @@
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
 
-  <Import Project="..\..\shared-infrastructure\src\SharedInfrastructure\SharedInfrastructure.projitems" Label="Shared" />
+  <Import Project="..\SharedInfrastructure\SharedInfrastructure.projitems" Label="Shared" />
 </Project>

@@ -212,14 +212,7 @@ namespace SixLabors.ImageSharp.PixelFormats
         [MethodImpl(InliningOptions.ShortMethod)]
         public void FromRgba32(Rgba32 source)
         {
-#if NETSTANDARD2_0
-            // See https://github.com/SixLabors/ImageSharp/issues/1275
-            this.R = source.R;
-            this.G = source.G;
-            this.B = source.B;
-#else
             this = source.Rgb;
-#endif
         }
 
         /// <inheritdoc />

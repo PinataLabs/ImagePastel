@@ -48,7 +48,7 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs
             var settings = new MagickReadSettings { Format = MagickFormat.WebP };
             using var memoryStream = new MemoryStream(this.webpLossyBytes);
             using var image = new MagickImage(memoryStream, settings);
-            return image.Width;
+            return (int)image.Width;
         }
 
         [Benchmark(Description = "ImageSharp Lossy Webp")]
@@ -65,7 +65,7 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs
             var settings = new MagickReadSettings { Format = MagickFormat.WebP };
             using var memoryStream = new MemoryStream(this.webpLossyBytes);
             using var image = new MagickImage(memoryStream, settings);
-            return image.Width;
+            return (int)image.Width;
         }
 
         [Benchmark(Description = "ImageSharp Lossless Webp")]

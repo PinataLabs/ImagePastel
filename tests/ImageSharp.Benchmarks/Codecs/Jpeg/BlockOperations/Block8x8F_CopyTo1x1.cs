@@ -5,10 +5,8 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-#endif
 using BenchmarkDotNet.Attributes;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 
@@ -169,7 +167,6 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg.BlockOperations
             Unsafe.As<float, Vector<float>>(ref Unsafe.AddByteOffset(ref d, (IntPtr)(stride * 7))) = v3;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Benchmark]
         public void UseVector256_Avx2_Variant1()
         {
@@ -366,7 +363,6 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg.BlockOperations
             Avx.Store(d + (stride * 6), v2);
             Avx.Store(d + (stride * 7), v3);
         }
-#endif
 
         // *** RESULTS 02/2020 ***
         // BenchmarkDotNet=v0.12.0, OS=Windows 10.0.18363

@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace SixLabors.ImageSharp.Tests
 {
@@ -114,6 +115,7 @@ namespace SixLabors.ImageSharp.Tests
 
         internal static bool IsMono => Type.GetType("Mono.Runtime") != null; // https://stackoverflow.com/a/721194
 
+        [SupportedOSPlatformGuard("windows6.1")]
         internal static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         internal static bool Is64BitProcess => IntPtr.Size == 8;

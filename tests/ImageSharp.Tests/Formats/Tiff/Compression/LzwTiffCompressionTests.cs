@@ -21,7 +21,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff.Compression
         {
             var compressedData = new byte[expectedCompressedData.Length];
             Stream streamData = CreateCompressedStream(inputData);
-            streamData.Read(compressedData, 0, expectedCompressedData.Length);
+            _ = streamData.Read(compressedData, 0, expectedCompressedData.Length);
 
             Assert.Equal(expectedCompressedData, compressedData);
         }

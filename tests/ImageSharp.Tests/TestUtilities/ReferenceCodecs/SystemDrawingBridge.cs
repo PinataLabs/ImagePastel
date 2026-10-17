@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.Versioning;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -14,6 +15,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs
     /// <summary>
     /// Provides methods to convert to/from System.Drawing bitmaps.
     /// </summary>
+    [SupportedOSPlatform("windows6.1")]
     public static class SystemDrawingBridge
     {
         /// <summary>

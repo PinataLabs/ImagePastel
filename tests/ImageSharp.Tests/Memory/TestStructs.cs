@@ -58,7 +58,7 @@ namespace SixLabors.ImageSharp.Tests.Memory
 
             static AlignedFoo()
             {
-                Assert.Equal(sizeof(AlignedFoo), sizeof(long));
+                Assert.Equal(sizeof(long), sizeof(AlignedFoo));
             }
 
             public AlignedFoo(int a, int b)

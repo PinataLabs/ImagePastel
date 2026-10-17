@@ -11,6 +11,6 @@
   -->
 
   <!-- Import the shared global .props file -->
-  <Import Project="$(MSBuildThisFileDirectory)shared-infrastructure\msbuild\targets\SixLabors.Global.targets"/>
+  <Import Project="$(MSBuildThisFileDirectory)build\msbuild\targets\SixLabors.Global.targets"/>
 
 </Project>

@@ -3,6 +3,7 @@
 
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
@@ -10,6 +11,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs
 {
+    [SupportedOSPlatform("windows6.1")]
     public class SystemDrawingReferenceEncoder : IImageEncoder
     {
         private readonly System.Drawing.Imaging.ImageFormat imageFormat;

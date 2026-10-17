@@ -4,9 +4,7 @@
 // Uncomment this to turn unit tests into benchmarks:
 // #define BENCHMARKING
 using System;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics.X86;
-#endif
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 using SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
 using SixLabors.ImageSharp.Tests.TestUtilities;
@@ -61,7 +59,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                         sum += block[i];
                     }
                 });
-            Assert.Equal(sum, 64f * 63f * 0.5f);
+            Assert.Equal(64f * 63f * 0.5f, sum);
         }
 
         [Fact]
@@ -86,7 +84,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                         sum += block[i];
                     }
                 });
-            Assert.Equal(sum, 64f * 63f * 0.5f);
+            Assert.Equal(64f * 63f * 0.5f, sum);
         }
 
         [Fact]

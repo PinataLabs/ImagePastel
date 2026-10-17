@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- Analyzers applied to every project. -->
+  <ItemGroup>
+    <GlobalPackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
+  </ItemGroup>
+
+  <!-- Library dependencies. -->
+  <ItemGroup>
+    <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
+    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.13" />
+  </ItemGroup>
+
+  <!-- Build tooling. -->
+  <ItemGroup>
+    <PackageVersion Include="MinVer" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Test, benchmark and sandbox dependencies. -->
+  <ItemGroup>
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageVersion Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.15.8" />
+    <PackageVersion Include="Colourful" Version="3.2.0" />
+    <PackageVersion Include="CommandLineParser" Version="2.9.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Magick.NET-Q16-AnyCPU" Version="15.0.0" />
+    <PackageVersion Include="Microsoft.DotNet.RemoteExecutor" Version="10.0.0-beta.26515.1" />
+    <PackageVersion Include="Microsoft.DotNet.XUnitExtensions" Version="10.0.0-beta.26515.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageVersion Include="Moq" Version="4.21.0" />
+    <PackageVersion Include="NetVips" Version="3.2.0" />
+    <PackageVersion Include="NetVips.Native" Version="8.18.7" />
+    <PackageVersion Include="PhotoSauce.MagicScaler" Version="0.15.0" />
+    <PackageVersion Include="Pfim" Version="0.11.4" />
+    <PackageVersion Include="SharpZipLib" Version="1.4.2" />
+    <PackageVersion Include="SkiaSharp" Version="4.153.1" />
+    <PackageVersion Include="System.Drawing.Common" Version="10.0.13" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+
+  <!--
+    Transitive pins: RemoteExecutor is built against internal builds of these packages
+    that are not published to nuget.org, so pin the nearest public releases.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.731102" />
+    <PackageVersion Include="Microsoft.Diagnostics.Runtime" Version="4.1.745802" />
+  </ItemGroup>
+
+</Project>

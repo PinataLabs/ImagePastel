@@ -11,7 +11,7 @@
   -->
 
   <!-- Import the shared src .targets file -->
-  <Import Project="$(MSBuildThisFileDirectory)..\shared-infrastructure\msbuild\targets\SixLabors.Src.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\msbuild\targets\SixLabors.Src.targets" />
 
   <!-- Import the solution .targets file. -->
   <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.targets" />

@@ -181,7 +181,6 @@ namespace SixLabors.ImageSharp.IO
             return this.ReadToBufferViaCopyFast(buffer, offset, count);
         }
 
-#if SUPPORTS_SPAN_STREAM
         /// <inheritdoc/>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int Read(Span<byte> buffer)
@@ -202,7 +201,6 @@ namespace SixLabors.ImageSharp.IO
 
             return this.ReadToBufferViaCopyFast(buffer);
         }
-#endif
 
         /// <inheritdoc/>
         public override void Flush()

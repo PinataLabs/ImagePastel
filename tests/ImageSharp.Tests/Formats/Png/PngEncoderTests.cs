@@ -199,14 +199,14 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
                 return;
             }
 
-            foreach (var filterMethod in PngFilterMethods)
+            foreach (PngFilterMethod filterMethod in PngFilterMethods)
             {
                 foreach (PngInterlaceMode interlaceMode in InterlaceMode)
                 {
                     TestPngEncoderCore(
                     provider,
                     pngColorType,
-                    (PngFilterMethod)filterMethod[0],
+                    filterMethod,
                     pngBitDepth,
                     interlaceMode,
                     appendPngColorType: true,
@@ -235,14 +235,14 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
         public void WorksWithAllBitDepthsAndExcludeAllFilter<TPixel>(TestImageProvider<TPixel> provider, PngColorType pngColorType, PngBitDepth pngBitDepth)
           where TPixel : unmanaged, IPixel<TPixel>
         {
-            foreach (var filterMethod in PngFilterMethods)
+            foreach (PngFilterMethod filterMethod in PngFilterMethods)
             {
                 foreach (PngInterlaceMode interlaceMode in InterlaceMode)
                 {
                     TestPngEncoderCore(
                     provider,
                     pngColorType,
-                    (PngFilterMethod)filterMethod[0],
+                    filterMethod,
                     pngBitDepth,
                     interlaceMode,
                     appendPngColorType: true,

@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+#nullable enable
+
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;

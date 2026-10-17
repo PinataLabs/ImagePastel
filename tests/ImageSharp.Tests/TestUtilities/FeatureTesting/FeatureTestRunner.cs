@@ -349,7 +349,9 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
 
         internal static Dictionary<HwIntrinsics, string> ToFeatureKeyValueCollection(this HwIntrinsics intrinsics)
         {
-            // Loop through and translate the given values into COMPlus equivaluents
+            // Loop through and translate the given values into COMPlus equivaluents.
+            // Since .NET 8 the runtime only honors grouped ISA knobs, so each value maps to the
+            // narrowest knob that still guarantees the requested feature is disabled.
             var features = new Dictionary<HwIntrinsics, string>();
             foreach (string intrinsic in intrinsics.ToString("G").Split(SplitChars, StringSplitOptions.RemoveEmptyEntries))
             {
@@ -357,17 +359,41 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 switch (intrinsic)
                 {
                     case nameof(HwIntrinsics.DisableSIMD):
-                        features.Add(key, "FeatureSIMD");
+                    case nameof(HwIntrinsics.DisableHWIntrinsic):
+                    case nameof(HwIntrinsics.DisableSSE):
+                    case nameof(HwIntrinsics.DisableSSE2):
+                        features.Add(key, "EnableHWIntrinsic");
+                        break;
+
+                    case nameof(HwIntrinsics.DisableAES):
+                    case nameof(HwIntrinsics.DisablePCLMULQDQ):
+                        features.Add(key, "EnableAES");
+                        break;
+
+                    case nameof(HwIntrinsics.DisableSSE3):
+                    case nameof(HwIntrinsics.DisableSSSE3):
+                    case nameof(HwIntrinsics.DisableSSE41):
+                    case nameof(HwIntrinsics.DisableSSE42):
+                    case nameof(HwIntrinsics.DisablePOPCNT):
+                        features.Add(key, "EnableSSE42");
+                        break;
+
+                    case nameof(HwIntrinsics.DisableAVX):
+                        features.Add(key, "EnableAVX");
+                        break;
+
+                    case nameof(HwIntrinsics.DisableFMA):
+                    case nameof(HwIntrinsics.DisableAVX2):
+                    case nameof(HwIntrinsics.DisableBMI1):
+                    case nameof(HwIntrinsics.DisableBMI2):
+                    case nameof(HwIntrinsics.DisableLZCNT):
+                        features.Add(key, "EnableAVX2");
                         break;
 
                     case nameof(HwIntrinsics.AllowAll):
 
                         // Not a COMPlus value. We filter in calling method.
                         features.Add(key, nameof(HwIntrinsics.AllowAll));
-                        break;
-
-                    default:
-                        features.Add(key, intrinsic.Replace("Disable", "Enable"));
                         break;
                 }
             }
@@ -377,10 +403,10 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
     }
 
     /// <summary>
-    /// See <see href="https://github.com/dotnet/runtime/blob/50ac454d8d8a1915188b2a4bb3fff3b81bf6c0cf/src/coreclr/src/jit/jitconfigvalues.h#L224"/>
+    /// See <see href="https://github.com/dotnet/runtime/blob/main/src/coreclr/jit/jitconfigvalues.h"/>
     /// <remarks>
-    /// <see cref="DisableSIMD"/> ends up impacting all SIMD support(including System.Numerics)
-    /// but not things like <see cref="DisableBMI1"/>, <see cref="DisableBMI2"/>, and <see cref="DisableLZCNT"/>.
+    /// The runtime disables ISAs in groups, so each value may disable more than the named feature.
+    /// <see cref="DisableSIMD"/>, <see cref="DisableSSE"/> and <see cref="DisableSSE2"/> disable all hardware intrinsics.
     /// </remarks>
     /// </summary>
     [Flags]

@@ -38,6 +38,7 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
         public int[] ParallelismValues { get; } =
         {
             Environment.ProcessorCount,
+
             // Environment.ProcessorCount / 2,
             // Environment.ProcessorCount / 4,
             // 1

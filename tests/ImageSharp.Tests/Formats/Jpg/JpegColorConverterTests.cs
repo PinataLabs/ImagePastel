@@ -24,11 +24,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
         private const int TestBufferLength = 40;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         private static readonly HwIntrinsics IntrinsicsConfig = HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX;
-#else
-        private static readonly HwIntrinsics IntrinsicsConfig = HwIntrinsics.AllowAll;
-#endif
 
         private static readonly ApproximateColorSpaceComparer ColorSpaceComparer = new(epsilon: Precision);
 
@@ -242,7 +238,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                     FeatureTestRunner.Deserialize<int>(arg));
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Theory]
         [MemberData(nameof(Seeds))]
         public void FromYCbCrAvx2(int seed) =>
@@ -267,7 +262,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
         [MemberData(nameof(Seeds))]
         public void FromYccKAvx2(int seed) =>
             this.TestConverter(new JpegColorConverterBase.FromYccKAvx(8), 4, seed);
-#endif
 
         private void TestConverter(
             JpegColorConverterBase converter,
@@ -359,7 +353,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                     break;
                 case JpegColorSpace.Undefined:
                 default:
-                    Assert.True(false, $"Invalid Colorspace enum value: {colorSpace}.");
+                    Assert.Fail($"Invalid Colorspace enum value: {colorSpace}.");
                     break;
             }
         }

@@ -34,21 +34,21 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs
         {
             var settings = new MagickReadSettings { Format = MagickFormat.Tga };
             using var image = new MagickImage(new MemoryStream(this.data), settings);
-            return image.Width;
+            return (int)image.Width;
         }
 
         [Benchmark(Description = "ImageSharp Tga")]
         public int TgaImageSharp()
         {
             using var image = Image.Load<Bgr24>(this.data, new TgaDecoder());
-            return image.Width;
+            return (int)image.Width;
         }
 
         [Benchmark(Description = "Pfim Tga")]
         public int TgaPfim()
         {
             using var image = Targa.Create(this.data, this.pfimConfig);
-            return image.Width;
+            return (int)image.Width;
         }
 
         private class PfimAllocator : IImageAllocator

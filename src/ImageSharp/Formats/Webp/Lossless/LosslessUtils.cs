@@ -32,13 +32,13 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private static readonly Vector128<byte> AddGreenToBlueAndRedMaskSsse3 = Vector128.Create(1, 255, 1, 255, 5, 255, 5, 255, 9, 255, 9, 255, 13, 255, 13, 255);
 
-        private static readonly byte AddGreenToBlueAndRedShuffleMask = SimdUtils.Shuffle.MmShuffle(2, 2, 0, 0);
+        private const byte AddGreenToBlueAndRedShuffleMask = (2 << 6) | (2 << 4) | (0 << 2) | 0;
 
         private static readonly Vector256<byte> SubtractGreenFromBlueAndRedMaskAvx2 = Vector256.Create(1, 255, 1, 255, 5, 255, 5, 255, 9, 255, 9, 255, 13, 255, 13, 255, 17, 255, 17, 255, 21, 255, 21, 255, 25, 255, 25, 255, 29, 255, 29, 255);
 
         private static readonly Vector128<byte> SubtractGreenFromBlueAndRedMaskSsse3 = Vector128.Create(1, 255, 1, 255, 5, 255, 5, 255, 9, 255, 9, 255, 13, 255, 13, 255);
 
-        private static readonly byte SubtractGreenFromBlueAndRedShuffleMask = SimdUtils.Shuffle.MmShuffle(2, 2, 0, 0);
+        private const byte SubtractGreenFromBlueAndRedShuffleMask = (2 << 6) | (2 << 4) | (0 << 2) | 0;
 
         private static readonly Vector128<byte> TransformColorAlphaGreenMask = Vector128.Create(0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255);
 
@@ -48,13 +48,13 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private static readonly Vector256<byte> TransformColorRedBlueMask256 = Vector256.Create(255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0);
 
-        private static readonly byte TransformColorShuffleMask = SimdUtils.Shuffle.MmShuffle(2, 2, 0, 0);
+        private const byte TransformColorShuffleMask = (2 << 6) | (2 << 4) | (0 << 2) | 0;
 
         private static readonly Vector128<byte> TransformColorInverseAlphaGreenMask = Vector128.Create(0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255);
 
         private static readonly Vector256<byte> TransformColorInverseAlphaGreenMask256 = Vector256.Create(0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255);
 
-        private static readonly byte TransformColorInverseShuffleMask = SimdUtils.Shuffle.MmShuffle(2, 2, 0, 0);
+        private const byte TransformColorInverseShuffleMask = (2 << 6) | (2 << 4) | (0 << 2) | 0;
 #endif
 
         /// <summary>

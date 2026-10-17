@@ -58,6 +58,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void BenchmarkSystemDrawingPngDecoder<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             this.BenchmarkDecoderImpl(PngBenchmarkFiles, new SystemDrawingReferenceDecoder(), "System.Drawing Decode Png");
         }
 
@@ -74,6 +79,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void BenchmarkSystemDrawingBmpDecoder<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             this.BenchmarkDecoderImpl(BmpBenchmarkFiles, new SystemDrawingReferenceDecoder(), "System.Drawing Decode Bmp");
         }
 

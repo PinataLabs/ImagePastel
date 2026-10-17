@@ -12,13 +12,7 @@ namespace SixLabors.ImageSharp.Tests.Helpers
         [Fact]
         public void CanDetectNetCore()
         {
-#if NET5_0_OR_GREATER
             Assert.False(RuntimeEnvironment.IsNetCore);
-#elif NETCOREAPP
-            Assert.True(RuntimeEnvironment.IsNetCore);
-#else
-            Assert.False(RuntimeEnvironment.IsNetCore);
-#endif
         }
 
         [Fact]

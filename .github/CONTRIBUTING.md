@@ -1,44 +1,41 @@
-# How to contribute to SixLabors.ImageSharp
+# How to contribute to PinataLabs.ImageSharp
 
-#### **Did you find a bug?**
+## Report a bug
 
-- Please **ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/SixLabors/ImageSharp/issues).
+1. Search the [open and closed issues](https://github.com/PinataLabs/ImageSharp/issues?q=is%3Aissue) to find out if somebody reported the bug before.
+2. If no issue exists, [open a new issue](https://github.com/PinataLabs/ImageSharp/issues/new/choose).
+3. Give the package version, a clear description, and a code sample or a test case that shows the problem.
 
-- If you're unable to find an open issue addressing the problem, please [open a new one](https://github.com/SixLabors/ImageSharp/issues/new). Be sure to include a **title, the applicable version, a clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring. Please do not hijack existing issues.
+To report a security problem, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md). Do not open a public issue.
 
-#### **Did you write a patch that fixes a bug?**
+## Change the code
 
-* Open a new GitHub pull request with the patch.
+The public API must stay the same as in SixLabors.ImageSharp 2.1.13.
+The `apicompat` job in CI compares the API in strict mode, and it fails on each addition or removal.
+To propose a change to the public API, open an issue first.
 
-* Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
+To send a fix:
 
-* Before submitting, please ensure that your code matches the existing coding patterns and practice as demonstrated in the repository. These follow strict Stylecop rules :cop:.
+1. Open a pull request with the change.
+2. In the description, give the problem, the solution, and the related issue number.
+3. Make sure that your code follows the coding patterns of the repository. StyleCop rules apply.
+4. Add tests for the change, where possible.
 
-#### **Do you intend to add a new feature or change an existing one?**
+## Build and test
 
-* Suggest your change in the [Ideas Discussions Channel](https://github.com/SixLabors/ImageSharp/discussions?discussions_q=category%3AIdeas) and start writing code.
+You need the .NET 10 SDK and [Git LFS](https://git-lfs.com/).
+Install Git LFS before you clone the repository. If you do not, the test images are missing.
 
-* Do not open an issue on GitHub until you have collected positive feedback about the change. GitHub issues are primarily intended for bug reports and fixes.
+1. Get the test images: `git lfs pull`.
+2. Build the solution: `dotnet build ImageSharp.sln -c Release`.
+3. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
+4. Compare the public API with the baseline: `pwsh ./ci-apicompat.ps1`.
 
-#### **Building**
+The build treats all warnings as errors. A suppression of an analyzer rule must give its reason.
 
- * When first cloning the repo, make sure to run `git submodule update --init --recursive` otherwise the submodules (e.g. `shared-infrastructure`) will be missing.
+The expected test output is in `tests/Images/External`, in Git LFS.
 
- * Run `dotnet build` in the root of the repo, or open the ImageSharp.sln file in Visual Studio and build from there.
+## Code of conduct
 
-#### **Running tests and Debugging**
-
-* Expected test output is pulled in as a submodule from the [ImageSharp.Tests.Images repository](https://github.com/SixLabors/Imagesharp.Tests.Images/tree/main/ReferenceOutput). To succesfully run tests, make sure that you have updated the submodules!
-* Debugging (running tests in Debug mode) is only supported on .NET Core 2.1+, because of JIT Code Generation bugs like [dotnet/coreclr#16443](https://github.com/dotnet/coreclr/issues/16443) or [dotnet/coreclr#20657](https://github.com/dotnet/coreclr/issues/20657)
-
-#### **Do you have questions about consuming the library or the source code?**
-
-* Ask any question about how to use SixLabors.ImageSharp in the [Help Discussions Channel](https://github.com/SixLabors/ImageSharp/discussions?discussions_q=category%3AHelp).
-
-#### Code of Conduct  
-This project has adopted the code of conduct defined by the [Contributor Covenant](https://contributor-covenant.org/) to clarify expected behavior in our community.
-For more information, see the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
-
-And please remember. SixLabors.ImageSharp is the work of a very, very, small number of developers who struggle balancing time to contribute to the project with family time and work commitments. We encourage you to pitch in and help make our vision of simple accessible image processing available to all. Open Source can only exist with your help.
-
-Thanks for reading!
+This project uses the code of conduct of the [Contributor Covenant](https://contributor-covenant.org/).
+For more information, read the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).

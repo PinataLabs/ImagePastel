@@ -34,17 +34,17 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public async Task Read_AfterWaitLimit_ShouldPause()
         {
             using Stream stream = this.CreateTestStream();
-            stream.Read(this.buffer);
+            _ = stream.Read(this.buffer);
             Assert.Equal(0, this.notifyWaitPositionReachedSemaphore.CurrentCount);
 
             Task readTask = Task.Factory.StartNew(
                 () =>
                 {
-                    stream.Read(this.buffer);
-                    stream.Read(this.buffer);
-                    stream.Read(this.buffer);
-                    stream.Read(this.buffer);
-                    stream.Read(this.buffer);
+                    _ = stream.Read(this.buffer);
+                    _ = stream.Read(this.buffer);
+                    _ = stream.Read(this.buffer);
+                    _ = stream.Read(this.buffer);
+                    _ = stream.Read(this.buffer);
                 },
                 TaskCreationOptions.LongRunning);
 
@@ -61,16 +61,16 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public async Task ReadAsync_AfterWaitLimit_ShouldPause()
         {
             using Stream stream = this.CreateTestStream();
-            await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+            _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
 
             Task readTask = Task.Factory.StartNew(
                 async () =>
                 {
-                    await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
-                    await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
-                    await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
-                    await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
-                    await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                    _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                    _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                    _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                    _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                    _ = await stream.ReadAsync(this.buffer, 0, this.buffer.Length);
                 },
                 TaskCreationOptions.LongRunning);
             await Task.Delay(5);

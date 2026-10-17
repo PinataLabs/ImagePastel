@@ -5,9 +5,7 @@ using System;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics.X86;
-#endif
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
@@ -193,7 +191,6 @@ namespace SixLabors.ImageSharp.Tests.Common
                 count,
                 (s, d) => SimdUtils.ExtendedIntrinsics.ByteToNormalizedFloat(s.Span, d.Span));
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Theory]
         [MemberData(nameof(ArraySizesDivisibleBy32))]
         public void HwIntrinsics_BulkConvertByteToNormalizedFloat(int count)
@@ -212,7 +209,6 @@ namespace SixLabors.ImageSharp.Tests.Common
                 count,
                 HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2 | HwIntrinsics.DisableSSE41);
         }
-#endif
 
         [Theory]
         [MemberData(nameof(ArbitraryArraySizes))]
@@ -278,8 +274,6 @@ namespace SixLabors.ImageSharp.Tests.Common
             Assert.Equal(expected2, actual2);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
-
         [Theory]
         [MemberData(nameof(ArraySizesDivisibleBy32))]
         public void HwIntrinsics_BulkConvertNormalizedFloatToByteClampOverflows(int count)
@@ -298,8 +292,6 @@ namespace SixLabors.ImageSharp.Tests.Common
                 count,
                 HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2);
         }
-
-#endif
 
         [Theory]
         [MemberData(nameof(ArbitraryArraySizes))]
@@ -334,7 +326,6 @@ namespace SixLabors.ImageSharp.Tests.Common
                 (r, g, b, actual) =>
                     SimdUtils.PackFromRgbPlanes(Configuration.Default, r, g, b, actual));
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Fact]
         public void PackFromRgbPlanesAvx2Reduce_Rgb24()
         {
@@ -403,7 +394,6 @@ namespace SixLabors.ImageSharp.Tests.Common
             Assert.Equal(0, bb.Length);
             Assert.Equal(0, dd.Length);
         }
-#endif
 
         internal static void TestPackFromRgbPlanes<TPixel>(int count, Action<byte[], byte[], byte[], TPixel[]> packMethod)
             where TPixel : unmanaged, IPixel<TPixel>

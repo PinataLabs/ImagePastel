@@ -274,7 +274,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff
 
         [Theory]
         [WithFile(Rgba6BitAssociatedAlpha, PixelTypes.Rgba32)]
-        public void TiffDecoder_CanDecode_24Bit_WithAssociatedAlpha<TPixel>(TestImageProvider<TPixel> provider)            
+        public void TiffDecoder_CanDecode_24Bit_WithAssociatedAlpha<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
             if (TestEnvironment.IsMacOS)
@@ -316,11 +316,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff
             using Image<TPixel> image = provider.GetImage();
             image.DebugSave(provider);
 
-#if NETCOREAPP
             image.CompareToReferenceOutput(ImageComparer.Exact, provider);
-#else
-            image.CompareToReferenceOutput(TolerantImageComparer.TolerantPercentage(0.0002F), provider);
-#endif
         }
 
         [Theory]

@@ -273,6 +273,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
             }
         }
 
+        // Magick.NET 14+ decodes this 16-bit colour-mapped file differently, so the reference output
+        // was captured from ImageSharp after it matched Magick.NET 11.1.2.
         [Theory]
         [WithFile(Bit16PalRle, PixelTypes.Rgba32)]
         public void TgaDecoder_CanDecode_RunLengthEncoded_WithPalette_16Bit<TPixel>(TestImageProvider<TPixel> provider)
@@ -281,7 +283,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
             using (Image<TPixel> image = provider.GetImage(TgaDecoder))
             {
                 image.DebugSave(provider);
-                ImageComparingUtils.CompareWithReferenceDecoder(provider, image);
+                image.CompareToReferenceOutput(ImageComparer.Exact, provider);
             }
         }
 
