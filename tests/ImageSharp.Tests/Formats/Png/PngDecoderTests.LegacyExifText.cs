@@ -34,4 +34,17 @@ public partial class PngDecoderTests
         Assert.Equal(1, info.Width);
         Assert.Null(info.Metadata.ExifProfile);
     }
+
+    [Theory]
+    [InlineData("\nexif\n  20\n45786966000049492A0008000000000000000000\n")]
+    [InlineData("\nexif\n  20\r\n45786966000049492A0008000000000000000000\n")]
+    [InlineData("\nexif\n  20  \n45786966000049492A0008000000000000000000\n")]
+    public void Decode_LegacyExifTextWithWhiteSpaceAfterLength_ReadsProfile(string value)
+    {
+        byte[] text = Encoding.Latin1.GetBytes("Raw profile type exif\0" + value);
+        byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("tEXt", text));
+
+        using Image image = Image.Load(png);
+        Assert.NotNull(image.Metadata.ExifProfile);
+    }
 }

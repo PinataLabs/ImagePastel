@@ -396,7 +396,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// <param name="source">The bytes of one scanline, without the filter byte. Cannot be empty.</param>
     /// <param name="bits">The number of bits per value.</param>
     /// <param name="buffer">The new array.</param>
-    /// <returns>The resulting <see cref="ReadOnlySpan{Byte}"/> array.</returns>
+    /// <returns>True if the bytes were scaled into <paramref name="buffer"/>; false if no scaling is needed.</returns>
     private bool TryScaleUpTo8BitArray(ReadOnlySpan<byte> source, int bits, out IMemoryOwner<byte> buffer)
     {
         if (bits >= 8)
@@ -1261,7 +1261,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// <param name="value">The parsed <see cref="int"/>.</param>
     /// <returns>True if the characters hold a number that fits in an <see cref="int"/>.</returns>
     private static bool TryParseInt32(ReadOnlySpan<char> span, out int value)
-        => int.TryParse(span, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+        => int.TryParse(span, NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out value);
 
     /// <summary>
     /// Sets the <see cref="ExifProfile"/> in <paramref name="metadata"/> to <paramref name="newProfile"/>,
