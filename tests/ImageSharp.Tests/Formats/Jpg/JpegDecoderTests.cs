@@ -241,6 +241,54 @@ public partial class JpegDecoderTests
         }
     }
 
+    // https://github.com/SixLabors/ImageSharp/issues/2136
+    [Theory]
+    [InlineData(new byte[] { 0x12 })]
+    [InlineData(new byte[] { 0xFF })]
+    [InlineData(new byte[] { 0xFF, 0x00 })]
+    [InlineData(new byte[] { 0x12, 0xFF, 0x00 })]
+    [InlineData(new byte[] { 0xFF, 0xD0 })]
+    [InlineData(new byte[] { 0x12, 0xFF, 0xD3 })]
+    public void Issue2136_DecodeWorks_WithExtraneousBytesAfterScan(byte[] extraneousPattern)
+    {
+        using var source = new Image<Rgb24>(32, 32);
+        source.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgb24> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    row[x] = new Rgb24((byte)(x * 8), (byte)(y * 8), (byte)((x + y) * 4));
+                }
+            }
+        });
+
+        using var encoded = new MemoryStream();
+        source.SaveAsJpeg(encoded);
+        byte[] clean = encoded.ToArray();
+
+        // Insert junk bytes between the end of the entropy coded data and the EOI marker,
+        // like the scanner output reported in the issue.
+        int eoiPosition = clean.Length - 2;
+        Assert.Equal(JpegConstants.Markers.XFF, clean[eoiPosition]);
+        Assert.Equal(JpegConstants.Markers.EOI, clean[eoiPosition + 1]);
+
+        using var corrupted = new MemoryStream();
+        corrupted.Write(clean, 0, eoiPosition);
+        for (int i = 0; i < 32; i++)
+        {
+            corrupted.Write(extraneousPattern, 0, extraneousPattern.Length);
+        }
+
+        corrupted.Write(clean, eoiPosition, 2);
+
+        using Image<Rgb24> expected = Image.Load<Rgb24>(clean);
+        using Image<Rgb24> actual = Image.Load<Rgb24>(corrupted.ToArray());
+
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
     // DEBUG ONLY!
     // The PDF.js output should be saved by "tests\ImageSharp.Tests\Formats\Jpg\pdfjs\jpeg-converter.htm"
     // into "\tests\Images\ActualOutput\JpegDecoderTests\"

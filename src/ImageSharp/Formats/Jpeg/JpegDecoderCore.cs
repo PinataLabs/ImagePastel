@@ -152,39 +152,44 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
 
     /// <summary>
     /// Finds the next file marker within the byte stream.
+    /// Stuffed bytes (0xFF00), restart markers and any other bytes that are not part of a
+    /// marker are skipped, as some encoders leave extraneous bytes after the entropy coded data.
     /// </summary>
-    /// <param name="marker">The buffer to read file markers to.</param>
     /// <param name="stream">The input stream.</param>
     /// <returns>The <see cref="JpegFileMarker"/></returns>
-    public static JpegFileMarker FindNextFileMarker(byte[] marker, BufferedReadStream stream)
+    public static JpegFileMarker FindNextFileMarker(BufferedReadStream stream)
     {
-        int value = stream.Read(marker, 0, 2);
-
-        if (value == 0)
+        while (true)
         {
-            return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
-        }
+            int b = stream.ReadByte();
+            if (b == -1)
+            {
+                return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
+            }
 
-        if (marker[0] == JpegConstants.Markers.XFF)
-        {
+            if (b != JpegConstants.Markers.XFF)
+            {
+                continue;
+            }
+
             // According to Section B.1.1.2:
             // "Any marker may optionally be preceded by any number of fill bytes, which are bytes assigned code 0xFF."
-            int m = marker[1];
-            while (m == JpegConstants.Markers.XFF)
+            while (b == JpegConstants.Markers.XFF)
             {
-                int suffix = stream.ReadByte();
-                if (suffix == -1)
+                b = stream.ReadByte();
+                if (b == -1)
                 {
                     return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
                 }
-
-                m = suffix;
             }
 
-            return new JpegFileMarker((byte)m, stream.Position - 2);
+            // 0xFF00 is a stuffed byte and restart markers only occur within entropy coded data,
+            // so neither can start a marker segment.
+            if (b is not 0 and (< JpegConstants.Markers.RST0 or > JpegConstants.Markers.RST7))
+            {
+                return new JpegFileMarker((byte)b, stream.Position - 2);
+            }
         }
-
-        return new JpegFileMarker(marker[1], stream.Position - 2, true);
     }
 
     /// <inheritdoc/>
@@ -465,7 +470,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             }
 
             // Read on.
-            fileMarker = FindNextFileMarker(this.markerBuffer, stream);
+            fileMarker = FindNextFileMarker(stream);
         }
     }
 
