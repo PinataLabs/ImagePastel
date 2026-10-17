@@ -40,7 +40,17 @@ public class TiffEncoder : IImageEncoder, ITiffEncoderOptions
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var encode = new TiffEncoderCore(this, image.GetMemoryAllocator());
-        encode.Encode(image, stream);
+        if (stream.CanSeek)
+        {
+            encode.Encode(image, stream);
+            return;
+        }
+
+        // The IFD offsets are written after the image data, so a non-seekable stream is buffered, as EncodeAsync does.
+        using var seekableStream = new MemoryStream();
+        encode.Encode(image, seekableStream);
+        seekableStream.Position = 0;
+        seekableStream.CopyTo(stream, image.GetConfiguration().StreamProcessingBufferSize);
     }
 
     /// <inheritdoc/>
