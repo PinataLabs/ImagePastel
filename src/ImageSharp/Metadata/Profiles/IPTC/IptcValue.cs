@@ -11,6 +11,8 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Iptc;
 /// </summary>
 public sealed class IptcValue : IDeepCloneable<IptcValue>
 {
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
+
     private byte[] data = Array.Empty<byte>();
     private Encoding encoding;
 
@@ -124,6 +126,50 @@ public sealed class IptcValue : IDeepCloneable<IptcValue>
     /// Gets the length of the value.
     /// </summary>
     public int Length => this.data.Length;
+
+    /// <summary>
+    /// Gets a value indicating whether the value holds only ASCII bytes.
+    /// </summary>
+    internal bool IsAscii
+    {
+        get
+        {
+            foreach (byte b in this.data)
+            {
+                if (b > 0x7F)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the value is encoded as UTF-8 and its bytes are valid UTF-8.
+    /// Values read from a profile are decoded as UTF-8 whatever their character set, so the bytes are checked too.
+    /// </summary>
+    internal bool IsUtf8
+    {
+        get
+        {
+            if (this.encoding.CodePage != Encoding.UTF8.CodePage)
+            {
+                return false;
+            }
+
+            try
+            {
+                StrictUtf8.GetCharCount(this.data);
+                return true;
+            }
+            catch (DecoderFallbackException)
+            {
+                return false;
+            }
+        }
+    }
 
     /// <inheritdoc/>
     public IptcValue DeepClone() => new IptcValue(this);

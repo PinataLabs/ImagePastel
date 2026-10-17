@@ -73,8 +73,7 @@ public class ExifValuesTests
         ExifTag.JPEGDCTables,
         ExifTag.JPEGACTables,
         ExifTag.StripRowCounts,
-        ExifTag.IntergraphRegisters,
-        ExifTag.TimeZoneOffset
+        ExifTag.IntergraphRegisters
     });
 
     public static TheoryData<ExifTag> NumberTags => new TheoryData<ExifTag>(new ExifTag[]
@@ -235,6 +234,11 @@ public class ExifValuesTests
     public static TheoryData<ExifTag> SignedRationalArrayTags => new TheoryData<ExifTag>(new ExifTag[]
     {
         ExifTag.Decode
+    });
+
+    public static TheoryData<ExifTag> SignedShortArrayTags => new TheoryData<ExifTag>(new ExifTag[]
+    {
+        ExifTag.TimeZoneOffset
     });
 
     public static TheoryData<ExifTag> StringTags => new TheoryData<ExifTag>(new ExifTag[]
@@ -559,6 +563,36 @@ public class ExifValuesTests
 
         var typed = (ExifSignedRationalArray)value;
         Assert.Equal(expected, typed.Value);
+    }
+
+    [Theory]
+    [MemberData(nameof(SignedShortArrayTags))]
+    public void ExifSignedShortArrayTests(ExifTag tag)
+    {
+        short[] expected = new[] { short.MinValue, short.MaxValue };
+        ExifValue value = ExifValues.Create(tag);
+
+        Assert.False(value.TrySetValue(expected.ToString()));
+        Assert.True(value.TrySetValue(expected));
+
+        var typed = (ExifSignedShortArray)value;
+        Assert.Equal(expected, typed.Value);
+    }
+
+    [Theory]
+    [MemberData(nameof(SignedShortArrayTags))]
+    public void ExifSignedShortArray_UnsignedArray_IsRangeChecked(ExifTag tag)
+    {
+        ExifValue value = ExifValues.Create(tag);
+
+        Assert.True(value.TrySetValue(new uint[] { 0, (uint)short.MaxValue }));
+        Assert.Equal(new short[] { 0, short.MaxValue }, ((ExifSignedShortArray)value).Value);
+
+        Assert.False(value.TrySetValue(new uint[] { (uint)short.MaxValue + 1 }));
+        Assert.False(value.TrySetValue(new uint[] { uint.MaxValue }));
+
+        Assert.True(value.TrySetValue(new int[] { -1, short.MinValue }));
+        Assert.Equal(new short[] { -1, short.MinValue }, ((ExifSignedShortArray)value).Value);
     }
 
     [Theory]

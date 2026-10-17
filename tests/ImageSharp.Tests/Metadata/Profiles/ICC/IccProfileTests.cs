@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
+using System.Text;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using Xunit;
 
@@ -40,5 +42,62 @@ public class IccProfileTests
         bool result = profile.CheckIsValid();
 
         Assert.Equal(expected, result);
+    }
+
+    public static TheoryData<string, uint> MalformedTagSizes()
+    {
+        var data = new TheoryData<string, uint>();
+        foreach (string type in new[] { "sf32", "uf32", "ui08", "ui16", "ui32", "ui64", "XYZ ", "text", "data", "zzzz" })
+        {
+            for (uint size = 0; size < 8; size++)
+            {
+                data.Add(type, size);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(MalformedTagSizes))]
+    public void Entries_WithTagSmallerThanHeader_SkipsTagWithoutLargeAllocations(string type, uint size)
+    {
+        byte[] data = CreateSingleTagProfile(type, size);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        IccTagDataEntry[] entries = new IccProfile(data).Entries;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Empty(entries);
+        Assert.True(allocated < 100 * data.Length, $"Allocated {allocated} bytes reading a {data.Length} byte profile.");
+    }
+
+    [Fact]
+    public void Entries_WithValidArrayTag_ReadsTag()
+    {
+        byte[] data = CreateSingleTagProfile("ui32", 16);
+
+        IccTagDataEntry entry = Assert.Single(new IccProfile(data).Entries);
+
+        var array = Assert.IsType<IccUInt32ArrayTagDataEntry>(entry);
+        Assert.Equal(new uint[] { 0x00010000, 0xFFFE0000 }, array.Data);
+    }
+
+    // A 160 byte profile with one tag at offset 144: the type signature, 4 reserved bytes,
+    // and the 32-bit values 0x00010000 and 0xFFFE0000.
+    private static byte[] CreateSingleTagProfile(string type, uint size)
+    {
+        byte[] data = new byte[160];
+        BinaryPrimitives.WriteUInt32BigEndian(data, 160);
+        Encoding.ASCII.GetBytes("RGB XYZ ").CopyTo(data, 16);
+        Encoding.ASCII.GetBytes("acsp").CopyTo(data, 36);
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(128), 1);
+        Encoding.ASCII.GetBytes("wtpt").CopyTo(data, 132);
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(136), 144);
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(140), size);
+        Encoding.ASCII.GetBytes(type).CopyTo(data, 144);
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(152), 0x00010000);
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(156), 0xFFFE0000);
+        return data;
     }
 }

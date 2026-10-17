@@ -1,4 +1,5 @@
-# Verifies that the public API matches SixLabors.ImageSharp 2.1.13 exactly.
+# Verifies that the public API matches SixLabors.ImageSharp 2.1.13 exactly, apart from the
+# intended breaks listed in apicompat-suppressions.xml.
 # ApiCompat pairs assemblies by name, so the library is built again under the baseline
 # assembly name. Only the strong-name key differs from the baseline (CP0003).
 $ErrorActionPreference = 'Stop'
@@ -33,6 +34,7 @@ $pairs = @(
 foreach ($pair in $pairs) {
     Write-Host "Comparing $($pair.Baseline) (baseline) with $($pair.Current)"
     dotnet apicompat --noWarn CP0003 --strict-mode `
+        --suppression-file "$PSScriptRoot/apicompat-suppressions.xml" `
         -l "$baseline/lib/$($pair.Baseline)/SixLabors.ImageSharp.dll" `
         -r "$output/bin/Release/$($pair.Current)/SixLabors.ImageSharp.dll"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

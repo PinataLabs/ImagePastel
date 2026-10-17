@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Intended breaks from the SixLabors.ImageSharp 2.1.13 public API, read by ci-apicompat.ps1. -->
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!-- ExifTag.TimeZoneOffset is ExifTag<short[]>, not ExifTag<uint[]>: TIFF/EP defines it as SSHORT, signed hours from UTC. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.get_TimeZoneOffset</Target>
+  </Suppression>
+</Suppressions>

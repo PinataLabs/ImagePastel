@@ -39,7 +39,12 @@ public class ExifProfileTests
         /// <summary>
         /// Writes a lossy webp file.
         /// </summary>
-        WebpLossy
+        WebpLossy,
+
+        /// <summary>
+        /// Writes a tiff file.
+        /// </summary>
+        Tiff
     }
 
     private static readonly Dictionary<ExifTag, object> TestProfileValues = new Dictionary<ExifTag, object>
@@ -524,6 +529,180 @@ public class ExifProfileTests
         Assert.Equal(0U, BinaryPrimitives.ReadUInt32LittleEndian(actualBytes.Slice(nextIfdPointerOffset, 4)));
     }
 
+    [Theory]
+    [InlineData((ushort)ExifTagValue.SubIFDOffset, (ushort)ExifTagValue.UserComment, true)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSProcessingMethod, true)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSAreaInformation, true)]
+    [InlineData((ushort)ExifTagValue.SubIFDOffset, (ushort)ExifTagValue.UserComment, false)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSProcessingMethod, false)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSAreaInformation, false)]
+    public void EncodedString_Unicode_ReadsTextInProfileByteOrder(ushort pointerTag, ushort tag, bool bigEndian)
+    {
+        const string text = "Grüße, 世界!";
+        byte[] data = CreateEncodedStringExif(bigEndian, pointerTag, tag, text);
+
+        var profile = new ExifProfile(data);
+
+        EncodedString value = GetEncodedString(profile, tag);
+        Assert.Equal(EncodedString.CharacterCode.Unicode, value.Code);
+        Assert.Equal(text, value.Text);
+    }
+
+    [Theory]
+    [InlineData((ushort)ExifTagValue.SubIFDOffset, (ushort)ExifTagValue.UserComment)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSProcessingMethod)]
+    [InlineData((ushort)ExifTagValue.GPSIFDOffset, (ushort)ExifTagValue.GPSAreaInformation)]
+    public void EncodedString_Unicode_FromBigEndianProfile_SurvivesJpegRoundTrip(ushort pointerTag, ushort tag)
+    {
+        const string text = "Grüße, 世界!";
+        var image = new Image<Rgba32>(8, 8);
+        image.Metadata.ExifProfile = new ExifProfile(CreateEncodedStringExif(true, pointerTag, tag, text));
+
+        using Image<Rgba32> reloaded = WriteAndReadJpeg(image);
+
+        EncodedString value = GetEncodedString(reloaded.Metadata.ExifProfile, tag);
+        Assert.Equal(EncodedString.CharacterCode.Unicode, value.Code);
+        Assert.Equal(text, value.Text);
+    }
+
+    [Fact]
+    public void NestedSubIfdPointers_AreFollowed()
+    {
+        // IFD0 at 8 points to the EXIF IFD at 26, which points to the GPS IFD at 44.
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.GPSIFDOffset, ExifDataType.Long, 1, builder.Long(44)));
+        builder.WriteIfd((ExifTagValue.GPSVersionID, ExifDataType.Byte, 4, new byte[] { 2, 2, 0, 0 }));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        IExifValue value = Assert.Single(profile.Values);
+        Assert.Equal(ExifTag.GPSVersionID, value.Tag);
+        Assert.Equal(new byte[] { 2, 2, 0, 0 }, value.GetValue());
+    }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(26)]
+    public void CyclicSubIfdPointers_AreReadOnce(uint target)
+    {
+        // IFD0 at 8 points to the EXIF IFD at 26, which points back to IFD0 or to itself.
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd(
+            (ExifTagValue.GPSIFDOffset, ExifDataType.Long, 1, builder.Long(target)),
+            (ExifTagValue.ColorSpace, ExifDataType.Short, 1, new byte[] { 1, 0, 0, 0 }));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        IExifValue value = Assert.Single(profile.Values);
+        Assert.Equal(ExifTag.ColorSpace, value.Tag);
+        Assert.Equal((ushort)1, value.GetValue());
+    }
+
+    [Theory]
+    [InlineData(new short[] { -5 })]
+    [InlineData(new short[] { -8, 9 })]
+    public void TimeZoneOffset_IsWrittenAsSignedShort(short[] offset)
+    {
+        var profile = new ExifProfile();
+        profile.SetValue(ExifTag.TimeZoneOffset, offset);
+
+        byte[] data = profile.ToByteArray();
+
+        // IFD0 holds only the pointer to the EXIF IFD, which holds only the time zone offset.
+        Span<byte> ifd0 = data.AsSpan(8);
+        Assert.Equal(1, BinaryPrimitives.ReadUInt16LittleEndian(ifd0));
+        Assert.Equal((ushort)ExifTagValue.SubIFDOffset, BinaryPrimitives.ReadUInt16LittleEndian(ifd0.Slice(2)));
+        Span<byte> exifIfd = data.AsSpan((int)BinaryPrimitives.ReadUInt32LittleEndian(ifd0.Slice(10)));
+        Assert.Equal(1, BinaryPrimitives.ReadUInt16LittleEndian(exifIfd));
+        Assert.Equal((ushort)ExifTagValue.TimeZoneOffset, BinaryPrimitives.ReadUInt16LittleEndian(exifIfd.Slice(2)));
+        Assert.Equal((ushort)ExifDataType.SignedShort, BinaryPrimitives.ReadUInt16LittleEndian(exifIfd.Slice(4)));
+        Assert.Equal((uint)offset.Length, BinaryPrimitives.ReadUInt32LittleEndian(exifIfd.Slice(6)));
+        for (int i = 0; i < offset.Length; i++)
+        {
+            Assert.Equal(offset[i], BinaryPrimitives.ReadInt16LittleEndian(exifIfd.Slice(10 + (2 * i))));
+        }
+    }
+
+    [Theory]
+    [InlineData(TestImageWriteFormat.Jpeg, new short[] { -5 })]
+    [InlineData(TestImageWriteFormat.Jpeg, new short[] { -8, 9 })]
+    [InlineData(TestImageWriteFormat.Tiff, new short[] { -5 })]
+    [InlineData(TestImageWriteFormat.Tiff, new short[] { -8, 9 })]
+    public void TimeZoneOffset_NegativeValues_RoundTrip(TestImageWriteFormat imageFormat, short[] offset)
+    {
+        // The TIFF encoder writes the EXIF profile of the root frame.
+        static ExifProfile GetProfile(Image image, TestImageWriteFormat imageFormat)
+            => imageFormat == TestImageWriteFormat.Tiff ? image.Frames.RootFrame.Metadata.ExifProfile : image.Metadata.ExifProfile;
+
+        var image = new Image<Rgba32>(8, 8);
+        image.Metadata.ExifProfile = new ExifProfile();
+        image.Frames.RootFrame.Metadata.ExifProfile = new ExifProfile();
+        GetProfile(image, imageFormat).SetValue(ExifTag.TimeZoneOffset, offset);
+
+        using Image<Rgba32> reloaded = WriteAndRead(image, imageFormat);
+
+        Assert.Equal(offset, GetProfile(reloaded, imageFormat).GetValue(ExifTag.TimeZoneOffset).Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TimeZoneOffset_StoredAsSignedShort_ReadsSignedValues(bool bigEndian)
+    {
+        var builder = new ExifBuilder(bigEndian);
+        byte[] value = builder.Short(unchecked((ushort)-5)).Concat(builder.Short(unchecked((ushort)-4))).ToArray();
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.SignedShort, 2, value));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Equal(new short[] { -5, -4 }, profile.GetValue(ExifTag.TimeZoneOffset).Value);
+    }
+
+    [Fact]
+    public void TimeZoneOffset_StoredAsLong_ReadsValues()
+    {
+        // Earlier versions of this library wrote the time zone offset as LONG.
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.Long, 1, builder.Long(9)));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Equal(new short[] { 9 }, profile.GetValue(ExifTag.TimeZoneOffset).Value);
+    }
+
+    [Fact]
+    public void TimeZoneOffset_StoredAsLongPair_ReadsValues()
+    {
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.Long, 2, builder.Long(44)));
+        builder.WriteBytes(builder.Long(9));
+        builder.WriteBytes(builder.Long(10));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Equal(new short[] { 9, 10 }, profile.GetValue(ExifTag.TimeZoneOffset).Value);
+    }
+
+    [Theory]
+    [InlineData(40000U)]
+    [InlineData(0xFFFFFFF7U)]
+    public void TimeZoneOffset_StoredAsLongOutOfRange_IsSkipped(uint offset)
+    {
+        // LONG is unsigned, so a large value must not be reinterpreted as a negative offset.
+        var builder = new ExifBuilder(false);
+        builder.WriteIfd((ExifTagValue.SubIFDOffset, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd((ExifTagValue.TimeZoneOffset, ExifDataType.Long, 1, builder.Long(offset)));
+
+        var profile = new ExifProfile(builder.ToArray());
+
+        Assert.Null(profile.GetValue(ExifTag.TimeZoneOffset));
+    }
+
     internal static ExifProfile GetExifProfile()
     {
         using Image<Rgba32> image = TestFile.Create(TestImages.Jpeg.Baseline.Floorplan).CreateRgba32Image();
@@ -546,8 +725,10 @@ public class ExifProfileTests
                 return WriteAndReadWebp(image, WebpFileFormatType.Lossless);
             case TestImageWriteFormat.WebpLossy:
                 return WriteAndReadWebp(image, WebpFileFormatType.Lossy);
+            case TestImageWriteFormat.Tiff:
+                return WriteAndReadTiff(image);
             default:
-                throw new ArgumentException("Unexpected test image format, only Jpeg and Png are allowed");
+                throw new ArgumentException("Unexpected test image format");
         }
     }
 
@@ -568,6 +749,18 @@ public class ExifProfileTests
         using (var memStream = new MemoryStream())
         {
             image.SaveAsPng(memStream);
+            image.Dispose();
+
+            memStream.Position = 0;
+            return Image.Load<Rgba32>(memStream);
+        }
+    }
+
+    private static Image<Rgba32> WriteAndReadTiff(Image<Rgba32> image)
+    {
+        using (var memStream = new MemoryStream())
+        {
+            image.SaveAsTiff(memStream);
             image.Dispose();
 
             memStream.Position = 0;
@@ -609,5 +802,93 @@ public class ExifProfileTests
 
         IExifValue<Number> xDimension = profile.GetValue(ExifTag.PixelXDimension);
         Assert.Equal(2338U, xDimension.Value);
+    }
+
+    private static EncodedString GetEncodedString(ExifProfile profile, ushort tag)
+    {
+        IExifValue value = profile.Values.Single(v => (ushort)v.Tag == tag);
+        return (EncodedString)value.GetValue();
+    }
+
+    // IFD0 at offset 8 points to a sub-IFD at offset 26, whose only entry is the encoded string stored at offset 44.
+    private static byte[] CreateEncodedStringExif(bool bigEndian, ushort pointerTag, ushort tag, string text)
+    {
+        Encoding encoding = bigEndian ? Encoding.BigEndianUnicode : Encoding.Unicode;
+        byte[] value = Encoding.ASCII.GetBytes("UNICODE\0").Concat(encoding.GetBytes(text)).ToArray();
+
+        var builder = new ExifBuilder(bigEndian);
+        builder.WriteIfd(((ExifTagValue)pointerTag, ExifDataType.Long, 1, builder.Long(26)));
+        builder.WriteIfd(((ExifTagValue)tag, ExifDataType.Undefined, (uint)value.Length, builder.Long(44)));
+        builder.WriteBytes(value);
+        return builder.ToArray();
+    }
+
+    /// <summary>
+    /// Writes raw EXIF data in either byte order: a TIFF header pointing to an IFD at offset 8, then whatever is written.
+    /// </summary>
+    private sealed class ExifBuilder
+    {
+        private readonly bool bigEndian;
+        private readonly List<byte> data = new();
+
+        public ExifBuilder(bool bigEndian)
+        {
+            this.bigEndian = bigEndian;
+            this.WriteBytes(bigEndian ? new byte[] { 0x4D, 0x4D } : new byte[] { 0x49, 0x49 });
+            this.WriteBytes(this.Short(0x002A));
+            this.WriteBytes(this.Long(8));
+        }
+
+        public byte[] Short(ushort value)
+        {
+            byte[] bytes = new byte[2];
+            if (this.bigEndian)
+            {
+                BinaryPrimitives.WriteUInt16BigEndian(bytes, value);
+            }
+            else
+            {
+                BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
+            }
+
+            return bytes;
+        }
+
+        public byte[] Long(uint value)
+        {
+            byte[] bytes = new byte[4];
+            if (this.bigEndian)
+            {
+                BinaryPrimitives.WriteUInt32BigEndian(bytes, value);
+            }
+            else
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+            }
+
+            return bytes;
+        }
+
+        /// <summary>
+        /// Writes an IFD of 2 + (12 * entry count) + 4 bytes with no next IFD.
+        /// Each entry value is the raw 4-byte value or offset field.
+        /// </summary>
+        public void WriteIfd(params (ExifTagValue Tag, ExifDataType DataType, uint Count, byte[] Value)[] entries)
+        {
+            this.WriteBytes(this.Short((ushort)entries.Length));
+            foreach ((ExifTagValue tag, ExifDataType dataType, uint count, byte[] value) in entries)
+            {
+                this.WriteBytes(this.Short((ushort)tag));
+                this.WriteBytes(this.Short((ushort)dataType));
+                this.WriteBytes(this.Long(count));
+                this.WriteBytes(value);
+            }
+
+            this.WriteBytes(this.Long(0));
+        }
+
+        public void WriteBytes(byte[] bytes) => this.data.AddRange(bytes);
+
+        public byte[] ToArray() => this.data.ToArray();
     }
 }

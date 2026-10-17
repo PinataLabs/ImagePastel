@@ -20,6 +20,12 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
 
     private const uint MaxStandardDataTagSize = 0x7FFF;
 
+    private const byte EnvelopeRecord = 1;
+
+    private const byte ApplicationRecord = 2;
+
+    private const byte CodedCharacterSetDataSet = 90;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="IptcProfile"/> class.
     /// </summary>
@@ -80,6 +86,11 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
             return this.values;
         }
     }
+
+    /// <summary>
+    /// Gets the ISO 2022 escape sequence ESC % G, which declares UTF-8 in the Coded Character Set DataSet.
+    /// </summary>
+    private static ReadOnlySpan<byte> Utf8CharacterSet => new byte[] { 0x1B, 0x25, 0x47 };
 
     /// <inheritdoc/>
     public IptcProfile DeepClone() => new(this);
@@ -233,9 +244,17 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
     /// <summary>
     /// Updates the data of the profile.
     /// </summary>
+    /// <remarks>
+    /// When a value holds non-ASCII text encoded as UTF-8, the data starts with the 1:90 Coded Character Set
+    /// DataSet declaring UTF-8, so other applications decode the text correctly. It is not written when all values
+    /// are ASCII, which reads the same in every character set, or when a value holds non-ASCII text in another
+    /// encoding, which a UTF-8 declaration would misdescribe.
+    /// </remarks>
     public void UpdateData()
     {
-        int length = 0;
+        bool declareUtf8 = this.ShouldDeclareUtf8();
+
+        int length = declareUtf8 ? Utf8CharacterSet.Length + 5 : 0;
         foreach (IptcValue value in this.Values)
         {
             length += value.Length + 5;
@@ -244,36 +263,73 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
         this.Data = new byte[length];
 
         int i = 0;
+        if (declareUtf8)
+        {
+            i = this.WriteDataSetHeader(i, EnvelopeRecord, CodedCharacterSetDataSet, Utf8CharacterSet.Length);
+            Utf8CharacterSet.CopyTo(this.Data.AsSpan(i));
+            i += Utf8CharacterSet.Length;
+        }
+
         foreach (IptcValue value in this.Values)
         {
-            // Standard DataSet Tag
-            // +-----------+----------------+---------------------------------------------------------------------------------+
-            // | Octet Pos | Name           | Description                                                                     |
-            // +==========-+================+=================================================================================+
-            // | 1         | Tag Marker     | Is the tag marker that initiates the start of a DataSet 0x1c.                   |
-            // +-----------+----------------+---------------------------------------------------------------------------------+
-            // | 2         | Record Number  | Octet 2 is the binary representation of the record number. Note that the        |
-            // |           |                | envelope record number is always 1, and that the application records are        |
-            // |           |                | numbered 2 through 6, the pre-object descriptor record is 7, the object record  |
-            // |           |                | is 8, and the post - object descriptor record is 9.                             |
-            // +-----------+----------------+---------------------------------------------------------------------------------+
-            // | 3         | DataSet Number | Octet 3 is the binary representation of the DataSet number.                     |
-            // +-----------+----------------+---------------------------------------------------------------------------------+
-            // | 4 and 5   | Data Field     | Octets 4 and 5, taken together, are the binary count of the number of octets in |
-            // |           | Octet Count    | the following data field(32767 or fewer octets). Note that the value of bit 7 of|
-            // |           |                | octet 4(most significant bit) always will be 0.                                 |
-            // +-----------+----------------+---------------------------------------------------------------------------------+
-            this.Data[i++] = IptcTagMarkerByte;
-            this.Data[i++] = 2;
-            this.Data[i++] = (byte)value.Tag;
-            this.Data[i++] = (byte)(value.Length >> 8);
-            this.Data[i++] = (byte)value.Length;
+            i = this.WriteDataSetHeader(i, ApplicationRecord, (byte)value.Tag, value.Length);
             if (value.Length > 0)
             {
                 Buffer.BlockCopy(value.ToByteArray(), 0, this.Data, i, value.Length);
                 i += value.Length;
             }
         }
+    }
+
+    private int WriteDataSetHeader(int offset, byte record, byte dataSet, int length)
+    {
+        // Standard DataSet Tag
+        // +-----------+----------------+---------------------------------------------------------------------------------+
+        // | Octet Pos | Name           | Description                                                                     |
+        // +==========-+================+=================================================================================+
+        // | 1         | Tag Marker     | Is the tag marker that initiates the start of a DataSet 0x1c.                   |
+        // +-----------+----------------+---------------------------------------------------------------------------------+
+        // | 2         | Record Number  | Octet 2 is the binary representation of the record number. Note that the        |
+        // |           |                | envelope record number is always 1, and that the application records are        |
+        // |           |                | numbered 2 through 6, the pre-object descriptor record is 7, the object record  |
+        // |           |                | is 8, and the post - object descriptor record is 9.                             |
+        // +-----------+----------------+---------------------------------------------------------------------------------+
+        // | 3         | DataSet Number | Octet 3 is the binary representation of the DataSet number.                     |
+        // +-----------+----------------+---------------------------------------------------------------------------------+
+        // | 4 and 5   | Data Field     | Octets 4 and 5, taken together, are the binary count of the number of octets in |
+        // |           | Octet Count    | the following data field(32767 or fewer octets). Note that the value of bit 7 of|
+        // |           |                | octet 4(most significant bit) always will be 0.                                 |
+        // +-----------+----------------+---------------------------------------------------------------------------------+
+        this.Data[offset++] = IptcTagMarkerByte;
+        this.Data[offset++] = record;
+        this.Data[offset++] = dataSet;
+        this.Data[offset++] = (byte)(length >> 8);
+        this.Data[offset++] = (byte)length;
+        return offset;
+    }
+
+    /// <summary>
+    /// Returns whether at least one value holds non-ASCII text and every such value is UTF-8.
+    /// </summary>
+    private bool ShouldDeclareUtf8()
+    {
+        bool hasUtf8 = false;
+        foreach (IptcValue value in this.Values)
+        {
+            if (value.IsAscii)
+            {
+                continue;
+            }
+
+            if (!value.IsUtf8)
+            {
+                return false;
+            }
+
+            hasUtf8 = true;
+        }
+
+        return hasUtf8;
     }
 
     private void Initialize()
@@ -295,9 +351,11 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
         {
             bool isValidTagMarker = this.Data[offset++] == IptcTagMarkerByte;
             byte recordNumber = this.Data[offset++];
-            bool isValidRecordNumber = recordNumber is >= 1 and <= 9;
             var tag = (IptcTag)this.Data[offset++];
-            bool isValidEntry = isValidTagMarker && isValidRecordNumber;
+
+            // IptcTag holds the DataSets of the application record. DataSets of other records, such as the
+            // 1:90 Coded Character Set that UpdateData writes, are skipped.
+            bool isValidEntry = isValidTagMarker && recordNumber == ApplicationRecord;
 
             uint byteCount = BinaryPrimitives.ReadUInt16BigEndian(this.Data.AsSpan(offset, 2));
             offset += 2;

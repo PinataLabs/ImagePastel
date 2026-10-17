@@ -7,6 +7,11 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
 
 internal sealed class ExifSignedShortArray : ExifArrayValue<short>
 {
+    public ExifSignedShortArray(ExifTag<short[]> tag)
+        : base(tag)
+    {
+    }
+
     public ExifSignedShortArray(ExifTagValue tag)
         : base(tag)
     {
@@ -24,6 +29,13 @@ internal sealed class ExifSignedShortArray : ExifArrayValue<short>
         if (base.TrySetValue(value))
         {
             return true;
+        }
+
+        // The runtime treats uint[] and int[] as each other in type checks, so match the exact type.
+        // LONG values, such as a TimeZoneOffset written by earlier versions, are read as uint[].
+        if (value.GetType() == typeof(uint[]))
+        {
+            return this.TrySetUnsignedArray((uint[])value);
         }
 
         if (value is int[] intArray)
@@ -58,6 +70,23 @@ internal sealed class ExifSignedShortArray : ExifArrayValue<short>
         {
             int s = intArray[i];
             value[i] = (short)s;
+        }
+
+        this.Value = value;
+        return true;
+    }
+
+    private bool TrySetUnsignedArray(uint[] uintArray)
+    {
+        if (Array.FindIndex(uintArray, x => x > short.MaxValue) > -1)
+        {
+            return false;
+        }
+
+        var value = new short[uintArray.Length];
+        for (int i = 0; i < uintArray.Length; i++)
+        {
+            value[i] = (short)uintArray[i];
         }
 
         this.Value = value;

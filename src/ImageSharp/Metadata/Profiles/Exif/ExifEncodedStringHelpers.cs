@@ -54,10 +54,22 @@ internal static class ExifEncodedStringHelpers
     };
 
     public static bool TryParse(ReadOnlySpan<byte> buffer, out EncodedString encodedString)
+        => TryParse(buffer, false, out encodedString);
+
+    /// <summary>
+    /// Parses an encoded string read from a profile with the given byte order.
+    /// Text with the UNICODE character code is UCS-2 in the byte order of the profile.
+    /// </summary>
+    /// <param name="buffer">The character code followed by the text.</param>
+    /// <param name="isBigEndian">Whether the profile the buffer was read from is big-endian.</param>
+    /// <param name="encodedString">The parsed encoded string.</param>
+    /// <returns>True when the buffer starts with a known character code.</returns>
+    public static bool TryParse(ReadOnlySpan<byte> buffer, bool isBigEndian, out EncodedString encodedString)
     {
         if (TryDetect(buffer, out CharacterCode code))
         {
-            string text = GetEncoding(code).GetString(buffer.Slice(CharacterCodeBytesLength));
+            Encoding encoding = code == CharacterCode.Unicode && isBigEndian ? Encoding.BigEndianUnicode : GetEncoding(code);
+            string text = encoding.GetString(buffer.Slice(CharacterCodeBytesLength));
             encodedString = new EncodedString(code, text);
             return true;
         }

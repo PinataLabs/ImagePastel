@@ -95,6 +95,7 @@ internal abstract class BaseExifReader
     private List<ExifTag> invalidTags;
 
     private List<ulong> subIfds;
+    private HashSet<ulong> subIfdOffsets;
 
     protected BaseExifReader(Stream stream, MemoryAllocator allocator)
     {
@@ -193,9 +194,10 @@ internal abstract class BaseExifReader
     {
         if (this.subIfds is not null)
         {
-            foreach (ulong subIfdOffset in this.subIfds)
+            // A sub-IFD can point to further sub-IFDs, which are added to the list while it is read.
+            for (int i = 0; i < this.subIfds.Count; i++)
             {
-                this.ReadValues(values, (uint)subIfdOffset);
+                this.ReadValues(values, (uint)this.subIfds[i]);
             }
         }
     }
@@ -495,6 +497,12 @@ internal abstract class BaseExifReader
 
     private void Add(IList<IExifValue> values, IExifValue exif, object value)
     {
+        // Encoded strings are parsed here because UNICODE text is stored in the byte order of the profile.
+        if (exif is ExifEncodedString && value is byte[] buffer && ExifEncodedStringHelpers.TryParse(buffer, this.IsBigEndian, out EncodedString encodedString))
+        {
+            value = encodedString;
+        }
+
         if (!exif.TrySetValue(value))
         {
             return;
@@ -528,7 +536,16 @@ internal abstract class BaseExifReader
         => (this.invalidTags ??= new List<ExifTag>()).Add(tag);
 
     private void AddSubIfd(object val)
-        => (this.subIfds ??= new List<ulong>()).Add(Convert.ToUInt64(val));
+    {
+        // Each sub-IFD is read once, so pointers that form a cycle end.
+        ulong offset = Convert.ToUInt64(val);
+        this.subIfds ??= new List<ulong>();
+        this.subIfdOffsets ??= new HashSet<ulong>();
+        if (this.subIfdOffsets.Add(offset))
+        {
+            this.subIfds.Add(offset);
+        }
+    }
 
     private void Seek(ulong pos)
         => this.data.Seek((long)pos, SeekOrigin.Begin);

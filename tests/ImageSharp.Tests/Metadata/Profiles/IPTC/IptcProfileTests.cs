@@ -370,6 +370,94 @@ public class IptcProfileTests
         Assert.Equal(2, result.Count);
     }
 
+    [Fact]
+    public void IptcProfile_WithUtf8Value_WritesCodedCharacterSetFirst()
+    {
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "ESPAÑA");
+
+        profile.UpdateData();
+
+        // 1:90 Coded Character Set holding ESC % G (UTF-8), then 2:120 Caption.
+        byte[] expected =
+        {
+            0x1C, 0x01, 0x5A, 0x00, 0x03, 0x1B, 0x25, 0x47,
+            0x1C, 0x02, 0x78, 0x00, 0x07, 0x45, 0x53, 0x50, 0x41, 0xC3, 0x91, 0x41
+        };
+        Assert.Equal(expected, profile.Data);
+    }
+
+    [Fact]
+    public void IptcProfile_WithUtf8Value_JpegRoundTrip_KeepsValueAndOneCodedCharacterSet()
+    {
+        var image = new Image<Rgba32>(8, 8);
+        image.Metadata.IptcProfile = new IptcProfile();
+        image.Metadata.IptcProfile.SetValue(IptcTag.Caption, "ESPAÑA");
+
+        using Image<Rgba32> once = WriteAndReadJpeg(image);
+        using Image<Rgba32> twice = WriteAndReadJpeg(once.Clone());
+
+        IptcProfile profile = twice.Metadata.IptcProfile;
+        IptcValue value = Assert.Single(profile.Values);
+        Assert.Equal(IptcTag.Caption, value.Tag);
+        Assert.Equal("ESPAÑA", value.Value);
+        Assert.Equal(new byte[] { 0x1C, 0x01, 0x5A, 0x00, 0x03, 0x1B, 0x25, 0x47 }, profile.Data.Take(8));
+        Assert.Equal(20, profile.Data.Length);
+    }
+
+    [Fact]
+    public void IptcProfile_WithAsciiValues_DoesNotWriteCodedCharacterSet()
+    {
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "SPAIN");
+        profile.SetValue(IptcTag.City, "Madrid");
+
+        profile.UpdateData();
+
+        Assert.Equal(new byte[] { 0x1C, 0x02, 0x78, 0x00, 0x05 }, profile.Data.Take(5));
+        Assert.Equal(5 + 5 + 5 + 6, profile.Data.Length);
+    }
+
+    [Fact]
+    public void IptcProfile_WithNonUtf8Value_DoesNotWriteCodedCharacterSet()
+    {
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "ESPAÑA");
+        profile.SetValue(IptcTag.City, System.Text.Encoding.Latin1, "Logroño");
+
+        profile.UpdateData();
+
+        Assert.Equal(new byte[] { 0x1C, 0x02, 0x78 }, profile.Data.Take(3));
+    }
+
+    [Fact]
+    public void IptcProfile_WithDecodedNonUtf8Bytes_DoesNotWriteCodedCharacterSet()
+    {
+        // 2:120 Caption holding "ESPAÑA" in Latin-1, with no character set declared.
+        byte[] data = { 0x1C, 0x02, 0x78, 0x00, 0x06, 0x45, 0x53, 0x50, 0x41, 0xD1, 0x41 };
+        var profile = new IptcProfile(data);
+
+        profile.UpdateData();
+
+        Assert.Equal(data, profile.Data);
+    }
+
+    [Fact]
+    public void IptcProfile_WithCodedCharacterSet_DoesNotReadItAsValue()
+    {
+        byte[] data =
+        {
+            0x1C, 0x01, 0x5A, 0x00, 0x03, 0x1B, 0x25, 0x47,
+            0x1C, 0x02, 0x78, 0x00, 0x07, 0x45, 0x53, 0x50, 0x41, 0xC3, 0x91, 0x41
+        };
+
+        var profile = new IptcProfile(data);
+
+        IptcValue value = Assert.Single(profile.Values);
+        Assert.Equal(IptcTag.Caption, value.Tag);
+        Assert.Equal("ESPAÑA", value.Value);
+    }
+
     private static void ContainsIptcValue(List<IptcValue> values, IptcTag tag, string value)
     {
         Assert.True(values.Any(val => val.Tag == tag), $"Missing iptc tag {tag}");
