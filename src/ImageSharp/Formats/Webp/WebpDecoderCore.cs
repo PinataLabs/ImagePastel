@@ -226,7 +226,11 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     private WebpImageInfo ReadVp8XHeader()
     {
         var features = new WebpFeatures();
-        uint fileSize = this.ReadChunkSize();
+        uint vp8XChunkSize = this.ReadPayloadSize();
+        if (vp8XChunkSize < WebpConstants.Vp8XChunkSize)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8X chunk is smaller than its 10 byte payload");
+        }
 
         // The first byte contains information about the image features used.
         int imageFeatures = this.currentStream.ReadByte();
@@ -278,6 +282,9 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         this.buffer[3] = 0;
         uint height = (uint)BinaryPrimitives.ReadInt32LittleEndian(this.buffer) + 1;
+
+        // A longer chunk can hold more data in a later version of the format. Skip it, with the padding byte of an odd size.
+        this.SkipChunkData(PaddedSize(vp8XChunkSize) - WebpConstants.Vp8XChunkSize);
 
         // Read all the chunks in the order they occur.
         var info = new WebpImageInfo();

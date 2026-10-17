@@ -151,6 +151,42 @@ public class WebpDecoderRobustnessTests
     }
 
     [Theory]
+    [InlineData(SampleKind.LossyWithAlpha, 2)]
+    [InlineData(SampleKind.LosslessWithExif, 2)]
+    [InlineData(SampleKind.LossyWithExifAndXmp, 1)]
+    [InlineData(SampleKind.LossyWithExifAndXmp, 6)]
+    public void Decode_VP8XChunkLongerThanTenBytes_SkipsExtraBytes(SampleKind kind, int extraBytes)
+    {
+        byte[] original = Encode(kind);
+        int vp8x = FindChunk(original, "VP8X");
+        Assert.Equal(10u, BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(vp8x + 4)));
+
+        // An odd chunk size is followed by a padding byte.
+        int payloadEnd = vp8x + 8 + 10;
+        int insertedBytes = extraBytes + (extraBytes & 1);
+        byte[] patched = [.. original.AsSpan(0, payloadEnd), .. new byte[insertedBytes], .. original.AsSpan(payloadEnd)];
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(vp8x + 4), (uint)(10 + extraBytes));
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4)) + (uint)insertedBytes);
+
+        AssertSameImage(original, patched);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(8u)]
+    [InlineData(9u)]
+    public void Decode_VP8XChunkShorterThanTenBytes_ThrowsInvalidImageContent(uint size)
+    {
+        byte[] patched = PatchChunkSize(Encode(SampleKind.LosslessWithExif), "VP8X", size);
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(patched);
+        });
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(patched));
+    }
+
+    [Theory]
     [InlineData(SampleKind.SimpleLossless)]
     [InlineData(SampleKind.LosslessWithIcc)]
     public void Decode_InvalidVp8LSignature_ThrowsAndReleasesBuffers(SampleKind kind)
