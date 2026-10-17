@@ -209,13 +209,13 @@ namespace SharedInfrastructure.Tests
         [InlineData(2, 1)]
         [InlineData(2, 2)]
         public void MustBeSizedAtLeast_Array_LengthIsGreaterOrEqual_ThrowsNoException(int valueLength, int minLength)
-            => Guard.MustBeSizedAtLeast<int>(new int[valueLength], minLength, "myParamName");
+            => Guard.MustBeSizedAtLeast<int>(new int[valueLength].AsSpan(), minLength, "myParamName");
 
         [Fact]
         public void MustBeSizedAtLeast_Array_LengthIsLess_ThrowsException()
         {
             ArgumentException exception =
-                Assert.Throws<ArgumentException>(() => Guard.MustBeSizedAtLeast<int>(new int[] { 1, 2 }, 3, "myParamName"));
+                Assert.Throws<ArgumentException>(() => Guard.MustBeSizedAtLeast<int>(new int[] { 1, 2 }.AsSpan(), 3, "myParamName"));
 
             Assert.Equal("myParamName", exception.ParamName);
             Assert.Contains("Spans must be at least of length 3", exception.Message);

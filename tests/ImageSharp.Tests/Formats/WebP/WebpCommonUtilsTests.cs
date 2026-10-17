@@ -108,7 +108,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
                 174, 183, 189, 255,
                 148, 158, 158, 255,
             };
-            Span<Bgra32> row = MemoryMarshal.Cast<byte, Bgra32>(rowBytes);
+            Span<Bgra32> row = MemoryMarshal.Cast<byte, Bgra32>(rowBytes.AsSpan());
 
             bool noneOpaque;
             for (int length = 8; length < row.Length; length += 8)
@@ -190,7 +190,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
                 174, 183, 189, 255,
                 148, 158, 158, 255,
             };
-            Span<Bgra32> row = MemoryMarshal.Cast<byte, Bgra32>(rowBytes);
+            Span<Bgra32> row = MemoryMarshal.Cast<byte, Bgra32>(rowBytes.AsSpan());
 
             bool noneOpaque;
             for (int length = 8; length < row.Length; length += 8)

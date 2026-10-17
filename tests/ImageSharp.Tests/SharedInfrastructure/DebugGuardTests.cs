@@ -210,13 +210,13 @@ namespace SharedInfrastructure.Tests
         [InlineData(new int[] { 1, 2 }, 1)]
         [InlineData(new int[] { 1, 2 }, 2)]
         public void MustBeSizedAtLeast_Array_LengthIsGreaterOrEqual_ThrowsNoException(int[] value, int minLength)
-            => DebugGuard.MustBeSizedAtLeast<int>(value, minLength, "myParamName");
+            => DebugGuard.MustBeSizedAtLeast<int>(value.AsSpan(), minLength, "myParamName");
 
         [Fact]
         public void MustBeSizedAtLeast_Array_LengthIsLess_ThrowsException()
         {
             ArgumentException exception = Assert.Throws<ArgumentException>(
-                () => DebugGuard.MustBeSizedAtLeast<int>(new int[] { 1, 2 }, 3, "myParamName"));
+                () => DebugGuard.MustBeSizedAtLeast<int>(new int[] { 1, 2 }.AsSpan(), 3, "myParamName"));
 
             Assert.Equal("myParamName", exception.ParamName);
             Assert.Contains("The size must be at least 3.", exception.Message);

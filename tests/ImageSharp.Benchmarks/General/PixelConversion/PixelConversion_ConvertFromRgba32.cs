@@ -167,8 +167,8 @@ namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion
         [Benchmark]
         public void PixelConverter_Rgba32_ToArgb32()
         {
-            Span<byte> source = MemoryMarshal.Cast<Rgba32, byte>(this.PermutedRunnerRgbaToArgb.Source);
-            Span<byte> dest = MemoryMarshal.Cast<TestArgb, byte>(this.PermutedRunnerRgbaToArgb.Dest);
+            Span<byte> source = MemoryMarshal.Cast<Rgba32, byte>(this.PermutedRunnerRgbaToArgb.Source.AsSpan());
+            Span<byte> dest = MemoryMarshal.Cast<TestArgb, byte>(this.PermutedRunnerRgbaToArgb.Dest.AsSpan());
 
             PixelConverter.FromRgba32.ToArgb32(source, dest);
         }

@@ -122,7 +122,7 @@ namespace SixLabors.ImageSharp.Tests
                 }
                 else
                 {
-                    Span<La16> destination = MemoryMarshal.Cast<byte, La16>(actual);
+                    Span<La16> destination = MemoryMarshal.Cast<byte, La16>(actual.AsSpan());
                     image.Frames.RootFrame.CopyPixelDataTo(destination);
                 }
 

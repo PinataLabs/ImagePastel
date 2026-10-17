@@ -208,7 +208,7 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc
                 return false;
             }
 
-            return thisCurves.SequenceEqual(entryCurves);
+            return Enumerable.SequenceEqual(thisCurves, entryCurves);
         }
 
         private bool IsAClutMMatrixB()
