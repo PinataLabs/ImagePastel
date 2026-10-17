@@ -319,4 +319,69 @@ public class PngMetadataTests
             Assert.Equal(42, (int)exif.GetValue(ExifTag.ImageNumber).Value);
         }
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Decode_PaletteImage_ReportsTransparencyFromTransparencyChunk(bool transparent)
+    {
+        using var image = new Image<Rgba32>(32, 32, transparent ? Color.Transparent : Color.Blue);
+        for (int y = 8; y < 24; y++)
+        {
+            for (int x = 8; x < 24; x++)
+            {
+                image[x, y] = Color.Red;
+            }
+        }
+
+        using var stream = new MemoryStream();
+        image.Save(stream, new PngEncoder { ColorType = PngColorType.Palette });
+        byte[] png = stream.ToArray();
+        Assert.Equal(transparent, PngTestFileBuilder.ReadChunks(png).Any(c => c.Type == "tRNS"));
+
+        PngMetadata identified = Image.Identify(png).Metadata.GetPngMetadata();
+        Assert.Equal(PngColorType.Palette, identified.ColorType);
+        Assert.Equal(transparent, identified.HasTransparency);
+
+        using Image loaded = Image.Load(png);
+        PngMetadata decoded = loaded.Metadata.GetPngMetadata();
+        Assert.Equal(PngColorType.Palette, decoded.ColorType);
+        Assert.Equal(transparent, decoded.HasTransparency);
+    }
+
+    [Fact]
+    public void Decode_16BitGrayscaleTransparency_IsBigEndian()
+    {
+        byte[] png = PngTestFileBuilder.Build(
+            PngTestFileBuilder.Header(2, 1, 16, PngColorType.Grayscale),
+            PngTestFileBuilder.Chunk("tRNS", new byte[] { 0x01, 0x02 }),
+            PngTestFileBuilder.Chunk("IDAT", PngTestFileBuilder.Zlib(new byte[] { 0, 0x01, 0x02, 0x02, 0x01 })),
+            PngTestFileBuilder.End());
+
+        Assert.Equal(new L16(0x0102), Image.Identify(png).Metadata.GetPngMetadata().TransparentL16);
+
+        using Image<Rgba64> image = Image.Load<Rgba64>(png);
+        Assert.Equal(new L16(0x0102), image.Metadata.GetPngMetadata().TransparentL16);
+        Assert.Equal(ushort.MinValue, image[0, 0].A);
+        Assert.Equal(ushort.MaxValue, image[1, 0].A);
+    }
+
+    [Fact]
+    public void Decode_16BitRgbTransparency_IsBigEndian()
+    {
+        byte[] pixels = { 0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x02, 0x01, 0x04, 0x03, 0x06, 0x05 };
+        byte[] png = PngTestFileBuilder.Build(
+            PngTestFileBuilder.Header(2, 1, 16, PngColorType.Rgb),
+            PngTestFileBuilder.Chunk("tRNS", new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }),
+            PngTestFileBuilder.Chunk("IDAT", PngTestFileBuilder.Zlib(pixels)),
+            PngTestFileBuilder.End());
+
+        var expected = new Rgb48(0x0102, 0x0304, 0x0506);
+        Assert.Equal(expected, Image.Identify(png).Metadata.GetPngMetadata().TransparentRgb48);
+
+        using Image<Rgba64> image = Image.Load<Rgba64>(png);
+        Assert.Equal(expected, image.Metadata.GetPngMetadata().TransparentRgb48);
+        Assert.Equal(ushort.MinValue, image[0, 0].A);
+        Assert.Equal(ushort.MaxValue, image[1, 0].A);
+    }
 }
