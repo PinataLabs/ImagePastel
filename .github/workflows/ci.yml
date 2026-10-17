@@ -1,11 +1,12 @@
 name: CI
 
+# Builds, tests, and checks the public API. Publishing is separate:
+# release-publish.yml (stable releases) and release-prerelease.yml (pre-releases)
+# both require this workflow to have passed on the commit they publish.
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
@@ -45,7 +46,7 @@ jobs:
           git config --global core.longpaths true
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # MinVer computes the version from tags.
           fetch-depth: 0
@@ -55,7 +56,7 @@ jobs:
         run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
 
       - name: Restore LFS cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .git/lfs
           key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}-v1
@@ -64,12 +65,12 @@ jobs:
         run: git lfs pull
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
       - name: Restore NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'nuget.config', 'global.json') }}
@@ -94,14 +95,14 @@ jobs:
 
       - name: Upload coverage
         if: ${{ matrix.coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: artifacts/coverage/**/coverage.info
 
       - name: Upload failed test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: actual-output-${{ runner.os }}
           path: tests/Images/ActualOutput/
@@ -112,10 +113,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -123,6 +124,8 @@ jobs:
         shell: pwsh
         run: ./ci-apicompat.ps1
 
+  # Packs every push to main so the package can be downloaded from the run and
+  # tried out. Nothing here publishes.
   pack:
     name: Pack
     needs: [build, apicompat]
@@ -131,7 +134,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # MinVer computes the version from tags.
           fetch-depth: 0
@@ -141,7 +144,7 @@ jobs:
         run: git lfs pull --include "build/branding/*"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -149,72 +152,7 @@ jobs:
         run: dotnet pack src/ImageSharp/ImageSharp.csproj -c Release -o artifacts/packages
 
       - name: Upload packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages
           path: artifacts/packages/
-
-  publish-prerelease:
-    name: Publish prerelease to GitHub Packages
-    needs: pack
-    if: ${{ github.ref == 'refs/heads/main' && github.repository_owner == 'PinataLabs' }}
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: artifacts/packages
-
-      # GitHub Packages does not accept symbol packages.
-      - name: Push
-        run: >
-          dotnet nuget push "artifacts/packages/*.nupkg"
-          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-          --api-key "${{ secrets.GITHUB_TOKEN }}"
-          --skip-duplicate
-          --no-symbols
-
-  publish-release:
-    name: Publish release to nuget.org
-    needs: pack
-    if: ${{ startsWith(github.ref, 'refs/tags/v') && github.repository_owner == 'PinataLabs' }}
-    runs-on: ubuntu-latest
-    environment: nuget
-    permissions:
-      # Trusted Publishing exchanges the GitHub OIDC token for a short-lived nuget.org API key.
-      id-token: write
-      contents: write
-
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: artifacts/packages
-
-      - name: NuGet login (OIDC to temporary API key)
-        id: login
-        uses: NuGet/login@v1
-        with:
-          user: ${{ secrets.NUGET_USER }}
-
-      # Pushes the matching .snupkg symbol packages alongside.
-      - name: Push
-        run: >
-          dotnet nuget push "artifacts/packages/*.nupkg"
-          --source https://api.nuget.org/v3/index.json
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-          --skip-duplicate
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          prerelease=""
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then prerelease="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" artifacts/packages/* \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease
