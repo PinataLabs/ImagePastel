@@ -1,6 +1,7 @@
 name: SonarQube
 
-# Analyzes the solution with SonarQube Cloud (project PinataLabs_ImageSharp).
+# Analyzes the solution with SonarQube Cloud (project PinataLabs_ImageSharp),
+# with test coverage from coverlet in OpenCover format.
 # Kept apart from ci.yml so an analysis failure never blocks a release:
 # require-green-ci.sh only looks at the CI workflow.
 #
@@ -39,12 +40,29 @@ jobs:
       (github.event.pull_request.head.repo.full_name == github.repository &&
        github.actor != 'dependabot[bot]')
 
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history gives SonarQube blame data for new-code detection.
           fetch-depth: 0
+
+      # The tests read their input images from LFS.
+      # See https://github.com/actions/checkout/issues/165#issuecomment-657673315
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}-v1
+
+      - name: Pull LFS files
+        run: git lfs pull
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -67,15 +85,31 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       # The scanner version is pinned in dotnet-tools.json.
-      - name: Build and analyze
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Begin analysis
         run: |
           if [ -z "$SONAR_TOKEN" ]; then
             echo "::error::The SONAR_TOKEN secret is not set."
             exit 1
           fi
           dotnet tool restore
-          dotnet tool run dotnet-sonarscanner begin /k:"PinataLabs_ImageSharp" /o:"pinatalabs" /d:sonar.token="$SONAR_TOKEN"
-          dotnet build ImageSharp.slnx -c Release
-          dotnet tool run dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+          dotnet tool run dotnet-sonarscanner begin /k:"PinataLabs_ImageSharp" /o:"pinatalabs" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.cs.opencover.reportsPaths="artifacts/coverage/**/coverage.opencover.xml" \
+            /d:sonar.exclusions="**/*.pdf"
+
+      - name: Build
+        run: dotnet build ImageSharp.slnx -c Release -p:codecov=true
+
+      # CI is what gates on the tests. Here a failure only means partial coverage,
+      # so the analysis still runs.
+      - name: Test with coverage
+        continue-on-error: true
+        run: >
+          dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build
+          -p:codecov=true
+          --collect "XPlat Code Coverage"
+          --settings tests/coverlet.runsettings
+          --results-directory artifacts/coverage
+
+      - name: End analysis
+        run: dotnet tool run dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
