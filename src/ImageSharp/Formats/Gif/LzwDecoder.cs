@@ -135,149 +135,26 @@ internal sealed class LzwDecoder : IDisposable
     /// <param name="indices">The pixel indices array to decode to.</param>
     public void DecodePixelRow(Span<byte> indices)
     {
+        // Indices past the end of the frame data stay zero.
         indices.Clear();
-
-        // Get span values from the owners.
-        Span<int> prefix = this.prefixOwner.GetSpan();
-        Span<int> suffix = this.suffixOwner.GetSpan();
-        Span<int> pixelStack = this.pixelStackOwner.GetSpan();
-        Span<byte> buffer = this.bufferOwner.GetSpan();
-
-        // Cache frequently accessed instance fields into locals.
-        // This helps avoid repeated field loads inside the tight loop.
-        BufferedReadStream stream = this.stream;
-        int top = this.top;
-        int bits = this.bits;
-        int codeSize = this.codeSize;
-        int codeMask = this.codeMask;
-        int minCodeSize = this.minCodeSize;
-        int availableCode = this.availableCode;
-        int oldCode = this.oldCode;
-        int first = this.first;
-        int data = this.data;
-        int count = this.count;
-        int bufferIndex = this.bufferIndex;
-        int code = this.code;
-        int clearCode = this.clearCode;
-        int endCode = this.endCode;
-
-        int i = 0;
-        while (i < indices.Length)
-        {
-            if (top == 0)
-            {
-                if (bits < codeSize)
-                {
-                    // Load bytes until there are enough bits for a code.
-                    if (count == 0)
-                    {
-                        // Read a new data block.
-                        count = ReadBlock(stream, buffer);
-                        if (count == 0)
-                        {
-                            break;
-                        }
-
-                        bufferIndex = 0;
-                    }
-
-                    data += buffer[bufferIndex] << bits;
-                    bits += 8;
-                    bufferIndex++;
-                    count--;
-                    continue;
-                }
-
-                // Get the next code
-                code = data & codeMask;
-                data >>= codeSize;
-                bits -= codeSize;
-
-                // Interpret the code
-                if (code > availableCode || code == endCode)
-                {
-                    break;
-                }
-
-                if (code == clearCode)
-                {
-                    // Reset the decoder
-                    codeSize = minCodeSize + 1;
-                    codeMask = (1 << codeSize) - 1;
-                    availableCode = clearCode + 2;
-                    oldCode = NullCode;
-                    continue;
-                }
-
-                if (oldCode == NullCode)
-                {
-                    pixelStack[top++] = suffix[code];
-                    oldCode = code;
-                    first = code;
-                    continue;
-                }
-
-                int inCode = code;
-                if (code == availableCode)
-                {
-                    pixelStack[top++] = first;
-                    code = oldCode;
-                }
-
-                while (code > clearCode && top < MaxStackSize)
-                {
-                    pixelStack[top++] = suffix[code];
-                    code = prefix[code];
-                }
-
-                int suffixCode = suffix[code];
-                first = suffixCode;
-                pixelStack[top++] = suffixCode;
-
-                // Fix for GIFs that have "deferred clear code" as per:
-                // https://bugzilla.mozilla.org/show_bug.cgi?id=55918
-                if (availableCode < MaxStackSize)
-                {
-                    prefix[availableCode] = oldCode;
-                    suffix[availableCode] = first;
-                    availableCode++;
-                    if (availableCode == codeMask + 1 && availableCode < MaxStackSize)
-                    {
-                        codeSize++;
-                        codeMask = (1 << codeSize) - 1;
-                    }
-                }
-
-                oldCode = inCode;
-            }
-
-            // Pop a pixel off the pixel stack.
-            top--;
-
-            // Clear missing pixels.
-            indices[i++] = (byte)pixelStack[top];
-        }
-
-        // Write back the local values to the instance fields.
-        this.top = top;
-        this.bits = bits;
-        this.codeSize = codeSize;
-        this.codeMask = codeMask;
-        this.availableCode = availableCode;
-        this.oldCode = oldCode;
-        this.first = first;
-        this.data = data;
-        this.count = count;
-        this.bufferIndex = bufferIndex;
-        this.code = code;
+        this.DecodeIndices(indices, indices.Length);
     }
 
     /// <summary>
     /// Decodes and decompresses all pixel indices from the stream allowing skipping of the data.
     /// </summary>
     /// <param name="length">The resulting index table length.</param>
-    public void SkipIndices(int length)
+    public void SkipIndices(int length) => this.DecodeIndices(default, length);
+
+    /// <summary>
+    /// Decodes and decompresses the next pixel indices from the stream.
+    /// </summary>
+    /// <param name="indices">The buffer to decode to, or an empty span to discard the decoded indices.</param>
+    /// <param name="length">The number of indices to decode.</param>
+    private void DecodeIndices(Span<byte> indices, int length)
     {
+        bool discard = indices.IsEmpty;
+
         // Get span values from the owners.
         Span<int> prefix = this.prefixOwner.GetSpan();
         Span<int> suffix = this.suffixOwner.GetSpan();
@@ -350,6 +227,13 @@ internal sealed class LzwDecoder : IDisposable
                     continue;
                 }
 
+                // A minimum code size of 12 leaves no room in the code tables,
+                // so any code past the clear and end codes cannot be looked up.
+                if (code >= MaxStackSize)
+                {
+                    break;
+                }
+
                 if (oldCode == NullCode)
                 {
                     pixelStack[top++] = suffix[code];
@@ -394,8 +278,11 @@ internal sealed class LzwDecoder : IDisposable
 
             // Pop a pixel off the pixel stack.
             top--;
+            if (!discard)
+            {
+                indices[i] = (byte)pixelStack[top];
+            }
 
-            // Skip missing pixels.
             i++;
         }
 

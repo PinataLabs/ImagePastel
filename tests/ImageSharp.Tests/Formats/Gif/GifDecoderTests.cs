@@ -2,7 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Memory;
@@ -27,6 +29,11 @@ public class GifDecoderTests
     public static readonly string[] MultiFrameTestFiles =
     {
         TestImages.Gif.Giphy, TestImages.Gif.Kumin
+    };
+
+    private static readonly Rgb24[] GlobalColorTable =
+    {
+        new(255, 0, 0), new(0, 255, 0), new(0, 0, 255), new(255, 255, 255)
     };
 
     [Theory]
@@ -340,5 +347,222 @@ public class GifDecoderTests
 
         Assert.Throws<InvalidImageContentException>(() => Image.Identify(testFile.FullPath));
         Assert.Throws<InvalidImageContentException>(() => Image.Load(testFile.FullPath));
+    }
+
+    [Fact]
+    public void Decode_LzwCodePastCodeTables_StopsDecodingFrame()
+    {
+        byte[] data = CreateLzwCodePastCodeTablesGif();
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        // No pixels are decoded, so the frame keeps the cleared indices.
+        Assert.Equal((4, 4), (image.Width, image.Height));
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Assert.Equal(GlobalColorTable[0], image[x, y].Rgb);
+            }
+        }
+    }
+
+    [Fact]
+    public void Identify_LzwCodePastCodeTables_ReturnsImageInfo()
+    {
+        byte[] data = CreateLzwCodePastCodeTablesGif();
+
+        IImageInfo info = Image.Identify(data);
+
+        Assert.Equal((4, 4), (info.Width, info.Height));
+    }
+
+    [Theory]
+    [InlineData(20, 20, 0, true)]
+    [InlineData(10, 10, 5, true)]
+    [InlineData(20, 20, 0, false)]
+    [InlineData(10, 10, 5, false)]
+    [InlineData(10, 3, 7, true)]
+    [InlineData(10, 1, 0, true)]
+    [InlineData(10, 2, 0, true)]
+    [InlineData(10, 4, 0, true)]
+    [InlineData(10, 10, 10, true)]
+    [InlineData(10, 10, 10, false)]
+    [InlineData(10, 10, 9, true)]
+    [InlineData(10, 20, 9, true)]
+    [InlineData(10, 20, 8, true)]
+    public void Decode_FrameGeometry_WritesOnlyRowsInsideCanvas(int width, int height, int top, bool interlaced)
+    {
+        // Each frame row is filled with the color index of its row number modulo 4.
+        int[] rowOrder = interlaced ? GetInterlacedRowOrder(height) : Enumerable.Range(0, height).ToArray();
+        byte[] indices = new byte[width * height];
+        for (int i = 0; i < rowOrder.Length; i++)
+        {
+            indices.AsSpan(i * width, width).Fill((byte)(rowOrder[i] % 4));
+        }
+
+        byte[] data = CreateGif(10, 10, 0, top, width, height, interlaced, 2, EncodeLzw(indices));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal((10, 10), (image.Width, image.Height));
+        for (int y = 0; y < image.Height; y++)
+        {
+            Rgb24 expected = y < top || y >= top + height ? Color.Black.ToPixel<Rgb24>() : GlobalColorTable[(y - top) % 4];
+            for (int x = 0; x < image.Width; x++)
+            {
+                Assert.Equal(expected, image[x, y].Rgb);
+            }
+        }
+    }
+
+    [Fact]
+    public void Decode_InterlacedFrameWithOneVisibleRow_StopsAfterThatRow()
+    {
+        // The canvas shows only frame row 0, which no later interlace pass revisits. The frame data
+        // ends after that row, so skipping the hidden rows would read past it into the next frame.
+        byte[] first = CreateGif(4, 1, 0, 0, 4, 16, interlaced: true, 2, EncodeLzw(new byte[] { 1, 1, 1, 1 }));
+        byte[] second = CreateGif(4, 1, 0, 0, 4, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2, 2, 2, 2 }));
+
+        // Replace the first file's trailer with the image descriptor and data of the second.
+        int frameStart = 6 + 7 + (GlobalColorTable.Length * 3);
+        byte[] data = [.. first.AsSpan(0, first.Length - 1), .. second.AsSpan(frameStart)];
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(2, image.Frames.Count);
+        for (int x = 0; x < image.Width; x++)
+        {
+            Assert.Equal(GlobalColorTable[1], image.Frames[0][x, 0].Rgb);
+            Assert.Equal(GlobalColorTable[2], image.Frames[1][x, 0].Rgb);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(10, 0)]
+    [InlineData(0, 0)]
+    public void Decode_ZeroSizedLogicalScreen_ThrowsInvalidImageContentException(int screenWidth, int screenHeight)
+    {
+        byte[] data = CreateGif(screenWidth, screenHeight, 0, 0, 1, 1, false, 2, EncodeLzw(new byte[] { 1 }));
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
+    }
+
+    // Creates a 4x4 GIF whose frame has a minimum code size of 12 and a single 13-bit code of 4098.
+    // The clear code is 4096, so 4098 cannot be looked up in the 4096-entry code tables.
+    private static byte[] CreateLzwCodePastCodeTablesGif()
+        => CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, minCodeSize: 12, lzwData: new byte[] { 0x02, 0x10 });
+
+    // Creates a GIF89a with a 4-entry global color table and a single image descriptor.
+    private static byte[] CreateGif(
+        int screenWidth,
+        int screenHeight,
+        int left,
+        int top,
+        int width,
+        int height,
+        bool interlaced,
+        int minCodeSize,
+        byte[] lzwData)
+    {
+        using MemoryStream stream = new();
+        stream.Write("GIF89a"u8);
+
+        // Logical screen descriptor with a 4-entry global color table.
+        WriteUInt16(stream, screenWidth);
+        WriteUInt16(stream, screenHeight);
+        stream.WriteByte(0x81);
+        stream.WriteByte(0);
+        stream.WriteByte(0);
+        foreach (Rgb24 color in GlobalColorTable)
+        {
+            stream.WriteByte(color.R);
+            stream.WriteByte(color.G);
+            stream.WriteByte(color.B);
+        }
+
+        // Image descriptor with no local color table.
+        stream.WriteByte(0x2C);
+        WriteUInt16(stream, left);
+        WriteUInt16(stream, top);
+        WriteUInt16(stream, width);
+        WriteUInt16(stream, height);
+        stream.WriteByte((byte)(interlaced ? 0x40 : 0));
+
+        // The image data split into sub-blocks.
+        stream.WriteByte((byte)minCodeSize);
+        for (int i = 0; i < lzwData.Length; i += 255)
+        {
+            int length = Math.Min(255, lzwData.Length - i);
+            stream.WriteByte((byte)length);
+            stream.Write(lzwData, i, length);
+        }
+
+        stream.WriteByte(0);
+        stream.WriteByte(0x3B);
+        return stream.ToArray();
+    }
+
+    // Returns the frame rows in the order an interlaced GIF stores them.
+    private static int[] GetInterlacedRowOrder(int height)
+    {
+        List<int> rows = new();
+        foreach ((int start, int step) in new[] { (0, 8), (4, 8), (2, 4), (1, 2) })
+        {
+            for (int y = start; y < height; y += step)
+            {
+                rows.Add(y);
+            }
+        }
+
+        return rows.ToArray();
+    }
+
+    // Encodes the indices with a minimum code size of 2. A clear code is sent before every
+    // pair of literal codes so the code table never grows and every code stays 3 bits wide.
+    private static byte[] EncodeLzw(byte[] indices)
+    {
+        const int clearCode = 4;
+        const int endCode = 5;
+        List<byte> output = new();
+        int buffer = 0;
+        int bits = 0;
+
+        void WriteCode(int code)
+        {
+            buffer |= code << bits;
+            bits += 3;
+            while (bits >= 8)
+            {
+                output.Add((byte)buffer);
+                buffer >>= 8;
+                bits -= 8;
+            }
+        }
+
+        for (int i = 0; i < indices.Length; i++)
+        {
+            if (i % 2 == 0)
+            {
+                WriteCode(clearCode);
+            }
+
+            WriteCode(indices[i]);
+        }
+
+        WriteCode(endCode);
+        if (bits > 0)
+        {
+            output.Add((byte)buffer);
+        }
+
+        return output.ToArray();
+    }
+
+    private static void WriteUInt16(Stream stream, int value)
+    {
+        stream.WriteByte((byte)value);
+        stream.WriteByte((byte)(value >> 8));
     }
 }
