@@ -137,6 +137,11 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>ImageExtensions.Save.tt</DependentUpon>
     </Compile>
+    <Compile Update="Common\SharedInfrastructure\Guard.Numeric.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Guard.Numeric.tt</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -211,6 +216,10 @@
     <None Update="Formats\ImageExtensions.Save.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>ImageExtensions.Save.cs</LastGenOutput>
+    </None>
+    <None Update="Common\SharedInfrastructure\Guard.Numeric.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Guard.Numeric.cs</LastGenOutput>
     </None>
   </ItemGroup>
 
