@@ -113,6 +113,10 @@ internal class Vp8Encoder : IDisposable
         int spatialNoiseShaping,
         bool alphaCompression)
     {
+        // The VP8 frame header stores each dimension in 14 bits.
+        Guard.MustBeLessThanOrEqualTo(width, WebpConstants.MaxDimension, nameof(width));
+        Guard.MustBeLessThanOrEqualTo(height, WebpConstants.MaxDimension, nameof(height));
+
         this.memoryAllocator = memoryAllocator;
         this.configuration = configuration;
         this.Width = width;

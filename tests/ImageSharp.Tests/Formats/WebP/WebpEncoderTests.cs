@@ -1,7 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
@@ -180,6 +182,69 @@ public class WebpEncoderTests
     }
 
     [Theory]
+    [InlineData(16384, 4)]
+    [InlineData(4, 16384)]
+    [InlineData(20000, 4)]
+    public void Encode_Lossy_WithDimensionAboveMaximum_Throws(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.SaveAsWebp(memStream, encoder));
+        Assert.Equal(0, memStream.Length);
+    }
+
+    [Theory]
+    [InlineData(16383, 4)]
+    [InlineData(4, 16383)]
+    public void Encode_Lossy_WithMaximumDimension_Works(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 0, 0));
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Method = WebpEncodingMethod.Fastest };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+
+        Assert.Equal(width, decoded.Width);
+        Assert.Equal(height, decoded.Height);
+    }
+
+    [Fact]
+    public void Encode_Lossy_WithNoisyImage_AllocatesInProportionToImageSize()
+    {
+        const int width = 1000;
+        const int height = 750;
+
+        // Run on a single thread so that all allocations are made on the current thread.
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MaxDegreeOfParallelism = 1;
+        using var image = new Image<Rgb24>(configuration, width, height);
+        var random = new Random(42);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                random.NextBytes(MemoryMarshal.AsBytes(accessor.GetRowSpan(y)));
+            }
+        });
+
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Quality = 90 };
+        using var memStream = new MemoryStream();
+
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        image.SaveAsWebp(memStream, encoder);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        // The encoder allocates scratch data for each macroblock, so allocations grow with the image size.
+        // A bit writer that copies its buffer each time the output grows by 1 KiB allocates over 200 MB here.
+        long pixelBytes = width * height * 3;
+        Assert.True(allocated < 32 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
+    }
+
+    [Theory]
     [WithFile(Lossy.NoFilter06, PixelTypes.Rgba32, 100)]
     [WithFile(Lossy.NoFilter06, PixelTypes.Rgba32, 75)]
     [WithFile(Lossy.NoFilter06, PixelTypes.Rgba32, 20)]
@@ -321,6 +386,35 @@ public class WebpEncoderTests
 
     [Fact]
     public void RunEncodeLossy_WithPeakImage_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunEncodeLossy_WithPeakImage, HwIntrinsics.DisableHWIntrinsic);
+
+    private static string GetIntrinsicsOutputPath(string intrinsics)
+        => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(WebpEncoderTests)), $"Encode_Lossy_IsTheSameWithAndWithoutAvx2_{intrinsics}.webp");
+
+    private static void RunEncodeLossy_ToFile(string intrinsics)
+    {
+        using var image = Image.Load<Rgba32>(TestImageLossyFullPath);
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
+        image.Save(GetIntrinsicsOutputPath(intrinsics), encoder);
+    }
+
+    [Fact]
+    public void Encode_Lossy_IsTheSameWithAndWithoutAvx2()
+    {
+        string withAvx2 = GetIntrinsicsOutputPath(nameof(HwIntrinsics.AllowAll));
+        string withoutAvx2 = GetIntrinsicsOutputPath(nameof(HwIntrinsics.DisableAVX2));
+        File.Delete(withAvx2);
+        File.Delete(withoutAvx2);
+
+        FeatureTestRunner.RunWithHwIntrinsicsFeature(RunEncodeLossy_ToFile, HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2);
+
+        if (!File.Exists(withAvx2))
+        {
+            // Remote execution is not supported on this platform.
+            return;
+        }
+
+        Assert.Equal(File.ReadAllBytes(withAvx2), File.ReadAllBytes(withoutAvx2));
+    }
 
     private static ImageComparer GetComparer(int quality)
     {
