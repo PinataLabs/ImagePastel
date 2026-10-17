@@ -205,6 +205,7 @@ namespace SixLabors.ImageSharp
                 }
             }
 
+#pragma warning disable CA1857 // The control byte comes from IComponentShuffle at run time; callers inline it to a constant where possible.
             [MethodImpl(InliningOptions.ShortMethod)]
             private static void Shuffle4(
                 ReadOnlySpan<float> source,
@@ -282,6 +283,7 @@ namespace SixLabors.ImageSharp
                     }
                 }
             }
+#pragma warning restore CA1857
 
             [MethodImpl(InliningOptions.ShortMethod)]
             private static void Shuffle4(

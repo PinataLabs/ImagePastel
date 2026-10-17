@@ -85,7 +85,7 @@ namespace SixLabors.ImageSharp.PixelFormats
         public uint Bgra
         {
             [MethodImpl(InliningOptions.ShortMethod)]
-            readonly get => Unsafe.As<Bgra32, uint>(ref Unsafe.AsRef(this));
+            readonly get => Unsafe.As<Bgra32, uint>(ref Unsafe.AsRef(in this));
 
             [MethodImpl(InliningOptions.ShortMethod)]
             set => Unsafe.As<Bgra32, uint>(ref this) = value;

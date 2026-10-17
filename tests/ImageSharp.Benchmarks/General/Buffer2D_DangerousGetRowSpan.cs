@@ -12,7 +12,8 @@ namespace SixLabors.ImageSharp.Benchmarks.General
     {
         private const int Height = 1024;
 
-        [Params(0.5, 2.0, 10.0)] public double SizeMegaBytes { get; set; }
+        [Params(0.5, 2.0, 10.0)]
+        public double SizeMegaBytes { get; set; }
 
         private Buffer2D<Rgba32> buffer;
 

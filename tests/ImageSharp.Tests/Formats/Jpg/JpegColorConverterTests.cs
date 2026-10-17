@@ -353,7 +353,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                     break;
                 case JpegColorSpace.Undefined:
                 default:
-                    Assert.True(false, $"Invalid Colorspace enum value: {colorSpace}.");
+                    Assert.Fail($"Invalid Colorspace enum value: {colorSpace}.");
                     break;
             }
         }

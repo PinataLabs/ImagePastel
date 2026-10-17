@@ -59,7 +59,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                         sum += block[i];
                     }
                 });
-            Assert.Equal(sum, 64f * 63f * 0.5f);
+            Assert.Equal(64f * 63f * 0.5f, sum);
         }
 
         [Fact]
@@ -84,7 +84,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
                         sum += block[i];
                     }
                 });
-            Assert.Equal(sum, 64f * 63f * 0.5f);
+            Assert.Equal(64f * 63f * 0.5f, sum);
         }
 
         [Fact]

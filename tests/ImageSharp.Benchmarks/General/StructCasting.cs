@@ -25,7 +25,8 @@ namespace SixLabors.ImageSharp.Benchmarks.General
         [Benchmark]
         public short UnsafeCastRef()
         {
-            return Unsafe.As<int, short>(ref Unsafe.AsRef(5 * 2));
+            int value = 5 * 2;
+            return Unsafe.As<int, short>(ref Unsafe.AsRef(in value));
         }
     }
 }

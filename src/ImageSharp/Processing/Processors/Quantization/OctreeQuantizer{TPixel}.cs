@@ -127,7 +127,7 @@ namespace SixLabors.ImageSharp.Processing.Processors.Quantization
         /// <inheritdoc/>
         [MethodImpl(InliningOptions.ShortMethod)]
         public readonly IndexedImageFrame<TPixel> QuantizeFrame(ImageFrame<TPixel> source, Rectangle bounds)
-            => QuantizerUtilities.QuantizeFrame(ref Unsafe.AsRef(this), source, bounds);
+            => QuantizerUtilities.QuantizeFrame(ref Unsafe.AsRef(in this), source, bounds);
 
         /// <inheritdoc/>
         [MethodImpl(InliningOptions.ShortMethod)]

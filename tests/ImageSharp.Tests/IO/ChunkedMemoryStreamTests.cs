@@ -98,7 +98,7 @@ namespace SixLabors.ImageSharp.Tests.IO
             byte[] buffer = new byte[2];
             for (int i = 0; i < expected.Length; i += 2)
             {
-                cms.Read(buffer);
+                _ = cms.Read(buffer);
                 Assert.Equal(expected[i], buffer[0]);
                 Assert.Equal(expected[i + 1], buffer[1]);
             }
@@ -121,7 +121,7 @@ namespace SixLabors.ImageSharp.Tests.IO
             Span<byte> buffer = new byte[2];
             for (int i = 0; i < expected.Length; i += 2)
             {
-                cms.Read(buffer);
+                _ = cms.Read(buffer);
                 Assert.Equal(expected[i], buffer[0]);
                 Assert.Equal(expected[i + 1], buffer[1]);
             }
@@ -143,7 +143,7 @@ namespace SixLabors.ImageSharp.Tests.IO
                 readonlyStream.Flush();
                 readonlyStream.Position = 0;
                 bytArrRet = new byte[(int)readonlyStream.Length];
-                readonlyStream.Read(bytArrRet, 0, (int)readonlyStream.Length);
+                _ = readonlyStream.Read(bytArrRet, 0, (int)readonlyStream.Length);
                 for (int i = 0; i < bytArr.Length; i++)
                 {
                     Assert.Equal(bytArr[i], bytArrRet[i]);
@@ -161,7 +161,7 @@ namespace SixLabors.ImageSharp.Tests.IO
                 ms2.WriteTo(ms3);
                 ms3.Position = 0;
                 bytArrRet = new byte[(int)ms3.Length];
-                ms3.Read(bytArrRet, 0, (int)ms3.Length);
+                _ = ms3.Read(bytArrRet, 0, (int)ms3.Length);
                 for (int i = 0; i < bytArr.Length; i++)
                 {
                     Assert.Equal(bytArr[i], bytArrRet[i]);
@@ -229,7 +229,7 @@ namespace SixLabors.ImageSharp.Tests.IO
                 readonlyStream.Flush();
                 readonlyStream.Position = 0;
                 bytArrRet = new byte[(int)readonlyStream.Length];
-                readonlyStream.Read(bytArrRet, 0, (int)readonlyStream.Length);
+                _ = readonlyStream.Read(bytArrRet, 0, (int)readonlyStream.Length);
                 for (int i = 0; i < bytArr.Length; i++)
                 {
                     Assert.Equal(bytArr[i], bytArrRet[i]);

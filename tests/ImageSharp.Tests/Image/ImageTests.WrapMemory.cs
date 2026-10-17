@@ -8,6 +8,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Memory;
@@ -27,6 +28,7 @@ namespace SixLabors.ImageSharp.Tests
             /// A <see cref="MemoryManager{T}"/> exposing the locked pixel memory of a <see cref="Bitmap"/> instance.
             /// TODO: This should be an example in https://github.com/SixLabors/Samples
             /// </summary>
+            [SupportedOSPlatform("windows6.1")]
             public class BitmapMemoryManager : MemoryManager<Bgra32>
             {
                 private readonly Bitmap bitmap;
@@ -147,7 +149,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public void WrapSystemDrawingBitmap_WhenObserved()
             {
-                if (ShouldSkipBitmapTest)
+                if (!IsBitmapTestSupported)
                 {
                     return;
                 }
@@ -193,7 +195,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public void WrapSystemDrawingBitmap_WhenOwned()
             {
-                if (ShouldSkipBitmapTest)
+                if (!IsBitmapTestSupported)
                 {
                     return;
                 }
@@ -250,7 +252,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public void WrapSystemDrawingBitmap_FromBytes_WhenObserved()
             {
-                if (ShouldSkipBitmapTest)
+                if (!IsBitmapTestSupported)
                 {
                     return;
                 }
@@ -324,7 +326,7 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public unsafe void WrapSystemDrawingBitmap_FromPointer()
             {
-                if (ShouldSkipBitmapTest)
+                if (!IsBitmapTestSupported)
                 {
                     return;
                 }
@@ -534,8 +536,9 @@ namespace SixLabors.ImageSharp.Tests
                 Assert.Throws<ArgumentException>(() => Image.WrapMemory<Rgba32>((void*)null, height, width));
             }
 
-            private static bool ShouldSkipBitmapTest =>
-                !TestEnvironment.Is64BitProcess || TestHelpers.ImageSharpBuiltAgainst != "net10.0";
+            [SupportedOSPlatformGuard("windows6.1")]
+            private static bool IsBitmapTestSupported =>
+                TestEnvironment.IsWindows && TestEnvironment.Is64BitProcess && TestHelpers.ImageSharpBuiltAgainst == "net10.0";
         }
     }
 }

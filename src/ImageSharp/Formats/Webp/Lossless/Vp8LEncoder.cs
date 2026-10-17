@@ -1098,7 +1098,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
                     uint pix = currentRow[x];
                     uint pixDiff = LosslessUtils.SubPixels(pix, pixPrev);
                     pixPrev = pix;
-                    if (pixDiff == 0 || (prevRow != null && pix == prevRow[x]))
+                    if (pixDiff == 0 || (!prevRow.IsEmpty && pix == prevRow[x]))
                     {
                         continue;
                     }

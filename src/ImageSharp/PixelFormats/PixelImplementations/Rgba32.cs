@@ -125,7 +125,7 @@ namespace SixLabors.ImageSharp.PixelFormats
         public uint Rgba
         {
             [MethodImpl(InliningOptions.ShortMethod)]
-            readonly get => Unsafe.As<Rgba32, uint>(ref Unsafe.AsRef(this));
+            readonly get => Unsafe.As<Rgba32, uint>(ref Unsafe.AsRef(in this));
 
             [MethodImpl(InliningOptions.ShortMethod)]
             set => Unsafe.As<Rgba32, uint>(ref this) = value;

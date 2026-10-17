@@ -95,9 +95,9 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         private static readonly Vector128<int> K51000 = Vector128.Create(51000);
 
-        private static readonly byte MmShuffle2301 = SimdUtils.Shuffle.MmShuffle(2, 3, 0, 1);
+        private const byte MmShuffle2301 = (2 << 6) | (3 << 4) | (0 << 2) | 1;
 
-        private static readonly byte MmShuffle1032 = SimdUtils.Shuffle.MmShuffle(1, 0, 3, 2);
+        private const byte MmShuffle1032 = (1 << 6) | (0 << 4) | (3 << 2) | 2;
 #pragma warning restore SA1310 // Field names should not contain underscore
 #endif
 
@@ -704,12 +704,12 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
             // V block.
             dst = dst.Slice(8);
-            if (top != null)
+            if (!top.IsEmpty)
             {
                 top = top.Slice(8);
             }
 
-            if (left != null)
+            if (!left.IsEmpty)
             {
                 left = left.Slice(16);
             }
@@ -738,7 +738,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         private static void VerticalPred(Span<byte> dst, Span<byte> top, int size)
         {
-            if (top != null)
+            if (!top.IsEmpty)
             {
                 for (int j = 0; j < size; j++)
                 {
@@ -753,7 +753,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void HorizontalPred(Span<byte> dst, Span<byte> left, int size)
         {
-            if (left != null)
+            if (!left.IsEmpty)
             {
                 left = left.Slice(1); // in the reference implementation, left starts at - 1.
                 for (int j = 0; j < size; j++)
@@ -769,9 +769,9 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void TrueMotion(Span<byte> dst, Span<byte> left, Span<byte> top, int size)
         {
-            if (left != null)
+            if (!left.IsEmpty)
             {
-                if (top != null)
+                if (!top.IsEmpty)
                 {
                     Span<byte> clip = Clip1.AsSpan(255 - left[0]); // left [0] instead of left[-1], original left starts at -1
                     for (int y = 0; y < size; y++)
@@ -796,7 +796,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
                 // is equivalent to VE prediction where you just copy the top samples.
                 // Note that if top samples are not available, the default value is
                 // then 129, and not 127 as in the VerticalPred case.
-                if (top != null)
+                if (!top.IsEmpty)
                 {
                     VerticalPred(dst, top, size);
                 }
@@ -811,14 +811,14 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         {
             int dc = 0;
             int j;
-            if (top != null)
+            if (!top.IsEmpty)
             {
                 for (j = 0; j < size; j++)
                 {
                     dc += top[j];
                 }
 
-                if (left != null)
+                if (!left.IsEmpty)
                 {
                     // top and left present.
                     left = left.Slice(1); // in the reference implementation, left starts at -1.
@@ -835,7 +835,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
                 dc = (dc + round) >> shift;
             }
-            else if (left != null)
+            else if (!left.IsEmpty)
             {
                 // left but no top.
                 left = left.Slice(1); // in the reference implementation, left starts at -1.

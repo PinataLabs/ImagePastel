@@ -1140,7 +1140,7 @@ namespace SixLabors.ImageSharp.Formats.Png
 
             uint crc = Crc32.Calculate(this.buffer.AsSpan(4, 4)); // Write the type buffer
 
-            if (data != null && length > 0)
+            if (!data.IsEmpty && length > 0)
             {
                 stream.Write(data, offset, length);
 

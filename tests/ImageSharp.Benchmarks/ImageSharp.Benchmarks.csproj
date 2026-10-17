@@ -10,6 +10,11 @@
     <!--Used to hide test project from dotnet test-->
     <IsTestProject>false</IsTestProject>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
+    <!--
+      CA1416: the System.Drawing comparison benchmarks only run on Windows, and their shared
+      setup code mixes in cross-platform ImageSharp work, so per-member annotations do not fit.
+    -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
     <!-- Uncomment this to run benchmarks depending on Colorful or Pfim (colorspaces and TGA): -->
     <!--<SignAssembly>false</SignAssembly>-->
   </PropertyGroup>

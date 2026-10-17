@@ -72,6 +72,9 @@
     <DebugType Condition="'$(IsCodeCoverage)'=='true'">full</DebugType>
     <NullableContextOptions>disable</NullableContextOptions>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <!-- Pin the analyzer rule set so SDK updates do not introduce new warnings unannounced. -->
+    <AnalysisLevel>10.0</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <!-- Standardize build output location. -->

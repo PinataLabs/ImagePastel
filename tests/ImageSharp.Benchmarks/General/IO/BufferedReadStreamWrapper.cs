@@ -198,7 +198,7 @@ namespace SixLabors.ImageSharp.Benchmarks.IO
                 this.stream.Seek(this.readerPosition, SeekOrigin.Begin);
             }
 
-            this.stream.Read(this.readBuffer, 0, BufferLength);
+            _ = this.stream.Read(this.readBuffer, 0, BufferLength);
             this.readBufferIndex = 0;
         }
 

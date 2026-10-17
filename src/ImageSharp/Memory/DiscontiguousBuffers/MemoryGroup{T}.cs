@@ -20,7 +20,7 @@ namespace SixLabors.ImageSharp.Memory
     /// <typeparam name="T">The element type.</typeparam>
     internal abstract partial class MemoryGroup<T> : IMemoryGroup<T>, IDisposable
         where T : struct
-    {    
+    {
         private static readonly int ElementSize = Unsafe.SizeOf<T>();
 
         private MemoryGroupSpanCache memoryGroupSpanCache;

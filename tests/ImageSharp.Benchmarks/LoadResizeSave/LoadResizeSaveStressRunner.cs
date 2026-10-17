@@ -231,6 +231,7 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
         public async Task ImageSharpResizeAsync(string input)
         {
             using FileStream output = File.Open(this.OutputPath(input), FileMode.Create);
+
             // Resize it to fit a 150x150 square
             using var image = await ImageSharpImage.LoadAsync(input);
             this.LogImageProcessed(image.Width, image.Height);

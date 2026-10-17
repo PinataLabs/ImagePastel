@@ -100,7 +100,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Pbm
             image.CompareToReferenceOutput(provider, grayscale: isGrayscale);
         }
 
-
         [Fact]
         public void PlainText_PrematureEof()
         {

@@ -431,7 +431,9 @@ namespace SixLabors.ImageSharp.IO
 
             this.readChunk = this.memoryChunk;
             this.readOffset = 0;
-            this.Read(copy, 0, length);
+
+            // Reading our own in-memory chunks always returns the full length.
+            _ = this.Read(copy, 0, length);
 
             this.readChunk = backupReadChunk;
             this.readOffset = backupReadOffset;

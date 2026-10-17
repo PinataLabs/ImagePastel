@@ -60,7 +60,7 @@ namespace SixLabors.ImageSharp.Advanced
             {
                 for (int y = top; y < bottom; y++)
                 {
-                    Unsafe.AsRef(operation).Invoke(y);
+                    Unsafe.AsRef(in operation).Invoke(y);
                 }
 
                 return;
@@ -129,7 +129,7 @@ namespace SixLabors.ImageSharp.Advanced
 
                 for (int y = top; y < bottom; y++)
                 {
-                    Unsafe.AsRef(operation).Invoke(y, span);
+                    Unsafe.AsRef(in operation).Invoke(y, span);
                 }
 
                 return;
@@ -253,7 +253,7 @@ namespace SixLabors.ImageSharp.Advanced
                 var rows = new RowInterval(top, bottom);
                 using IMemoryOwner<TBuffer> buffer = allocator.Allocate<TBuffer>(width);
 
-                Unsafe.AsRef(operation).Invoke(in rows, buffer.Memory.Span);
+                Unsafe.AsRef(in operation).Invoke(in rows, buffer.Memory.Span);
 
                 return;
             }

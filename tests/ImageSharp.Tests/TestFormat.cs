@@ -216,7 +216,6 @@ namespace SixLabors.ImageSharp.Tests
                 where TPixel : unmanaged, IPixel<TPixel>
                 => this.DecodeImpl<TPixel>(configuration, stream);
 
-
             private Image<TPixel> DecodeImpl<TPixel>(Configuration config, Stream stream)
                 where TPixel : unmanaged, IPixel<TPixel>
             {

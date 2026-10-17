@@ -343,7 +343,7 @@ namespace SixLabors.ImageSharp.Tests.Memory
             Assert.False(mgBefore.IsValid);
             Assert.NotSame(mgBefore, buffer1.MemoryGroup);
         }
-            
+
         public static TheoryData<Size> InvalidLengths { get; set; } = new()
         {
             { new(-1, -1) },

@@ -26,6 +26,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void To32bppArgbSystemDrawingBitmap<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             using (Image<TPixel> image = provider.GetImage())
             {
                 using (System.Drawing.Bitmap sdBitmap = SystemDrawingBridge.To32bppArgbSystemDrawingBitmap(image))
@@ -41,6 +46,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void From32bppArgbSystemDrawingBitmap<TPixel>(TestImageProvider<TPixel> dummyProvider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             string path = TestFile.GetInputFileFullPath(TestImages.Png.Splash);
 
             using (var sdBitmap = new System.Drawing.Bitmap(path))
@@ -72,6 +82,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void From32bppArgbSystemDrawingBitmap2<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             if (TestEnvironment.IsLinux)
             {
                 return;
@@ -95,6 +110,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void From24bppRgbSystemDrawingBitmap<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             string path = SavePng(provider, PngColorType.Rgb);
 
             using (Image<TPixel> original = provider.GetImage())
@@ -115,6 +135,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void OpenWithReferenceDecoder<TPixel>(TestImageProvider<TPixel> dummyProvider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             string path = TestFile.GetInputFileFullPath(TestImages.Png.Splash);
             using (var image = Image.Load<TPixel>(path, SystemDrawingReferenceDecoder.Instance))
             {
@@ -127,6 +152,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void SaveWithReferenceEncoder<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             using (Image<TPixel> image = provider.GetImage())
             {
                 provider.Utility.SaveTestOutputFile(image, "png", SystemDrawingReferenceEncoder.Png);

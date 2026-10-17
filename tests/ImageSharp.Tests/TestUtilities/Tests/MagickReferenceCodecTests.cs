@@ -32,6 +32,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void MagickDecode_8BitDepthImage_IsEquivalentTo_SystemDrawingResult<TPixel>(TestImageProvider<TPixel> dummyProvider, string testImage)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             string path = TestFile.GetInputFileFullPath(testImage);
 
             var magickDecoder = new MagickReferenceDecoder();
@@ -46,10 +51,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
 
                 mImage.DebugSave(dummyProvider);
 
-                if (TestEnvironment.IsWindows)
-                {
-                    Assert.True(report.IsEmpty);
-                }
+                Assert.True(report.IsEmpty);
             }
         }
 
@@ -62,6 +64,11 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
         public void MagickDecode_16BitDepthImage_IsApproximatelyEquivalentTo_SystemDrawingResult<TPixel>(TestImageProvider<TPixel> dummyProvider, string testImage)
             where TPixel : unmanaged, IPixel<TPixel>
         {
+            if (!TestEnvironment.IsWindows)
+            {
+                return;
+            }
+
             string path = TestFile.GetInputFileFullPath(testImage);
 
             var magickDecoder = new MagickReferenceDecoder();
@@ -77,10 +84,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
 
                 mImage.DebugSave(dummyProvider);
 
-                if (TestEnvironment.IsWindows)
-                {
-                    Assert.True(report.IsEmpty);
-                }
+                Assert.True(report.IsEmpty);
             }
         }
     }

@@ -27,7 +27,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
         {
             var meta = new JpegMetadata();
 
-            Assert.Equal(meta.Quality, ImageSharp.Formats.Jpeg.Components.Quantization.DefaultQualityFactor);
+            Assert.Equal(ImageSharp.Formats.Jpeg.Components.Quantization.DefaultQualityFactor, meta.Quality);
         }
 
         [Fact]
