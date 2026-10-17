@@ -20,7 +20,7 @@ namespace SixLabors.ImageSharp
         public const MethodImplOptions HotPath = MethodImplOptions.NoInlining;
         public const MethodImplOptions ShortMethod = MethodImplOptions.NoInlining;
 #else
-#if SUPPORTS_HOTPATH
+#if NETCOREAPP3_0_OR_GREATER
         public const MethodImplOptions HotPath = MethodImplOptions.AggressiveOptimization;
 #else
         public const MethodImplOptions HotPath = MethodImplOptions.AggressiveInlining;

@@ -19,7 +19,7 @@ namespace SixLabors.ImageSharp
         {
             public static bool IsAvailable { get; } = HasVector8;
 
-#if !SUPPORTS_EXTENDED_INTRINSICS
+#if !NETCOREAPP2_1_OR_GREATER
             /// <summary>
             /// <see cref="ByteToNormalizedFloat"/> as many elements as possible, slicing them down (keeping the remainder).
             /// </summary>

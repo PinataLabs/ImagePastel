@@ -25,7 +25,7 @@ namespace SixLabors.ImageSharp
         {
             VerifyShuffle4SpanInput(source, dest);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.Shuffle4Reduce(ref source, ref dest, control);
 #endif
 
@@ -52,7 +52,7 @@ namespace SixLabors.ImageSharp
         {
             VerifyShuffle4SpanInput(source, dest);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.Shuffle4Reduce(ref source, ref dest, shuffle.Control);
 #endif
 
@@ -80,7 +80,7 @@ namespace SixLabors.ImageSharp
             // Source length should be smaller than dest length, and divisible by 3.
             VerifyShuffle3SpanInput(source, dest);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.Shuffle3Reduce(ref source, ref dest, shuffle.Control);
 #endif
 
@@ -107,7 +107,7 @@ namespace SixLabors.ImageSharp
         {
             VerifyPad3Shuffle4SpanInput(source, dest);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.Pad3Shuffle4Reduce(ref source, ref dest, shuffle.Control);
 #endif
 
@@ -134,7 +134,7 @@ namespace SixLabors.ImageSharp
         {
             VerifyShuffle4Slice3SpanInput(source, dest);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.Shuffle4Slice3Reduce(ref source, ref dest, shuffle.Control);
 #endif
 

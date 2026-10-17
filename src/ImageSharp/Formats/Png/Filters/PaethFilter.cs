@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -38,7 +38,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             // row:  a d
             // The Paeth function predicts d to be whichever of a, b, or c is nearest to
             // p = a + b - c.
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse41.IsSupported && bytesPerPixel is 4)
             {
                 DecodeSse41(scanline, previousScanline);
@@ -50,7 +50,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void DecodeSse41(Span<byte> scanline, Span<byte> previousScanline)
@@ -168,7 +168,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
                 sum += Numerics.Abs(unchecked((sbyte)res));
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 Vector256<byte> zero = Vector256<byte>.Zero;
@@ -261,7 +261,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             return upperLeft;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static Vector256<byte> PaethPredictor(Vector256<byte> left, Vector256<byte> above, Vector256<byte> upleft)
         {
             Vector256<byte> zero = Vector256<byte>.Zero;

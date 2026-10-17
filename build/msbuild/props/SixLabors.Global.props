@@ -99,20 +99,4 @@
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)..\..\stylecop.json" />
   </ItemGroup>
 
-  <!-- Define target framework specific constants.
-    https://apisof.net/
-    +===================+=====================+====================+=========+===============+
-    | SUPPORTS          | EXTENDED_INTRINSICS | RUNTIME_INTRINSICS | HOTPATH | BITOPERATIONS |
-    +===================+=====================+====================+=========+===============+
-    | net10.0           |         Y           |        Y           |    Y    |       Y       |
-    | netstandard2.1    |         N           |        N           |    N    |       N       |
-    +===================+=====================+====================+=========+===============+
-    -->
-  <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)','net10.0'))">
-    <DefineConstants>$(DefineConstants);SUPPORTS_EXTENDED_INTRINSICS</DefineConstants>
-    <DefineConstants>$(DefineConstants);SUPPORTS_RUNTIME_INTRINSICS</DefineConstants>
-    <DefineConstants>$(DefineConstants);SUPPORTS_HOTPATH</DefineConstants>
-    <DefineConstants>$(DefineConstants);SUPPORTS_BITOPERATIONS</DefineConstants>
-  </PropertyGroup>
-
 </Project>

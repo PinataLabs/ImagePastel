@@ -5,7 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -15,7 +15,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 {
     internal static class LossyUtils
     {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector128<byte> Mean16x4Mask = Vector128.Create((short)0x00ff).AsByte();
 
         private static readonly Vector128<byte> SignBit = Vector128.Create((byte)0x80);
@@ -42,7 +42,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static int Vp8_Sse16X16(Span<byte> a, Span<byte> b)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 return Vp8_Sse16xN_Avx2(a, b, 4);
@@ -62,7 +62,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static int Vp8_Sse16X8(Span<byte> a, Span<byte> b)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 return Vp8_Sse16xN_Avx2(a, b, 2);
@@ -82,7 +82,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static int Vp8_Sse4X4(Span<byte> a, Span<byte> b)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 // Load values.
@@ -178,7 +178,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             return count;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         [MethodImpl(InliningOptions.ShortMethod)]
         private static int Vp8_Sse16xN_Sse2(Span<byte> a, Span<byte> b, int numPairs)
         {
@@ -312,7 +312,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static int Vp8Disto4X4(Span<byte> a, Span<byte> b, Span<ushort> w, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse41.IsSupported)
             {
                 int diffSum = TTransformSse41(a, b, w);
@@ -836,7 +836,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             return sum;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         /// <summary>
         /// Hadamard transform
         /// Returns the weighted sum of the absolute value of transformed coefficients.
@@ -973,7 +973,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         // Does two transforms.
         public static void TransformTwo(Span<short> src, Span<byte> dst, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // This implementation makes use of 16-bit fixed point versions of two
@@ -1126,7 +1126,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void TransformOne(Span<short> src, Span<byte> dst, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Load and concatenate the transform coefficients.
@@ -1349,7 +1349,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         // Simple In-loop filtering (Paragraph 15.2)
         public static void SimpleVFilter16(Span<byte> p, int offset, int stride, int thresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Load.
@@ -1384,7 +1384,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void SimpleHFilter16(Span<byte> p, int offset, int stride, int thresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Beginning of p1
@@ -1411,7 +1411,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void SimpleVFilter16i(Span<byte> p, int offset, int stride, int thresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 for (int k = 3; k > 0; k--)
@@ -1433,7 +1433,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void SimpleHFilter16i(Span<byte> p, int offset, int stride, int thresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 for (int k = 3; k > 0; k--)
@@ -1457,7 +1457,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void VFilter16(Span<byte> p, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte pRef = ref MemoryMarshal.GetReference(p);
@@ -1501,7 +1501,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void HFilter16(Span<byte> p, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte pRef = ref MemoryMarshal.GetReference(p);
@@ -1533,7 +1533,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void VFilter16i(Span<byte> p, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte pRef = ref MemoryMarshal.GetReference(p);
@@ -1591,7 +1591,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void HFilter16i(Span<byte> p, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte pRef = ref MemoryMarshal.GetReference(p);
@@ -1642,7 +1642,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void VFilter8(Span<byte> u, Span<byte> v, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Load uv h-edges.
@@ -1688,7 +1688,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void HFilter8(Span<byte> u, Span<byte> v, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte uRef = ref MemoryMarshal.GetReference(u);
@@ -1722,7 +1722,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void VFilter8i(Span<byte> u, Span<byte> v, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Load uv h-edges.
@@ -1769,7 +1769,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         [MethodImpl(InliningOptions.ShortMethod)]
         public static void HFilter8i(Span<byte> u, Span<byte> v, int offset, int stride, int thresh, int ithresh, int hevThresh)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte uRef = ref MemoryMarshal.GetReference(u);
@@ -1807,7 +1807,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void Mean16x4(Span<byte> input, Span<uint> dc)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Ssse3.IsSupported)
             {
                 Vector128<byte> a0 = Unsafe.As<byte, Vector128<byte>>(ref MemoryMarshal.GetReference(input));
@@ -1974,7 +1974,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             p[offset] = WebpLookupTables.Clip1(q0 - a1);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         // Applies filter on 2 pixels (p0 and q0)
         private static void DoFilter2Sse2(ref Vector128<byte> p1, ref Vector128<byte> p0, ref Vector128<byte> q0, ref Vector128<byte> q1, int thresh)
         {
@@ -2188,7 +2188,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
                    WebpLookupTables.Abs0(q2 - q1) <= it && WebpLookupTables.Abs0(q1 - q0) <= it;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static Vector128<byte> NeedsFilter(Vector128<byte> p1, Vector128<byte> p0, Vector128<byte> q0, Vector128<byte> q1, int thresh)
         {
             var mthresh = Vector128.Create((byte)thresh);

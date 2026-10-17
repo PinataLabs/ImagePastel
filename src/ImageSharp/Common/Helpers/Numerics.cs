@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -18,12 +18,12 @@ namespace SixLabors.ImageSharp
     /// </summary>
     internal static class Numerics
     {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         public const int BlendAlphaControl = 0b_10_00_10_00;
         private const int ShuffleAlphaControl = 0b_11_11_11_11;
 #endif
 
-#if !SUPPORTS_BITOPERATIONS
+#if !NETCOREAPP3_0_OR_GREATER
         private static ReadOnlySpan<byte> Log2DeBruijn => new byte[32]
         {
             00, 09, 01, 10, 13, 21, 02, 29,
@@ -506,7 +506,7 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Premultiply(Span<Vector4> vectors)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && vectors.Length >= 2)
             {
                 // Divide by 2 as 4 elements per Vector4 and 8 per Vector256<float>
@@ -549,7 +549,7 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void UnPremultiply(Span<Vector4> vectors)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && vectors.Length >= 2)
             {
                 // Divide by 2 as 4 elements per Vector4 and 8 per Vector256<float>
@@ -621,7 +621,7 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void CubeRootOnXYZ(Span<Vector4> vectors)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse41.IsSupported)
             {
                 ref Vector128<float> vectors128Ref = ref Unsafe.As<Vector4, Vector128<float>>(ref MemoryMarshal.GetReference(vectors));
@@ -721,7 +721,7 @@ namespace SixLabors.ImageSharp
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
         /// <summary>
         /// Performs a linear interpolation between two values based on the given weighting.
@@ -759,7 +759,7 @@ namespace SixLabors.ImageSharp
         public static float Lerp(float value1, float value2, float amount)
             => ((value2 - value1) * amount) + value1;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
         /// <summary>
         /// Accumulates 8-bit integers into <paramref name="accumulator"/> by
@@ -863,14 +863,14 @@ namespace SixLabors.ImageSharp
         /// <param name="value">The value.</param>
         public static int Log2(uint value)
         {
-#if SUPPORTS_BITOPERATIONS
+#if NETCOREAPP3_0_OR_GREATER
             return BitOperations.Log2(value);
 #else
             return Log2SoftwareFallback(value);
 #endif
         }
 
-#if !SUPPORTS_BITOPERATIONS
+#if !NETCOREAPP3_0_OR_GREATER
         /// <summary>
         /// Calculates floored log of the specified value, base 2.
         /// Note that by convention, input value 0 returns 0 since Log(0) is undefined.
@@ -917,14 +917,14 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint RotateLeft(uint value, int offset)
         {
-#if SUPPORTS_BITOPERATIONS
+#if NETCOREAPP3_0_OR_GREATER
             return BitOperations.RotateLeft(value, offset);
 #else
             return RotateLeftSoftwareFallback(value, offset);
 #endif
         }
 
-#if !SUPPORTS_BITOPERATIONS
+#if !NETCOREAPP3_0_OR_GREATER
         /// <summary>
         /// Rotates the specified value left by the specified number of bits.
         /// </summary>
@@ -945,14 +945,14 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint RotateRight(uint value, int offset)
         {
-#if SUPPORTS_BITOPERATIONS
+#if NETCOREAPP3_0_OR_GREATER
             return BitOperations.RotateRight(value, offset);
 #else
             return RotateRightSoftwareFallback(value, offset);
 #endif
         }
 
-#if !SUPPORTS_BITOPERATIONS
+#if !NETCOREAPP3_0_OR_GREATER
         /// <summary>
         /// Rotates the specified value right by the specified number of bits.
         /// </summary>

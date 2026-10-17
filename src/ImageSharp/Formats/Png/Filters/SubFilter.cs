@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -29,7 +29,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
         public static void Decode(Span<byte> scanline, int bytesPerPixel)
         {
             // The Sub filter predicts each pixel as the previous pixel.
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported && bytesPerPixel is 4)
             {
                 DecodeSse2(scanline);
@@ -41,7 +41,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static void DecodeSse2(Span<byte> scanline)
         {
             ref byte scanBaseRef = ref MemoryMarshal.GetReference(scanline);
@@ -110,7 +110,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
                 sum += Numerics.Abs(unchecked((sbyte)res));
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 Vector256<byte> zero = Vector256<byte>.Zero;

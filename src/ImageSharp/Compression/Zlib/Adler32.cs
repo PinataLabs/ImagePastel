@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -29,7 +29,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
         // NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1
         private const uint NMAX = 5552;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private const int MinBufferSize = 64;
 
         private const int BlockSize = 1 << 5;
@@ -65,7 +65,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
                 return adler;
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && buffer.Length >= MinBufferSize)
             {
                 return CalculateAvx2(adler, buffer);
@@ -83,7 +83,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
         }
 
         // Based on https://github.com/chromium/chromium/blob/master/third_party/zlib/adler32_simd.c
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         [MethodImpl(InliningOptions.HotPath | InliningOptions.ShortMethod)]
         private static unsafe uint CalculateSse(uint adler, ReadOnlySpan<byte> buffer)
         {

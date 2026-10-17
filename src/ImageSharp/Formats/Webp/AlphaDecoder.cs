@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Formats.Webp.BitReader;
 using SixLabors.ImageSharp.Formats.Webp.Lossless;
 using SixLabors.ImageSharp.Memory;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -311,7 +311,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
 
         private static void HorizontalUnfilter(Span<byte> prev, Span<byte> input, Span<byte> dst, int width)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 dst[0] = (byte)(input[0] + (prev.IsEmpty ? 0 : prev[0]));
@@ -366,7 +366,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
             }
             else
             {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
                 if (Avx2.IsSupported)
                 {
                     nint i;

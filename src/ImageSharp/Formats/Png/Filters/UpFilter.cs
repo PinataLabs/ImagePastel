@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -30,7 +30,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
         {
             DebugGuard.MustBeSameSized<byte>(scanline, previousScanline, nameof(scanline));
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 DecodeAvx2(scanline, previousScanline);
@@ -46,7 +46,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static void DecodeAvx2(Span<byte> scanline, Span<byte> previousScanline)
         {
             ref byte scanBaseRef = ref MemoryMarshal.GetReference(scanline);
@@ -150,7 +150,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
 
             int x = 0;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 Vector256<byte> zero = Vector256<byte>.Zero;
