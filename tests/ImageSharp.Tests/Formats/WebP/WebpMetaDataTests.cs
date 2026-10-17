@@ -336,6 +336,101 @@ public class WebpMetaDataTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Decode_OddLengthMetadataChunks_ReadsPayloadWithoutPaddingByte(bool ignoreMetadata)
+    {
+        // arrange
+        byte[] icc = OddLengthIccProfile();
+        byte[] exif = OddLengthExifProfile();
+        byte[] xmp = Encoding.UTF8.GetBytes("<x:xmpmeta xmlns:x='adobe:ns:meta/'>" + new string('a', 953) + "</x:xmpmeta>");
+        Assert.Equal(1001, xmp.Length);
+        byte[] data = CreateExtendedWebp(icc, exif, xmp);
+
+        // act
+        using var image = Image.Load<Rgba32>(data, new WebpDecoder { IgnoreMetadata = ignoreMetadata });
+
+        // assert
+        Assert.Equal(new Rgba32(255, 0, 0, 255), image[0, 0]);
+        if (ignoreMetadata)
+        {
+            Assert.Null(image.Metadata.IccProfile);
+            Assert.Null(image.Metadata.ExifProfile);
+            Assert.Null(image.Metadata.XmpProfile);
+        }
+        else
+        {
+            Assert.Equal(icc, image.Metadata.IccProfile.ToByteArray());
+            Assert.Equal(exif, image.Metadata.ExifProfile.ToByteArray());
+            Assert.Equal(xmp, image.Metadata.XmpProfile.Data);
+        }
+    }
+
+    /// <summary>
+    /// Returns a valid ICC profile whose length, and the size stored in its header, is odd.
+    /// </summary>
+    private static byte[] OddLengthIccProfile()
+    {
+        byte[] icc = [.. IccTestDataProfiles.Profile_Random_Array, 0x2A];
+        Assert.True(icc.Length % 2 == 1, "The ICC profile length must be odd.");
+        BinaryPrimitives.WriteUInt32BigEndian(icc, (uint)icc.Length);
+        Assert.True(new IccProfile(icc).CheckIsValid(), "The ICC profile must be valid.");
+        return icc;
+    }
+
+    /// <summary>
+    /// Returns raw EXIF data with an odd length.
+    /// </summary>
+    private static byte[] OddLengthExifProfile()
+    {
+        var exifProfile = new ExifProfile();
+        exifProfile.SetValue(ExifTag.Software, "ImageSharp");
+        byte[] exif = exifProfile.ToByteArray();
+        return exif.Length % 2 == 1 ? exif : [.. exif, 0x2A];
+    }
+
+    /// <summary>
+    /// Builds a 1x1 VP8X WebP file with ICCP, VP8L, EXIF and XMP chunks, padding each odd-length chunk with a zero byte.
+    /// </summary>
+    private static byte[] CreateExtendedWebp(byte[] icc, byte[] exif, byte[] xmp)
+    {
+        using var source = new Image<Rgba32>(1, 1, Color.Red.ToPixel<Rgba32>());
+        using var sourceStream = new MemoryStream();
+        source.Save(sourceStream, new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless });
+        byte[] simple = sourceStream.ToArray();
+        Assert.Equal("VP8L", Encoding.ASCII.GetString(simple, 12, 4));
+
+        using var output = new MemoryStream();
+        output.Write(Encoding.ASCII.GetBytes("RIFF"));
+        output.Write(new byte[4]);
+        output.Write(Encoding.ASCII.GetBytes("WEBP"));
+
+        // VP8X with the ICC, EXIF and XMP flags, and a 1x1 canvas (width and height minus one are zero).
+        WriteChunk(output, "VP8X", [0x2C, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        WriteChunk(output, "ICCP", icc);
+        output.Write(simple, 12, simple.Length - 12);
+        WriteChunk(output, "EXIF", exif);
+        WriteChunk(output, "XMP ", xmp);
+
+        byte[] data = output.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), (uint)data.Length - 8);
+        return data;
+    }
+
+    private static void WriteChunk(Stream stream, string fourCc, byte[] payload)
+    {
+        Span<byte> size = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(size, (uint)payload.Length);
+        stream.Write(Encoding.ASCII.GetBytes(fourCc));
+        stream.Write(size);
+        stream.Write(payload);
+        if (payload.Length % 2 == 1)
+        {
+            stream.WriteByte(0);
+        }
+    }
+
     /// <summary>
     /// Walks the chunks of a RIFF WebP file and returns their FourCCs in order.
     /// Fails if a chunk does not fit inside the file.

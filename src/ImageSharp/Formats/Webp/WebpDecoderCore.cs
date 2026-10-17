@@ -633,10 +633,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// </summary>
     private void ReadExifProfile()
     {
-        uint exifChunkSize = this.ReadChunkSize();
+        uint exifChunkSize = this.ReadPayloadSize();
         if (this.IgnoreMetadata)
         {
-            this.SkipChunkData(exifChunkSize);
+            this.SkipChunkData(PaddedSize(exifChunkSize));
         }
         else
         {
@@ -657,10 +657,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// </summary>
     private void ReadXmpProfile()
     {
-        uint xmpChunkSize = this.ReadChunkSize();
+        uint xmpChunkSize = this.ReadPayloadSize();
         if (this.IgnoreMetadata)
         {
-            this.SkipChunkData(xmpChunkSize);
+            this.SkipChunkData(PaddedSize(xmpChunkSize));
         }
         else
         {
@@ -681,10 +681,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// </summary>
     private void ReadIccProfile()
     {
-        uint iccpChunkSize = this.ReadChunkSize();
+        uint iccpChunkSize = this.ReadPayloadSize();
         if (this.IgnoreMetadata)
         {
-            this.SkipChunkData(iccpChunkSize);
+            this.SkipChunkData(PaddedSize(iccpChunkSize));
         }
         else
         {
@@ -703,22 +703,29 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// Reads the data of a metadata chunk. The data is only allocated once the chunk is known to fit in the rest of the RIFF payload.
+    /// Reads the data of a metadata chunk and skips the padding byte that follows odd-sized data.
+    /// The data is only allocated once the chunk is known to fit in the rest of the RIFF payload.
     /// </summary>
-    /// <param name="chunkSize">The chunk size in bytes.</param>
+    /// <param name="payloadSize">The chunk payload size in bytes, without the padding byte.</param>
     /// <returns>The chunk data, or null if the chunk extends past the end of the RIFF payload.</returns>
-    private byte[] ReadChunkData(uint chunkSize)
+    private byte[] ReadChunkData(uint payloadSize)
     {
-        if (chunkSize > this.riffEnd - this.currentStream.Position)
+        if (payloadSize > this.riffEnd - this.currentStream.Position)
         {
             // Nothing after a chunk with an invalid size can be located, so skip to the end of the payload.
             this.currentStream.Position = this.riffEnd;
             return null;
         }
 
-        byte[] data = new byte[chunkSize];
-        int bytesRead = this.currentStream.Read(data, 0, (int)chunkSize);
-        return bytesRead == chunkSize ? data : null;
+        byte[] data = new byte[payloadSize];
+        int bytesRead = this.currentStream.Read(data, 0, (int)payloadSize);
+        if (bytesRead != payloadSize)
+        {
+            return null;
+        }
+
+        this.SkipChunkData(payloadSize & 1);
+        return data;
     }
 
     /// <summary>
@@ -753,18 +760,33 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// <exception cref="InvalidImageContentException">
     /// Thrown if the stream ends inside the chunk header.
     /// </exception>
-    private uint ReadChunkSize()
+    private uint ReadChunkSize() => PaddedSize(this.ReadPayloadSize());
+
+    /// <summary>
+    /// Reads the chunk size as stored in the chunk header, without the padding byte of an odd-sized chunk.
+    /// </summary>
+    /// <returns>The chunk payload size in bytes.</returns>
+    /// <exception cref="InvalidImageContentException">
+    /// Thrown if the stream ends inside the chunk header.
+    /// </exception>
+    private uint ReadPayloadSize()
     {
         if (this.currentStream.Read(this.buffer, 0, 4) == 4)
         {
-            uint chunkSize = BinaryPrimitives.ReadUInt32LittleEndian(this.buffer);
-
-            // uint.MaxValue is left as is rather than wrapped to zero. No stream is long enough to hold it anyway.
-            return (chunkSize % 2 == 0 || chunkSize == uint.MaxValue) ? chunkSize : chunkSize + 1;
+            return BinaryPrimitives.ReadUInt32LittleEndian(this.buffer);
         }
 
         throw new InvalidImageContentException("Not enough data to read the chunk size");
     }
+
+    /// <summary>
+    /// Adds the padding byte that follows an odd-sized chunk payload.
+    /// uint.MaxValue is left as is rather than wrapped to zero. No stream is long enough to hold it anyway.
+    /// </summary>
+    /// <param name="payloadSize">The chunk payload size in bytes.</param>
+    /// <returns>The chunk size in bytes, including the padding byte.</returns>
+    private static uint PaddedSize(uint payloadSize)
+        => (payloadSize % 2 == 0 || payloadSize == uint.MaxValue) ? payloadSize : payloadSize + 1;
 
     /// <summary>
     /// Determines if the chunk type is an optional VP8X chunk.
