@@ -1,7 +1,7 @@
 ﻿# This script can be used to collect logs from sporadic bugs
 Param(
     [int]$TestRunCount=10,
-    [string]$TargetFramework="netcoreapp3.1",
+    [string]$TargetFramework="net10.0",
     [string]$Configuration="Release"
 )
 

@@ -116,7 +116,6 @@ namespace SixLabors.ImageSharp.Tests.Primitives
         [Fact]
         public void ColorMatrixHashCode()
         {
-#if NETCOREAPP2_1
             ColorMatrix m = KnownFilterMatrices.CreateBrightnessFilter(.5F);
             HashCode hash = default;
             hash.Add(m.M11);
@@ -141,7 +140,6 @@ namespace SixLabors.ImageSharp.Tests.Primitives
             hash.Add(m.M54);
 
             Assert.Equal(hash.ToHashCode(), m.GetHashCode());
-#endif
         }
 
         [Fact]

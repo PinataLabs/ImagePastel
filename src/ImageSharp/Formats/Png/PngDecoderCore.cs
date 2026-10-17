@@ -1199,11 +1199,7 @@ namespace SixLabors.ImageSharp.Formats.Png
         private static bool StringEqualsInsensitive(ReadOnlySpan<char> span1, ReadOnlySpan<char> span2)
         {
 #pragma warning disable IDE0022 // Use expression body for methods
-#if NETSTANDARD2_1 || NETCOREAPP2_1_OR_GREATER
             return span1.Equals(span2, StringComparison.OrdinalIgnoreCase);
-#else
-            return span1.ToString().Equals(span2.ToString(), StringComparison.OrdinalIgnoreCase);
-#endif
 #pragma warning restore IDE0022 // Use expression body for methods
         }
 
@@ -1215,11 +1211,7 @@ namespace SixLabors.ImageSharp.Formats.Png
         private static int ParseInt32(ReadOnlySpan<char> span)
         {
 #pragma warning disable IDE0022 // Use expression body for methods
-#if NETSTANDARD2_1 || NETCOREAPP2_1_OR_GREATER
             return int.Parse(span);
-#else
-            return int.Parse(span.ToString());
-#endif
 #pragma warning restore IDE0022 // Use expression body for methods
         }
 

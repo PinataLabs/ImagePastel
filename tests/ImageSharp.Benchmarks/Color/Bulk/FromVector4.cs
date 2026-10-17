@@ -6,10 +6,8 @@ using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-#endif
 using BenchmarkDotNet.Attributes;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -98,7 +96,6 @@ namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk
             SimdUtils.ExtendedIntrinsics.NormalizedFloatToByteSaturate(sBytes, dFloats);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Benchmark]
         public void UseHwIntrinsics()
         {
@@ -161,7 +158,6 @@ namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk
             vf = Avx.Multiply(scale, vf);
             return Avx.ConvertToVector256Int32(vf);
         }
-#endif
 
         // *** RESULTS 2020 March: ***
         // Intel Core i7-8650U CPU 1.90GHz (Kaby Lake R), 1 CPU, 8 logical and 4 physical cores

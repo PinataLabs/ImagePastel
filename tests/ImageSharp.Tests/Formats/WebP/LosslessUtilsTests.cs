@@ -228,7 +228,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
         [Fact]
         public void TransformColorInverse_Works() => RunTransformColorInverseTest();
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Fact]
         public void CombinedShannonEntropy_WithHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunCombinedShannonEntropyTest, HwIntrinsics.AllowAll);
 
@@ -288,6 +287,5 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
         [Fact]
         public void TransformColorInverse_WithoutAVX2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunTransformColorInverseTest, HwIntrinsics.DisableAVX2);
-#endif
     }
 }

@@ -98,12 +98,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.WebP
         [Fact]
         public void AddVector_Works() => RunAddVectorTest();
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Fact]
         public void AddVector_WithHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunAddVectorTest, HwIntrinsics.AllowAll);
 
         [Fact]
         public void AddVector_WithoutAVX2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunAddVectorTest, HwIntrinsics.DisableAVX2);
-#endif
     }
 }

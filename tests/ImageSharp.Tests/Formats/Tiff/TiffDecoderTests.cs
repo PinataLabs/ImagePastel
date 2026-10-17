@@ -316,11 +316,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff
             using Image<TPixel> image = provider.GetImage();
             image.DebugSave(provider);
 
-#if NETCOREAPP
             image.CompareToReferenceOutput(ImageComparer.Exact, provider);
-#else
-            image.CompareToReferenceOutput(TolerantImageComparer.TolerantPercentage(0.0002F), provider);
-#endif
         }
 
         [Theory]

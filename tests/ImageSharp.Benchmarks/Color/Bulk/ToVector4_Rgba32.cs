@@ -51,7 +51,6 @@ namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk
             SimdUtils.ExtendedIntrinsics.ByteToNormalizedFloat(sBytes, dFloats);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
         [Benchmark]
         public void HwIntrinsics()
         {
@@ -60,7 +59,6 @@ namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk
 
             SimdUtils.HwIntrinsics.ByteToNormalizedFloat(sBytes, dFloats);
         }
-#endif
 
         // [Benchmark]
         public void ExtendedIntrinsics_BulkConvertByteToNormalizedFloat_2Loops()

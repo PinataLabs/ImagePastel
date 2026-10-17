@@ -24,27 +24,13 @@
                       IsImplicitlyDefined="true"
                       Condition="'$(IsCodeCoverage)'=='true'"/>
 
-    <!-- Maximum compatible version for xunit with netcore 2.0 -->
-    <PackageReference Include="Microsoft.NET.Test.Sdk"
-                      Version="16.2.0"
-                      IsImplicitlyDefined="true"
-                      Condition="'$(TargetFramework)' == 'netcoreapp2.0'"/>
-
     <PackageReference Include="Microsoft.NET.Test.Sdk"
                       Version="16.8.0"
-                      IsImplicitlyDefined="true"
-                      Condition="'$(TargetFramework)' != 'netcoreapp2.0'"/>
-
-    <!-- Maximum compatible version with net46 or net472-->
-    <PackageReference Include="xunit.runner.visualstudio"
-                      Version="2.4.1"
-                      IsImplicitlyDefined="true"
-                      Condition="'$(TargetFramework)' == 'net46' OR '$(TargetFramework)' == 'net472' OR '$(TargetFramework)' == 'netcoreapp2.0'" />
+                      IsImplicitlyDefined="true" />
 
     <PackageReference Include="xunit.runner.visualstudio"
                       Version="2.4.3"
-                      IsImplicitlyDefined="true"
-                      Condition="'$(TargetFramework)' != 'net46' AND '$(TargetFramework)' != 'net472' AND '$(TargetFramework)' != 'netcoreapp2.0'" />
+                      IsImplicitlyDefined="true" />
   </ItemGroup>
 
 </Project>
