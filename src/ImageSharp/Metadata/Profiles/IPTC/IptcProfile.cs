@@ -21,6 +21,26 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
     private const uint MaxStandardDataTagSize = 0x7FFF;
 
     /// <summary>
+    /// The record number of the envelope record.
+    /// </summary>
+    private const byte EnvelopeRecordNumber = 1;
+
+    /// <summary>
+    /// The record number of the application record, which holds the values described by <see cref="IptcTag"/>.
+    /// </summary>
+    private const byte ApplicationRecordNumber = 2;
+
+    /// <summary>
+    /// The DataSet number of the envelope record 1:90 Coded Character Set.
+    /// </summary>
+    private const byte CodedCharacterSetDataSetNumber = 90;
+
+    /// <summary>
+    /// A UTF-8 encoding which throws on invalid bytes, used to check whether a value holds valid UTF-8 text.
+    /// </summary>
+    private static readonly UTF8Encoding StrictUtf8Encoding = new(false, true);
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="IptcProfile"/> class.
     /// </summary>
     public IptcProfile()
@@ -80,6 +100,11 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
             return this.values;
         }
     }
+
+    /// <summary>
+    /// Gets the 1:90 Coded Character Set value which marks that UTF-8 is used in the application records.
+    /// </summary>
+    private static ReadOnlySpan<byte> CodedCharacterSetUtf8Value => [0x1B, 0x25, 0x47];
 
     /// <inheritdoc/>
     public IptcProfile DeepClone() => new(this);
@@ -236,14 +261,50 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
     public void UpdateData()
     {
         int length = 0;
+        bool hasNonAsciiUtf8Values = false;
+        bool hasNonAsciiOtherValues = false;
         foreach (IptcValue value in this.Values)
         {
             length += value.Length + 5;
+
+            byte[] bytes = value.ToByteArray();
+            if (!IsAscii(bytes))
+            {
+                if (IsUtf8(value, bytes))
+                {
+                    hasNonAsciiUtf8Values = true;
+                }
+                else
+                {
+                    hasNonAsciiOtherValues = true;
+                }
+            }
+        }
+
+        // ASCII text reads the same in any character set, so UTF-8 only needs declaring when a value holds
+        // non-ASCII UTF-8 text, and can only be declared when no value holds non-ASCII text in another encoding.
+        bool declareUtf8 = hasNonAsciiUtf8Values && !hasNonAsciiOtherValues;
+        if (declareUtf8)
+        {
+            length += CodedCharacterSetUtf8Value.Length + 5;
         }
 
         this.Data = new byte[length];
 
         int i = 0;
+        if (declareUtf8)
+        {
+            // Declare UTF-8 in the optional 1:90 Coded Character Set envelope record so that readers
+            // do not fall back to a legacy encoding when decoding the application records.
+            this.Data[i++] = IptcTagMarkerByte;
+            this.Data[i++] = EnvelopeRecordNumber;
+            this.Data[i++] = CodedCharacterSetDataSetNumber;
+            this.Data[i++] = 0;
+            this.Data[i++] = (byte)CodedCharacterSetUtf8Value.Length;
+            CodedCharacterSetUtf8Value.CopyTo(this.Data.AsSpan(i));
+            i += CodedCharacterSetUtf8Value.Length;
+        }
+
         foreach (IptcValue value in this.Values)
         {
             // Standard DataSet Tag
@@ -264,7 +325,7 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
             // |           |                | octet 4(most significant bit) always will be 0.                                 |
             // +-----------+----------------+---------------------------------------------------------------------------------+
             this.Data[i++] = IptcTagMarkerByte;
-            this.Data[i++] = 2;
+            this.Data[i++] = ApplicationRecordNumber;
             this.Data[i++] = (byte)value.Tag;
             this.Data[i++] = (byte)(value.Length >> 8);
             this.Data[i++] = (byte)value.Length;
@@ -273,6 +334,39 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
                 Buffer.BlockCopy(value.ToByteArray(), 0, this.Data, i, value.Length);
                 i += value.Length;
             }
+        }
+    }
+
+    private static bool IsAscii(byte[] bytes)
+    {
+        foreach (byte b in bytes)
+        {
+            if (b > 0x7F)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsUtf8(IptcValue value, byte[] bytes)
+    {
+        if (value.Encoding.CodePage != Encoding.UTF8.CodePage)
+        {
+            return false;
+        }
+
+        // Values decoded from an existing profile default to UTF-8 whatever their real character set is,
+        // so only treat the value as UTF-8 when its bytes are valid UTF-8.
+        try
+        {
+            StrictUtf8Encoding.GetCharCount(bytes);
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
         }
     }
 
@@ -299,6 +393,10 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
             var tag = (IptcTag)this.Data[offset++];
             bool isValidEntry = isValidTagMarker && isValidRecordNumber;
 
+            // Only the application record holds values described by IptcTag. Other records, such as the
+            // envelope record with its 1:90 Coded Character Set, reuse the same DataSet numbers.
+            bool isApplicationRecord = recordNumber == ApplicationRecordNumber;
+
             uint byteCount = BinaryPrimitives.ReadUInt16BigEndian(this.Data.AsSpan(offset, 2));
             offset += 2;
             if (byteCount > MaxStandardDataTagSize)
@@ -307,7 +405,7 @@ public sealed class IptcProfile : IDeepCloneable<IptcProfile>
                 break;
             }
 
-            if (isValidEntry && byteCount > 0 && (offset <= this.Data.Length - byteCount))
+            if (isValidEntry && isApplicationRecord && byteCount > 0 && (offset <= this.Data.Length - byteCount))
             {
                 var iptcData = new byte[byteCount];
                 Buffer.BlockCopy(this.Data, offset, iptcData, 0, (int)byteCount);
