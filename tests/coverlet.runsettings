@@ -8,7 +8,8 @@
         <DataCollectors>
             <DataCollector friendlyName="XPlat code coverage">
                 <Configuration>
-                    <Format>lcov,cobertura</Format>
+                    <!-- opencover is the format SonarQube reads for C#. -->
+                    <Format>lcov,cobertura,opencover</Format>
                     <Include>[PinataLabs.ImageSharp]*</Include>
                 </Configuration>
             </DataCollector>
