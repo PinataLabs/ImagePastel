@@ -9,10 +9,11 @@ using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
-
+using SixLabors.ImageSharp.Tests.Formats.Tiff.Utils;
 using Xunit;
 using static SixLabors.ImageSharp.Tests.TestImages.Tiff;
 
@@ -306,4 +307,173 @@ public class TiffMetadataTests
         Assert.Equal((ushort)TiffPlanarConfiguration.Chunky, encodedImageExifProfile.GetValue(ExifTag.PlanarConfiguration)?.Value);
         Assert.Equal(exifProfileInput.Values.Count + 1, encodedImageExifProfile.Values.Count);
     }
+
+    [Fact]
+    public void Decode_WithIccProfile_ExposesProfileOnImageAndRootFrame()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
+
+        Assert.Equal(iccBytes, image.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Encode_DecodedTiffWithIccProfile_KeepsProfile()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(source));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
+
+        Assert.Equal(iccBytes, image.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Encode_DecodedTiffWithIccProfileAsJpeg_KeepsProfile()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(source));
+
+        using var stream = new MemoryStream();
+        decoded.SaveAsJpeg(stream);
+        using Image<Rgba32> image = Image.Load<Rgba32>(stream.ToArray());
+
+        Assert.Equal(iccBytes, image.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Decode_MultiframeWithIccProfiles_KeepsEachProfileOnItsFrame()
+    {
+        byte[] rootIccBytes = GetJpegIccProfileBytes();
+        byte[] secondIccBytes = IccTestDataProfiles.Profile_Random_Array;
+        var builder = new TiffTestFileBuilder();
+        AddOnePixelRgbPage(builder, rootIccBytes);
+        AddOnePixelRgbPage(builder, secondIccBytes);
+        byte[] tiff = builder.Build();
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(tiff);
+
+        Assert.Equal(2, image.Frames.Count);
+        Assert.Equal(rootIccBytes, image.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(rootIccBytes, image.Frames[0].Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(secondIccBytes, image.Frames[1].Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Theory]
+    [WithFile(IptcData, PixelTypes.Rgba32)]
+    public void Encode_DecodedTiffWithIptcProfile_KeepsProfile<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> decoded = provider.GetImage(TiffDecoder);
+        List<(IptcTag Tag, string Value)> expected = GetIptcValues(decoded.Frames.RootFrame.Metadata.IptcProfile);
+        Assert.NotEmpty(expected);
+        Assert.Equal(expected, GetIptcValues(decoded.Metadata.IptcProfile));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
+
+        Assert.Equal(expected, GetIptcValues(image.Metadata.IptcProfile));
+        Assert.Equal(expected, GetIptcValues(image.Frames.RootFrame.Metadata.IptcProfile));
+    }
+
+    [Theory]
+    [WithFile(IptcData, PixelTypes.Rgba32)]
+    public void Encode_EditedRootFrameIptcProfile_WritesEdit<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> decoded = provider.GetImage(TiffDecoder);
+        decoded.Frames.RootFrame.Metadata.IptcProfile.SetValue(IptcTag.Caption, "edited caption");
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
+
+        IptcProfile iptcProfile = image.Frames.RootFrame.Metadata.IptcProfile;
+        Assert.Equal("edited caption", iptcProfile.GetValues(IptcTag.Caption).Single().Value);
+        Assert.Equal("author", iptcProfile.GetValues(IptcTag.Byline).Single().Value);
+    }
+
+    [Theory]
+    [WithFile(IptcData, PixelTypes.Rgba32)]
+    public void Encode_ReplacedRootFrameIptcProfile_WritesReplacement<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> decoded = provider.GetImage(TiffDecoder);
+        var replacement = new IptcProfile();
+        replacement.SetValue(IptcTag.Byline, "replaced author");
+        decoded.Frames.RootFrame.Metadata.IptcProfile = replacement;
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
+
+        IptcProfile iptcProfile = image.Frames.RootFrame.Metadata.IptcProfile;
+        Assert.Equal("replaced author", iptcProfile.GetValues(IptcTag.Byline).Single().Value);
+        Assert.Empty(iptcProfile.GetValues(IptcTag.Caption));
+    }
+
+    [Fact]
+    public void Encode_RootFrameProfilesWithoutImageProfiles_AreWritten()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using var source = new Image<Rgba32>(8, 8);
+        source.Frames.RootFrame.Metadata.IccProfile = new IccProfile(iccBytes);
+        source.Frames.RootFrame.Metadata.IptcProfile = new IptcProfile();
+        source.Frames.RootFrame.Metadata.IptcProfile.SetValue(IptcTag.Byline, "frame author");
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
+
+        Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal("frame author", image.Frames.RootFrame.Metadata.IptcProfile?.GetValues(IptcTag.Byline).Single().Value);
+    }
+
+    [Fact]
+    public void Encode_ImageLevelProfiles_AreWritten()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+        source.Metadata.IptcProfile = new IptcProfile();
+        source.Metadata.IptcProfile.SetValue(IptcTag.Byline, "image author");
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
+
+        Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal("image author", image.Frames.RootFrame.Metadata.IptcProfile?.GetValues(IptcTag.Byline).Single().Value);
+    }
+
+    private static byte[] GetJpegIccProfileBytes()
+    {
+        using Image<Rgba32> jpeg = Image.Load<Rgba32>(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes);
+        return jpeg.Metadata.IccProfile.ToByteArray();
+    }
+
+    private static void AddOnePixelRgbPage(TiffTestFileBuilder builder, byte[] iccBytes)
+        => builder
+            .AddPage(new byte[] { 1, 2, 3 })
+            .AddLong(ExifTagValue.ImageWidth, 1)
+            .AddLong(ExifTagValue.ImageLength, 1)
+            .AddShort(ExifTagValue.BitsPerSample, 8, 8, 8)
+            .AddShort(ExifTagValue.PhotometricInterpretation, (ushort)TiffPhotometricInterpretation.Rgb)
+            .AddShort(ExifTagValue.SamplesPerPixel, 3)
+            .AddLong(ExifTagValue.RowsPerStrip, 1)
+            .AddEntry(ExifTagValue.IccProfile, ExifDataType.Undefined, (uint)iccBytes.Length, iccBytes);
+
+    private static Image<Rgba32> CreateImageWithIccProfile(byte[] iccBytes)
+    {
+        var image = new Image<Rgba32>(8, 8);
+        image.Metadata.IccProfile = new IccProfile(iccBytes);
+        return image;
+    }
+
+    private static byte[] EncodeTiff(Image image)
+    {
+        using var stream = new MemoryStream();
+        image.Save(stream, new TiffEncoder());
+        return stream.ToArray();
+    }
+
+    private static List<(IptcTag Tag, string Value)> GetIptcValues(IptcProfile profile)
+        => profile?.Values.Select(v => (v.Tag, v.Value)).ToList();
 }

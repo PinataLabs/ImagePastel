@@ -467,6 +467,9 @@ internal static class TiffDecoderOptionsParser
                     options.ColorType = TiffColorType.Rgb;
                 }
 
+                // The jpeg decoder upsamples the chroma components itself, so the YCbCr data it returns is never subsampled.
+                options.YcbcrSubSampling = null;
+
                 break;
             }
 

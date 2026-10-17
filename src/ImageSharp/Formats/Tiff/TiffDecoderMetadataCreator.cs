@@ -52,6 +52,12 @@ internal static class TiffDecoderMetadataCreator
                     frameMetaData.IccProfile = new IccProfile(iccProfileBytes.Value);
                 }
             }
+
+            // The profiles of the first frame describe the image, so they are also exposed at image level,
+            // where other encoders look for them. The instances are shared, so an edit through either one is kept.
+            ImageFrameMetadata rootFrameMetaData = frames[0].Metadata;
+            imageMetaData.IccProfile = rootFrameMetaData.IccProfile;
+            imageMetaData.IptcProfile = rootFrameMetaData.IptcProfile;
         }
 
         return imageMetaData;
