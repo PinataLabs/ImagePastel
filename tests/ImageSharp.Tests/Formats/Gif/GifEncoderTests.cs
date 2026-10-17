@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Metadata;
@@ -173,6 +174,60 @@ public class GifEncoderTests
         // ReferenceDecoder(testOutputFile);
         // using var encoded = Image.Load<TPixel>(testOutputFile, referenceDecoder);
         // ValidatorComparer.VerifySimilarity(image, encoded);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Encode_GlobalPalette_WuQuantizer_KeepsColorsOfEveryFrame(bool dither)
+    {
+        using var image = new Image<Rgba32>(64, 64);
+        image.Frames.CreateFrame();
+        for (int y = 0; y < 64; y++)
+        {
+            for (int x = 0; x < 64; x++)
+            {
+                byte ramp = (byte)(128 + (x * 2));
+                byte green = (byte)(y * 2);
+                image.Frames[0][x, y] = new Rgba32(ramp, green, 0);
+                image.Frames[1][x, y] = new Rgba32(0, green, ramp);
+            }
+        }
+
+        var options = new QuantizerOptions { Dither = dither ? QuantizerConstants.DefaultDither : null };
+        double globalError = MeanRoundTripError(image, GifColorTableMode.Global, options, out Rgba32 globalCorner);
+        double localError = MeanRoundTripError(image, GifColorTableMode.Local, options, out _);
+
+        // A palette shared by two frames has fewer entries per frame, so allow a little more error than local tables.
+        Assert.True(globalError <= (localError * 2) + 1, $"Global error {globalError:F2} vs local error {localError:F2}.");
+        Assert.True(Math.Abs(globalCorner.R - 254) <= 8 && globalCorner.G <= 8 && globalCorner.B <= 8, $"Pixel (63,0) was {globalCorner}.");
+
+        static double MeanRoundTripError(Image<Rgba32> image, GifColorTableMode mode, QuantizerOptions options, out Rgba32 corner)
+        {
+            using var stream = new MemoryStream();
+            image.Save(stream, new GifEncoder { ColorTableMode = mode, Quantizer = new WuQuantizer(options) });
+            stream.Position = 0;
+            using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+            Assert.Equal(image.Frames.Count, decoded.Frames.Count);
+            corner = decoded.Frames[0][63, 0];
+
+            long sum = 0;
+            for (int i = 0; i < image.Frames.Count; i++)
+            {
+                for (int y = 0; y < image.Height; y++)
+                {
+                    for (int x = 0; x < image.Width; x++)
+                    {
+                        Rgba32 expected = image.Frames[i][x, y];
+                        Rgba32 actual = decoded.Frames[i][x, y];
+                        sum += Math.Abs(expected.R - actual.R) + Math.Abs(expected.G - actual.G) + Math.Abs(expected.B - actual.B);
+                    }
+                }
+            }
+
+            return sum / (3D * image.Width * image.Height * image.Frames.Count);
+        }
     }
 
     [Fact]

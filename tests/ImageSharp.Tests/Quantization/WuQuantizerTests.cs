@@ -3,6 +3,7 @@
 
 using System;
 using SixLabors.ImageSharp.Advanced;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using Xunit;
@@ -118,6 +119,61 @@ public class WuQuantizerTests
                 Assert.True(imageAccessor.GetRowSpan(y).SequenceEqual(actualImageAccessor.GetRowSpan(y)));
             }
         });
+    }
+
+    [Fact]
+    public void PaletteFromSeveralRegionsMatchesPaletteFromWholeImage()
+    {
+        // The first band is a single color so the first call alone can only produce a one entry palette.
+        using var image = new Image<Rgba32>(64, 64);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                image[x, y] = y < 4
+                    ? new Rgba32(10, 20, 30, 255)
+                    : new Rgba32((byte)(x * 4), (byte)(y * 4), (byte)((x ^ y) * 4), (byte)(255 - x));
+            }
+        }
+
+        Configuration config = Configuration.Default;
+        var quantizer = new WuQuantizer(new QuantizerOptions { Dither = null });
+        Buffer2D<Rgba32> buffer = image.Frames.RootFrame.PixelBuffer;
+
+        using IQuantizer<Rgba32> wholeQuantizer = quantizer.CreatePixelSpecificQuantizer<Rgba32>(config);
+        wholeQuantizer.AddPaletteColors(buffer.GetRegion());
+        Rgba32[] expected = wholeQuantizer.Palette.ToArray();
+
+        using IQuantizer<Rgba32> bandedQuantizer = quantizer.CreatePixelSpecificQuantizer<Rgba32>(config);
+        bandedQuantizer.AddPaletteColors(buffer.GetRegion(0, 0, 64, 4));
+        bandedQuantizer.AddPaletteColors(buffer.GetRegion(0, 4, 64, 20));
+        bandedQuantizer.AddPaletteColors(buffer.GetRegion(0, 24, 64, 40));
+        Rgba32[] actual = bandedQuantizer.Palette.ToArray();
+
+        Assert.Equal(256, expected.Length);
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void RaisingMaxColorsAfterCreationKeepsTheCreationLimit()
+    {
+        using var image = new Image<Rgba32>(16, 16);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                image[x, y] = new Rgba32((byte)(x * 16), (byte)(y * 16), (byte)((x + y) * 8), 255);
+            }
+        }
+
+        using IQuantizer<Rgba32> quantizer = new WuQuantizer(new QuantizerOptions { Dither = null, MaxColors = 2 })
+            .CreatePixelSpecificQuantizer<Rgba32>(Configuration.Default);
+
+        // The palette and color cube are sized when the quantizer is created.
+        quantizer.Options.MaxColors = 256;
+        quantizer.AddPaletteColors(image.Frames.RootFrame.PixelBuffer.GetRegion());
+
+        Assert.Equal(2, quantizer.Palette.Length);
     }
 
     [Theory]

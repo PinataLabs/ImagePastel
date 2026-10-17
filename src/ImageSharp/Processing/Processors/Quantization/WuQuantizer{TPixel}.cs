@@ -73,6 +73,7 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
     private readonly Box[] colorCube;
     private EuclideanPixelMap<TPixel> pixelMap;
     private readonly bool isDithering;
+    private bool hasMoments;
     private bool isDisposed;
 
     /// <summary>
@@ -95,6 +96,7 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
         this.paletteOwner = this.memoryAllocator.Allocate<TPixel>(this.maxColors, AllocationOptions.Clean);
         this.colorCube = new Box[this.maxColors];
         this.isDisposed = false;
+        this.hasMoments = false;
         this.pixelMap = default;
         this.palette = default;
         this.isDithering = this.isDithering = !(this.Options.Dither is null);
@@ -122,8 +124,20 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
         Rectangle bounds = pixelRegion.Rectangle;
         Buffer2D<TPixel> source = pixelRegion.Buffer;
 
+        // A previous call turned the histogram into cumulative moments in place.
+        // Turn them back so this region adds to the counts of every region seen so far.
+        if (this.hasMoments)
+        {
+            this.Revert3DMoments();
+        }
+
         this.Build3DHistogram(source, bounds);
         this.Get3DMoments(this.memoryAllocator);
+        this.hasMoments = true;
+
+        // A previous call may have found fewer distinct colors than requested. Reset to the limit the
+        // palette and color cube were sized for, which a later change to the options can not raise.
+        this.maxColors = this.colorCube.Length;
         this.BuildCube();
 
         // Slice again since maxColors has been updated since the buffer was created.
@@ -139,6 +153,11 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
             {
                 ref TPixel color = ref paletteSpan[k];
                 color.FromScaledVector4(moment.Normalize());
+            }
+            else
+            {
+                // Do not keep a color from a previous call.
+                paletteSpan[k] = default;
             }
         }
 
@@ -464,6 +483,44 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
 
                         int ind2 = ind1 - baseIndex;
                         momentSpan[ind1] = momentSpan[ind2] + volumeSpan[inv];
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reverses <see cref="Get3DMoments"/>, turning the cumulative moments back into the histogram they were built from.
+    /// </summary>
+    private void Revert3DMoments()
+    {
+        Span<Moment> momentSpan = this.momentsOwner.GetSpan();
+
+        // The moments are a running sum along each axis, so take the difference along each axis in turn.
+        // Walking every axis from high to low reads each neighbor before the same pass has changed it.
+        // The planes at index zero are always empty, so they are never written and act as the first neighbor.
+        ReadOnlySpan<int> strides = stackalloc int[]
+        {
+            GetPaletteIndex(1, 0, 0, 0),
+            GetPaletteIndex(0, 1, 0, 0),
+            GetPaletteIndex(0, 0, 1, 0),
+            GetPaletteIndex(0, 0, 0, 1)
+        };
+
+        foreach (int stride in strides)
+        {
+            for (int r = IndexCount - 1; r > 0; r--)
+            {
+                for (int g = IndexCount - 1; g > 0; g--)
+                {
+                    for (int b = IndexCount - 1; b > 0; b--)
+                    {
+                        int ind1B = GetPaletteIndex(r, g, b, 0);
+                        for (int a = IndexAlphaCount - 1; a > 0; a--)
+                        {
+                            int index = ind1B + a;
+                            momentSpan[index] -= momentSpan[index - stride];
+                        }
                     }
                 }
             }
