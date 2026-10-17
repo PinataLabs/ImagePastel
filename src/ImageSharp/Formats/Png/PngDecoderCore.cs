@@ -393,12 +393,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     /// Attempts to convert a byte array to a new array where each value in the original array is represented by the
     /// specified number of bits.
     /// </summary>
-    /// <param name="source">The bytes to convert from. Cannot be empty.</param>
-    /// <param name="bytesPerScanline">The number of bytes per scanline</param>
+    /// <param name="source">The bytes of one scanline, without the filter byte. Cannot be empty.</param>
     /// <param name="bits">The number of bits per value.</param>
     /// <param name="buffer">The new array.</param>
     /// <returns>The resulting <see cref="ReadOnlySpan{Byte}"/> array.</returns>
-    private bool TryScaleUpTo8BitArray(ReadOnlySpan<byte> source, int bytesPerScanline, int bits, out IMemoryOwner<byte> buffer)
+    private bool TryScaleUpTo8BitArray(ReadOnlySpan<byte> source, int bits, out IMemoryOwner<byte> buffer)
     {
         if (bits >= 8)
         {
@@ -406,15 +405,14 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             return false;
         }
 
-        buffer = this.memoryAllocator.Allocate<byte>(bytesPerScanline * 8 / bits, AllocationOptions.Clean);
-        ref byte sourceRef = ref MemoryMarshal.GetReference(source);
+        buffer = this.memoryAllocator.Allocate<byte>(source.Length * 8 / bits, AllocationOptions.Clean);
         ref byte resultRef = ref buffer.GetReference();
         int mask = 0xFF >> (8 - bits);
         int resultOffset = 0;
 
-        for (int i = 0; i < bytesPerScanline; i++)
+        for (int i = 0; i < source.Length; i++)
         {
-            byte b = Unsafe.Add(ref sourceRef, i);
+            byte b = source[i];
             for (int shift = 0; shift < 8; shift += bits)
             {
                 int colorIndex = (b >> (8 - bits - shift)) & mask;
@@ -737,7 +735,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                 }
 
                 Span<TPixel> rowSpan = imageBuffer.DangerousGetRowSpan(this.currentRow);
-                this.ProcessInterlacedDefilteredScanline(this.scanline.GetSpan(), rowSpan, pngMetadata, Adam7.FirstColumn[pass], Adam7.ColumnIncrement[pass]);
+                this.ProcessInterlacedDefilteredScanline(scanSpan, rowSpan, pngMetadata, Adam7.FirstColumn[pass], Adam7.ColumnIncrement[pass]);
 
                 this.SwapScanlineBuffers();
 
@@ -783,7 +781,6 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         {
             ReadOnlySpan<byte> scanlineSpan = this.TryScaleUpTo8BitArray(
                 trimmed,
-                this.bytesPerScanline - 1,
                 this.header.BitDepth,
                 out buffer)
             ? buffer.GetSpan()
@@ -875,7 +872,6 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         {
             ReadOnlySpan<byte> scanlineSpan = this.TryScaleUpTo8BitArray(
                 trimmed,
-                this.bytesPerScanline,
                 this.header.BitDepth,
                 out buffer)
             ? buffer.GetSpan()
