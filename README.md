@@ -64,8 +64,8 @@ The package does not support .NET Framework.
 
 Versions continue the 2.x line and start at 2.2.0. The project uses [semantic versioning](https://semver.org/).
 
-Each push to `main` publishes a prerelease package to [GitHub Packages](https://github.com/PinataLabs/ImageSharp/packages).
-Each `v*` tag publishes a release to [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
+Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
+A maintainer starts each one by hand. A push to `main` does not publish a package.
 
 ## Documentation
 

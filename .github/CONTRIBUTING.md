@@ -35,6 +35,24 @@ The build treats all warnings as errors. A suppression of an analyzer rule must 
 
 The expected test output is in `tests/Images/External`, in Git LFS.
 
+## Publish a package (maintainers)
+
+The CI workflow builds, tests, and checks the public API. It does not publish.
+Both publish workflows require CI to have passed on the head of `main`.
+
+To publish a stable release:
+
+1. In GitHub Actions, run **Publish Release** on `main`.
+2. Enter the version, for example `2.2.1`, and keep **dry-run** selected.
+3. Read the dry-run summary.
+4. Run the workflow again with **dry-run** cleared.
+
+The workflow tags the head of `main` and calls the **Release** workflow.
+That workflow publishes the package to nuget.org and creates the GitHub Release.
+
+To publish a pre-release, run **Pre-release** on `main` and select `alpha`, `beta`, or `rc`.
+MinVer gives the version, for example `2.2.1-beta.4`.
+
 ## Code of conduct
 
 This project uses the code of conduct of the [Contributor Covenant](https://contributor-covenant.org/).
