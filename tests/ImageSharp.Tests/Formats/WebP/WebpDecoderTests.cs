@@ -369,11 +369,12 @@ public class WebpDecoderTests
         image.CompareToOriginal(provider, ReferenceDecoder);
     }
 
+    // The image data chunk is truncated, so the decoding error is reported as invalid content.
     [Theory]
     [WithFile(Lossless.LossLessCorruptImage3, PixelTypes.Rgba32)]
     public void WebpDecoder_ThrowImageFormatException_OnInvalidImages<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> =>
-        Assert.Throws<ImageFormatException>(
+        Assert.Throws<InvalidImageContentException>(
             () =>
             {
                 using (provider.GetImage(WebpDecoder))
