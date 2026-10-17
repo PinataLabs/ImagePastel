@@ -67,16 +67,27 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
             }
 
             string args = $@"""{sourceFile}"" ""{destFile}""";
-            var process = new Process
+            using var process = new Process
             {
                 StartInfo =
                                       {
                                           FileName = DumpToolFullPath,
                                           Arguments = args,
-                                          WindowStyle = ProcessWindowStyle.Hidden
+                                          WindowStyle = ProcessWindowStyle.Hidden,
+
+                                          // The tool prints progress to stdout. An xUnit v3 test process reports
+                                          // results to the runner over stdout, so inherited output corrupts
+                                          // those messages and test results get lost. Capture and discard it.
+                                          UseShellExecute = false,
+                                          RedirectStandardOutput = true,
+                                          RedirectStandardError = true
                                       }
             };
+            process.OutputDataReceived += static (_, _) => { };
+            process.ErrorDataReceived += static (_, _) => { };
             process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             process.WaitForExit();
         }
 
