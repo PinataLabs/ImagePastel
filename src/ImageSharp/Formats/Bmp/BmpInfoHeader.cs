@@ -454,15 +454,19 @@ internal struct BmpInfoHeader
         dest = this;
     }
 
+    /// <summary>
+    /// Checks that the width and the height are each between 1 and 65535.
+    /// The height must already be made positive for top-down bitmaps.
+    /// </summary>
     internal void VerifyDimensions()
     {
         const int MaximumBmpDimension = 65535;
 
-        if (this.Width > MaximumBmpDimension || this.Height > MaximumBmpDimension)
+        if (this.Width is <= 0 or > MaximumBmpDimension || this.Height is <= 0 or > MaximumBmpDimension)
         {
-            throw new InvalidOperationException(
-                $"The input bmp '{this.Width}x{this.Height}' is "
-                + $"bigger then the max allowed size '{MaximumBmpDimension}x{MaximumBmpDimension}'");
+            BmpThrowHelper.ThrowInvalidImageContentException(
+                $"The input bmp '{this.Width}x{this.Height}' has invalid dimensions. "
+                + $"Width and height must be between 1 and {MaximumBmpDimension}.");
         }
     }
 }

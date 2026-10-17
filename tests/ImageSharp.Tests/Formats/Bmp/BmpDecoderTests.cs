@@ -2,11 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
@@ -657,9 +659,8 @@ public class BmpDecoderTests
     public void BmpDecoder_ThrowsException_Issue2696<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        // On V2 this is throwing InvalidOperationException,
-        // because of the validation logic in BmpInfoHeader.VerifyDimensions().
-        Assert.Throws<InvalidOperationException>(() =>
+        // The width is above the maximum allowed by BmpInfoHeader.VerifyDimensions().
+        Assert.Throws<InvalidImageContentException>(() =>
             {
                 using Image<TPixel> image = provider.GetImage(BmpDecoder);
             });
@@ -691,6 +692,154 @@ public class BmpDecoderTests
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(stream);
         });
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(7)]
+    [InlineData(9)]
+    [InlineData(64)]
+    public void BmpDecoder_ThrowsInvalidImageContentException_OnInvalidBitsPerPixel(short bitsPerPixel)
+    {
+        byte[] data = CreateBmp(width: 2, height: 2, bitsPerPixel, pixelDataLength: 8);
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+    }
+
+    [Theory]
+    [InlineData((int)BmpCompression.RLE8, 4)]
+    [InlineData((int)BmpCompression.RLE8, 24)]
+    [InlineData((int)BmpCompression.RLE4, 8)]
+    [InlineData((int)BmpCompression.BitFields, 1)]
+    [InlineData((int)BmpCompression.BitFields, 24)]
+    [InlineData((int)BmpCompression.BI_ALPHABITFIELDS, 8)]
+    [InlineData((int)BmpCompression.JPEG, 3)]
+    [InlineData((int)BmpCompression.PNG, 7)]
+    public void BmpDecoder_ThrowsInvalidImageContentException_OnBitsPerPixelInvalidForCompression(int compression, short bitsPerPixel)
+    {
+        byte[] data = CreateBmp(width: 2, height: 2, bitsPerPixel, pixelDataLength: 64, compression: (BmpCompression)compression);
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    [InlineData(-5, 2)]
+    [InlineData(int.MinValue, 2)]
+    [InlineData(2, int.MinValue)]
+    [InlineData(65536, 1)]
+    [InlineData(1, 65536)]
+    [InlineData(1, -65536)]
+    [InlineData(100000, 2)]
+    [InlineData(int.MaxValue, 2)]
+    public void BmpDecoder_ThrowsInvalidImageContentException_OnInvalidDimensions(int width, int height)
+    {
+        byte[] data = CreateBmp(width, height, bitsPerPixel: 24, pixelDataLength: 72);
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(data));
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+    }
+
+    [Fact]
+    public void BmpDecoder_ThrowsInvalidImageContentException_BeforeAllocating_WhenPixelDataIsTooShort()
+    {
+        // 4000x4000 at 24 bits per pixel declares 48 MB of pixel data, but the file has 72 bytes.
+        byte[] data = CreateBmp(width: 4000, height: 4000, bitsPerPixel: 24, pixelDataLength: 72);
+
+        var allocator = new TestMemoryAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = allocator;
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(configuration, data);
+        });
+
+        long allocatedBytes = 0;
+        foreach (TestMemoryAllocator.AllocationRequest request in allocator.AllocationLog)
+        {
+            allocatedBytes += request.LengthInBytes;
+        }
+
+        Assert.True(allocatedBytes < 1024 * 1024, $"Allocated {allocatedBytes} bytes.");
+    }
+
+    [Theory]
+    [InlineData(24, 3, 2, 24, true)] // Rows of 9 bytes, padded to 12.
+    [InlineData(24, 3, 2, 21, true)] // Only the padding of the last row is missing.
+    [InlineData(24, 3, 2, 20, false)]
+    [InlineData(24, 3, 2, 12, false)]
+    [InlineData(1, 33, 2, 13, true)] // Rows of 5 bytes, padded to 8.
+    [InlineData(1, 33, 2, 12, false)]
+    [InlineData(16, 3, 5, 38, true)] // Rows of 6 bytes, padded to 8.
+    [InlineData(16, 3, 5, 37, false)]
+    [InlineData(32, 2, 3, 24, true)] // Rows of 8 bytes, no padding.
+    [InlineData(32, 2, 3, 23, false)]
+    public void BmpDecoder_RequiresPixelDataForEveryRow(short bitsPerPixel, int width, int height, int pixelDataLength, bool isValid)
+    {
+        byte[] data = CreateBmp(width, height, bitsPerPixel, pixelDataLength, paletteLength: bitsPerPixel <= 8 ? 2 : 0);
+
+        if (isValid)
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+            Assert.Equal(new Size(width, height), image.Size());
+        }
+        else
+        {
+            Assert.Throws<InvalidImageContentException>(() =>
+            {
+                using Image<Rgba32> image = Image.Load<Rgba32>(data);
+            });
+        }
+    }
+
+    /// <summary>
+    /// Creates a bitmap with a 40 byte BITMAPINFOHEADER, an optional black color palette and zeroed pixel data.
+    /// </summary>
+    private static byte[] CreateBmp(
+        int width,
+        int height,
+        short bitsPerPixel,
+        int pixelDataLength,
+        int paletteLength = 0,
+        BmpCompression compression = BmpCompression.RGB)
+    {
+        const int infoHeaderStart = BmpFileHeader.Size;
+        int pixelDataOffset = BmpFileHeader.Size + BmpInfoHeader.SizeV3 + (paletteLength * 4);
+        byte[] data = new byte[pixelDataOffset + pixelDataLength];
+        Span<byte> span = data;
+
+        // File header.
+        span[0] = (byte)'B';
+        span[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(span[2..], data.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(span[10..], pixelDataOffset);
+
+        // Info header. Image size and resolution stay zero.
+        Span<byte> infoHeader = span[infoHeaderStart..];
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader, BmpInfoHeader.SizeV3);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[4..], width);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[8..], height);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[12..], 1);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[14..], bitsPerPixel);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[16..], (int)compression);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[32..], paletteLength);
+
+        return data;
     }
 
     // On Linux and macOS the reference decoder is Magick.NET. Magick.NET 14+ decodes 16-bit bitfield

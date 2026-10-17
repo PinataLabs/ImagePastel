@@ -126,6 +126,7 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         try
         {
             int bytesPerColorMapEntry = this.ReadImageHeaders(stream, out bool inverted, out byte[] palette);
+            this.VerifyUncompressedPixelDataLength();
 
             image = new Image<TPixel>(this.Configuration, this.infoHeader.Width, this.infoHeader.Height, this.metadata);
 
@@ -239,6 +240,29 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         }
 
         return padding;
+    }
+
+    /// <summary>
+    /// Checks that the stream holds pixel data for every row of an uncompressed bitmap,
+    /// so that a small file cannot make the decoder allocate a large pixel buffer.
+    /// The padding of the last row may be missing.
+    /// </summary>
+    private void VerifyUncompressedPixelDataLength()
+    {
+        if (this.infoHeader.Compression is not (BmpCompression.RGB or BmpCompression.BitFields or BmpCompression.BI_ALPHABITFIELDS))
+        {
+            return;
+        }
+
+        long rowBits = (long)this.infoHeader.Width * this.infoHeader.BitsPerPixel;
+        long stride = (rowBits + 31) / 32 * 4;
+        long requiredLength = (stride * (this.infoHeader.Height - 1)) + ((rowBits + 7) / 8);
+        long remainingLength = this.stream.Length - this.stream.Position;
+        if (requiredLength > remainingLength)
+        {
+            BmpThrowHelper.ThrowInvalidImageContentException(
+                $"The bitmap needs {requiredLength} bytes of pixel data, but only {remainingLength} bytes remain in the stream.");
+        }
     }
 
     /// <summary>
@@ -1353,6 +1377,25 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
 
         this.ReadFileHeader();
         this.ReadInfoHeader();
+
+        short bitsPerPixel = this.infoHeader.BitsPerPixel;
+        bool isValidBitsPerPixel = this.infoHeader.Compression switch
+        {
+            BmpCompression.RLE8 => bitsPerPixel == 8,
+            BmpCompression.RLE4 => bitsPerPixel == 4,
+            BmpCompression.RLE24 => bitsPerPixel == 24,
+            BmpCompression.BitFields or BmpCompression.BI_ALPHABITFIELDS => bitsPerPixel is 16 or 32,
+
+            // Embedded JPEG and PNG data may declare a bit depth of zero. Decoding them is not supported.
+            BmpCompression.JPEG or BmpCompression.PNG => bitsPerPixel is 0 or 1 or 2 or 4 or 8 or 16 or 24 or 32,
+            _ => bitsPerPixel is 1 or 2 or 4 or 8 or 16 or 24 or 32
+        };
+
+        if (!isValidBitsPerPixel)
+        {
+            BmpThrowHelper.ThrowInvalidImageContentException(
+                $"Invalid bits per pixel '{bitsPerPixel}' for compression '{this.infoHeader.Compression}'.");
+        }
 
         // see http://www.drdobbs.com/architecture-and-design/the-bmp-file-format-part-1/184409517
         // If the height is negative, then this is a Windows bitmap whose origin

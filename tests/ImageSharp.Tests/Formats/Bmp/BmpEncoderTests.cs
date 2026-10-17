@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
@@ -44,6 +45,12 @@ public class BmpEncoderTests
         { Rgb16, BmpBitsPerPixel.Pixel16 },
         { Car, BmpBitsPerPixel.Pixel24 },
         { Bit32Rgb, BmpBitsPerPixel.Pixel32 }
+    };
+
+    public static readonly TheoryData<int> OneBitWidths = new()
+    {
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33
     };
 
     [Theory]
@@ -309,6 +316,133 @@ public class BmpEncoderTests
     {
         provider.LimitAllocatorBufferCapacity().InBytesSqrt(100);
         TestBmpEncoderCore(provider, bitsPerPixel);
+    }
+
+    [Theory]
+    [InlineData(BmpBitsPerPixel.Pixel1, false)]
+    [InlineData(BmpBitsPerPixel.Pixel4, false)]
+    [InlineData(BmpBitsPerPixel.Pixel8, false)]
+    [InlineData(BmpBitsPerPixel.Pixel1, true)]
+    [InlineData(BmpBitsPerPixel.Pixel4, true)]
+    [InlineData(BmpBitsPerPixel.Pixel8, true)]
+    public void Encode_IndexedWithoutDither_KeepsGradientRowsIdenticalAndMonotonic(BmpBitsPerPixel bitsPerPixel, bool zeroDitherScale)
+    {
+        // A dither scale of zero adds no error to the neighbouring pixels, so it must match no dither.
+        QuantizerOptions options = zeroDitherScale
+            ? new QuantizerOptions { Dither = KnownDitherings.FloydSteinberg, DitherScale = 0 }
+            : new QuantizerOptions { Dither = null };
+
+        // A palette of evenly spaced grays that fits the bit depth.
+        int paletteLength = bitsPerPixel == BmpBitsPerPixel.Pixel1 ? 2 : 16;
+        var palette = new Color[paletteLength];
+        for (int i = 0; i < paletteLength; i++)
+        {
+            byte value = (byte)(i * 255 / (paletteLength - 1));
+            palette[i] = Color.FromRgb(value, value, value);
+        }
+
+        using var image = new Image<Rgba32>(64, 16);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    byte value = (byte)(x * 255 / (row.Length - 1));
+                    row[x] = new Rgba32(value, value, value);
+                }
+            }
+        });
+
+        var encoder = new BmpEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            Quantizer = new PaletteQuantizer(palette, options)
+        };
+
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        decoded.ProcessPixelRows(accessor =>
+        {
+            Span<Rgba32> firstRow = accessor.GetRowSpan(0);
+            for (int x = 1; x < firstRow.Length; x++)
+            {
+                Assert.True(firstRow[x].R >= firstRow[x - 1].R, $"Row 0 decreases at x={x}.");
+            }
+
+            for (int y = 1; y < accessor.Height; y++)
+            {
+                Assert.True(firstRow.SequenceEqual(accessor.GetRowSpan(y)), $"Row {y} differs from row 0.");
+            }
+        });
+    }
+
+    [Theory]
+    [MemberData(nameof(OneBitWidths))]
+    public void Encode_1Bit_RoundTripIsExact(int width)
+    {
+        // A non-periodic black and white pattern, so every bit of each row is checked.
+        var random = new Random(width);
+        using var image = new Image<Rgba32>(width, 5);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    row[x] = random.Next(2) == 0 ? Color.Black : Color.White;
+                }
+            }
+        });
+
+        using var stream = new MemoryStream();
+        image.Save(stream, new BmpEncoder { BitsPerPixel = BmpBitsPerPixel.Pixel1 });
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    [Fact]
+    public void Encode_1Bit_PacksPixelsMostSignificantBitFirst()
+    {
+        // Bits per row, 1 = white: 10110010 01110001 | 11000000 01.
+        string[] rows = { "1011001001110001", "1100000001" };
+        var palette = new[] { Color.Black, Color.White };
+        var encoder = new BmpEncoder
+        {
+            BitsPerPixel = BmpBitsPerPixel.Pixel1,
+            Quantizer = new PaletteQuantizer(palette, new QuantizerOptions { Dither = null })
+        };
+
+        byte[][] expectedRows =
+        {
+            new byte[] { 0b1011_0010, 0b0111_0001, 0, 0 },
+            new byte[] { 0b1100_0000, 0b0100_0000, 0, 0 }
+        };
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            string bits = rows[i];
+            using var image = new Image<Rgba32>(bits.Length, 1);
+            for (int x = 0; x < bits.Length; x++)
+            {
+                image[x, 0] = bits[x] == '1' ? Color.White : Color.Black;
+            }
+
+            using var stream = new MemoryStream();
+            image.Save(stream, encoder);
+            byte[] data = stream.ToArray();
+
+            // The pixel data starts after the file header, the info header and the two entry palette.
+            int pixelOffset = BitConverter.ToInt32(data, 10);
+            Assert.Equal(expectedRows[i], data[pixelOffset..]);
+        }
     }
 
     private static void TestBmpEncoderCore<TPixel>(
