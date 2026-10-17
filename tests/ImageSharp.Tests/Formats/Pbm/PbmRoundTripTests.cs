@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
+using SixLabors.ImageSharp.Formats.Pbm;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
@@ -53,6 +54,51 @@ public class PbmRoundTripTests
 
         // Assert
         Assert.NotNull(encodedImage);
+        ImageComparer.Exact.VerifySimilarity(originalImage, encodedImage);
+    }
+
+    [Theory]
+    [InlineData(1, PbmEncoding.Plain)]
+    [InlineData(7, PbmEncoding.Plain)]
+    [InlineData(8, PbmEncoding.Plain)]
+    [InlineData(9, PbmEncoding.Plain)]
+    [InlineData(10, PbmEncoding.Plain)]
+    [InlineData(13, PbmEncoding.Plain)]
+    [InlineData(17, PbmEncoding.Plain)]
+    [InlineData(1, PbmEncoding.Binary)]
+    [InlineData(7, PbmEncoding.Binary)]
+    [InlineData(8, PbmEncoding.Binary)]
+    [InlineData(9, PbmEncoding.Binary)]
+    [InlineData(10, PbmEncoding.Binary)]
+    [InlineData(13, PbmEncoding.Binary)]
+    [InlineData(17, PbmEncoding.Binary)]
+    public void PbmBlackAndWhiteImageCanRoundTripAtAnyWidth(int width, PbmEncoding encoding)
+    {
+        // Arrange
+        const int height = 3;
+        using Image<L8> originalImage = new(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                originalImage[x, y] = ((x * 7) + (y * 3)) % 5 < 2 ? new L8(0) : new L8(255);
+            }
+        }
+
+        var encoder = new PbmEncoder
+        {
+            ColorType = PbmColorType.BlackAndWhite,
+            ComponentType = PbmComponentType.Byte,
+            Encoding = encoding
+        };
+
+        // Act
+        using var stream = new MemoryStream();
+        originalImage.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<L8> encodedImage = Image.Load<L8>(stream);
+
+        // Assert
         ImageComparer.Exact.VerifySimilarity(originalImage, encodedImage);
     }
 
