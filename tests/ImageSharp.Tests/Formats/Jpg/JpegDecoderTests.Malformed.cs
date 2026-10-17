@@ -75,6 +75,31 @@ public partial class JpegDecoderTests
         }
     }
 
+    public static TheoryData<string, byte[]> ReservedMarkerBeforeEndOfImageData { get; } = new()
+    {
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x01 } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0xBF } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x12, 0xFF, 0x34 } },
+        { TestImages.Jpeg.Baseline.Jpeg400, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Baseline.Calliphora, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Progressive.Progress, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Issues.BadRstProgressive518, new byte[] { 0xFF, 0x12 } },
+    };
+
+    [Theory]
+    [MemberData(nameof(ReservedMarkerBeforeEndOfImageData))]
+    public void Decode_ReservedMarkerBeforeEndOfImage_IsSkipped(string file, byte[] junk)
+    {
+        byte[] original = TestFile.Create(file).Bytes;
+        Assert.Equal(JpegConstants.Markers.EOI, original[^1]);
+        byte[] corrupt = Insert(original, original.Length - 2, junk);
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(original);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
     // Inserts the junk bytes before every RSTn marker, either in the entropy-coded data following the first SOS only,
     // or before every RST-like byte pair in the file.
     private static byte[] InsertBeforeRestartMarkers(byte[] data, byte[] junk, bool entropyCodedDataOnly)
@@ -109,6 +134,30 @@ public partial class JpegDecoderTests
         // RSTn and TEM have no length field (ITU T.81 B.1.1.4), insert one straight after APP0.
         int app0End = SegmentEnd(original, 2);
         byte[] corrupt = Insert(original, app0End, JpegConstants.Markers.XFF, marker);
+
+        IImageInfo info = Image.Identify(corrupt);
+        Assert.Equal(new Size(32, 24), new Size(info.Width, info.Height));
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(original);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x00 })]
+    [InlineData(new byte[] { 0x00, 0x00 })]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00 })]
+    [InlineData(new byte[] { 0x12, 0xFF, 0x00 })]
+    public void Decode_JunkBytesBetweenHeaderSegments_AreSkipped(byte[] junk)
+    {
+        byte[] original = EncodeTestJpeg(JpegColorType.YCbCrRatio420);
+
+        // Insert the junk after SOI, after APP0 and before SOS, so it is skipped both on an even and an odd offset.
+        int app0End = SegmentEnd(original, 2);
+        int sos = FindSegment(original, JpegConstants.Markers.SOS);
+        byte[] corrupt = Insert(original, sos, junk);
+        corrupt = Insert(corrupt, app0End, junk);
+        corrupt = Insert(corrupt, 2, junk);
 
         IImageInfo info = Image.Identify(corrupt);
         Assert.Equal(new Size(32, 24), new Size(info.Width, info.Height));

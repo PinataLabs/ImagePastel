@@ -156,40 +156,43 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     public Block8x8F[] QuantizationTables { get; private set; }
 
     /// <summary>
-    /// Finds the next file marker within the byte stream.
+    /// Finds the next file marker within the byte stream, skipping any bytes before it one at a time.
     /// </summary>
-    /// <param name="marker">The buffer to read file markers to.</param>
     /// <param name="stream">The input stream.</param>
     /// <returns>The <see cref="JpegFileMarker"/></returns>
-    public static JpegFileMarker FindNextFileMarker(byte[] marker, BufferedReadStream stream)
+    public static JpegFileMarker FindNextFileMarker(BufferedReadStream stream)
     {
-        int value = stream.Read(marker, 0, 2);
-
-        if (value == 0)
+        while (true)
         {
-            return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
-        }
+            int b = stream.ReadByte();
+            if (b == -1)
+            {
+                return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
+            }
 
-        if (marker[0] == JpegConstants.Markers.XFF)
-        {
+            if (b != JpegConstants.Markers.XFF)
+            {
+                continue;
+            }
+
             // According to Section B.1.1.2:
             // "Any marker may optionally be preceded by any number of fill bytes, which are bytes assigned code 0xFF."
-            int m = marker[1];
-            while (m == JpegConstants.Markers.XFF)
+            do
             {
-                int suffix = stream.ReadByte();
-                if (suffix == -1)
+                b = stream.ReadByte();
+                if (b == -1)
                 {
                     return new JpegFileMarker(JpegConstants.Markers.EOI, stream.Length - 2);
                 }
-
-                m = suffix;
             }
+            while (b == JpegConstants.Markers.XFF);
 
-            return new JpegFileMarker((byte)m, stream.Position - 2);
+            // FF 00 is a stuffed data byte, not a marker.
+            if (b != 0)
+            {
+                return new JpegFileMarker((byte)b, stream.Position - 2);
+            }
         }
-
-        return new JpegFileMarker(marker[1], stream.Position - 2, true);
     }
 
     /// <inheritdoc/>
@@ -259,9 +262,9 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         bytesRead = stream.Read(this.markerBuffer, 0, 2);
         fileMarker = new JpegFileMarker(this.markerBuffer[1], (int)stream.Position - 2);
 
-        while (fileMarker.Marker != JpegConstants.Markers.EOI || (fileMarker.Marker == JpegConstants.Markers.EOI && fileMarker.Invalid))
+        while (fileMarker.Marker != JpegConstants.Markers.EOI)
         {
-            if (!fileMarker.Invalid)
+            if (!IsStandaloneMarker(fileMarker.Marker))
             {
                 // Get the marker length.
                 int markerContentByteSize = this.ReadUint16(stream) - 2;
@@ -277,9 +280,6 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
                 switch (fileMarker.Marker)
                 {
                     case JpegConstants.Markers.SOI:
-                        break;
-                    case JpegConstants.Markers.RST0:
-                    case JpegConstants.Markers.RST7:
                         break;
                     case JpegConstants.Markers.DHT:
                         this.ProcessDefineHuffmanTablesMarker(stream, markerContentByteSize);
@@ -328,19 +328,17 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             JpegThrowHelper.ThrowInvalidImageContentException("Missing SOI marker.");
         }
 
-        stream.Read(this.markerBuffer, 0, 2);
-        byte marker = this.markerBuffer[1];
-        fileMarker = new JpegFileMarker(marker, (int)stream.Position - 2);
+        fileMarker = FindNextFileMarker(stream);
         this.QuantizationTables ??= new Block8x8F[4];
 
-        // Break only when we discover a valid EOI marker.
-        // https://github.com/SixLabors/ImageSharp/issues/695
-        while (fileMarker.Marker != JpegConstants.Markers.EOI
-            || (fileMarker.Marker == JpegConstants.Markers.EOI && fileMarker.Invalid))
+        while (fileMarker.Marker != JpegConstants.Markers.EOI)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!fileMarker.Invalid && !IsStandaloneMarker(fileMarker.Marker))
+            // After a scan, an FF xx pair with a reserved code (ITU T.81 Table B.1) is junk left after the last restart
+            // interval and cannot start a segment, so skip it as HuffmanScanDecoder does between restart intervals.
+            bool reservedAfterScan = this.hasScan && fileMarker.Marker < JpegConstants.Markers.SOF0;
+            if (!IsStandaloneMarker(fileMarker.Marker) && !reservedAfterScan)
             {
                 // Get the marker length.
                 int markerContentByteSize = this.ReadUint16(stream) - 2;
@@ -470,7 +468,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             }
 
             // Read on.
-            fileMarker = FindNextFileMarker(this.markerBuffer, stream);
+            fileMarker = FindNextFileMarker(stream);
         }
 
         // Without a scan the frame components never allocate their spectral blocks, so there is nothing to convert.

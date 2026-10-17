@@ -109,26 +109,69 @@ public class TiffDecoderCorrectnessTests
         source.SaveAsJpeg(jpegStream, new JpegEncoder { ColorType = colorType, Quality = 90 });
         byte[] jpeg = jpegStream.ToArray();
 
-        byte[] jpegTables = GetJpegTables(jpeg);
-        byte[] tiff = new TiffTestFileBuilder()
-            .AddPage(jpeg)
-            .AddLong(ExifTagValue.ImageWidth, size)
-            .AddLong(ExifTagValue.ImageLength, size)
-            .AddShort(ExifTagValue.BitsPerSample, 8, 8, 8)
-            .AddShort(ExifTagValue.Compression, (ushort)TiffCompression.Jpeg)
-            .AddShort(ExifTagValue.PhotometricInterpretation, (ushort)TiffPhotometricInterpretation.YCbCr)
-            .AddShort(ExifTagValue.SamplesPerPixel, 3)
-            .AddLong(ExifTagValue.RowsPerStrip, size)
-            .AddShort(ExifTagValue.PlanarConfiguration, (ushort)TiffPlanarConfiguration.Chunky)
-            .AddEntry(ExifTagValue.JPEGTables, ExifDataType.Undefined, (uint)jpegTables.Length, jpegTables)
-            .AddShort(ExifTagValue.YCbCrSubsampling, horizontalSubsampling, verticalSubsampling)
-            .Build();
+        byte[] tiff = CreateJpegCompressedTiff(jpeg, GetJpegTables(jpeg), size, horizontalSubsampling, verticalSubsampling);
 
         using Image<Rgb24> expected = Image.Load<Rgb24>(jpeg);
         using Image<Rgb24> actual = Image.Load<Rgb24>(tiff);
 
         ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
+
+    [Theory]
+    [InlineData(0xD0)]
+    [InlineData(0xD7)]
+    [InlineData(0x01)]
+    public void Decode_JpegTablesWithStandaloneMarker_SkipsMarker(byte marker)
+    {
+        const int size = 16;
+        using var source = new Image<Rgb24>(size, size);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                source[x, y] = new Rgb24((byte)(x * 16), (byte)(y * 16), (byte)(255 - (x * 8) - (y * 8)));
+            }
+        }
+
+        using var jpegStream = new MemoryStream();
+        source.SaveAsJpeg(jpegStream, new JpegEncoder { ColorType = JpegColorType.YCbCrRatio444, Quality = 90 });
+        byte[] jpeg = jpegStream.ToArray();
+
+        // RSTn and TEM have no length field (ITU T.81 B.1.1.4), insert one between the DQT and DHT segments.
+        byte[] jpegTables = GetJpegTables(jpeg);
+        int dht = 2;
+        while (jpegTables[dht + 1] != 0xC4)
+        {
+            dht += 2 + BinaryPrimitives.ReadUInt16BigEndian(jpegTables.AsSpan(dht + 2));
+        }
+
+        jpegTables = jpegTables.Take(dht).Concat(new byte[] { 0xFF, marker }).Concat(jpegTables.Skip(dht)).ToArray();
+
+        byte[] tiff = CreateJpegCompressedTiff(jpeg, jpegTables, size, 1, 1);
+
+        using Image<Rgb24> expected = Image.Load<Rgb24>(jpeg);
+        using Image<Rgb24> actual = Image.Load<Rgb24>(tiff);
+
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    /// <summary>
+    /// Builds a single strip, JPEG-compressed YCbCr TIFF from a JPEG file and a JPEGTables value.
+    /// </summary>
+    private static byte[] CreateJpegCompressedTiff(byte[] jpeg, byte[] jpegTables, int size, ushort horizontalSubsampling, ushort verticalSubsampling)
+        => new TiffTestFileBuilder()
+            .AddPage(jpeg)
+            .AddLong(ExifTagValue.ImageWidth, (uint)size)
+            .AddLong(ExifTagValue.ImageLength, (uint)size)
+            .AddShort(ExifTagValue.BitsPerSample, 8, 8, 8)
+            .AddShort(ExifTagValue.Compression, (ushort)TiffCompression.Jpeg)
+            .AddShort(ExifTagValue.PhotometricInterpretation, (ushort)TiffPhotometricInterpretation.YCbCr)
+            .AddShort(ExifTagValue.SamplesPerPixel, 3)
+            .AddLong(ExifTagValue.RowsPerStrip, (uint)size)
+            .AddShort(ExifTagValue.PlanarConfiguration, (ushort)TiffPlanarConfiguration.Chunky)
+            .AddEntry(ExifTagValue.JPEGTables, ExifDataType.Undefined, (uint)jpegTables.Length, jpegTables)
+            .AddShort(ExifTagValue.YCbCrSubsampling, horizontalSubsampling, verticalSubsampling)
+            .Build();
 
     [Theory]
     [InlineData(TiffCompression.None, 2, 2)]
