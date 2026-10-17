@@ -261,6 +261,18 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
         => this.memoryAllocator.AllocatePaddedPixelRowBuffer(width, bytesPerPixel, this.padding);
 
     /// <summary>
+    /// Creates quantizer options limited to the given color count, keeping the dither settings of the configured quantizer.
+    /// </summary>
+    /// <param name="maxColors">The maximum number of colors in the palette.</param>
+    /// <returns>The <see cref="QuantizerOptions"/>.</returns>
+    private QuantizerOptions CreateQuantizerOptions(int maxColors) => new()
+    {
+        Dither = this.quantizer.Options.Dither,
+        DitherScale = this.quantizer.Options.DitherScale,
+        MaxColors = maxColors
+    };
+
+    /// <summary>
     /// Writes the 32bit color palette to the stream.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
@@ -436,10 +448,7 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
     private void Write4BitColor<TPixel>(Stream stream, ImageFrame<TPixel> image)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        using IQuantizer<TPixel> frameQuantizer = this.quantizer.CreatePixelSpecificQuantizer<TPixel>(this.configuration, new QuantizerOptions()
-        {
-            MaxColors = 16
-        });
+        using IQuantizer<TPixel> frameQuantizer = this.quantizer.CreatePixelSpecificQuantizer<TPixel>(this.configuration, this.CreateQuantizerOptions(16));
         using IndexedImageFrame<TPixel> quantized = frameQuantizer.BuildPaletteAndQuantizeFrame(image, image.Bounds());
         using IMemoryOwner<byte> colorPaletteBuffer = this.memoryAllocator.Allocate<byte>(ColorPaletteSize4Bit, AllocationOptions.Clean);
 
@@ -480,10 +489,7 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
     private void Write1BitColor<TPixel>(Stream stream, ImageFrame<TPixel> image)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        using IQuantizer<TPixel> frameQuantizer = this.quantizer.CreatePixelSpecificQuantizer<TPixel>(this.configuration, new QuantizerOptions()
-        {
-            MaxColors = 2
-        });
+        using IQuantizer<TPixel> frameQuantizer = this.quantizer.CreatePixelSpecificQuantizer<TPixel>(this.configuration, this.CreateQuantizerOptions(2));
         using IndexedImageFrame<TPixel> quantized = frameQuantizer.BuildPaletteAndQuantizeFrame(image, image.Bounds());
         using IMemoryOwner<byte> colorPaletteBuffer = this.memoryAllocator.Allocate<byte>(ColorPaletteSize1Bit, AllocationOptions.Clean);
 
@@ -493,21 +499,21 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
 
         ReadOnlySpan<byte> quantizedPixelRow = quantized.DangerousGetRowSpan(0);
         int rowPadding = quantizedPixelRow.Length % 8 != 0 ? this.padding - 1 : this.padding;
+
+        // The pixels that fill whole bytes. Any remaining pixels go into one partial byte.
+        int fullBytesEndIdx = quantizedPixelRow.Length - (quantizedPixelRow.Length % 8);
         for (int y = image.Height - 1; y >= 0; y--)
         {
             quantizedPixelRow = quantized.DangerousGetRowSpan(y);
 
-            int endIdx = quantizedPixelRow.Length % 8 == 0 ? quantizedPixelRow.Length : quantizedPixelRow.Length - 8;
-            for (int i = 0; i < endIdx; i += 8)
+            for (int i = 0; i < fullBytesEndIdx; i += 8)
             {
                 Write1BitPalette(stream, i, i + 8, quantizedPixelRow);
             }
 
-            if (quantizedPixelRow.Length % 8 != 0)
+            if (fullBytesEndIdx < quantizedPixelRow.Length)
             {
-                int startIdx = quantizedPixelRow.Length - 7;
-                endIdx = quantizedPixelRow.Length;
-                Write1BitPalette(stream, startIdx, endIdx, quantizedPixelRow);
+                Write1BitPalette(stream, fullBytesEndIdx, quantizedPixelRow.Length, quantizedPixelRow);
             }
 
             for (int i = 0; i < rowPadding; i++)
