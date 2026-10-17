@@ -135,8 +135,9 @@ internal struct WuQuantizer<TPixel> : IQuantizer<TPixel>
         this.Get3DMoments(this.memoryAllocator);
         this.hasMoments = true;
 
-        // A previous call may have found fewer distinct colors than requested.
-        this.maxColors = this.Options.MaxColors;
+        // A previous call may have found fewer distinct colors than requested. Reset to the limit the
+        // palette and color cube were sized for, which a later change to the options can not raise.
+        this.maxColors = this.colorCube.Length;
         this.BuildCube();
 
         // Slice again since maxColors has been updated since the buffer was created.

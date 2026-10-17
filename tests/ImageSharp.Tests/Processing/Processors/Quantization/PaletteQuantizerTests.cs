@@ -231,15 +231,27 @@ public class PaletteQuantizerTests
         Color[] colors = GetColorWalk(ColorWalk.Rgb256).Select(x => new Color(x)).ToArray();
         using IQuantizer<Rgba32> quantizer = new PaletteQuantizer(colors, new QuantizerOptions { Dither = null })
             .CreatePixelSpecificQuantizer<Rgba32>(configuration);
+
+        // Warm up so one-time setup is not counted.
+        for (uint i = 0; i < 1 << 16; i++)
+        {
+            quantizer.GetQuantizedColor(new Rgba32(i * 2246822519U), out _);
+        }
+
         int allocationsBefore = allocator.AllocationLog.Count;
+        long managedBytesBefore = GC.GetAllocatedBytesForCurrentThread();
 
         for (uint i = 0; i < 1 << 20; i++)
         {
             quantizer.GetQuantizedColor(new Rgba32(i * 2654435761U), out _);
         }
 
+        // Managed allocations are not seen by the test allocator, so count them separately.
+        long managedBytes = GC.GetAllocatedBytesForCurrentThread() - managedBytesBefore;
+
         Assert.Equal(allocationsBefore, allocator.AllocationLog.Count);
         Assert.True(allocator.AllocationLog.Sum(x => (long)x.LengthInBytes) <= 4 * 1024 * 1024);
+        Assert.True(managedBytes < 64 * 1024, $"Lookups allocated {managedBytes} managed bytes.");
     }
 
     [Theory]

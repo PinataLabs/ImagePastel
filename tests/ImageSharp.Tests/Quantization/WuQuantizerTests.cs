@@ -154,6 +154,28 @@ public class WuQuantizerTests
         Assert.Equal(expected, actual);
     }
 
+    [Fact]
+    public void RaisingMaxColorsAfterCreationKeepsTheCreationLimit()
+    {
+        using var image = new Image<Rgba32>(16, 16);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                image[x, y] = new Rgba32((byte)(x * 16), (byte)(y * 16), (byte)((x + y) * 8), 255);
+            }
+        }
+
+        using IQuantizer<Rgba32> quantizer = new WuQuantizer(new QuantizerOptions { Dither = null, MaxColors = 2 })
+            .CreatePixelSpecificQuantizer<Rgba32>(Configuration.Default);
+
+        // The palette and color cube are sized when the quantizer is created.
+        quantizer.Options.MaxColors = 256;
+        quantizer.AddPaletteColors(image.Frames.RootFrame.PixelBuffer.GetRegion());
+
+        Assert.Equal(2, quantizer.Palette.Length);
+    }
+
     [Theory]
     [WithFile(TestImages.Png.LowColorVariance, PixelTypes.Rgba32)]
     public void LowVariance<TPixel>(TestImageProvider<TPixel> provider)
