@@ -181,6 +181,12 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                 }
             }
         }
+        catch
+        {
+            // Return the pixel buffers of the frames decoded so far.
+            image?.Dispose();
+            throw;
+        }
         finally
         {
             this.globalColorTable?.Dispose();

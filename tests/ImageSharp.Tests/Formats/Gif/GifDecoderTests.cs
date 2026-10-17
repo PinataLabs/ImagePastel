@@ -505,6 +505,17 @@ public class GifDecoderTests
         AssertFramePixels(image.Frames[1], (_, _) => GlobalColorTable[2]);
     }
 
+    [Fact]
+    public void Decode_TruncatedGraphicControlExtensionAfterFirstFrame_ThrowsAndReleasesImage()
+    {
+        // The class level ValidateDisposedMemoryAllocations attribute checks that the
+        // first frame's pixel buffer is returned when decoding fails.
+        byte[] first = CreateGif(4, 4, 0, 0, 4, 4, interlaced: false, 2, EncodeLzw(new byte[16]));
+        byte[] data = [.. first.AsSpan(0, first.Length - 1), 0x21, 0xF9, 0x04, 0x00];
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
+    }
+
     // Appends the image descriptor and data of a second file made by CreateGif to the first.
     private static byte[] AppendFrame(byte[] first, byte[] second)
     {
