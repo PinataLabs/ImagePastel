@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
@@ -135,6 +136,27 @@ public partial class ImageTests
             Assert.Equal(PngFormat.Instance, syncFormat);
             Assert.Equal(syncFormat, asyncFormat);
             Assert.Equal(syncStream.Position, asyncStream.Position);
+        }
+
+        [Fact]
+        public async Task FromSeekableStream_ShortRemainingData_ReturnsNull()
+        {
+            // Only the 2-byte JPEG SOI marker remains after the start position, fewer than the 11 bytes the JPEG detector needs.
+            byte[] bytes = new byte[22];
+            bytes[20] = 0xFF;
+            bytes[21] = 0xD8;
+            var configuration = new Configuration(new JpegConfigurationModule()) { ReadOrigin = ReadOrigin.Current };
+
+            using var syncStream = new MemoryStream(bytes) { Position = 20 };
+            IImageFormat syncFormat = Image.DetectFormat(configuration, syncStream);
+
+            using var asyncStream = new MemoryStream(bytes) { Position = 20 };
+            IImageFormat asyncFormat = await Image.DetectFormatAsync(configuration, asyncStream, TestContext.Current.CancellationToken);
+
+            Assert.Null(syncFormat);
+            Assert.Null(asyncFormat);
+            Assert.Equal(20, syncStream.Position);
+            Assert.Equal(20, asyncStream.Position);
         }
 
         [Fact]

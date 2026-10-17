@@ -50,9 +50,9 @@ public abstract partial class Image
     /// <returns>The mime type or null if none found.</returns>
     private static IImageFormat InternalDetectFormat(Stream stream, Configuration config)
     {
-        // We take a minimum of the stream length vs the max header size and always check below
+        // We take a minimum of the remaining stream length vs the max header size and always check below
         // to ensure that only formats that headers fit within the given buffer length are tested.
-        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length);
+        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length - stream.Position);
         if (headerSize <= 0)
         {
             return null;
@@ -77,7 +77,8 @@ public abstract partial class Image
 
         stream.Position = startPosition;
 
-        return InternalDetectFormat(headersBuffer, config);
+        // Only test the bytes actually read so unread buffer space is never mistaken for header data.
+        return InternalDetectFormat(headersBuffer.Slice(0, n), config);
     }
 
     /// <summary>
@@ -91,7 +92,7 @@ public abstract partial class Image
     private static async Task<IImageFormat> InternalDetectFormatAsync(Stream stream, Configuration config, CancellationToken cancellationToken)
     {
         // Sized the same way as InternalDetectFormat(Stream, Configuration) so both paths test the same formats.
-        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length);
+        int headerSize = (int)Math.Min(config.MaxHeaderSize, stream.Length - stream.Position);
         if (headerSize <= 0)
         {
             return null;
@@ -111,7 +112,7 @@ public abstract partial class Image
 
         stream.Position = startPosition;
 
-        return InternalDetectFormat(headersBuffer, config);
+        return InternalDetectFormat(headersBuffer.AsSpan(0, n), config);
     }
 
     /// <summary>
