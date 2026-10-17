@@ -142,6 +142,22 @@ public class PbmDecoderTests
     }
 
     [Theory]
+    [InlineData("P1\n0 1\n")]
+    [InlineData("P2\n0 1\n255\n")]
+    [InlineData("P2\n1 0\n255\n")]
+    [InlineData("P3\n0 0\n255\n")]
+    [InlineData("P4\n0 1\n")]
+    [InlineData("P5\n1 0\n255\n")]
+    [InlineData("P6\n0 1\n255\n")]
+    public void Decode_ZeroWidthOrHeight_ThrowsInvalidImageContentException(string data)
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes(data);
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<L8>(bytes));
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(bytes));
+    }
+
+    [Theory]
     [MemberData(nameof(GrayscaleWithUnusualMaxValue))]
     public void Decode_Grayscale_ScalesMaxValueToFullIntensity(string header, byte[] samples)
     {

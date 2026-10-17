@@ -141,6 +141,11 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
             ThrowPrematureEof();
         }
 
+        if (width == 0 || height == 0)
+        {
+            throw new InvalidImageContentException($"Invalid image dimensions {width}x{height}; the width and height must be greater than zero.");
+        }
+
         // ReadDecimal reads the single white space byte that ends the last header field. In the binary formats
         // the raster starts right after it, and its first bytes can look like white space or a comment,
         // so only the plain formats skip more white space and comments.
