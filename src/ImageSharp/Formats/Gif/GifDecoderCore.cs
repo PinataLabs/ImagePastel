@@ -181,6 +181,15 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                 }
             }
         }
+        catch (OutOfMemoryException ex)
+        {
+            // Every frame is a copy of the logical screen, so a file that claims a large screen
+            // can ask for more memory than is available while each frame is within the allocator limit.
+            image?.Dispose();
+            GifThrowHelper.ThrowInvalidImageContentException(
+                $"Not enough memory to decode the frames of a {this.logicalScreenDescriptor.Width}x{this.logicalScreenDescriptor.Height} logical screen",
+                ex);
+        }
         catch
         {
             // Return the pixel buffers of the frames decoded so far.

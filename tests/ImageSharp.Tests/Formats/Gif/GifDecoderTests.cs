@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,7 @@ using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 
@@ -516,6 +518,35 @@ public class GifDecoderTests
         Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(data));
     }
 
+    [Fact]
+    public void Decode_OutOfMemoryForLaterFrame_ThrowsInvalidImageContentExceptionAndReleasesImage()
+    {
+        // The allocator runs out of memory when the second frame's canvas is allocated.
+        byte[] first = CreateGif(100, 100, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 1 }));
+        byte[] second = CreateGif(100, 100, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2 }));
+        OutOfMemoryAllocator allocator = new(largeLength: 100 * 100, allowedLargeAllocations: 1);
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = new(new GifConfigurationModule()) { MemoryAllocator = allocator };
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(
+            () => Image.Load<Rgba32>(configuration, AppendFrame(first, second)));
+
+        Assert.IsType<OutOfMemoryException>(ex.InnerException);
+        Assert.Equal(allocator.AllocationLog.Count, allocator.ReturnLog.Count);
+    }
+
+    [Fact]
+    public void Decode_LogicalScreenOverAllocatorLimit_ThrowsInvalidImageContentException()
+    {
+        byte[] first = CreateGif(65535, 65535, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 1 }));
+        byte[] second = CreateGif(65535, 65535, 0, 0, 1, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2 }));
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(
+            () => Image.Load<Rgba32>(AppendFrame(first, second)));
+
+        Assert.IsType<InvalidMemoryOperationException>(ex.InnerException);
+    }
+
     // Appends the image descriptor and data of a second file made by CreateGif to the first.
     private static byte[] AppendFrame(byte[] first, byte[] second)
     {
@@ -694,5 +725,29 @@ public class GifDecoderTests
     {
         stream.WriteByte((byte)value);
         stream.WriteByte((byte)(value >> 8));
+    }
+
+    // Throws OutOfMemoryException for allocations of at least largeLength elements once
+    // allowedLargeAllocations of them have been made.
+    private sealed class OutOfMemoryAllocator : TestMemoryAllocator
+    {
+        private readonly int largeLength;
+        private int allowedLargeAllocations;
+
+        public OutOfMemoryAllocator(int largeLength, int allowedLargeAllocations)
+        {
+            this.largeLength = largeLength;
+            this.allowedLargeAllocations = allowedLargeAllocations;
+        }
+
+        public override IMemoryOwner<T> Allocate<T>(int length, AllocationOptions options = AllocationOptions.None)
+        {
+            if (length >= this.largeLength && this.allowedLargeAllocations-- <= 0)
+            {
+                throw new OutOfMemoryException();
+            }
+
+            return base.Allocate<T>(length, options);
+        }
     }
 }
