@@ -1,5 +1,4 @@
-<#@include file="_Common.ttinclude" #>
-<#@ output extension=".cs" #>
+<#@ include file="_Common.ttinclude" #><#@ output extension=".cs" #>
 
 namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations
 {

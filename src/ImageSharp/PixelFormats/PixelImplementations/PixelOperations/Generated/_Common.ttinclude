@@ -3,6 +3,11 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+<#
+// Templates that include this file put the include directive and the next directive
+// on the same line. Visual Studio keeps the newline after an include directive and
+// dotnet-t4 drops it, so a newline there would make the two outputs differ.
+#>
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
@@ -13,6 +18,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.PixelFormats.Utils;
+
 <#+
     private static readonly string[] CommonPixelTypes =
     {

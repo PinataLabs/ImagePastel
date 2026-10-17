@@ -1,6 +1,7 @@
 <#@ template language="C#" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
