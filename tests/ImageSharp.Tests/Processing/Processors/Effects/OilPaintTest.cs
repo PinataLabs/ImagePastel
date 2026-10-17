@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Numerics;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -49,5 +51,29 @@ public class OilPaintTest
             (x, rect) => x.OilPaint(levels, brushSize, rect),
             $"{levels}-{brushSize}",
             ImageComparer.TolerantPercentage(0.01F));
+    }
+
+    [Theory]
+    [InlineData(1000F, 3000F, 2000F)]
+    [InlineData(-1000F, -3000F, -2000F)]
+    public void OutOfRangeVectorValues_DoNotProduceNaN(float r, float g, float b)
+    {
+        Configuration configuration = Configuration.CreateDefaultInstance();
+
+        // Unpooled buffers turn any out-of-bounds bin write into an access violation instead of silent pool corruption.
+        configuration.MemoryAllocator = new SimpleGcMemoryAllocator();
+
+        using var image = new Image<RgbaVector>(configuration, 64, 64, new RgbaVector(r, g, b));
+
+        image.Mutate(x => x.OilPaint(10, 5));
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Vector4 pixel = image[x, y].ToVector4();
+                Assert.False(float.IsNaN(pixel.X) || float.IsNaN(pixel.Y) || float.IsNaN(pixel.Z) || float.IsNaN(pixel.W));
+            }
+        }
     }
 }

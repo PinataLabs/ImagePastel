@@ -50,7 +50,8 @@ internal class AdaptiveThresholdProcessor<TPixel> : ImageProcessor<TPixel>
         int height = intersect.Height;
 
         // ClusterSize defines the size of cluster to used to check for average. Tweaked to support up to 4k wide pixels and not more. 4096 / 16 is 256 thus the '-1'
-        byte clusterSize = (byte)Math.Truncate((width / 16f) - 1);
+        // It must be at least 1 or the averaging window falls outside the integral image for images narrower than 32 pixels.
+        byte clusterSize = (byte)Math.Max(Math.Truncate((width / 16f) - 1), 1);
 
         Buffer2D<TPixel> sourceBuffer = source.PixelBuffer;
 
