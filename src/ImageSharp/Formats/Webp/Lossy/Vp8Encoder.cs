@@ -381,6 +381,7 @@ internal class Vp8Encoder : IDisposable
                 stream,
                 metadata.ExifProfile,
                 metadata.XmpProfile,
+                metadata.IccProfile,
                 (uint)width,
                 (uint)height,
                 hasAlpha,
