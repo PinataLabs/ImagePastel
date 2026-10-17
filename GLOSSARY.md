@@ -27,3 +27,13 @@ _Avoid_: output profile, image profile
 **Conformance vector**:
 One test case from the JPEG XL conformance suite: a codestream, its reference decoded output, and the error thresholds a decoder must meet against that output.
 _Avoid_: test vector, conformance image
+
+### JPEG XL encoding
+
+**Distance**:
+The JPEG XL encoder's target for lossy error, in butteraugli units: 0 means lossless, about 1 is visually lossless, and larger values allow more visible loss.
+_Avoid_: quality, compression level
+
+**Effort**:
+How much search the JPEG XL encoder spends to reach a given distance. It changes encode time and file size, not the target error.
+_Avoid_: speed, encoder level
