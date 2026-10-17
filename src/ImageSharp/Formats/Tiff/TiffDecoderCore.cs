@@ -23,6 +23,11 @@ namespace SixLabors.ImageSharp.Formats.Tiff;
 internal class TiffDecoderCore : IImageDecoderInternals
 {
     /// <summary>
+    /// The largest buffer, in bytes, used to read a band of rows from an uncompressed strip.
+    /// </summary>
+    private const int MaxUncompressedBandBytes = 16 * 1024 * 1024;
+
+    /// <summary>
     /// Used for allocating memory during processing operations.
     /// </summary>
     private readonly MemoryAllocator memoryAllocator;
@@ -245,33 +250,47 @@ internal class TiffDecoderCore : IImageDecoderInternals
 
         int width = GetImageWidth(tags);
         int height = GetImageHeight(tags);
-        var frame = new ImageFrame<TPixel>(this.Configuration, width, height, imageFrameMetaData);
-
-        int rowsPerStrip = tags.GetValue(ExifTag.RowsPerStrip) != null ? (int)tags.GetValue(ExifTag.RowsPerStrip).Value : TiffConstants.RowsPerStripInfinity;
+        int rowsPerStrip = GetRowsPerStrip(tags, height);
 
         var stripOffsetsArray = (Array)tags.GetValueInternal(ExifTag.StripOffsets).GetValue();
         var stripByteCountsArray = (Array)tags.GetValueInternal(ExifTag.StripByteCounts).GetValue();
+        if (stripByteCountsArray.Length < stripOffsetsArray.Length)
+        {
+            TiffThrowHelper.ThrowImageFormatException("The TIFF image has fewer StripByteCounts than StripOffsets.");
+        }
 
         using IMemoryOwner<ulong> stripOffsetsMemory = this.ConvertNumbers(stripOffsetsArray, out Span<ulong> stripOffsets);
         using IMemoryOwner<ulong> stripByteCountsMemory = this.ConvertNumbers(stripByteCountsArray, out Span<ulong> stripByteCounts);
 
-        if (this.PlanarConfiguration == TiffPlanarConfiguration.Planar)
+        // Set the dimensions first, so that a failure to allocate the frame reports its real size.
+        this.Dimensions = new Size(width, height);
+        var frame = new ImageFrame<TPixel>(this.Configuration, width, height, imageFrameMetaData);
+
+        try
         {
-            this.DecodeStripsPlanar(
-                frame,
-                rowsPerStrip,
-                stripOffsets,
-                stripByteCounts,
-                cancellationToken);
+            if (this.PlanarConfiguration == TiffPlanarConfiguration.Planar)
+            {
+                this.DecodeStripsPlanar(
+                    frame,
+                    rowsPerStrip,
+                    stripOffsets,
+                    stripByteCounts,
+                    cancellationToken);
+            }
+            else
+            {
+                this.DecodeStripsChunky(
+                    frame,
+                    rowsPerStrip,
+                    stripOffsets,
+                    stripByteCounts,
+                    cancellationToken);
+            }
         }
-        else
+        catch
         {
-            this.DecodeStripsChunky(
-                frame,
-                rowsPerStrip,
-                stripOffsets,
-                stripByteCounts,
-                cancellationToken);
+            frame.Dispose();
+            throw;
         }
 
         return frame;
@@ -297,13 +316,12 @@ internal class TiffDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// Calculates the size (in bytes) for a pixel buffer using the determined color format.
+    /// Calculates the size (in bytes) of one row of strip data using the determined color format.
     /// </summary>
-    /// <param name="width">The width for the desired pixel buffer.</param>
-    /// <param name="height">The height for the desired pixel buffer.</param>
-    /// <param name="plane">The index of the plane for planar image configuration (or zero for chunky).</param>
-    /// <returns>The size (in bytes) of the required pixel buffer.</returns>
-    private int CalculateStripBufferSize(int width, int height, int plane = -1)
+    /// <param name="width">The width of the image.</param>
+    /// <param name="plane">The index of the plane for planar image configuration (or -1 for chunky).</param>
+    /// <returns>The size (in bytes) of one row.</returns>
+    private long CalculateBytesPerRow(int width, int plane = -1)
     {
         DebugGuard.MustBeLessThanOrEqualTo(plane, 3, nameof(plane));
 
@@ -328,7 +346,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
                     bitsPerPixel = this.BitsPerSample.Channel2;
                     break;
                 case 3:
-                    bitsPerPixel = this.BitsPerSample.Channel2;
+                    bitsPerPixel = this.BitsPerSample.Channel3;
                     break;
                 default:
                     TiffThrowHelper.ThrowNotSupported("More then 4 color channels are not supported");
@@ -336,8 +354,77 @@ internal class TiffDecoderCore : IImageDecoderInternals
             }
         }
 
-        int bytesPerRow = ((width * bitsPerPixel) + 7) / 8;
-        return bytesPerRow * height;
+        return (((long)width * bitsPerPixel) + 7) / 8;
+    }
+
+    /// <summary>
+    /// Calculates how many rows of a strip are decoded at a time. Uncompressed strips are read in bands of rows,
+    /// so a large strip does not need one large buffer. Other strips are decoded whole.
+    /// </summary>
+    /// <param name="width">The width of the image.</param>
+    /// <param name="rowsPerStrip">The number of rows per strip.</param>
+    /// <param name="bytesPerRow">The size (in bytes) of one row in the largest strip buffer.</param>
+    /// <returns>The number of rows decoded at a time.</returns>
+    private int CalculateRowsPerBand(int width, int rowsPerStrip, long bytesPerRow)
+    {
+        int bufferLimit = this.memoryAllocator.SingleBufferAllocationLimitBytes;
+        int rowsPerBand = rowsPerStrip;
+        if (this.CanReadStripsInBands())
+        {
+            long bandBytes = Math.Min(MaxUncompressedBandBytes, bufferLimit);
+            rowsPerBand = (int)Math.Clamp(bandBytes / Math.Max(bytesPerRow, 1), 1, rowsPerStrip);
+        }
+
+        long bufferBytes = bytesPerRow * rowsPerBand;
+        if (bufferBytes > bufferLimit)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException($"Cannot decode TIFF strip data of {width}x{rowsPerBand} pixels. It needs a buffer of {bufferBytes} bytes, which exceeds the limit of {bufferLimit} bytes.");
+        }
+
+        return rowsPerBand;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a strip can be read a band of rows at a time.
+    /// This needs uncompressed data where every row has the same size, so YCbCr data is read whole.
+    /// </summary>
+    private bool CanReadStripsInBands()
+        => this.CompressionType == TiffDecoderCompressionType.None
+        && this.PhotometricInterpretation != TiffPhotometricInterpretation.YCbCr;
+
+    /// <summary>
+    /// Decompresses a band of rows of a strip into the buffer.
+    /// </summary>
+    /// <param name="decompressor">The decompressor.</param>
+    /// <param name="stripOffset">The byte offset of the strip.</param>
+    /// <param name="stripByteCount">The size of the strip (in bytes).</param>
+    /// <param name="bandTop">The first row of the band, relative to the top of the strip.</param>
+    /// <param name="bandHeight">The number of rows in the band.</param>
+    /// <param name="bytesPerRow">The size (in bytes) of one row.</param>
+    /// <param name="buffer">The output buffer for uncompressed data.</param>
+    private void DecompressBand(TiffBaseDecompressor decompressor, ulong stripOffset, ulong stripByteCount, int bandTop, int bandHeight, long bytesPerRow, Span<byte> buffer)
+    {
+        if (this.CanReadStripsInBands())
+        {
+            ulong skippedBytes = (ulong)(bandTop * bytesPerRow);
+            ulong bandBytes = (ulong)(bandHeight * bytesPerRow);
+            ulong streamLength = (ulong)this.inputStream.Length;
+            stripOffset += skippedBytes;
+            stripByteCount = stripByteCount > skippedBytes ? Math.Min(stripByteCount - skippedBytes, bandBytes) : 0;
+            stripByteCount = stripOffset < streamLength ? Math.Min(stripByteCount, streamLength - stripOffset) : 0;
+
+            // Do not decode stale rows of the previous band when the strip, or the file, holds less data than the band needs.
+            if (stripByteCount < bandBytes)
+            {
+                buffer.Slice(0, (int)bandBytes).Clear();
+                if (stripByteCount == 0)
+                {
+                    return;
+                }
+            }
+        }
+
+        decompressor.Decompress(this.inputStream, stripOffset, stripByteCount, bandHeight, buffer);
     }
 
     /// <summary>
@@ -359,13 +446,21 @@ internal class TiffDecoderCore : IImageDecoderInternals
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
 
         var stripBuffers = new IMemoryOwner<byte>[stripsPerPixel];
+        Span<long> bytesPerRow = stackalloc long[stripsPerPixel];
+        long maxBytesPerRow = 0;
+        for (int planeIndex = 0; planeIndex < stripsPerPixel; planeIndex++)
+        {
+            bytesPerRow[planeIndex] = this.CalculateBytesPerRow(frame.Width, planeIndex);
+            maxBytesPerRow = Math.Max(maxBytesPerRow, bytesPerRow[planeIndex]);
+        }
+
+        int rowsPerBand = this.CalculateRowsPerBand(frame.Width, rowsPerStrip, maxBytesPerRow);
 
         try
         {
-            for (int stripIndex = 0; stripIndex < stripBuffers.Length; stripIndex++)
+            for (int planeIndex = 0; planeIndex < stripBuffers.Length; planeIndex++)
             {
-                int uncompressedStripSize = this.CalculateStripBufferSize(frame.Width, rowsPerStrip, stripIndex);
-                stripBuffers[stripIndex] = this.memoryAllocator.Allocate<byte>(uncompressedStripSize);
+                stripBuffers[planeIndex] = this.memoryAllocator.Allocate<byte>((int)(bytesPerRow[planeIndex] * rowsPerBand));
             }
 
             using TiffBaseDecompressor decompressor = TiffDecompressorsFactory.Create(
@@ -396,22 +491,35 @@ internal class TiffDecoderCore : IImageDecoderInternals
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                int stripHeight = i < stripsPerPlane - 1 || frame.Height % rowsPerStrip == 0 ? rowsPerStrip : frame.Height % rowsPerStrip;
-
-                int stripIndex = i;
-                for (int planeIndex = 0; planeIndex < stripsPerPixel; planeIndex++)
+                // Make sure we ignore any strips that are not needed for the image (if too many are present).
+                long top = (long)rowsPerStrip * i;
+                if (top >= frame.Height)
                 {
-                    decompressor.Decompress(
-                        this.inputStream,
-                        stripOffsets[stripIndex],
-                        stripByteCounts[stripIndex],
-                        stripHeight,
-                        stripBuffers[planeIndex].GetSpan());
-
-                    stripIndex += stripsPerPlane;
+                    break;
                 }
 
-                colorDecoder.Decode(stripBuffers, pixels, 0, rowsPerStrip * i, frame.Width, stripHeight);
+                int stripTop = (int)top;
+                int stripHeight = Math.Min(rowsPerStrip, frame.Height - stripTop);
+                for (int bandTop = 0; bandTop < stripHeight; bandTop += rowsPerBand)
+                {
+                    int bandHeight = Math.Min(rowsPerBand, stripHeight - bandTop);
+                    int stripIndex = i;
+                    for (int planeIndex = 0; planeIndex < stripsPerPixel; planeIndex++)
+                    {
+                        this.DecompressBand(
+                            decompressor,
+                            stripOffsets[stripIndex],
+                            stripByteCounts[stripIndex],
+                            bandTop,
+                            bandHeight,
+                            bytesPerRow[planeIndex],
+                            stripBuffers[planeIndex].GetSpan());
+
+                        stripIndex += stripsPerPlane;
+                    }
+
+                    colorDecoder.Decode(stripBuffers, pixels, 0, stripTop + bandTop, frame.Width, bandHeight);
+                }
             }
         }
         finally
@@ -435,16 +543,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
     private void DecodeStripsChunky<TPixel>(ImageFrame<TPixel> frame, int rowsPerStrip, Span<ulong> stripOffsets, Span<ulong> stripByteCounts, CancellationToken cancellationToken)
        where TPixel : unmanaged, IPixel<TPixel>
     {
-        // If the rowsPerStrip has the default value, which is effectively infinity. That is, the entire image is one strip.
-        if (rowsPerStrip == TiffConstants.RowsPerStripInfinity)
-        {
-            rowsPerStrip = frame.Height;
-        }
-
-        int uncompressedStripSize = this.CalculateStripBufferSize(frame.Width, rowsPerStrip);
+        long bytesPerRow = this.CalculateBytesPerRow(frame.Width);
+        int rowsPerBand = this.CalculateRowsPerBand(frame.Width, rowsPerStrip, bytesPerRow);
         int bitsPerPixel = this.BitsPerPixel;
 
-        using IMemoryOwner<byte> stripBuffer = this.memoryAllocator.Allocate<byte>(uncompressedStripSize, AllocationOptions.Clean);
+        using IMemoryOwner<byte> stripBuffer = this.memoryAllocator.Allocate<byte>((int)(bytesPerRow * rowsPerBand), AllocationOptions.Clean);
         Span<byte> stripBufferSpan = stripBuffer.GetSpan();
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
 
@@ -478,26 +581,54 @@ internal class TiffDecoderCore : IImageDecoderInternals
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            int stripHeight = stripIndex < stripOffsets.Length - 1 || frame.Height % rowsPerStrip == 0
-                ? rowsPerStrip
-                : frame.Height % rowsPerStrip;
-
-            int top = rowsPerStrip * stripIndex;
-            if (top + stripHeight > frame.Height)
+            // Make sure we ignore any strips that are not needed for the image (if too many are present).
+            long top = (long)rowsPerStrip * stripIndex;
+            if (top >= frame.Height)
             {
-                // Make sure we ignore any strips that are not needed for the image (if too many are present).
                 break;
             }
 
-            decompressor.Decompress(
-                this.inputStream,
-                stripOffsets[stripIndex],
-                stripByteCounts[stripIndex],
-                stripHeight,
-                stripBufferSpan);
+            int stripTop = (int)top;
+            int stripHeight = Math.Min(rowsPerStrip, frame.Height - stripTop);
+            for (int bandTop = 0; bandTop < stripHeight; bandTop += rowsPerBand)
+            {
+                int bandHeight = Math.Min(rowsPerBand, stripHeight - bandTop);
+                this.DecompressBand(
+                    decompressor,
+                    stripOffsets[stripIndex],
+                    stripByteCounts[stripIndex],
+                    bandTop,
+                    bandHeight,
+                    bytesPerRow,
+                    stripBufferSpan);
 
-            colorDecoder.Decode(stripBufferSpan, pixels, 0, top, frame.Width, stripHeight);
+                colorDecoder.Decode(stripBufferSpan, pixels, 0, stripTop + bandTop, frame.Width, bandHeight);
+            }
         }
+    }
+
+    /// <summary>
+    /// Gets the number of rows per strip, limited to the image height.
+    /// </summary>
+    /// <param name="exifProfile">The image frame exif profile.</param>
+    /// <param name="height">The image height.</param>
+    /// <returns>The number of rows per strip.</returns>
+    private static int GetRowsPerStrip(ExifProfile exifProfile, int height)
+    {
+        // A missing RowsPerStrip, or one larger than the height, means that the entire image is one strip.
+        IExifValue<Number> rowsPerStrip = exifProfile.GetValue(ExifTag.RowsPerStrip);
+        if (rowsPerStrip == null)
+        {
+            return height;
+        }
+
+        int rows = (int)rowsPerStrip.Value;
+        if (rows <= 0)
+        {
+            TiffThrowHelper.ThrowImageFormatException("The TIFF RowsPerStrip value must be greater than zero.");
+        }
+
+        return Math.Min(rows, height);
     }
 
     /// <summary>

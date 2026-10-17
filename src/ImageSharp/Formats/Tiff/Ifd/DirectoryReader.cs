@@ -77,8 +77,10 @@ internal class DirectoryReader
     private IEnumerable<ExifProfile> ReadIfds(bool isBigTiff)
     {
         var readers = new List<EntryReader>();
+        var visitedOffsets = new HashSet<ulong>();
         while (this.nextIfdOffset != 0 && this.nextIfdOffset < (ulong)this.stream.Length)
         {
+            visitedOffsets.Add(this.nextIfdOffset);
             EntryReader reader = new(this.stream, this.ByteOrder, this.allocator);
             reader.ReadTags(isBigTiff, this.nextIfdOffset);
 
@@ -93,7 +95,8 @@ internal class DirectoryReader
                 }
             }
 
-            if (this.nextIfdOffset >= reader.NextIfdOffset && reader.NextIfdOffset != 0)
+            // IFDs may be stored in any order, so only an offset that has already been read is a loop.
+            if (visitedOffsets.Contains(reader.NextIfdOffset))
             {
                 TiffThrowHelper.ThrowImageFormatException("TIFF image contains circular directory offsets");
             }
