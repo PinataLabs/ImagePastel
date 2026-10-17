@@ -6,26 +6,25 @@ using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Formats.Gif
+namespace SixLabors.ImageSharp.Formats.Gif;
+
+/// <summary>
+/// The configuration options used for encoding gifs.
+/// </summary>
+internal interface IGifEncoderOptions
 {
     /// <summary>
-    /// The configuration options used for encoding gifs.
+    /// Gets the quantizer used to generate the color palette.
     /// </summary>
-    internal interface IGifEncoderOptions
-    {
-        /// <summary>
-        /// Gets the quantizer used to generate the color palette.
-        /// </summary>
-        IQuantizer Quantizer { get; }
+    IQuantizer Quantizer { get; }
 
-        /// <summary>
-        /// Gets the color table mode: Global or local.
-        /// </summary>
-        GifColorTableMode? ColorTableMode { get; }
+    /// <summary>
+    /// Gets the color table mode: Global or local.
+    /// </summary>
+    GifColorTableMode? ColorTableMode { get; }
 
-        /// <summary>
-        /// Gets the <see cref="IPixelSamplingStrategy"/> used for quantization when building a global color table.
-        /// </summary>
-        IPixelSamplingStrategy GlobalPixelSamplingStrategy { get; }
-    }
+    /// <summary>
+    /// Gets the <see cref="IPixelSamplingStrategy"/> used for quantization when building a global color table.
+    /// </summary>
+    IPixelSamplingStrategy GlobalPixelSamplingStrategy { get; }
 }

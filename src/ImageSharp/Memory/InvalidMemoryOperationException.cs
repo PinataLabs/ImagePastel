@@ -4,28 +4,27 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 
-namespace SixLabors.ImageSharp.Memory
+namespace SixLabors.ImageSharp.Memory;
+
+/// <summary>
+/// Exception thrown when the library detects an invalid memory allocation request,
+/// or an attempt has been made to use an invalidated <see cref="IMemoryGroup{T}"/>.
+/// </summary>
+public class InvalidMemoryOperationException : InvalidOperationException
 {
     /// <summary>
-    /// Exception thrown when the library detects an invalid memory allocation request,
-    /// or an attempt has been made to use an invalidated <see cref="IMemoryGroup{T}"/>.
+    /// Initializes a new instance of the <see cref="InvalidMemoryOperationException"/> class.
     /// </summary>
-    public class InvalidMemoryOperationException : InvalidOperationException
+    /// <param name="message">The exception message text.</param>
+    public InvalidMemoryOperationException(string message)
+        : base(message)
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="InvalidMemoryOperationException"/> class.
-        /// </summary>
-        /// <param name="message">The exception message text.</param>
-        public InvalidMemoryOperationException(string message)
-            : base(message)
-        {
-        }
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="InvalidMemoryOperationException"/> class.
-        /// </summary>
-        public InvalidMemoryOperationException()
-        {
-        }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InvalidMemoryOperationException"/> class.
+    /// </summary>
+    public InvalidMemoryOperationException()
+    {
     }
 }

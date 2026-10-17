@@ -3,21 +3,20 @@
 
 using SixLabors.ImageSharp.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Tiff
+namespace SixLabors.ImageSharp.Formats.Tiff;
+
+/// <summary>
+/// Encapsulates the options for the <see cref="TiffDecoder"/>.
+/// </summary>
+internal interface ITiffDecoderOptions
 {
     /// <summary>
-    /// Encapsulates the options for the <see cref="TiffDecoder"/>.
+    /// Gets a value indicating whether the metadata should be ignored when the image is being decoded.
     /// </summary>
-    internal interface ITiffDecoderOptions
-    {
-        /// <summary>
-        /// Gets a value indicating whether the metadata should be ignored when the image is being decoded.
-        /// </summary>
-        bool IgnoreMetadata { get; }
+    bool IgnoreMetadata { get; }
 
-        /// <summary>
-        /// Gets the decoding mode for multi-frame images.
-        /// </summary>
-        FrameDecodingMode DecodingMode { get; }
-    }
+    /// <summary>
+    /// Gets the decoding mode for multi-frame images.
+    /// </summary>
+    FrameDecodingMode DecodingMode { get; }
 }

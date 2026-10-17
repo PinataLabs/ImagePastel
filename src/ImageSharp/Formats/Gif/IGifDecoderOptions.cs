@@ -3,26 +3,25 @@
 
 using SixLabors.ImageSharp.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Gif
+namespace SixLabors.ImageSharp.Formats.Gif;
+
+/// <summary>
+/// Decoder for generating an image out of a gif encoded stream.
+/// </summary>
+internal interface IGifDecoderOptions
 {
     /// <summary>
-    /// Decoder for generating an image out of a gif encoded stream.
+    /// Gets a value indicating whether the metadata should be ignored when the image is being decoded.
     /// </summary>
-    internal interface IGifDecoderOptions
-    {
-        /// <summary>
-        /// Gets a value indicating whether the metadata should be ignored when the image is being decoded.
-        /// </summary>
-        bool IgnoreMetadata { get; }
+    bool IgnoreMetadata { get; }
 
-        /// <summary>
-        /// Gets the decoding mode for multi-frame images.
-        /// </summary>
-        FrameDecodingMode DecodingMode { get; }
+    /// <summary>
+    /// Gets the decoding mode for multi-frame images.
+    /// </summary>
+    FrameDecodingMode DecodingMode { get; }
 
-        /// <summary>
-        /// Gets or sets the maximum number of gif frames.
-        /// </summary>
-        uint MaxFrames { get; set; }
-    }
+    /// <summary>
+    /// Gets or sets the maximum number of gif frames.
+    /// </summary>
+    uint MaxFrames { get; set; }
 }

@@ -3,17 +3,16 @@
 
 using System.IO;
 
-namespace SixLabors.ImageSharp.IO
-{
-    /// <summary>
-    /// A wrapper around the local File apis.
-    /// </summary>
-    internal sealed class LocalFileSystem : IFileSystem
-    {
-        /// <inheritdoc/>
-        public Stream OpenRead(string path) => File.OpenRead(path);
+namespace SixLabors.ImageSharp.IO;
 
-        /// <inheritdoc/>
-        public Stream Create(string path) => File.Create(path);
-    }
+/// <summary>
+/// A wrapper around the local File apis.
+/// </summary>
+internal sealed class LocalFileSystem : IFileSystem
+{
+    /// <inheritdoc/>
+    public Stream OpenRead(string path) => File.OpenRead(path);
+
+    /// <inheritdoc/>
+    public Stream Create(string path) => File.Create(path);
 }

@@ -4,38 +4,37 @@
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc
+namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+
+[Trait("Profile", "Icc")]
+public class IccWriterTests
 {
-    [Trait("Profile", "Icc")]
-    public class IccWriterTests
+    [Fact]
+    public void WriteProfile_NoEntries()
     {
-        [Fact]
-        public void WriteProfile_NoEntries()
+        IccWriter writer = this.CreateWriter();
+
+        var profile = new IccProfile
         {
-            IccWriter writer = this.CreateWriter();
+            Header = IccTestDataProfiles.Header_Random_Write
+        };
+        byte[] output = writer.Write(profile);
 
-            var profile = new IccProfile
-            {
-                Header = IccTestDataProfiles.Header_Random_Write
-            };
-            byte[] output = writer.Write(profile);
+        Assert.Equal(IccTestDataProfiles.Header_Random_Array, output);
+    }
 
-            Assert.Equal(IccTestDataProfiles.Header_Random_Array, output);
-        }
+    [Fact]
+    public void WriteProfile_DuplicateEntry()
+    {
+        IccWriter writer = this.CreateWriter();
 
-        [Fact]
-        public void WriteProfile_DuplicateEntry()
-        {
-            IccWriter writer = this.CreateWriter();
+        byte[] output = writer.Write(IccTestDataProfiles.Profile_Random_Val);
 
-            byte[] output = writer.Write(IccTestDataProfiles.Profile_Random_Val);
+        Assert.Equal(IccTestDataProfiles.Profile_Random_Array, output);
+    }
 
-            Assert.Equal(IccTestDataProfiles.Profile_Random_Array, output);
-        }
-
-        private IccWriter CreateWriter()
-        {
-            return new IccWriter();
-        }
+    private IccWriter CreateWriter()
+    {
+        return new IccWriter();
     }
 }
