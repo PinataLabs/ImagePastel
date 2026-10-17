@@ -7,10 +7,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Memory.Internals;
 using SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -149,7 +149,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void MemoryAllocator_Create_WithoutSettings_AllocatesDiscontiguousMemory()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -165,7 +165,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void MemoryAllocator_Create_LimitPoolSize()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -205,7 +205,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(false)]
         public void BufferDisposal_ReturnsToPool(bool shared)
         {
-            RemoteExecutor.Invoke(RunTest, shared.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, shared.ToString()).Dispose();
 
             static void RunTest(string sharedStr)
             {
@@ -223,7 +223,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(false)]
         public void MemoryGroupDisposal_ReturnsToPool(bool shared)
         {
-            RemoteExecutor.Invoke(RunTest, shared.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, shared.ToString()).Dispose();
 
             static void RunTest(string sharedStr)
             {
@@ -239,7 +239,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void ReleaseRetainedResources_ShouldFreePooledMemory()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
             static void RunTest()
             {
                 var allocator = new UniformUnmanagedMemoryPoolMemoryAllocator(128, 512, 16 * 512, 1024);
@@ -254,7 +254,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void ReleaseRetainedResources_DoesNotFreeOutstandingBuffers()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
             static void RunTest()
             {
                 var allocator = new UniformUnmanagedMemoryPoolMemoryAllocator(128, 512, 16 * 512, 1024);
@@ -291,7 +291,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             }
 
             // RunTest(length.ToString());
-            RemoteExecutor.Invoke(RunTest, length.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, length.ToString()).Dispose();
 
             static void RunTest(string lengthStr)
             {
@@ -353,7 +353,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             }
 
             // RunTest(length.ToString());
-            RemoteExecutor.Invoke(RunTest, length.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, length.ToString()).Dispose();
 
             static void RunTest(string lengthStr)
             {
@@ -425,7 +425,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void Issue2001_NegativeMemoryReportedByGc()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -438,7 +438,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact(Skip = "Requires a 64-bit process.", SkipType = typeof(Environment), SkipUnless = nameof(Environment.Is64BitProcess))]
         public void MemoryAllocator_Create_SetHighLimit()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
             static void RunTest()
             {
                 const long threeGB = 3L * (1 << 30);

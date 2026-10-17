@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
@@ -67,28 +68,28 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
             }
 
             string args = $@"""{sourceFile}"" ""{destFile}""";
-            using var process = new Process
+            var startInfo = new ProcessStartInfo(DumpToolFullPath, args)
             {
-                StartInfo =
-                                      {
-                                          FileName = DumpToolFullPath,
-                                          Arguments = args,
-                                          WindowStyle = ProcessWindowStyle.Hidden,
-
-                                          // The tool prints progress to stdout. An xUnit v3 test process reports
-                                          // results to the runner over stdout, so inherited output corrupts
-                                          // those messages and test results get lost. Capture and discard it.
-                                          UseShellExecute = false,
-                                          RedirectStandardOutput = true,
-                                          RedirectStandardError = true
-                                      }
+                // The tool prints progress to stdout. An xUnit v3 test process reports results to the
+                // runner over stdout, so inherited output would corrupt those messages. Capture it.
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
-            process.OutputDataReceived += static (_, _) => { };
-            process.ErrorDataReceived += static (_, _) => { };
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+
+            using Process process = Process.Start(startInfo);
+            Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+            Task<string> standardError = process.StandardError.ReadToEndAsync();
             process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"{DumpToolFullPath} {args} exited with code {process.ExitCode}.{Environment.NewLine}"
+                    + $"STDOUT: {standardOutput.GetAwaiter().GetResult()}{Environment.NewLine}"
+                    + $"STDERR: {standardError.GetAwaiter().GetResult()}");
+            }
         }
 
         /// <summary>

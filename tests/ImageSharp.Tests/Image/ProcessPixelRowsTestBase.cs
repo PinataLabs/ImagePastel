@@ -4,10 +4,10 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Memory.Internals;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests
@@ -176,7 +176,7 @@ namespace SixLabors.ImageSharp.Tests
         [InlineData(true)]
         public void RetainsUnmangedBuffers1(bool throwException)
         {
-            RemoteExecutor.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
 
             static void RunTest(string testTypeName, string throwExceptionStr)
             {
@@ -213,7 +213,7 @@ namespace SixLabors.ImageSharp.Tests
         [InlineData(true)]
         public void RetainsUnmangedBuffers2(bool throwException)
         {
-            RemoteExecutor.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
 
             static void RunTest(string testTypeName, string throwExceptionStr)
             {
@@ -253,7 +253,7 @@ namespace SixLabors.ImageSharp.Tests
         [InlineData(true)]
         public void RetainsUnmangedBuffers3(bool throwException)
         {
-            RemoteExecutor.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, this.GetType().FullName, throwException.ToString()).Dispose();
 
             static void RunTest(string testTypeName, string throwExceptionStr)
             {

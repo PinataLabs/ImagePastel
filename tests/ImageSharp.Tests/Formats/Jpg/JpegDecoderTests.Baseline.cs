@@ -42,7 +42,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             string providerDump = BasicSerializer.Serialize(provider);
             RunTest(providerDump, enforceDiscontiguousBuffers ? "Disco" : string.Empty);
 
-            // RemoteExecutor.Invoke(
+            // RemoteExecutorRunner.Invoke(
             //         RunTest,
             //         providerDump,
             //         enforceDiscontiguousBuffers ? "Disco" : string.Empty)

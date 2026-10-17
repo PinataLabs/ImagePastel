@@ -55,7 +55,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             // internal scan decoder which we substitute to assert spectral correctness
             var debugConverter = new DebugSpectralConverter<TPixel>();
-            var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: default);
+            var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: TestContext.Current.CancellationToken);
 
             // This would parse entire image
             decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: TestContext.Current.CancellationToken);
@@ -84,7 +84,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             // internal scan decoder which we substitute to assert spectral correctness
             var debugConverter = new DebugSpectralConverter<TPixel>();
-            var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: default);
+            var scanDecoder = new HuffmanScanDecoder(bufferedStream, debugConverter, cancellationToken: TestContext.Current.CancellationToken);
 
             // This would parse entire image
             decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: TestContext.Current.CancellationToken);

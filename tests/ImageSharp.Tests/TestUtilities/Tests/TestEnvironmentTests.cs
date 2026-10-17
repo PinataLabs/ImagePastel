@@ -10,6 +10,7 @@ using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
@@ -119,11 +120,7 @@ namespace SixLabors.ImageSharp.Tests
             Assert.IsType(expectedDecoderType, decoder);
         }
 
-        // RemoteExecutor does not work with "dotnet xunit" used to run tests on 32 bit .NET Framework:
-        // https://github.com/SixLabors/ImageSharp/blob/381dff8640b721a34b1227c970fcf6ad6c5e3e72/ci-test.ps1#L30
-        public static bool IsNot32BitNetFramework => !TestEnvironment.IsFramework || TestEnvironment.Is64BitProcess;
-
-        [Fact(Skip = "Not supported on 32-bit .NET Framework.", SkipUnless = nameof(IsNot32BitNetFramework))]
+        [Fact]
         public void RemoteExecutor_FailingRemoteTestShouldFailLocalTest()
         {
             static void FailingCode()
@@ -131,7 +128,10 @@ namespace SixLabors.ImageSharp.Tests
                 Assert.False(true);
             }
 
-            Assert.ThrowsAny<RemoteExecutionException>(() => RemoteExecutor.Invoke(FailingCode).Dispose());
+            RemoteExecutionException ex = Assert.ThrowsAny<RemoteExecutionException>(() => RemoteExecutorRunner.Invoke(FailingCode).Dispose());
+
+            // The child's captured stderr carries the remote failure.
+            Assert.Contains("Assert.False() Failure", ex.Message);
         }
     }
 }

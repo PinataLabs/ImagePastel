@@ -85,10 +85,10 @@ namespace SixLabors.ImageSharp.Tests
                     if (obj is IEnumerable<object> memberItems)
                     {
                         // TheoryData yields ITheoryDataRow instances rather than object arrays.
-                        addedRows = memberItems.Select(x => x is ITheoryDataRow row ? row.GetData() : x as object[]);
+                        addedRows = memberItems.Select(x => x is ITheoryDataRow row ? row.GetData() : x as object[]).ToArray();
                         if (addedRows.Any(x => x == null))
                         {
-                            addedRows = memberItems.Select(x => new[] { x });
+                            addedRows = memberItems.Select(x => new[] { x }).ToArray();
                         }
                     }
                 }

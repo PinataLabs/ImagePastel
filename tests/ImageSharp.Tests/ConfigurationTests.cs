@@ -3,12 +3,12 @@
 
 using System;
 using System.Linq;
-using Microsoft.DotNet.RemoteExecutor;
 using Moq;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Tests.Memory;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -167,7 +167,7 @@ namespace SixLabors.ImageSharp.Tests
         [Fact]
         public void InheritsDefaultMemoryAllocatorInstance()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {

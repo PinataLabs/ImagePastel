@@ -4,9 +4,9 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Memory.Internals;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -34,7 +34,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public unsafe void Dispose_DoesNotReleaseOutstandingReferences()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -61,7 +61,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(12)]
         public void BufferFinalization_TracksAllocations(int count)
         {
-            RemoteExecutor.Invoke(RunTest, count.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, count.ToString()).Dispose();
 
             static void RunTest(string countStr)
             {

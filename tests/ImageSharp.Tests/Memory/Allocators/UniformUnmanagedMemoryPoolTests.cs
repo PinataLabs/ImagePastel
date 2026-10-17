@@ -8,9 +8,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Memory.Internals;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -85,7 +85,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void Return_DoesNotDeallocateMemory()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -252,7 +252,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(true)]
         public void RentReturnRelease_SubsequentRentReturnsDifferentHandles(bool multiple)
         {
-            RemoteExecutor.Invoke(RunTest, multiple.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, multiple.ToString()).Dispose();
 
             static void RunTest(string multipleInner)
             {
@@ -292,7 +292,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void Release_ShouldFreeRetainedMemory()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -351,7 +351,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(true)]
         public void LeakPool_FinalizerShouldFreeRetainedHandles(bool withGuardedBuffers)
         {
-            RemoteExecutor.Invoke(RunTest, withGuardedBuffers.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, withGuardedBuffers.ToString()).Dispose();
 
             static void RunTest(string withGuardedBuffersInner)
             {

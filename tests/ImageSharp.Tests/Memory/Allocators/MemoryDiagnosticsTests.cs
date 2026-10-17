@@ -5,9 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Diagnostics;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -23,7 +23,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(true)]
         public void PerfectCleanup_NoLeaksReported(bool isGroupOuter)
         {
-            RemoteExecutor.Invoke(RunTest, isGroupOuter.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, isGroupOuter.ToString()).Dispose();
 
             static void RunTest(string isGroupInner)
             {
@@ -65,7 +65,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(true, true)]
         public void MissingCleanup_LeaksAreReported(bool isGroupOuter, bool subscribeLeakHandleOuter)
         {
-            RemoteExecutor.Invoke(RunTest, isGroupOuter.ToString(), subscribeLeakHandleOuter.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, isGroupOuter.ToString(), subscribeLeakHandleOuter.ToString()).Dispose();
 
             static void RunTest(string isGroupInner, string subscribeLeakHandleInner)
             {

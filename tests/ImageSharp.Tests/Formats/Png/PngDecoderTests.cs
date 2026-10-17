@@ -4,7 +4,6 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.DotNet.RemoteExecutor;
 
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Memory;
@@ -520,7 +519,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
             }
 
             string providerDump = BasicSerializer.Serialize(provider);
-            RemoteExecutor.Invoke(
+            RemoteExecutorRunner.Invoke(
                     RunTest,
                     providerDump,
                     "Disco")
