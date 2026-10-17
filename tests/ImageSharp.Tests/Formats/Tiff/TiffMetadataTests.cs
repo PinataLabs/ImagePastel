@@ -313,7 +313,9 @@ public class TiffMetadataTests
     {
         byte[] iccBytes = GetJpegIccProfileBytes();
 
-        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(CreateImageWithIccProfile(iccBytes)));
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
 
         Assert.Equal(iccBytes, image.Metadata.IccProfile?.ToByteArray());
         Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
@@ -323,7 +325,8 @@ public class TiffMetadataTests
     public void Encode_DecodedTiffWithIccProfile_KeepsProfile()
     {
         byte[] iccBytes = GetJpegIccProfileBytes();
-        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(CreateImageWithIccProfile(iccBytes)));
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(source));
 
         using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
 
@@ -335,7 +338,8 @@ public class TiffMetadataTests
     public void Encode_DecodedTiffWithIccProfileAsJpeg_KeepsProfile()
     {
         byte[] iccBytes = GetJpegIccProfileBytes();
-        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(CreateImageWithIccProfile(iccBytes)));
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(EncodeTiff(source));
 
         using var stream = new MemoryStream();
         decoded.SaveAsJpeg(stream);
