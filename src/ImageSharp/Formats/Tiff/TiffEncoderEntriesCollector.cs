@@ -6,6 +6,8 @@ using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 
 namespace SixLabors.ImageSharp.Formats.Tiff;
@@ -56,11 +58,16 @@ internal class TiffEncoderEntriesCollector
 
         public void Process(Image image)
         {
-            ImageFrame rootFrame = image.Frames.RootFrame;
-            ExifProfile rootFrameExifProfile = rootFrame.Metadata.ExifProfile ?? new ExifProfile();
-            XmpProfile rootFrameXmpProfile = rootFrame.Metadata.XmpProfile;
+            ImageFrameMetadata rootFrameMetadata = image.Frames.RootFrame.Metadata;
+            ExifProfile rootFrameExifProfile = rootFrameMetadata.ExifProfile ?? new ExifProfile();
+            XmpProfile rootFrameXmpProfile = rootFrameMetadata.XmpProfile;
 
-            this.ProcessProfiles(image.Metadata, rootFrameExifProfile, rootFrameXmpProfile);
+            // The root frame is written as the first IFD, so its own profiles take precedence over those of the image.
+            // This keeps edits to a decoded frame's profiles even after a clone, which copies the frame and image profiles separately.
+            IccProfile iccProfile = rootFrameMetadata.IccProfile ?? image.Metadata.IccProfile;
+            IptcProfile iptcProfile = rootFrameMetadata.IptcProfile ?? image.Metadata.IptcProfile;
+
+            this.ProcessProfiles(rootFrameExifProfile, rootFrameXmpProfile, iccProfile, iptcProfile);
             this.ProcessMetadata(rootFrameExifProfile);
 
             if (!this.Collector.Entries.Exists(t => t.Tag == ExifTag.Software))
@@ -150,7 +157,7 @@ internal class TiffEncoderEntriesCollector
             }
         }
 
-        private void ProcessProfiles(ImageMetadata imageMetadata, ExifProfile exifProfile, XmpProfile xmpProfile)
+        private void ProcessProfiles(ExifProfile exifProfile, XmpProfile xmpProfile, IccProfile iccProfile, IptcProfile iptcProfile)
         {
             if (exifProfile != null && exifProfile.Parts != ExifParts.None)
             {
@@ -171,12 +178,12 @@ internal class TiffEncoderEntriesCollector
                 exifProfile.RemoveValue(ExifTag.SubIFDOffset);
             }
 
-            if (imageMetadata.IptcProfile != null)
+            if (iptcProfile != null)
             {
-                imageMetadata.IptcProfile.UpdateData();
+                iptcProfile.UpdateData();
                 var iptc = new ExifByteArray(ExifTagValue.IPTC, ExifDataType.Byte)
                 {
-                    Value = imageMetadata.IptcProfile.Data
+                    Value = iptcProfile.Data
                 };
 
                 this.Collector.Add(iptc);
@@ -186,11 +193,11 @@ internal class TiffEncoderEntriesCollector
                 exifProfile.RemoveValue(ExifTag.IPTC);
             }
 
-            if (imageMetadata.IccProfile != null)
+            if (iccProfile != null)
             {
                 var icc = new ExifByteArray(ExifTagValue.IccProfile, ExifDataType.Undefined)
                 {
-                    Value = imageMetadata.IccProfile.ToByteArray()
+                    Value = iccProfile.ToByteArray()
                 };
 
                 this.Collector.Add(icc);

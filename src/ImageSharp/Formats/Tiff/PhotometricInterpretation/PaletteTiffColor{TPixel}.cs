@@ -54,14 +54,31 @@ internal class PaletteTiffColor<TPixel> : TiffBaseColorDecoder<TPixel>
         int gOffset = colorCount;
         int bOffset = colorCount * 2;
 
+        // ColorMap entries are 16-bit values, but many writers store 8-bit values instead.
+        // For compatibility, a colormap where every entry fits in 8 bits is scaled as 8-bit.
+        float maxValue = IsEightBitColorMap(colorMap) ? 255F : 65535F;
+
         for (int i = 0; i < palette.Length; i++)
         {
-            float r = colorMap[rOffset + i] / 65535F;
-            float g = colorMap[gOffset + i] / 65535F;
-            float b = colorMap[bOffset + i] / 65535F;
+            float r = colorMap[rOffset + i] / maxValue;
+            float g = colorMap[gOffset + i] / maxValue;
+            float b = colorMap[bOffset + i] / maxValue;
             palette[i].FromScaledVector4(new Vector4(r, g, b, 1.0f));
         }
 
         return palette;
+    }
+
+    private static bool IsEightBitColorMap(ReadOnlySpan<ushort> colorMap)
+    {
+        foreach (ushort entry in colorMap)
+        {
+            if (entry > byte.MaxValue)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

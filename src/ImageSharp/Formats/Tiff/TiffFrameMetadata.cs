@@ -77,9 +77,20 @@ public class TiffFrameMetadata : IDeepCloneable
     {
         if (profile != null)
         {
-            if (TiffBitsPerSample.TryParse(profile.GetValue(ExifTag.BitsPerSample)?.Value, out TiffBitsPerSample bitsPerSample))
+            IExifValue<ushort[]> bitsPerSampleValue = profile.GetValue(ExifTag.BitsPerSample);
+            if (TiffBitsPerSample.TryParse(bitsPerSampleValue?.Value, out TiffBitsPerSample bitsPerSample))
             {
                 meta.BitsPerSample = bitsPerSample;
+            }
+            else if (bitsPerSampleValue == null)
+            {
+                // TIFF 6.0 defines a default of 1 bit for each sample. Fax and scanner files often omit the entry.
+                ushort samplesPerPixel = profile.GetValue(ExifTag.SamplesPerPixel)?.Value ?? 1;
+                meta.BitsPerSample = new TiffBitsPerSample(
+                    1,
+                    (ushort)(samplesPerPixel > 1 ? 1 : 0),
+                    (ushort)(samplesPerPixel > 2 ? 1 : 0),
+                    (ushort)(samplesPerPixel > 3 ? 1 : 0));
             }
 
             meta.BitsPerPixel = meta.BitsPerSample?.BitsPerPixel();
