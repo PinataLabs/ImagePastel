@@ -107,6 +107,28 @@ public class TiffDecoderMalformedInputTests
     }
 
     [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    [InlineData(0, 0)]
+    public void Decode_ZeroWidthOrHeight_ThrowsImageFormatException(int width, int height)
+    {
+        TiffPage page = TiffPage.Create(width, height, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[4] });
+
+        Assert.ThrowsAny<ImageFormatException>(() => Decode<L8>(BuildTiff(page)).Dispose());
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    public void Identify_ZeroWidthOrHeight_ThrowsImageFormatException(int width, int height)
+    {
+        TiffPage page = TiffPage.Create(width, height, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[4] });
+        using MemoryStream stream = new(BuildTiff(page), false);
+
+        Assert.ThrowsAny<ImageFormatException>(() => Image.Identify(stream));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void Decode_FewerStripByteCountsThanStripOffsets_ThrowsImageFormatException(bool planar)

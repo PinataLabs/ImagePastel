@@ -650,6 +650,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
 
         DebugGuard.MustBeLessThanOrEqualTo((ulong)width.Value, (ulong)int.MaxValue, nameof(ExifTag.ImageWidth));
 
+        if ((int)width.Value <= 0)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException("The TIFF ImageWidth must be greater than zero.");
+        }
+
         return (int)width.Value;
     }
 
@@ -664,6 +669,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
         if (height == null)
         {
             TiffThrowHelper.ThrowImageFormatException("The TIFF image frame is missing the ImageLength");
+        }
+
+        if ((int)height.Value <= 0)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException("The TIFF ImageLength must be greater than zero.");
         }
 
         return (int)height.Value;
