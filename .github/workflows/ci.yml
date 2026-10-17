@@ -78,7 +78,7 @@ jobs:
 
       # Builds net10.0 and netstandard2.1 for the library; tests run on net10.0.
       - name: Build
-        run: dotnet build ImageSharp.sln -c Release -p:codecov=${{ matrix.coverage == true }}
+        run: dotnet build ImageSharp.slnx -c Release -p:codecov=${{ matrix.coverage == true }}
 
       - name: Test
         if: ${{ !matrix.coverage }}

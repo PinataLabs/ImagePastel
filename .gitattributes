@@ -67,6 +67,7 @@
 #   use a union merge when resoling conflicts
 ###############################################################################
 *.csproj            text        eol=lf          merge=union
+*.slnx              text        eol=lf          merge=union
 *.dbproj            text        eol=lf          merge=union
 *.fsproj            text        eol=lf          merge=union
 *.ncrunchproject    text        eol=lf          merge=union
