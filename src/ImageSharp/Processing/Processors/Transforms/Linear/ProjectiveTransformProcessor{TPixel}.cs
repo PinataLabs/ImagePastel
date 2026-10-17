@@ -135,9 +135,10 @@ namespace SixLabors.ImageSharp.Processing.Processors.Transforms
 
                 for (int x = 0; x < destRow.Length; x++)
                 {
-                    Vector2 point = TransformUtils.ProjectiveTransform2D(x, y, this.matrix);
-                    int px = (int)MathF.Round(point.X);
-                    int py = (int)MathF.Round(point.Y);
+                    // Map the destination pixel center and pick the source pixel containing it.
+                    Vector2 point = TransformUtils.ProjectiveTransform2D(x + .5F, y + .5F, this.matrix);
+                    int px = (int)MathF.Floor(point.X);
+                    int py = (int)MathF.Floor(point.Y);
 
                     if (this.bounds.Contains(px, py))
                     {

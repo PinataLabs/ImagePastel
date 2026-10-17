@@ -153,7 +153,8 @@ namespace SixLabors.ImageSharp.Processing.Processors.Effects
                                 float sourceBlue = vector.Z;
                                 float sourceGreen = vector.Y;
 
-                                int currentIntensity = (int)MathF.Round((sourceBlue + sourceGreen + sourceRed) / 3F * (this.levels - 1));
+                                // Clamp the bin index, as pixel formats such as RgbaVector can hold values outside the [0, 1] range.
+                                int currentIntensity = Numerics.Clamp((int)MathF.Round((sourceBlue + sourceGreen + sourceRed) / 3F * (this.levels - 1)), 0, this.levels - 1);
 
                                 Unsafe.Add(ref intensityBinRef, currentIntensity)++;
                                 Unsafe.Add(ref redBinRef, currentIntensity) += sourceRed;

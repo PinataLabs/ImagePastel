@@ -265,6 +265,71 @@ namespace SixLabors.ImageSharp.Tests.Processing.Transforms
             image.CompareToReferenceOutput(ValidatorComparer, provider, testOutputDetails: radians);
         }
 
+        [Theory]
+        [InlineData(4, 4, 90)]
+        [InlineData(4, 4, 180)]
+        [InlineData(4, 4, 270)]
+        [InlineData(5, 5, 90)]
+        [InlineData(5, 5, 180)]
+        [InlineData(5, 5, 270)]
+        [InlineData(5, 3, 90)]
+        [InlineData(5, 3, 180)]
+        [InlineData(5, 3, 270)]
+        [InlineData(4, 2, 90)]
+        [InlineData(4, 2, 180)]
+        [InlineData(4, 2, 270)]
+        public void AppendRotationDegrees_RightAngle_NearestNeighbor_MatchesRotate(int width, int height, float degrees)
+        {
+            using Image<L8> source = CreateDistinctValueImage(width, height);
+            using Image<L8> expected = source.Clone(x => x.Rotate(degrees));
+
+            AffineTransformBuilder builder = new AffineTransformBuilder().AppendRotationDegrees(degrees);
+            using Image<L8> actual = source.Clone(x => x.Transform(builder, KnownResamplers.NearestNeighbor));
+
+            AssertPixelsEqual(expected, actual);
+        }
+
+        [Theory]
+        [InlineData(4, 4, 90)]
+        [InlineData(5, 3, 180)]
+        [InlineData(4, 2, 270)]
+        public void AppendRotationRadians_RightAngle_NearestNeighbor_MatchesRotate(int width, int height, float degrees)
+        {
+            using Image<L8> source = CreateDistinctValueImage(width, height);
+            using Image<L8> expected = source.Clone(x => x.Rotate(degrees));
+
+            AffineTransformBuilder builder = new AffineTransformBuilder().AppendRotationRadians(GeometryUtilities.DegreeToRadian(degrees));
+            using Image<L8> actual = source.Clone(x => x.Transform(builder, KnownResamplers.NearestNeighbor));
+
+            AssertPixelsEqual(expected, actual);
+        }
+
+        private static void AssertPixelsEqual(Image<L8> expected, Image<L8> actual)
+        {
+            Assert.Equal(expected.Size(), actual.Size());
+            for (int y = 0; y < expected.Height; y++)
+            {
+                for (int x = 0; x < expected.Width; x++)
+                {
+                    Assert.Equal(expected[x, y], actual[x, y]);
+                }
+            }
+        }
+
+        private static Image<L8> CreateDistinctValueImage(int width, int height)
+        {
+            var image = new Image<L8>(width, height);
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    image[x, y] = new L8((byte)(10 + (y * width) + x));
+                }
+            }
+
+            return image;
+        }
+
         private static IResampler GetResampler(string name)
         {
             PropertyInfo property = typeof(KnownResamplers).GetTypeInfo().GetProperty(name);

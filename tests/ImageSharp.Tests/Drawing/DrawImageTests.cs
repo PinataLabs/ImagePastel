@@ -182,19 +182,18 @@ namespace SixLabors.ImageSharp.Tests.Drawing
         [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, 130, -30)]
         [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, 130, 130)]
         [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, -30, 130)]
-        public void NonOverlappingImageThrows(TestImageProvider<Rgba32> provider, int x, int y)
+        [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, 100, 0)]
+        [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, 0, 100)]
+        [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, -10, 0)]
+        [WithSolidFilledImages(100, 100, 255, 255, 255, PixelTypes.Rgba32, 0, -10)]
+        public void NonOverlappingImage_LeavesBackgroundUnchanged(TestImageProvider<Rgba32> provider, int x, int y)
         {
             using (Image<Rgba32> background = provider.GetImage())
             using (var overlay = new Image<Rgba32>(Configuration.Default, 10, 10, Color.Black))
             {
-                ImageProcessingException ex = Assert.Throws<ImageProcessingException>(Test);
+                background.Mutate(context => context.DrawImage(overlay, new Point(x, y), new GraphicsOptions()));
 
-                Assert.Contains("does not overlap", ex.ToString());
-
-                void Test()
-                {
-                    background.Mutate(context => context.DrawImage(overlay, new Point(x, y), new GraphicsOptions()));
-                }
+                background.ComparePixelBufferTo(Color.White);
             }
         }
     }

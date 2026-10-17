@@ -92,11 +92,10 @@ namespace SixLabors.ImageSharp.Processing.Processors.Drawing
 
             var workingRect = Rectangle.FromLTRB(minX, minY, maxX, maxY);
 
-            // Not a valid operation because rectangle does not overlap with this image.
+            // Nothing to draw because the foreground does not overlap the background.
             if (workingRect.Width <= 0 || workingRect.Height <= 0)
             {
-                throw new ImageProcessingException(
-                    "Cannot draw image because the source image does not overlap the target image.");
+                return;
             }
 
             var operation = new RowOperation(source.PixelBuffer, targetImage.Frames.RootFrame.PixelBuffer, blender, configuration, minX, width, locationY, targetX, this.Opacity);
