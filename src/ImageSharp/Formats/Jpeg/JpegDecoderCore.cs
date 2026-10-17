@@ -530,21 +530,9 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
                 return JpegColorSpace.RGB;
             }
 
-            // If these values are 1-3 for a 3-channel image, then the image is assumed to be YCbCr.
-            if (this.Components[2].Id == 3 && this.Components[1].Id == 2 && this.Components[0].Id == 1)
-            {
-                return JpegColorSpace.YCbCr;
-            }
-
-            // 3-channel non-subsampled images are assumed to be RGB.
-            if (this.Components[2].VerticalSamplingFactor == 1 && this.Components[1].VerticalSamplingFactor == 1 && this.Components[0].VerticalSamplingFactor == 1 &&
-                this.Components[2].HorizontalSamplingFactor == 1 && this.Components[1].HorizontalSamplingFactor == 1 && this.Components[0].HorizontalSamplingFactor == 1)
-            {
-                return JpegColorSpace.RGB;
-            }
-
-            // Some images are poorly encoded and contain incorrect colorspace transform metadata.
-            // We ignore that and always fall back to the default colorspace.
+            // Without a JFIF or Adobe marker, any other component ids (including the common 1-3 and 0-2)
+            // are assumed to be YCbCr, matching libjpeg. Subsampling is not a reliable indicator of the colorspace,
+            // as non-subsampled YCbCr (4:4:4) images are common.
             return JpegColorSpace.YCbCr;
         }
 
