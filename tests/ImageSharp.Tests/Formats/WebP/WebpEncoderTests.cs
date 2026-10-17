@@ -303,10 +303,10 @@ public class WebpEncoderTests
         image.SaveAsWebp(memStream, encoder);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
-        // The encoder allocates scratch data for each macroblock, so allocations grow with the image size.
-        // A bit writer that copies its buffer each time the output grows by 1 KiB allocates over 200 MB here.
+        // A bit writer that copies its buffer each time the output grows by 1 KiB allocates over 200 MB here,
+        // and mode selection that creates scratch objects for each macroblock allocates about 14 times the pixel and output size.
         long pixelBytes = width * height * 3;
-        Assert.True(allocated < 32 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
+        Assert.True(allocated < 4 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
     }
 
     [Theory]

@@ -55,8 +55,9 @@ internal static unsafe class QuantEnc
         int tlambda = dqm.TLambda;
         Span<byte> src = it.YuvIn.AsSpan(Vp8EncIterator.YOffEnc);
         Span<int> scratch = it.Scratch3;
-        var rdTmp = new Vp8ModeScore();
-        var res = new Vp8Residual();
+        Vp8ModeScore rdTmp = it.ModeScoreScratch;
+        rdTmp.Clear();
+        Vp8Residual res = it.ResidualScratch;
         Vp8ModeScore rdCur = rdTmp;
         Vp8ModeScore rdBest = rd;
         int mode;
@@ -103,6 +104,8 @@ internal static unsafe class QuantEnc
 
         if (rdBest != rd)
         {
+            // The best score is in the scratch, so the old score becomes the scratch.
+            it.ModeScoreScratch = rd;
             rd = rdBest;
         }
 
@@ -128,21 +131,21 @@ internal static unsafe class QuantEnc
         Span<byte> bestBlocks = it.YuvOut2.AsSpan(Vp8EncIterator.YOffEnc);
         Span<int> scratch = it.Scratch3;
         int totalHeaderBits = 0;
-        var rdBest = new Vp8ModeScore();
 
         if (maxI4HeaderBits == 0)
         {
             return false;
         }
 
+        Vp8ModeScore rdBest = it.ModeScoreScratch;
         rdBest.InitScore();
         rdBest.H = 211;  // '211' is the value of VP8BitCost(0, 145)
         rdBest.SetRdScore(dqm.LambdaMode);
         it.StartI4();
-        var rdi4 = new Vp8ModeScore();
-        var rdTmp = new Vp8ModeScore();
-        var res = new Vp8Residual();
-        Span<short> tmpLevels = new short[16];
+        Vp8ModeScore rdi4 = it.ModeScoreScratch2;
+        Vp8ModeScore rdTmp = it.ModeScoreScratch3;
+        Vp8Residual res = it.ResidualScratch;
+        Span<short> tmpLevels = stackalloc short[16];
         do
         {
             int numBlocks = 1;
@@ -242,9 +245,9 @@ internal static unsafe class QuantEnc
         Span<byte> tmpDst = it.YuvOut2.AsSpan(Vp8EncIterator.UOffEnc);
         Span<byte> dst0 = it.YuvOut.AsSpan(Vp8EncIterator.UOffEnc);
         Span<byte> dst = dst0;
-        var rdBest = new Vp8ModeScore();
-        var rdUv = new Vp8ModeScore();
-        var res = new Vp8Residual();
+        Vp8ModeScore rdBest = it.ModeScoreScratch;
+        Vp8ModeScore rdUv = it.ModeScoreScratch2;
+        Vp8Residual res = it.ResidualScratch;
         int mode;
 
         rd.ModeUv = -1;

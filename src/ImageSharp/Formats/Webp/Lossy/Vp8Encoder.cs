@@ -505,6 +505,7 @@ internal class Vp8Encoder : IDisposable
         it.Init();
         this.SetLoopParams(stats.Q);
         var info = new Vp8ModeScore();
+        var residual = new Vp8Residual();
         do
         {
             info.Clear();
@@ -515,7 +516,7 @@ internal class Vp8Encoder : IDisposable
                 ++this.Proba.NbSkip;
             }
 
-            this.RecordResiduals(it, info);
+            this.RecordResiduals(it, info, residual);
             size += info.R + info.H;
             sizeP0 += info.H;
             distortion += info.D;
@@ -1049,10 +1050,9 @@ internal class Vp8Encoder : IDisposable
     /// Same as CodeResiduals, but doesn't actually write anything.
     /// Instead, it just records the event distribution.
     /// </summary>
-    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd)
+    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd, Vp8Residual residual)
     {
         int x, y, ch;
-        var residual = new Vp8Residual();
         bool i16 = it.CurrentMacroBlockInfo.MacroBlockType == Vp8MacroBlockType.I16X16;
 
         it.NzToBytes();
