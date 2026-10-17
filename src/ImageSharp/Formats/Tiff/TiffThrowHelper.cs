@@ -18,6 +18,13 @@ internal static class TiffThrowHelper
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static Exception ThrowImageFormatException(string errorMessage) => throw new ImageFormatException(errorMessage);
 
+    /// <summary>
+    /// Cold path optimization for throwing <see cref="InvalidImageContentException"/>-s
+    /// </summary>
+    /// <param name="errorMessage">The error message for the exception.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static Exception ThrowInvalidImageContentException(string errorMessage) => throw new InvalidImageContentException(errorMessage);
+
     [MethodImpl(InliningOptions.ColdPath)]
     public static Exception NotSupportedDecompressor(string compressionType) => throw new NotSupportedException($"Not supported decoder compression method: {compressionType}");
 

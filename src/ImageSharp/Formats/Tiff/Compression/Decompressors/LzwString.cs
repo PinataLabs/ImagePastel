@@ -59,36 +59,38 @@ public class LzwString
 
     /// <summary>
     /// Writes decoded pixel to buffer at a given position.
+    /// Only the part of the string that fits in the buffer is written; the rest is ignored.
     /// </summary>
     /// <param name="buffer">The buffer to write to.</param>
     /// <param name="offset">The position to write to.</param>
     /// <returns>The number of bytes written.</returns>
     public int WriteTo(Span<byte> buffer, int offset)
     {
-        if (this.Length == 0)
+        int count = Math.Min(this.Length, buffer.Length - offset);
+        if (count <= 0)
         {
             return 0;
         }
 
-        if (this.Length == 1)
+        if (count == 1 && this.Length == 1)
         {
             buffer[offset] = this.value;
             return 1;
         }
 
+        // The string is stored last character first, so skip the characters that do not fit.
         LzwString e = this;
-        int endIdx = this.Length - 1;
-        if (endIdx >= buffer.Length)
+        for (int i = this.Length; i > count; i--)
         {
-            TiffThrowHelper.ThrowImageFormatException("Error reading lzw compressed stream. Either pixel buffer to write to is to small or code length is invalid!");
+            e = e.previous;
         }
 
-        for (int i = endIdx; i >= 0; i--)
+        for (int i = count - 1; i >= 0; i--)
         {
             buffer[offset + i] = e.value;
             e = e.previous;
         }
 
-        return this.Length;
+        return count;
     }
 }
