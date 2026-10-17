@@ -6,8 +6,14 @@ Pinata Labs supports the latest 2.x release of PinataLabs.ImageSharp.
 
 ## Scope
 
-This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
-Pinata Labs does not port security fixes that Six Labors publishes after that date.
+This fork exists only to fix security issues in the ImageSharp v2 line.
+It starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
+
+Pinata Labs fixes security issues in this v2 line.
+If Six Labors publishes a security fix that applies to the v2 code, Pinata Labs ports the fix to this fork.
+
+Pinata Labs does not offer support for this package.
+For a supported version, use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package.
 
 ## Report a vulnerability
 
