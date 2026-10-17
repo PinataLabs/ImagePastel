@@ -13,6 +13,7 @@ To report a security problem, read [SECURITY.md](https://github.com/PinataLabs/I
 The public API must stay the same as in SixLabors.ImageSharp 2.1.13.
 The `apicompat` job in CI compares the API in strict mode, and it fails on each addition or removal.
 To propose a change to the public API, open an issue first.
+An agreed break is listed, with its reason, in `apicompat-suppressions.xml`.
 
 To send a fix:
 

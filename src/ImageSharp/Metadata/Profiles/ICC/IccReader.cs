@@ -137,8 +137,9 @@ internal sealed class IccReader
             uint tagOffset = reader.ReadUInt32();
             uint tagSize = reader.ReadUInt32();
 
-            // Exclude entries that have nonsense values and could cause exceptions further on
-            if (tagOffset < reader.DataLength && tagSize < reader.DataLength - 128)
+            // Exclude entries that have nonsense values and could cause exceptions further on.
+            // Every tag starts with an 8 byte type header; tag readers derive their data length from the size.
+            if (tagOffset < reader.DataLength && tagSize >= 8 && tagSize < reader.DataLength - 128)
             {
                 table.Add(new IccTagTableEntry((IccProfileTag)tagSignature, tagOffset, tagSize));
             }
