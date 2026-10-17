@@ -4,38 +4,37 @@
 using BenchmarkDotNet.Attributes;
 using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg
+namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg;
+
+[Config(typeof(Config.ShortMultiFramework))]
+public class RgbColorConversion : ColorConversionBenchmark
 {
-    [Config(typeof(Config.ShortMultiFramework))]
-    public class RgbColorConversion : ColorConversionBenchmark
+    public RgbColorConversion()
+        : base(3)
     {
-        public RgbColorConversion()
-            : base(3)
-        {
-        }
+    }
 
-        [Benchmark(Baseline = true)]
-        public void Scalar()
-        {
-            var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
+    [Benchmark(Baseline = true)]
+    public void Scalar()
+    {
+        var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
 
-            new JpegColorConverterBase.FromRgbScalar(8).ConvertToRgbInplace(values);
-        }
+        new JpegColorConverterBase.FromRgbScalar(8).ConvertToRgbInplace(values);
+    }
 
-        [Benchmark]
-        public void SimdVector8()
-        {
-            var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
+    [Benchmark]
+    public void SimdVector8()
+    {
+        var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
 
-            new JpegColorConverterBase.FromRgbVector(8).ConvertToRgbInplace(values);
-        }
+        new JpegColorConverterBase.FromRgbVector(8).ConvertToRgbInplace(values);
+    }
 
-        [Benchmark]
-        public void SimdVectorAvx()
-        {
-            var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
+    [Benchmark]
+    public void SimdVectorAvx()
+    {
+        var values = new JpegColorConverterBase.ComponentValues(this.Input, 0);
 
-            new JpegColorConverterBase.FromRgbAvx(8).ConvertToRgbInplace(values);
-        }
+        new JpegColorConverterBase.FromRgbAvx(8).ConvertToRgbInplace(values);
     }
 }

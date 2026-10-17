@@ -5,31 +5,30 @@ using System.Runtime.InteropServices;
 using Xunit;
 
 #pragma warning disable IDE0022 // Use expression body for methods
-namespace SixLabors.ImageSharp.Tests.Helpers
-{
-    public class RuntimeEnvironmentTests
-    {
-        [Fact]
-        public void CanDetectNetCore()
-        {
-            Assert.False(RuntimeEnvironment.IsNetCore);
-        }
+namespace SixLabors.ImageSharp.Tests.Helpers;
 
-        [Fact]
-        public void CanDetectOSPlatform()
+public class RuntimeEnvironmentTests
+{
+    [Fact]
+    public void CanDetectNetCore()
+    {
+        Assert.False(RuntimeEnvironment.IsNetCore);
+    }
+
+    [Fact]
+    public void CanDetectOSPlatform()
+    {
+        if (TestEnvironment.IsLinux)
         {
-            if (TestEnvironment.IsLinux)
-            {
-                Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.Linux));
-            }
-            else if (TestEnvironment.IsMacOS)
-            {
-                Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.OSX));
-            }
-            else if (TestEnvironment.IsWindows)
-            {
-                Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.Windows));
-            }
+            Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.Linux));
+        }
+        else if (TestEnvironment.IsMacOS)
+        {
+            Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.OSX));
+        }
+        else if (TestEnvironment.IsWindows)
+        {
+            Assert.True(RuntimeEnvironment.IsOSPlatform(OSPlatform.Windows));
         }
     }
 }

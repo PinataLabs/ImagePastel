@@ -6,47 +6,46 @@ using System.Threading;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Gif
+namespace SixLabors.ImageSharp.Formats.Gif;
+
+/// <summary>
+/// Decoder for generating an image out of a gif encoded stream.
+/// </summary>
+public sealed class GifDecoder : IImageDecoder, IGifDecoderOptions, IImageInfoDetector
 {
     /// <summary>
-    /// Decoder for generating an image out of a gif encoded stream.
+    /// Gets or sets a value indicating whether the metadata should be ignored when the image is being decoded.
     /// </summary>
-    public sealed class GifDecoder : IImageDecoder, IGifDecoderOptions, IImageInfoDetector
+    public bool IgnoreMetadata { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the decoding mode for multi-frame images
+    /// </summary>
+    public FrameDecodingMode DecodingMode { get; set; } = FrameDecodingMode.All;
+
+    /// <summary>
+    /// Gets or sets the maximum number of gif frames.
+    /// </summary>
+    public uint MaxFrames { get; set; } = uint.MaxValue;
+
+    /// <inheritdoc/>
+    public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
-        /// <summary>
-        /// Gets or sets a value indicating whether the metadata should be ignored when the image is being decoded.
-        /// </summary>
-        public bool IgnoreMetadata { get; set; } = false;
+        var decoder = new GifDecoderCore(configuration, this);
+        return decoder.Decode<TPixel>(configuration, stream, cancellationToken);
+    }
 
-        /// <summary>
-        /// Gets or sets the decoding mode for multi-frame images
-        /// </summary>
-        public FrameDecodingMode DecodingMode { get; set; } = FrameDecodingMode.All;
+    /// <inheritdoc />
+    public Image Decode(Configuration configuration, Stream stream, CancellationToken cancellationToken)
+        => this.Decode<Rgba32>(configuration, stream, cancellationToken);
 
-        /// <summary>
-        /// Gets or sets the maximum number of gif frames.
-        /// </summary>
-        public uint MaxFrames { get; set; } = uint.MaxValue;
+    /// <inheritdoc/>
+    public IImageInfo Identify(Configuration configuration, Stream stream, CancellationToken cancellationToken)
+    {
+        Guard.NotNull(stream, nameof(stream));
 
-        /// <inheritdoc/>
-        public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
-            where TPixel : unmanaged, IPixel<TPixel>
-        {
-            var decoder = new GifDecoderCore(configuration, this);
-            return decoder.Decode<TPixel>(configuration, stream, cancellationToken);
-        }
-
-        /// <inheritdoc />
-        public Image Decode(Configuration configuration, Stream stream, CancellationToken cancellationToken)
-            => this.Decode<Rgba32>(configuration, stream, cancellationToken);
-
-        /// <inheritdoc/>
-        public IImageInfo Identify(Configuration configuration, Stream stream, CancellationToken cancellationToken)
-        {
-            Guard.NotNull(stream, nameof(stream));
-
-            var decoder = new GifDecoderCore(configuration, this);
-            return decoder.Identify(configuration, stream, cancellationToken);
-        }
+        var decoder = new GifDecoderCore(configuration, this);
+        return decoder.Identify(configuration, stream, cancellationToken);
     }
 }

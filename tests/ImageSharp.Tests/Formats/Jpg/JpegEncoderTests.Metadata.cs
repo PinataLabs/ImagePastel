@@ -8,26 +8,25 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg
+namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+
+[Trait("Format", "Jpg")]
+public partial class JpegEncoderTests
 {
-    [Trait("Format", "Jpg")]
-    public partial class JpegEncoderTests
+    [Theory]
+    [WithFile(TestImages.Jpeg.Issues.ValidExifArgumentNullExceptionOnEncode, PixelTypes.Rgba32)]
+    public void Encode_WithValidExifProfile_DoesNotThrowException<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
-        [Theory]
-        [WithFile(TestImages.Jpeg.Issues.ValidExifArgumentNullExceptionOnEncode, PixelTypes.Rgba32)]
-        public void Encode_WithValidExifProfile_DoesNotThrowException<TPixel>(TestImageProvider<TPixel> provider)
-            where TPixel : unmanaged, IPixel<TPixel>
+        Exception ex = Record.Exception(() =>
         {
-            Exception ex = Record.Exception(() =>
-            {
-                var encoder = new JpegEncoder();
-                var stream = new MemoryStream();
+            var encoder = new JpegEncoder();
+            var stream = new MemoryStream();
 
-                using Image<TPixel> image = provider.GetImage(JpegDecoder);
-                image.Save(stream, encoder);
-            });
+            using Image<TPixel> image = provider.GetImage(JpegDecoder);
+            image.Save(stream, encoder);
+        });
 
-            Assert.Null(ex);
-        }
+        Assert.Null(ex);
     }
 }

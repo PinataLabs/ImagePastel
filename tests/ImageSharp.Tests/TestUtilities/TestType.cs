@@ -3,26 +3,25 @@
 
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities
+namespace SixLabors.ImageSharp.Tests.TestUtilities;
+
+public class TestType<T> : IXunitSerializable
 {
-    public class TestType<T> : IXunitSerializable
+    public TestType()
     {
-        public TestType()
-        {
-        }
+    }
 
-        public void Deserialize(IXunitSerializationInfo info)
-        {
-        }
+    public void Deserialize(IXunitSerializationInfo info)
+    {
+    }
 
-        // xUnit v3 cannot deserialize an object that wrote no values, and VSTest then drops the
-        // test case without reporting it. The type argument carries all the state, so write its name.
-        public void Serialize(IXunitSerializationInfo info)
-            => info.AddValue("Type", typeof(T).FullName);
+    // xUnit v3 cannot deserialize an object that wrote no values, and VSTest then drops the
+    // test case without reporting it. The type argument carries all the state, so write its name.
+    public void Serialize(IXunitSerializationInfo info)
+        => info.AddValue("Type", typeof(T).FullName);
 
-        public override string ToString()
-        {
-            return $"Type<{typeof(T).Name}>";
-        }
+    public override string ToString()
+    {
+        return $"Type<{typeof(T).Name}>";
     }
 }

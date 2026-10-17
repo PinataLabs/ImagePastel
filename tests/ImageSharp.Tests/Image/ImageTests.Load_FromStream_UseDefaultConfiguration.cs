@@ -10,155 +10,154 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests
+namespace SixLabors.ImageSharp.Tests;
+
+public partial class ImageTests
 {
-    public partial class ImageTests
+    public class Load_FromStream_UseDefaultConfiguration : IDisposable
     {
-        public class Load_FromStream_UseDefaultConfiguration : IDisposable
+        private static readonly byte[] Data = TestFile.Create(TestImages.Bmp.Bit8).Bytes;
+
+        private MemoryStream BaseStream { get; }
+
+        private AsyncStreamWrapper Stream { get; }
+
+        private bool AllowSynchronousIO { get; set; } = true;
+
+        public Load_FromStream_UseDefaultConfiguration()
         {
-            private static readonly byte[] Data = TestFile.Create(TestImages.Bmp.Bit8).Bytes;
+            this.BaseStream = new MemoryStream(Data);
+            this.Stream = new AsyncStreamWrapper(this.BaseStream, () => this.AllowSynchronousIO);
+        }
 
-            private MemoryStream BaseStream { get; }
+        private static void VerifyDecodedImage(Image img)
+        {
+            Assert.Equal(new Size(127, 64), img.Size());
+        }
 
-            private AsyncStreamWrapper Stream { get; }
-
-            private bool AllowSynchronousIO { get; set; } = true;
-
-            public Load_FromStream_UseDefaultConfiguration()
+        [Fact]
+        public void Stream_Specific()
+        {
+            using (var img = Image.Load<Rgba32>(this.Stream))
             {
-                this.BaseStream = new MemoryStream(Data);
-                this.Stream = new AsyncStreamWrapper(this.BaseStream, () => this.AllowSynchronousIO);
+                VerifyDecodedImage(img);
             }
+        }
 
-            private static void VerifyDecodedImage(Image img)
+        [Fact]
+        public void Stream_Agnostic()
+        {
+            using (var img = Image.Load(this.Stream))
             {
-                Assert.Equal(new Size(127, 64), img.Size());
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public void Stream_Specific()
+        [Fact]
+        public void Stream_OutFormat_Specific()
+        {
+            using (var img = Image.Load<Rgba32>(this.Stream, out IImageFormat format))
             {
-                using (var img = Image.Load<Rgba32>(this.Stream))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(img);
+                Assert.IsType<BmpFormat>(format);
             }
+        }
 
-            [Fact]
-            public void Stream_Agnostic()
+        [Fact]
+        public void Stream_Decoder_Specific()
+        {
+            using (var img = Image.Load<Rgba32>(this.Stream, new BmpDecoder()))
             {
-                using (var img = Image.Load(this.Stream))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public void Stream_OutFormat_Specific()
+        [Fact]
+        public void Stream_Decoder_Agnostic()
+        {
+            using (var img = Image.Load(this.Stream, new BmpDecoder()))
             {
-                using (var img = Image.Load<Rgba32>(this.Stream, out IImageFormat format))
-                {
-                    VerifyDecodedImage(img);
-                    Assert.IsType<BmpFormat>(format);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public void Stream_Decoder_Specific()
+        [Fact]
+        public void Stream_OutFormat_Agnostic()
+        {
+            using (var img = Image.Load(this.Stream, out IImageFormat format))
             {
-                using (var img = Image.Load<Rgba32>(this.Stream, new BmpDecoder()))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(img);
+                Assert.IsType<BmpFormat>(format);
             }
+        }
 
-            [Fact]
-            public void Stream_Decoder_Agnostic()
+        [Fact]
+        public async Task Async_Stream_OutFormat_Agnostic()
+        {
+            this.AllowSynchronousIO = false;
+            var formattedImage = await Image.LoadWithFormatAsync(this.Stream, TestContext.Current.CancellationToken);
+            using (formattedImage.Image)
             {
-                using (var img = Image.Load(this.Stream, new BmpDecoder()))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(formattedImage.Image);
+                Assert.IsType<BmpFormat>(formattedImage.Format);
             }
+        }
 
-            [Fact]
-            public void Stream_OutFormat_Agnostic()
+        [Fact]
+        public async Task Async_Stream_Specific()
+        {
+            this.AllowSynchronousIO = false;
+            using (var img = await Image.LoadAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken))
             {
-                using (var img = Image.Load(this.Stream, out IImageFormat format))
-                {
-                    VerifyDecodedImage(img);
-                    Assert.IsType<BmpFormat>(format);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public async Task Async_Stream_OutFormat_Agnostic()
+        [Fact]
+        public async Task Async_Stream_Agnostic()
+        {
+            this.AllowSynchronousIO = false;
+            using (var img = await Image.LoadAsync(this.Stream, TestContext.Current.CancellationToken))
             {
-                this.AllowSynchronousIO = false;
-                var formattedImage = await Image.LoadWithFormatAsync(this.Stream, TestContext.Current.CancellationToken);
-                using (formattedImage.Image)
-                {
-                    VerifyDecodedImage(formattedImage.Image);
-                    Assert.IsType<BmpFormat>(formattedImage.Format);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public async Task Async_Stream_Specific()
+        [Fact]
+        public async Task Async_Stream_OutFormat_Specific()
+        {
+            this.AllowSynchronousIO = false;
+            var formattedImage = await Image.LoadWithFormatAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken);
+            using (formattedImage.Image)
             {
-                this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(formattedImage.Image);
+                Assert.IsType<BmpFormat>(formattedImage.Format);
             }
+        }
 
-            [Fact]
-            public async Task Async_Stream_Agnostic()
+        [Fact]
+        public async Task Async_Stream_Decoder_Specific()
+        {
+            this.AllowSynchronousIO = false;
+            using (var img = await Image.LoadAsync<Rgba32>(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
             {
-                this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync(this.Stream, TestContext.Current.CancellationToken))
-                {
-                    VerifyDecodedImage(img);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public async Task Async_Stream_OutFormat_Specific()
+        [Fact]
+        public async Task Async_Stream_Decoder_Agnostic()
+        {
+            this.AllowSynchronousIO = false;
+            using (var img = await Image.LoadAsync(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
             {
-                this.AllowSynchronousIO = false;
-                var formattedImage = await Image.LoadWithFormatAsync<Rgba32>(this.Stream, TestContext.Current.CancellationToken);
-                using (formattedImage.Image)
-                {
-                    VerifyDecodedImage(formattedImage.Image);
-                    Assert.IsType<BmpFormat>(formattedImage.Format);
-                }
+                VerifyDecodedImage(img);
             }
+        }
 
-            [Fact]
-            public async Task Async_Stream_Decoder_Specific()
-            {
-                this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync<Rgba32>(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
-                {
-                    VerifyDecodedImage(img);
-                }
-            }
-
-            [Fact]
-            public async Task Async_Stream_Decoder_Agnostic()
-            {
-                this.AllowSynchronousIO = false;
-                using (var img = await Image.LoadAsync(this.Stream, new BmpDecoder(), TestContext.Current.CancellationToken))
-                {
-                    VerifyDecodedImage(img);
-                }
-            }
-
-            public void Dispose()
-            {
-                this.BaseStream?.Dispose();
-            }
+        public void Dispose()
+        {
+            this.BaseStream?.Dispose();
         }
     }
 }

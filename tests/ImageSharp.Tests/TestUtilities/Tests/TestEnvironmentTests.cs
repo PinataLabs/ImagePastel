@@ -15,123 +15,122 @@ using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests
+namespace SixLabors.ImageSharp.Tests;
+
+public class TestEnvironmentTests
 {
-    public class TestEnvironmentTests
+    public TestEnvironmentTests(ITestOutputHelper output)
+        => this.Output = output;
+
+    private ITestOutputHelper Output { get; }
+
+    private void CheckPath(string path)
     {
-        public TestEnvironmentTests(ITestOutputHelper output)
-            => this.Output = output;
+        this.Output.WriteLine(path);
+        Assert.True(Directory.Exists(path));
+    }
 
-        private ITestOutputHelper Output { get; }
+    [Fact]
+    public void SolutionDirectoryFullPath()
+        => this.CheckPath(TestEnvironment.SolutionDirectoryFullPath);
 
-        private void CheckPath(string path)
+    [Fact]
+    public void InputImagesDirectoryFullPath()
+        => this.CheckPath(TestEnvironment.InputImagesDirectoryFullPath);
+
+    [Fact]
+    public void ExpectedOutputDirectoryFullPath()
+        => this.CheckPath(TestEnvironment.ReferenceOutputDirectoryFullPath);
+
+    [Fact]
+    public void GetReferenceOutputFileName()
+    {
+        string actual = Path.Combine(TestEnvironment.ActualOutputDirectoryFullPath, @"foo\bar\lol.jpeg");
+        string expected = TestEnvironment.GetReferenceOutputFileName(actual);
+
+        this.Output.WriteLine(expected);
+        Assert.Contains(TestEnvironment.ReferenceOutputDirectoryFullPath, expected);
+    }
+
+    [Theory]
+    [InlineData("lol/foo.png", typeof(SystemDrawingReferenceEncoder))]
+    [InlineData("lol/Rofl.bmp", typeof(SystemDrawingReferenceEncoder))]
+    [InlineData("lol/Baz.JPG", typeof(JpegEncoder))]
+    [InlineData("lol/Baz.gif", typeof(GifEncoder))]
+    [InlineData("lol/foobar.webp", typeof(WebpEncoder))]
+    public void GetReferenceEncoder_ReturnsCorrectEncoders_Windows(string fileName, Type expectedEncoderType)
+    {
+        if (!TestEnvironment.IsWindows)
         {
-            this.Output.WriteLine(path);
-            Assert.True(Directory.Exists(path));
+            return;
         }
 
-        [Fact]
-        public void SolutionDirectoryFullPath()
-            => this.CheckPath(TestEnvironment.SolutionDirectoryFullPath);
+        IImageEncoder encoder = TestEnvironment.GetReferenceEncoder(fileName);
+        Assert.IsType(expectedEncoderType, encoder);
+    }
 
-        [Fact]
-        public void InputImagesDirectoryFullPath()
-            => this.CheckPath(TestEnvironment.InputImagesDirectoryFullPath);
-
-        [Fact]
-        public void ExpectedOutputDirectoryFullPath()
-            => this.CheckPath(TestEnvironment.ReferenceOutputDirectoryFullPath);
-
-        [Fact]
-        public void GetReferenceOutputFileName()
+    [Theory]
+    [InlineData("lol/foo.png", typeof(MagickReferenceDecoder))]
+    [InlineData("lol/Rofl.bmp", typeof(SystemDrawingReferenceDecoder))]
+    [InlineData("lol/Baz.JPG", typeof(JpegDecoder))]
+    [InlineData("lol/Baz.gif", typeof(GifDecoder))]
+    [InlineData("lol/foobar.webp", typeof(WebpDecoder))]
+    public void GetReferenceDecoder_ReturnsCorrectDecoders_Windows(string fileName, Type expectedDecoderType)
+    {
+        if (!TestEnvironment.IsWindows)
         {
-            string actual = Path.Combine(TestEnvironment.ActualOutputDirectoryFullPath, @"foo\bar\lol.jpeg");
-            string expected = TestEnvironment.GetReferenceOutputFileName(actual);
-
-            this.Output.WriteLine(expected);
-            Assert.Contains(TestEnvironment.ReferenceOutputDirectoryFullPath, expected);
+            return;
         }
 
-        [Theory]
-        [InlineData("lol/foo.png", typeof(SystemDrawingReferenceEncoder))]
-        [InlineData("lol/Rofl.bmp", typeof(SystemDrawingReferenceEncoder))]
-        [InlineData("lol/Baz.JPG", typeof(JpegEncoder))]
-        [InlineData("lol/Baz.gif", typeof(GifEncoder))]
-        [InlineData("lol/foobar.webp", typeof(WebpEncoder))]
-        public void GetReferenceEncoder_ReturnsCorrectEncoders_Windows(string fileName, Type expectedEncoderType)
-        {
-            if (!TestEnvironment.IsWindows)
-            {
-                return;
-            }
+        IImageDecoder decoder = TestEnvironment.GetReferenceDecoder(fileName);
+        Assert.IsType(expectedDecoderType, decoder);
+    }
 
-            IImageEncoder encoder = TestEnvironment.GetReferenceEncoder(fileName);
-            Assert.IsType(expectedEncoderType, encoder);
+    [Theory]
+    [InlineData("lol/foo.png", typeof(ImageSharpPngEncoderWithDefaultConfiguration))]
+    [InlineData("lol/Rofl.bmp", typeof(BmpEncoder))]
+    [InlineData("lol/Baz.JPG", typeof(JpegEncoder))]
+    [InlineData("lol/Baz.gif", typeof(GifEncoder))]
+    [InlineData("lol/foobar.webp", typeof(WebpEncoder))]
+    public void GetReferenceEncoder_ReturnsCorrectEncoders_Linux(string fileName, Type expectedEncoderType)
+    {
+        if (!TestEnvironment.IsLinux)
+        {
+            return;
         }
 
-        [Theory]
-        [InlineData("lol/foo.png", typeof(MagickReferenceDecoder))]
-        [InlineData("lol/Rofl.bmp", typeof(SystemDrawingReferenceDecoder))]
-        [InlineData("lol/Baz.JPG", typeof(JpegDecoder))]
-        [InlineData("lol/Baz.gif", typeof(GifDecoder))]
-        [InlineData("lol/foobar.webp", typeof(WebpDecoder))]
-        public void GetReferenceDecoder_ReturnsCorrectDecoders_Windows(string fileName, Type expectedDecoderType)
-        {
-            if (!TestEnvironment.IsWindows)
-            {
-                return;
-            }
+        IImageEncoder encoder = TestEnvironment.GetReferenceEncoder(fileName);
+        Assert.IsType(expectedEncoderType, encoder);
+    }
 
-            IImageDecoder decoder = TestEnvironment.GetReferenceDecoder(fileName);
-            Assert.IsType(expectedDecoderType, decoder);
+    [Theory]
+    [InlineData("lol/foo.png", typeof(MagickReferenceDecoder))]
+    [InlineData("lol/Rofl.bmp", typeof(MagickReferenceDecoder))]
+    [InlineData("lol/Baz.JPG", typeof(JpegDecoder))]
+    [InlineData("lol/Baz.gif", typeof(GifDecoder))]
+    [InlineData("lol/foobar.webp", typeof(WebpDecoder))]
+    public void GetReferenceDecoder_ReturnsCorrectDecoders_Linux(string fileName, Type expectedDecoderType)
+    {
+        if (!TestEnvironment.IsLinux)
+        {
+            return;
         }
 
-        [Theory]
-        [InlineData("lol/foo.png", typeof(ImageSharpPngEncoderWithDefaultConfiguration))]
-        [InlineData("lol/Rofl.bmp", typeof(BmpEncoder))]
-        [InlineData("lol/Baz.JPG", typeof(JpegEncoder))]
-        [InlineData("lol/Baz.gif", typeof(GifEncoder))]
-        [InlineData("lol/foobar.webp", typeof(WebpEncoder))]
-        public void GetReferenceEncoder_ReturnsCorrectEncoders_Linux(string fileName, Type expectedEncoderType)
-        {
-            if (!TestEnvironment.IsLinux)
-            {
-                return;
-            }
+        IImageDecoder decoder = TestEnvironment.GetReferenceDecoder(fileName);
+        Assert.IsType(expectedDecoderType, decoder);
+    }
 
-            IImageEncoder encoder = TestEnvironment.GetReferenceEncoder(fileName);
-            Assert.IsType(expectedEncoderType, encoder);
+    [Fact]
+    public void RemoteExecutor_FailingRemoteTestShouldFailLocalTest()
+    {
+        static void FailingCode()
+        {
+            Assert.False(true);
         }
 
-        [Theory]
-        [InlineData("lol/foo.png", typeof(MagickReferenceDecoder))]
-        [InlineData("lol/Rofl.bmp", typeof(MagickReferenceDecoder))]
-        [InlineData("lol/Baz.JPG", typeof(JpegDecoder))]
-        [InlineData("lol/Baz.gif", typeof(GifDecoder))]
-        [InlineData("lol/foobar.webp", typeof(WebpDecoder))]
-        public void GetReferenceDecoder_ReturnsCorrectDecoders_Linux(string fileName, Type expectedDecoderType)
-        {
-            if (!TestEnvironment.IsLinux)
-            {
-                return;
-            }
+        RemoteExecutionException ex = Assert.ThrowsAny<RemoteExecutionException>(() => RemoteExecutorRunner.Invoke(FailingCode).Dispose());
 
-            IImageDecoder decoder = TestEnvironment.GetReferenceDecoder(fileName);
-            Assert.IsType(expectedDecoderType, decoder);
-        }
-
-        [Fact]
-        public void RemoteExecutor_FailingRemoteTestShouldFailLocalTest()
-        {
-            static void FailingCode()
-            {
-                Assert.False(true);
-            }
-
-            RemoteExecutionException ex = Assert.ThrowsAny<RemoteExecutionException>(() => RemoteExecutorRunner.Invoke(FailingCode).Dispose());
-
-            // RemoteExecutor puts the remote exception in StackTrace; the captured stderr is in Message.
-            Assert.Contains("Assert.False() Failure", ex.Message + ex.StackTrace);
-        }
+        // RemoteExecutor puts the remote exception in StackTrace; the captured stderr is in Message.
+        Assert.Contains("Assert.False() Failure", ex.Message + ex.StackTrace);
     }
 }

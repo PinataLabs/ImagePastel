@@ -4,15 +4,14 @@
 using SixLabors.ImageSharp.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.Convolution
-{
-    [Trait("Category", "Processors")]
-    [GroupOutput("Convolution")]
-    public class BoxBlurTest : Basic1ParameterConvolutionTests
-    {
-        protected override void Apply(IImageProcessingContext ctx, int value) => ctx.BoxBlur(value);
+namespace SixLabors.ImageSharp.Tests.Processing.Processors.Convolution;
 
-        protected override void Apply(IImageProcessingContext ctx, int value, Rectangle bounds) =>
-            ctx.BoxBlur(value, bounds);
-    }
+[Trait("Category", "Processors")]
+[GroupOutput("Convolution")]
+public class BoxBlurTest : Basic1ParameterConvolutionTests
+{
+    protected override void Apply(IImageProcessingContext ctx, int value) => ctx.BoxBlur(value);
+
+    protected override void Apply(IImageProcessingContext ctx, int value, Rectangle bounds) =>
+        ctx.BoxBlur(value, bounds);
 }
