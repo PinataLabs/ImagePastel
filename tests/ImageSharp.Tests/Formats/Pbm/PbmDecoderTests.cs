@@ -207,6 +207,59 @@ public class PbmDecoderTests
         Assert.Equal(new Rgb48(32768, 65535, 0), rgbImage[0, 0]);
     }
 
+    [Theory]
+    [InlineData("P5\n2 1\n255\n", new byte[] { 0x20, 0x80 }, 0x20)]
+    [InlineData("P5\n2 1\n255\n", new byte[] { 0x0A, 0x80 }, 0x0A)]
+    [InlineData("P5\n2 1\n255\n", new byte[] { 0x23, 0x80 }, 0x23)]
+    [InlineData("P5 2 1 255 ", new byte[] { 0x09, 0x80 }, 0x09)]
+    public void Decode_BinaryGrayscaleRasterStartingWithWhitespaceOrHash_ReadsFirstByteAsPixel(string header, byte[] raster, byte expected)
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes(header).Concat(raster).ToArray();
+
+        using Image<L8> image = Image.Load<L8>(bytes);
+
+        Assert.Equal(expected, image[0, 0].PackedValue);
+        Assert.Equal(0x80, image[1, 0].PackedValue);
+    }
+
+    [Fact]
+    public void Decode_BinaryRgbRasterStartingWithWhitespace_ReadsFirstByteAsSample()
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes("P6\n1 1\n255\n").Concat(new byte[] { 0x0D, 0x20, 0x0A }).ToArray();
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(bytes);
+
+        Assert.Equal(new Rgb24(0x0D, 0x20, 0x0A), image[0, 0]);
+    }
+
+    [Theory]
+    [InlineData(0x0A)]
+    [InlineData(0x20)]
+    [InlineData(0x23)]
+    public void Decode_BinaryBlackAndWhiteRasterStartingWithWhitespaceOrHash_ReadsFirstByteAsPixels(byte raster)
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes("P4\n8 1\n").Concat(new[] { raster }).ToArray();
+
+        using Image<L8> image = Image.Load<L8>(bytes);
+
+        for (int x = 0; x < 8; x++)
+        {
+            bool black = (raster & (0x80 >> x)) != 0;
+            Assert.Equal(black ? 0 : 255, image[x, 0].PackedValue);
+        }
+    }
+
+    [Fact]
+    public void Decode_PlainHeaderFollowedByWhitespaceAndComments_SkipsThem()
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes("P2\n2 1\n255\n\n# comment\n  7 8\n");
+
+        using Image<L8> image = Image.Load<L8>(bytes);
+
+        Assert.Equal(7, image[0, 0].PackedValue);
+        Assert.Equal(8, image[1, 0].PackedValue);
+    }
+
     [Fact]
     public void PlainText_PrematureEof()
     {
