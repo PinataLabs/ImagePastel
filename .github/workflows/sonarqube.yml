@@ -95,7 +95,7 @@ jobs:
           dotnet tool run dotnet-sonarscanner begin /k:"PinataLabs_ImageSharp" /o:"pinatalabs" \
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.opencover.reportsPaths="artifacts/coverage/**/coverage.opencover.xml" \
-            /d:sonar.exclusions="**/*.pdf"
+            /d:sonar.exclusions="**/*.pdf,**/*.pptx,**/*.ttf,**/*.woff,**/*.jpg,**/*.png"
 
       - name: Build
         run: dotnet build ImageSharp.slnx -c Release -p:codecov=true
