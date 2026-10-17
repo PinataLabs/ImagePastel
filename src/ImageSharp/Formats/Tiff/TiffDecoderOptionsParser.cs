@@ -52,11 +52,6 @@ internal static class TiffDecoderOptionsParser
             TiffThrowHelper.ThrowNotSupported("The lower-order bits of the byte FillOrder is only supported in combination with 1bit per pixel bicolor tiff's.");
         }
 
-        if (frameMetadata.Predictor == TiffPredictor.FloatingPoint)
-        {
-            TiffThrowHelper.ThrowNotSupported("TIFF images with FloatingPoint horizontal predictor are not supported.");
-        }
-
         TiffSampleFormat[] sampleFormats = exifProfile.GetValue(ExifTag.SampleFormat)?.Value?.Select(a => (TiffSampleFormat)a).ToArray();
         TiffSampleFormat? sampleFormat = null;
         if (sampleFormats != null)
@@ -103,6 +98,18 @@ internal static class TiffDecoderOptionsParser
 
         options.ParseColorType(exifProfile);
         options.ParseCompression(frameMetadata.Compression, exifProfile);
+
+        // TIFF 6.0 defines the Predictor only for LZW, and the Deflate specification adds it for Deflate.
+        // Other compressions ignore it.
+        if (options.CompressionType is not (TiffDecoderCompressionType.Lzw or TiffDecoderCompressionType.Deflate))
+        {
+            options.Predictor = TiffPredictor.None;
+        }
+
+        if (options.Predictor == TiffPredictor.FloatingPoint)
+        {
+            TiffThrowHelper.ThrowNotSupported("TIFF images with FloatingPoint horizontal predictor are not supported.");
+        }
     }
 
     private static void VerifyRequiredFieldsArePresent(ExifProfile exifProfile, TiffFrameMetadata frameMetadata)

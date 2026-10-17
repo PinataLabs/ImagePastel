@@ -107,6 +107,26 @@ public class TiffDecoderMalformedInputTests
     }
 
     [Theory]
+    [InlineData(TiffPredictor.Horizontal, false)]
+    [InlineData(TiffPredictor.Horizontal, true)]
+    [InlineData(TiffPredictor.FloatingPoint, false)]
+    public void Decode_PredictorWithoutLzwOrDeflate_IgnoresPredictor(TiffPredictor predictor, bool packBits)
+    {
+        // The samples would decode as 10, 21, 33, 46 if the horizontal predictor were applied.
+        byte[] samples = { 10, 11, 12, 13 };
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { packBits ? new byte[] { 3, 10, 11, 12, 13 } : samples });
+        page.Compression = packBits ? TiffCompression.PackBits : TiffCompression.None;
+        page.Predictor = predictor;
+
+        using Image<L8> image = Decode<L8>(BuildTiff(page));
+
+        Assert.Equal(samples[0], image[0, 0].PackedValue);
+        Assert.Equal(samples[1], image[1, 0].PackedValue);
+        Assert.Equal(samples[2], image[0, 1].PackedValue);
+        Assert.Equal(samples[3], image[1, 1].PackedValue);
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(2)]
     public void Decode_PlanarWithFewerStripOffsetsThanPlanes_ThrowsImageFormatException(int stripCount)
@@ -593,6 +613,8 @@ public class TiffDecoderMalformedInputTests
 
         public TiffCompression Compression { get; set; } = TiffCompression.None;
 
+        public TiffPredictor? Predictor { get; set; }
+
         public bool Planar { get; private set; }
 
         public uint? RowsPerStrip { get; private set; }
@@ -646,6 +668,11 @@ public class TiffDecoderMalformedInputTests
             if (this.RowsPerStrip.HasValue)
             {
                 entries.Add((ExifTagValue.RowsPerStrip, ExifDataType.Long, new[] { this.RowsPerStrip.Value }));
+            }
+
+            if (this.Predictor.HasValue)
+            {
+                entries.Add((ExifTagValue.Predictor, ExifDataType.Short, new[] { (uint)this.Predictor.Value }));
             }
 
             if (this.Planar)
