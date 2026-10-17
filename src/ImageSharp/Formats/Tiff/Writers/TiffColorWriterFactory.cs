@@ -31,7 +31,7 @@ internal static class TiffColorWriterFactory
                     return new TiffBiColorWriter<TPixel>(image, memoryAllocator, configuration, entriesCollector);
                 }
 
-                return new TiffGrayWriter<TPixel>(image, memoryAllocator, configuration, entriesCollector);
+                return new TiffGrayWriter<TPixel>(image, memoryAllocator, configuration, entriesCollector, photometricInterpretation == TiffPhotometricInterpretation.WhiteIsZero);
             default:
                 return new TiffRgbWriter<TPixel>(image, memoryAllocator, configuration, entriesCollector);
         }
