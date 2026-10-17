@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 // ReSharper disable InconsistentNaming
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using SixLabors.ImageSharp.Formats;
@@ -545,6 +546,37 @@ public partial class PngEncoderTests
 
         Assert.Equal(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }, PngTestFileBuilder.ReadChunks(png).Single(c => c.Type == "tRNS").Data);
         Assert.Equal(new Rgb48(0x0102, 0x0304, 0x0506), Image.Identify(png).Metadata.GetPngMetadata().TransparentRgb48);
+    }
+
+    [Theory]
+    [InlineData(TestImages.Png.Rgb48BppTrans, PngColorType.Palette)]
+    [InlineData(TestImages.Png.Rgb24BppTrans, PngColorType.Palette)]
+    [InlineData(TestImages.Png.L8BitTrans, PngColorType.Palette)]
+    [InlineData(TestImages.Png.Rgb48BppTrans, PngColorType.RgbWithAlpha)]
+    [InlineData(TestImages.Png.Rgb24BppTrans, PngColorType.Grayscale)]
+    [InlineData(TestImages.Png.L8BitTrans, PngColorType.GrayscaleWithAlpha)]
+    [InlineData(TestImages.Png.L8BitTrans, PngColorType.Rgb)]
+    public void Encode_TransparencyToOtherColorType_WritesOnlyMatchingTransparencyChunk(string imagePath, PngColorType colorType)
+    {
+        var testFile = TestFile.Create(imagePath);
+        using Image<Rgba32> input = testFile.CreateRgba32Image();
+        Assert.True(input.Metadata.GetPngMetadata().HasTransparency);
+
+        byte[] png = EncodeToBytes(input, new PngEncoder { ColorType = colorType });
+        List<(string Type, byte[] Data)> chunks = PngTestFileBuilder.ReadChunks(png);
+        List<byte[]> transparency = chunks.Where(c => c.Type == "tRNS").Select(c => c.Data).ToList();
+
+        if (colorType == PngColorType.Palette)
+        {
+            // A palette tRNS holds one alpha value per palette entry at most.
+            byte[] transparencyData = Assert.Single(transparency);
+            Assert.True(transparencyData.Length <= chunks.Single(c => c.Type == "PLTE").Data.Length / 3);
+        }
+        else
+        {
+            // The transparent color in the metadata belongs to another color type, so it cannot be written.
+            Assert.Empty(transparency);
+        }
     }
 
     [Theory]
