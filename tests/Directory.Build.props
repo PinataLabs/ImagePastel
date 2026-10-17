@@ -11,6 +11,12 @@
   <PropertyGroup>
     <IsTestProject Condition="'$(IsTestProject)' == ''">true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <!--
+      SA0001: XML comment analysis is disabled due to project configuration.
+      Test projects do not generate documentation files. StyleCop reports SA0001 without a
+      source location, so a path-scoped .editorconfig section cannot reliably suppress it.
+    -->
+    <NoWarn>$(NoWarn);SA0001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">
