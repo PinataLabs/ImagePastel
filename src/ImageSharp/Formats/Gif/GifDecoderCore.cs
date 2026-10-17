@@ -601,9 +601,11 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
 
                 // Lines only move down within a pass, so once a line falls below the canvas the rest of the
                 // frame can be ignored, unless it is interlaced and later passes still have lines to write.
+                // Every later pass includes the last one, which starts at frame row 1, so a later pass can
+                // only reach the canvas if the canvas shows at least two frame rows.
                 if (writeY >= imageHeight)
                 {
-                    if (!descriptor.InterlaceFlag || interlacePass == 3)
+                    if (!descriptor.InterlaceFlag || interlacePass == 3 || imageHeight - descriptorTop < 2)
                     {
                         break;
                     }

@@ -388,6 +388,9 @@ public class GifDecoderTests
     [InlineData(10, 4, 0, true)]
     [InlineData(10, 10, 10, true)]
     [InlineData(10, 10, 10, false)]
+    [InlineData(10, 10, 9, true)]
+    [InlineData(10, 20, 9, true)]
+    [InlineData(10, 20, 8, true)]
     public void Decode_FrameGeometry_WritesOnlyRowsInsideCanvas(int width, int height, int top, bool interlaced)
     {
         // Each frame row is filled with the color index of its row number modulo 4.
@@ -410,6 +413,28 @@ public class GifDecoderTests
             {
                 Assert.Equal(expected, image[x, y].Rgb);
             }
+        }
+    }
+
+    [Fact]
+    public void Decode_InterlacedFrameWithOneVisibleRow_StopsAfterThatRow()
+    {
+        // The canvas shows only frame row 0, which no later interlace pass revisits. The frame data
+        // ends after that row, so skipping the hidden rows would read past it into the next frame.
+        byte[] first = CreateGif(4, 1, 0, 0, 4, 16, interlaced: true, 2, EncodeLzw(new byte[] { 1, 1, 1, 1 }));
+        byte[] second = CreateGif(4, 1, 0, 0, 4, 1, interlaced: false, 2, EncodeLzw(new byte[] { 2, 2, 2, 2 }));
+
+        // Replace the first file's trailer with the image descriptor and data of the second.
+        int frameStart = 6 + 7 + (GlobalColorTable.Length * 3);
+        byte[] data = [.. first.AsSpan(0, first.Length - 1), .. second.AsSpan(frameStart)];
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(2, image.Frames.Count);
+        for (int x = 0; x < image.Width; x++)
+        {
+            Assert.Equal(GlobalColorTable[1], image.Frames[0][x, 0].Rgb);
+            Assert.Equal(GlobalColorTable[2], image.Frames[1][x, 0].Rgb);
         }
     }
 
