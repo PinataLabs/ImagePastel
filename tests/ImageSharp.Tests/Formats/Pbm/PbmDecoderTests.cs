@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using SixLabors.ImageSharp.Formats.Pbm;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
@@ -155,6 +156,21 @@ public class PbmDecoderTests
 
         Assert.Throws<InvalidImageContentException>(() => Image.Load<L8>(bytes));
         Assert.Throws<InvalidImageContentException>(() => Image.Identify(bytes));
+    }
+
+    [Theory]
+    [InlineData("P6\n400000 1\n255\n")]
+    [InlineData("P5\n600000 1\n65535\n")]
+    [InlineData("P3\n400000 1\n255\n")]
+    public void Decode_PixelProcessingFails_DisposesImage(string header)
+    {
+        // The L8 image needs less than 1 MB, but the row buffer needs more, so its allocation fails after
+        // the image is allocated. The class attribute checks that the image is disposed.
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = MemoryAllocator.Create(new MemoryAllocatorOptions { AllocationLimitMegabytes = 1 });
+        using var stream = new MemoryStream(Encoding.ASCII.GetBytes(header));
+
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<L8>(configuration, stream));
     }
 
     [Theory]

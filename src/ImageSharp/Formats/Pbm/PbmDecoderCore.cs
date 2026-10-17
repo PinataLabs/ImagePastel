@@ -61,12 +61,19 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
         this.ProcessHeader(stream);
 
         var image = new Image<TPixel>(this.Configuration, this.PixelSize.Width, this.PixelSize.Height, this.Metadata);
+        try
+        {
+            Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
 
-        Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
+            this.ProcessPixels(stream, pixels);
 
-        this.ProcessPixels(stream, pixels);
-
-        return image;
+            return image;
+        }
+        catch
+        {
+            image.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc/>
