@@ -102,6 +102,8 @@ internal class BinaryEncoder
                 rowSpan,
                 width);
 
+            SampleScaler.SwapShortsBigEndian(rowSpan);
+
             stream.Write(rowSpan);
         }
     }
@@ -151,6 +153,8 @@ internal class BinaryEncoder
                 pixelSpan,
                 rowSpan,
                 width);
+
+            SampleScaler.SwapShortsBigEndian(rowSpan);
 
             stream.Write(rowSpan);
         }

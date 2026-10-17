@@ -172,6 +172,42 @@ public class PbmDecoderTests
     }
 
     [Fact]
+    public void Decode_Binary16BitGrayscale_ReadsSamplesBigEndian()
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes("P5\n2 1\n65535\n").Concat(new byte[] { 0x01, 0x00, 0x12, 0x34 }).ToArray();
+
+        using Image<L16> image = Image.Load<L16>(bytes);
+
+        Assert.Equal(0x0100, image[0, 0].PackedValue);
+        Assert.Equal(0x1234, image[1, 0].PackedValue);
+    }
+
+    [Fact]
+    public void Decode_Binary16BitRgb_ReadsSamplesBigEndian()
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes("P6\n1 1\n65535\n").Concat(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }).ToArray();
+
+        using Image<Rgb48> image = Image.Load<Rgb48>(bytes);
+
+        Assert.Equal(new Rgb48(0x0102, 0x0304, 0x0506), image[0, 0]);
+    }
+
+    [Fact]
+    public void Decode_Binary16BitWithMaxValue1000_ScalesBigEndianSamples()
+    {
+        // 500 = 0x01F4 and 1000 = 0x03E8, stored big-endian.
+        byte[] gray = Encoding.ASCII.GetBytes("P5\n2 1\n1000\n").Concat(new byte[] { 0x01, 0xF4, 0x03, 0xE8 }).ToArray();
+        byte[] rgb = Encoding.ASCII.GetBytes("P6\n1 1\n1000\n").Concat(new byte[] { 0x01, 0xF4, 0x03, 0xE8, 0x00, 0x00 }).ToArray();
+
+        using Image<L16> grayImage = Image.Load<L16>(gray);
+        using Image<Rgb48> rgbImage = Image.Load<Rgb48>(rgb);
+
+        Assert.Equal(32768, grayImage[0, 0].PackedValue);
+        Assert.Equal(65535, grayImage[1, 0].PackedValue);
+        Assert.Equal(new Rgb48(32768, 65535, 0), rgbImage[0, 0]);
+    }
+
+    [Fact]
     public void PlainText_PrematureEof()
     {
         byte[] bytes = Encoding.ASCII.GetBytes($"P1\n100 100\n1 0 1 0 1 0");

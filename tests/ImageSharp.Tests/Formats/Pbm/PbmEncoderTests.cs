@@ -90,6 +90,35 @@ public class PbmEncoderTests
         }
     }
 
+    [Fact]
+    public void PbmEncoder_P5_WritesWideSamplesBigEndian()
+    {
+        using Image<L16> image = new(2, 1);
+        image[0, 0] = new L16(0x0100);
+        image[1, 0] = new L16(0x1234);
+        var encoder = new PbmEncoder { ColorType = PbmColorType.Grayscale, ComponentType = PbmComponentType.Short, Encoding = PbmEncoding.Binary };
+
+        using var memStream = new MemoryStream();
+        image.Save(memStream, encoder);
+        byte[] data = memStream.ToArray();
+
+        Assert.Equal(new byte[] { 0x01, 0x00, 0x12, 0x34 }, data[^4..]);
+    }
+
+    [Fact]
+    public void PbmEncoder_P6_WritesWideSamplesBigEndian()
+    {
+        using Image<Rgb48> image = new(1, 1);
+        image[0, 0] = new Rgb48(0x0102, 0x0304, 0x0506);
+        var encoder = new PbmEncoder { ColorType = PbmColorType.Rgb, ComponentType = PbmComponentType.Short, Encoding = PbmEncoding.Binary };
+
+        using var memStream = new MemoryStream();
+        image.Save(memStream, encoder);
+        byte[] data = memStream.ToArray();
+
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }, data[^6..]);
+    }
+
     [Theory]
     [MemberData(nameof(BlackAndWhiteWidths))]
     public void PbmEncoder_P4_PadsEachRowToByteBoundary(int width)
