@@ -6,7 +6,7 @@
     System.Diagnostics.CodeAnalysis.SuppressMessage(
         "StyleCop.CSharp.MaintainabilityRules",
         "SA1413:UseTrailingCommasInMultiLineInitializers",
-        Justification = "Follows SixLabors.ruleset")]
+        Justification = "SA1413 is disabled in .editorconfig")]
 
 // BufferedReadStream.Read fills the requested count unless the stream ends, and the decoders
 // handle truncated input deliberately (see BufferedReadStream.EofHitCount).
