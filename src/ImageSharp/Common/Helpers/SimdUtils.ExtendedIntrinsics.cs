@@ -22,7 +22,7 @@ namespace SixLabors.ImageSharp
         public static class ExtendedIntrinsics
         {
             public static bool IsAvailable { get; } =
-#if SUPPORTS_EXTENDED_INTRINSICS
+#if NETCOREAPP2_1_OR_GREATER
                 Vector.IsHardwareAccelerated;
 #else
                 false;

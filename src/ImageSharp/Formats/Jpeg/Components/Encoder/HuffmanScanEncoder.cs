@@ -558,7 +558,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
         internal static int GetHuffmanEncodingLength(uint value)
         {
             DebugGuard.IsTrue(value <= (1 << 16), "Huffman encoder is supposed to encode a value of 16bit size max");
-#if SUPPORTS_BITOPERATIONS
+#if NETCOREAPP3_0_OR_GREATER
             // This should have been implemented as (BitOperations.Log2(value) + 1) as in non-intrinsic implementation
             // But internal log2 is implemented like this: (31 - (int)Lzcnt.LeadingZeroCount(value))
 

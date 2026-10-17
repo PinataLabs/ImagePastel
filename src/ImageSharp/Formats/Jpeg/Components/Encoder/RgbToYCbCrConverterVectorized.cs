@@ -3,7 +3,7 @@
 
 using System;
 using System.Diagnostics;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -19,7 +19,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
         {
             get
             {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
                 return Avx2.IsSupported;
 #else
                 return false;
@@ -48,7 +48,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
             // 8 byte padding to rgb byte span will solve this problem without extra code in converters
             get
             {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
                 if (IsSupported)
                 {
                     return 8;
@@ -58,7 +58,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
         internal static ReadOnlySpan<byte> MoveFirst24BytesToSeparateLanes => new byte[]
         {
@@ -85,7 +85,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
         {
             Debug.Assert(IsSupported, "AVX2 is required to run this converter");
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             var f0299 = Vector256.Create(0.299f);
             var f0587 = Vector256.Create(0.587f);
             var f0114 = Vector256.Create(0.114f);
@@ -140,7 +140,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
         {
             Debug.Assert(IsSupported, "AVX2 is required to run this converter");
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             var f0299 = Vector256.Create(0.299f);
             var f0587 = Vector256.Create(0.587f);
             var f0114 = Vector256.Create(0.114f);
@@ -234,7 +234,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
 #endif
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         /// <summary>
         /// Scales 16x2 matrix to 8x1 using 2x2 average
         /// </summary>

@@ -5,7 +5,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -98,7 +98,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder
         {
             Debug.Assert(RgbToYCbCrConverterVectorized.IsSupported, "AVX2 is required to run this converter");
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             ref Vector128<byte> l8ByteSpan = ref Unsafe.As<L8, Vector128<byte>>(ref l8Start);
             ref Vector256<float> destRef = ref yBlock.V0;
 

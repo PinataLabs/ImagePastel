@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;

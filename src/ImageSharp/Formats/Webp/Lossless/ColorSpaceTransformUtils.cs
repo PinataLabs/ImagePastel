@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -13,7 +13,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 {
     internal static class ColorSpaceTransformUtils
     {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector128<byte> CollectColorRedTransformsGreenMask = Vector128.Create(0x00ff00).AsByte();
 
         private static readonly Vector128<byte> CollectColorRedTransformsAndMask = Vector128.Create((short)0xff).AsByte();
@@ -45,7 +45,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         public static void CollectColorBlueTransforms(Span<uint> bgra, int stride, int tileWidth, int tileHeight, int greenToBlue, int redToBlue, Span<int> histo)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && tileWidth >= 16)
             {
                 const int span = 16;
@@ -160,7 +160,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         public static void CollectColorRedTransforms(Span<uint> bgra, int stride, int tileWidth, int tileHeight, int greenToRed, Span<int> histo)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && tileWidth >= 16)
             {
                 var multsg = Vector256.Create(LosslessUtils.Cst5b(greenToRed));

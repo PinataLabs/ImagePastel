@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -16,7 +16,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
     /// </summary>
     internal class Vp8Residual
     {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector256<byte> Cst2 = Vector256.Create((byte)2);
 
         private static readonly Vector256<byte> Cst67 = Vector256.Create((byte)67);
@@ -52,7 +52,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public void SetCoeffs(Span<short> coeffs)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref short coeffsRef = ref MemoryMarshal.GetReference(coeffs);
@@ -169,7 +169,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
                 return LossyUtils.Vp8BitCost(0, (byte)p0);
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 Span<byte> ctxs = this.scratch.AsSpan(0, 16);

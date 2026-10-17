@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -35,7 +35,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             // With pixels positioned like this:
             //  prev:  c b
             //  row:   a d
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported && bytesPerPixel is 4)
             {
                 DecodeSse2(scanline, previousScanline);
@@ -47,7 +47,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void DecodeSse2(Span<byte> scanline, Span<byte> previousScanline)
         {
@@ -139,7 +139,7 @@ namespace SixLabors.ImageSharp.Formats.Png.Filters
                 sum += Numerics.Abs(unchecked((sbyte)res));
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 Vector256<byte> zero = Vector256<byte>.Zero;

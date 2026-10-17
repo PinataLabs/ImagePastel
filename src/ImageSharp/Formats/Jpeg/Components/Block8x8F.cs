@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -160,7 +160,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         [MethodImpl(InliningOptions.ShortMethod)]
         public void MultiplyInPlace(float value)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 var valueVec = Vector256.Create(value);
@@ -202,7 +202,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         [MethodImpl(InliningOptions.ShortMethod)]
         public unsafe void MultiplyInPlace(ref Block8x8F other)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 this.V0 = Avx.Multiply(this.V0, other.V0);
@@ -243,7 +243,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         [MethodImpl(InliningOptions.ShortMethod)]
         public void AddInPlace(float value)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 var valueVec = Vector256.Create(value);
@@ -287,7 +287,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         /// <param name="qt">The quantization table.</param>
         public static void Quantize(ref Block8x8F block, ref Block8x8 dest, ref Block8x8F qt)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 MultiplyIntoInt16_Avx2(ref block, ref qt, ref dest);
@@ -366,7 +366,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         [MethodImpl(InliningOptions.ShortMethod)]
         public void LoadFrom(ref Block8x8 source)
         {
-#if SUPPORTS_EXTENDED_INTRINSICS
+#if NETCOREAPP2_1_OR_GREATER
             if (SimdUtils.HasVector8)
             {
                 this.LoadFromInt16ExtendedAvx2(ref source);
@@ -414,7 +414,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         /// <param name="value">Value to compare to.</param>
         public bool EqualsToScalar(int value)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 const int equalityMask = unchecked((int)0b1111_1111_1111_1111_1111_1111_1111_1111);
@@ -491,7 +491,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         [MethodImpl(InliningOptions.ShortMethod)]
         public void TransposeInplace()
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 this.TransposeInplace_Avx();

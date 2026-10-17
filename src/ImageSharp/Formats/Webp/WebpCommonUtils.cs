@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.PixelFormats;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -16,7 +16,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
     /// </summary>
     internal static class WebpCommonUtils
     {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector256<byte> AlphaMaskVector256 = Vector256.Create(0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255);
 
         private static readonly Vector256<byte> All0x80Vector256 = Vector256.Create((byte)0x80).AsByte();
@@ -33,7 +33,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
         /// <returns>Returns true if alpha has non-0xff values.</returns>
         public static unsafe bool CheckNonOpaque(Span<Bgra32> row)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 ReadOnlySpan<byte> rowBytes = MemoryMarshal.AsBytes(row);
@@ -134,7 +134,7 @@ namespace SixLabors.ImageSharp.Formats.Webp
             return false;
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static unsafe bool IsNoneOpaque64Bytes(byte* src, int i)
         {
             Vector128<byte> a0 = Sse2.LoadVector128(src + i).AsByte();

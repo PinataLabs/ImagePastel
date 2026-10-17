@@ -5,7 +5,7 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -23,7 +23,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         private const int YuvHalf = 1 << (YuvFix - 1);
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector128<byte> One = Vector128.Create((byte)1);
 
         // These constants are 14b fixed-point version of ITU-R BT.601 constants.
@@ -75,7 +75,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         //  ([3*a +   b + 9*c + 3*d      a + 3*b + 3*c + 9*d]   [8 8]) / 16
         public static void UpSample(Span<byte> topY, Span<byte> bottomY, Span<byte> topU, Span<byte> topV, Span<byte> curU, Span<byte> curV, Span<byte> topDst, Span<byte> bottomDst, int len, byte[] uvBuffer)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse41.IsSupported)
             {
                 UpSampleSse41(topY, bottomY, topU, topV, curU, curV, topDst, bottomDst, len, uvBuffer);
@@ -141,7 +141,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         // We compute (9*a + 3*b + 3*c + d + 8) / 16 as follows
         // u = (9*a + 3*b + 3*c + d + 8) / 16
         //   = (a + (a + 3*b + 3*c + d) / 8 + 1) / 2
@@ -612,7 +612,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             bgr[0] = (byte)YuvToB(y, u);
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
         [MethodImpl(InliningOptions.ShortMethod)]
         private static void ConvertYuvToBgrSse41(Span<byte> topY, Span<byte> topDst, Span<byte> ru, Span<byte> rv, int curX, int step) => YuvToBgrSse41(topY.Slice(curX), ru, rv, topDst.Slice(curX * step));

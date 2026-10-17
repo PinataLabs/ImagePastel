@@ -108,7 +108,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters
         /// </summary>
         private static IEnumerable<JpegColorConverterBase> GetYCbCrConverters(int precision)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             yield return new FromYCbCrAvx(precision);
 #endif
             yield return new FromYCbCrVector(precision);
@@ -120,7 +120,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters
         /// </summary>
         private static IEnumerable<JpegColorConverterBase> GetYccKConverters(int precision)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             yield return new FromYccKAvx(precision);
 #endif
             yield return new FromYccKVector(precision);
@@ -132,7 +132,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters
         /// </summary>
         private static IEnumerable<JpegColorConverterBase> GetCmykConverters(int precision)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             yield return new FromCmykAvx(precision);
 #endif
             yield return new FromCmykVector(precision);
@@ -144,7 +144,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters
         /// </summary>
         private static IEnumerable<JpegColorConverterBase> GetGrayScaleConverters(int precision)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             yield return new FromGrayscaleAvx(precision);
 #endif
             yield return new FromGrayScaleVector(precision);
@@ -156,7 +156,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters
         /// </summary>
         private static IEnumerable<JpegColorConverterBase> GetRgbConverters(int precision)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             yield return new FromRgbAvx(precision);
 #endif
             yield return new FromRgbVector(precision);

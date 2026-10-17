@@ -4,7 +4,7 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -109,7 +109,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         /// <param name="block">Input block.</param>
         public static void TransformIDCT(ref Block8x8F block)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 IDCT8x8_Avx(ref block);
@@ -131,7 +131,7 @@ namespace SixLabors.ImageSharp.Formats.Jpeg.Components
         /// <param name="block">Input block.</param>
         public static void TransformFDCT(ref Block8x8F block)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx.IsSupported)
             {
                 FDCT8x8_Avx(ref block);

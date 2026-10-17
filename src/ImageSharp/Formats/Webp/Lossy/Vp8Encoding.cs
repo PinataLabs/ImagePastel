@@ -5,7 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -65,7 +65,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static readonly int[] Vp8I4ModeOffsets = { I4DC4, I4TM4, I4VE4, I4HE4, I4RD4, I4VR4, I4LD4, I4VL4, I4HD4, I4HU4 };
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 #pragma warning disable SA1310 // Field names should not contain underscore
         private static readonly Vector128<short> K1 = Vector128.Create((short)20091).AsInt16();
 
@@ -113,7 +113,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
         // Does two inverse transforms.
         public static void ITransformTwo(Span<byte> reference, Span<short> input, Span<byte> dst, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // This implementation makes use of 16-bit fixed point versions of two
@@ -225,7 +225,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void ITransformOne(Span<byte> reference, Span<short> input, Span<byte> dst, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 // Load and concatenate the transform coefficients (we'll do two inverse
@@ -341,7 +341,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static void InverseTransformVerticalPass(Vector128<long> in0, Vector128<long> in2, Vector128<long> in1, Vector128<long> in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3)
         {
             Vector128<short> a = Sse2.Add(in0.AsInt16(), in2.AsInt16());
@@ -402,7 +402,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void FTransform2(Span<byte> src, Span<byte> reference, Span<short> output, Span<short> output2, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte srcRef = ref MemoryMarshal.GetReference(src);
@@ -464,7 +464,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
 
         public static void FTransform(Span<byte> src, Span<byte> reference, Span<short> output, Span<int> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 ref byte srcRef = ref MemoryMarshal.GetReference(src);
@@ -556,7 +556,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossy
             }
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         public static void FTransformPass1SSE2(Vector128<short> row01, Vector128<short> row23, out Vector128<int> out01, out Vector128<int> out32)
         {
             // *in01 = 00 01 10 11 02 03 12 13

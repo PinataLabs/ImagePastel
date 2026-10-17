@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Memory;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -27,7 +27,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private const double Log2Reciprocal = 1.44269504088896338700465094007086;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private static readonly Vector256<byte> AddGreenToBlueAndRedMaskAvx2 = Vector256.Create(1, 255, 1, 255, 5, 255, 5, 255, 9, 255, 9, 255, 13, 255, 13, 255, 17, 255, 17, 255, 21, 255, 21, 255, 25, 255, 25, 255, 29, 255, 29, 255);
 
         private static readonly Vector128<byte> AddGreenToBlueAndRedMaskSsse3 = Vector128.Create(1, 255, 1, 255, 5, 255, 5, 255, 9, 255, 9, 255, 13, 255, 13, 255);
@@ -126,7 +126,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
         /// <param name="pixelData">The pixel data to apply the transformation.</param>
         public static void AddGreenToBlueAndRed(Span<uint> pixelData)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 int numPixels = pixelData.Length;
@@ -206,7 +206,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         public static void SubtractGreenFromBlueAndRed(Span<uint> pixelData)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 int numPixels = pixelData.Length;
@@ -397,7 +397,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
         /// <param name="numPixels">The number of pixels to process.</param>
         public static void TransformColor(Vp8LMultipliers m, Span<uint> pixelData, int numPixels)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && numPixels >= 8)
             {
                 Vector256<int> multsrb = MkCst32(Cst5b(m.GreenToRed), Cst5b(m.GreenToBlue));
@@ -485,7 +485,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
         /// <param name="pixelData">The pixel data to apply the inverse transform on.</param>
         public static void TransformColorInverse(Vp8LMultipliers m, Span<uint> pixelData)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported && pixelData.Length >= 8)
             {
                 Vector256<int> multsrb = MkCst32(Cst5b(m.GreenToRed), Cst5b(m.GreenToBlue));
@@ -761,7 +761,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
         /// <returns>Shanon entropy.</returns>
         public static float CombinedShannonEntropy(Span<int> x, Span<int> y)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 double retVal = 0.0d;
@@ -1414,7 +1414,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private static uint ClampedAddSubtractFull(uint c0, uint c1, uint c2)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 Vector128<byte> c0Vec = Sse2.UnpackLow(Sse2.ConvertScalarToVector128UInt32(c0).AsByte(), Vector128<byte>.Zero);
@@ -1447,7 +1447,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private static uint ClampedAddSubtractHalf(uint c0, uint c1, uint c2)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 Vector128<byte> c0Vec = Sse2.UnpackLow(Sse2.ConvertScalarToVector128UInt32(c0).AsByte(), Vector128<byte>.Zero);
@@ -1484,7 +1484,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
         [MethodImpl(InliningOptions.ShortMethod)]
         private static uint Clip255(uint a) => a < 256 ? a : ~a >> 24;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         [MethodImpl(InliningOptions.ShortMethod)]
         private static Vector128<int> MkCst16(int hi, int lo) => Vector128.Create((hi << 16) | (lo & 0xffff));
 
@@ -1494,7 +1494,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
 
         private static uint Select(uint a, uint b, uint c, Span<short> scratch)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse2.IsSupported)
             {
                 Span<short> output = scratch;

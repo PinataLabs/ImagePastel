@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -22,7 +22,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
         /// </summary>
         public const uint SeedValue = 0U;
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         private const int MinBufferSize = 64;
         private const int ChunksizeMask = 15;
 
@@ -60,7 +60,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
                 return crc;
             }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Sse41.IsSupported && Pclmulqdq.IsSupported && buffer.Length >= MinBufferSize)
             {
                 return ~CalculateSse(~crc, buffer);
@@ -74,7 +74,7 @@ namespace SixLabors.ImageSharp.Compression.Zlib
 #endif
         }
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
         // Based on https://github.com/chromium/chromium/blob/master/third_party/zlib/crc32_simd.c
         [MethodImpl(InliningOptions.HotPath | InliningOptions.ShortMethod)]
         private static unsafe uint CalculateSse(uint crc, ReadOnlySpan<byte> buffer)

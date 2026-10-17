@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -517,7 +517,7 @@ namespace SixLabors.ImageSharp.Formats.Webp.Lossless
             DebugGuard.MustBeGreaterThanOrEqualTo(b.Length, count, nameof(b.Length));
             DebugGuard.MustBeGreaterThanOrEqualTo(output.Length, count, nameof(output.Length));
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 ref uint aRef = ref MemoryMarshal.GetReference(a);

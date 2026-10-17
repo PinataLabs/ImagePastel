@@ -7,7 +7,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.PixelFormats;
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
@@ -56,7 +56,7 @@ namespace SixLabors.ImageSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector<float> FastRound(this Vector<float> v)
         {
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
 
             if (Avx2.IsSupported)
             {
@@ -87,9 +87,9 @@ namespace SixLabors.ImageSharp
         internal static void ByteToNormalizedFloat(ReadOnlySpan<byte> source, Span<float> dest)
         {
             DebugGuard.IsTrue(source.Length == dest.Length, nameof(source), "Input spans must be of same length!");
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.ByteToNormalizedFloatReduce(ref source, ref dest);
-#elif SUPPORTS_EXTENDED_INTRINSICS
+#elif NETCOREAPP2_1_OR_GREATER
             ExtendedIntrinsics.ByteToNormalizedFloatReduce(ref source, ref dest);
 #else
             BasicIntrinsics256.ByteToNormalizedFloatReduce(ref source, ref dest);
@@ -118,9 +118,9 @@ namespace SixLabors.ImageSharp
         {
             DebugGuard.IsTrue(source.Length == dest.Length, nameof(source), "Input spans must be of same length!");
 
-#if SUPPORTS_RUNTIME_INTRINSICS
+#if NETCOREAPP3_0_OR_GREATER
             HwIntrinsics.NormalizedFloatToByteSaturateReduce(ref source, ref dest);
-#elif SUPPORTS_EXTENDED_INTRINSICS
+#elif NETCOREAPP2_1_OR_GREATER
             ExtendedIntrinsics.NormalizedFloatToByteSaturateReduce(ref source, ref dest);
 #else
             BasicIntrinsics256.NormalizedFloatToByteSaturateReduce(ref source, ref dest);
