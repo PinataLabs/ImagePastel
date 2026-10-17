@@ -22,8 +22,22 @@ _Avoid_: original ICC, source profile
 The ICC profile that describes a decoded image's pixels. When an image has none, its pixels are gamma-encoded sRGB.
 _Avoid_: output profile, image profile
 
+**Extra channel**:
+A per-pixel channel of a JPEG XL image beyond its colour channels, such as alpha, black, a spot colour or depth. The image header describes each one by type.
+_Avoid_: auxiliary channel, additional plane
+
 ### JPEG XL testing
 
 **Conformance vector**:
 One test case from the JPEG XL conformance suite: a codestream, its reference decoded output, and the error thresholds a decoder must meet against that output.
 _Avoid_: test vector, conformance image
+
+### JPEG XL encoding
+
+**Distance**:
+The JPEG XL encoder's target for lossy error, in butteraugli units: 0 means lossless, about 1 is visually lossless, and larger values allow more visible loss.
+_Avoid_: quality, compression level
+
+**Effort**:
+How much search the JPEG XL encoder spends to reach a given distance. It changes encode time and file size, not the target error.
+_Avoid_: speed, encoder level
