@@ -50,6 +50,11 @@ internal class Vp8LBitReader : BitReaderBase
     private readonly long len;
 
     /// <summary>
+    /// The end of the data in the buffer. It can be less than the buffer length, as the missing data is read as zeros.
+    /// </summary>
+    private readonly long dataEnd;
+
+    /// <summary>
     /// Byte position in buffer.
     /// </summary>
     private long pos;
@@ -67,6 +72,7 @@ internal class Vp8LBitReader : BitReaderBase
     {
         this.Data = data;
         this.len = data.Memory.Length;
+        this.dataEnd = this.len;
         this.value = 0;
         this.bitPos = 0;
         this.Eos = false;
@@ -95,6 +101,7 @@ internal class Vp8LBitReader : BitReaderBase
         this.ReadImageDataFromStream(inputStream, (int)imageDataSize, memoryAllocator);
 
         this.len = length;
+        this.dataEnd = this.Data.Memory.Length;
         this.value = 0;
         this.bitPos = 0;
         this.Eos = false;
@@ -106,7 +113,7 @@ internal class Vp8LBitReader : BitReaderBase
 
         ulong currentValue = 0;
         System.Span<byte> dataSpan = this.Data.Memory.Span;
-        for (int i = 0; i < length; i++)
+        for (int i = 0; i < length && i < this.dataEnd; i++)
         {
             currentValue |= (ulong)dataSpan[i] << (8 * i);
         }
@@ -195,10 +202,18 @@ internal class Vp8LBitReader : BitReaderBase
     private void ShiftBytes()
     {
         System.Span<byte> dataSpan = this.Data.Memory.Span;
-        while (this.bitPos >= 8 && this.pos < this.len)
+        while (this.bitPos >= 8 && this.pos < this.dataEnd)
         {
             this.value >>= 8;
             this.value |= (ulong)dataSpan[(int)this.pos] << (Lbits - 8);
+            ++this.pos;
+            this.bitPos -= 8;
+        }
+
+        // The bytes after the data in the buffer are read as zeros.
+        while (this.bitPos >= 8 && this.pos < this.len)
+        {
+            this.value >>= 8;
             ++this.pos;
             this.bitPos -= 8;
         }

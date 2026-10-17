@@ -22,16 +22,19 @@ internal abstract class BitReaderBase : IDisposable
 
     /// <summary>
     /// Copies the raw encoded image data from the stream into a byte array.
+    /// The buffer only holds the data present in the stream, so a chunk size larger than the stream does not
+    /// allocate its declared size. The bit readers read the missing end of the chunk as zeros.
     /// </summary>
     /// <param name="input">The input stream.</param>
     /// <param name="bytesToRead">Number of bytes to read as indicated from the chunk size.</param>
     /// <param name="memoryAllocator">Used for allocating memory during reading data from the stream.</param>
     protected void ReadImageDataFromStream(Stream input, int bytesToRead, MemoryAllocator memoryAllocator)
     {
-        this.Data = memoryAllocator.Allocate<byte>(bytesToRead);
-        Span<byte> dataSpan = this.Data.Memory.Span.Slice(0, bytesToRead);
+        int bufferSize = (int)Math.Clamp(input.Length - input.Position, 0, bytesToRead);
+        this.Data = memoryAllocator.Allocate<byte>(bufferSize);
+        Span<byte> dataSpan = this.Data.Memory.Span;
         int totalBytesRead = 0;
-        while (totalBytesRead < bytesToRead)
+        while (totalBytesRead < bufferSize)
         {
             int bytesRead = input.Read(dataSpan.Slice(totalBytesRead));
             if (bytesRead == 0)
@@ -42,7 +45,7 @@ internal abstract class BitReaderBase : IDisposable
             totalBytesRead += bytesRead;
         }
 
-        // A truncated stream leaves the end of the buffer unread. Clear it, so the missing data is read as zeros.
+        // A stream that ends early leaves the end of the buffer unread. Clear it, so the missing data is read as zeros.
         dataSpan.Slice(totalBytesRead).Clear();
     }
 

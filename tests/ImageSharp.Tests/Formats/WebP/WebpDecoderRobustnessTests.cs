@@ -4,11 +4,13 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
+using System.Linq;
 using System.Text;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
@@ -368,11 +370,10 @@ public class WebpDecoderRobustnessTests
     }
 
     [Theory]
-    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFFFu)]
     [InlineData(SampleKind.SimpleLossless, "VP8L", 0xFFFFFFF0u)]
-    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x7FFFFFF0u)]
     [InlineData(SampleKind.SimpleLossy, "VP8 ", 0xFFFFFFF0u)]
-    public void Decode_ImageChunkSizeLargerThanStream_ThrowsInvalidImageContent(SampleKind kind, string chunkId, uint size)
+    public void Decode_ImageChunkSizeAboveIntMaxValue_ThrowsInvalidImageContent(SampleKind kind, string chunkId, uint size)
     {
         byte[] patched = PatchChunkSize(Encode(kind), chunkId, size);
 
@@ -380,6 +381,59 @@ public class WebpDecoderRobustnessTests
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(patched);
         });
+    }
+
+    [Theory]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.LosslessWithExif, "VP8L", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.LossyWithAlpha, "VP8 ", 0x10000000u)]
+    public void Decode_ImageChunkSizeLargerThanStream_DoesNotAllocateDeclaredSize(SampleKind kind, string chunkId, uint declaredSize)
+    {
+        // The missing end of the image data is read as zeros, so the file decodes, or fails as invalid content.
+        byte[] patched = PatchChunkSize(Encode(kind), chunkId, declaredSize);
+        var allocator = new TestMemoryAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.MemoryAllocator = allocator;
+
+        Exception loadException = Record.Exception(() =>
+        {
+            using var stream = new MemoryStream(patched);
+            using Image<Rgba32> image = Image.Load<Rgba32>(configuration, stream);
+        });
+        Exception identifyException = Record.Exception(() =>
+        {
+            using var stream = new MemoryStream(patched);
+            Image.Identify(configuration, stream);
+        });
+
+        AssertInvalidImageContent(loadException, false, "Load");
+        AssertInvalidImageContent(identifyException, false, "Identify");
+        int largest = allocator.AllocationLog.Max(a => a.LengthInBytes);
+        Assert.True(largest < 1024 * 1024, $"Decoding allocated a buffer of {largest} bytes.");
+    }
+
+    [Theory]
+    [InlineData(SampleKind.SimpleLossless, "VP8L")]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ")]
+    public void Decode_ImageChunkLongerThanStream_DecodesAsIfPaddedWithZeros(SampleKind kind, string chunkId)
+    {
+        const int missingBytes = 1000;
+        byte[] original = Encode(kind);
+        int chunk = FindChunk(original, chunkId);
+        Assert.Equal(original.Length, chunk + 8 + (int)BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(chunk + 4)));
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(chunk + 4)) + missingBytes;
+
+        byte[] truncated = PatchChunkSize(original, chunkId, size);
+        byte[] padded = [.. truncated, .. new byte[missingBytes]];
+        BinaryPrimitives.WriteUInt32LittleEndian(padded.AsSpan(4), (uint)(padded.Length - 8));
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(padded);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(truncated);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
 
     private static void AssertInvalidImageContent(Exception exception, bool mustThrow, string operation)

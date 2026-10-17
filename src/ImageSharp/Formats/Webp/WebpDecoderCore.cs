@@ -488,6 +488,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         // VP8 data size.
         uint imageDataSize = this.ReadChunkSize();
+
+        // The bit reader holds the data in a single buffer, which can not be larger than int.MaxValue.
+        if (imageDataSize >= int.MaxValue)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8L data size is too large");
+        }
+
         this.imageDataTruncated = imageDataSize > this.RemainingStreamBytes;
 
         // The header has a 1 byte signature and 32 bits for the size, alpha flag and version.
