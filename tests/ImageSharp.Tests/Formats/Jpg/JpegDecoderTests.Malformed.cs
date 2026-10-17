@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -75,6 +76,31 @@ public partial class JpegDecoderTests
         }
     }
 
+    public static TheoryData<string, byte[]> ReservedMarkerBeforeEndOfImageData { get; } = new()
+    {
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x01 } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0xBF } },
+        { TestImages.Jpeg.Issues.ExifGetString750Load, new byte[] { 0xFF, 0x12, 0xFF, 0x34 } },
+        { TestImages.Jpeg.Baseline.Jpeg400, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Baseline.Calliphora, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Progressive.Progress, new byte[] { 0xFF, 0x12 } },
+        { TestImages.Jpeg.Issues.BadRstProgressive518, new byte[] { 0xFF, 0x12 } },
+    };
+
+    [Theory]
+    [MemberData(nameof(ReservedMarkerBeforeEndOfImageData))]
+    public void Decode_ReservedMarkerBeforeEndOfImage_IsSkipped(string file, byte[] junk)
+    {
+        byte[] original = TestFile.Create(file).Bytes;
+        Assert.Equal(JpegConstants.Markers.EOI, original[^1]);
+        byte[] corrupt = Insert(original, original.Length - 2, junk);
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(original);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
     // Inserts the junk bytes before every RSTn marker, either in the entropy-coded data following the first SOS only,
     // or before every RST-like byte pair in the file.
     private static byte[] InsertBeforeRestartMarkers(byte[] data, byte[] junk, bool entropyCodedDataOnly)
@@ -116,6 +142,47 @@ public partial class JpegDecoderTests
         using Image<Rgba32> expected = Image.Load<Rgba32>(original);
         using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x00 })]
+    [InlineData(new byte[] { 0x00, 0x00 })]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00 })]
+    [InlineData(new byte[] { 0x12, 0xFF, 0x00 })]
+    public void Decode_JunkBytesBetweenHeaderSegments_AreSkipped(byte[] junk)
+    {
+        byte[] original = EncodeTestJpeg(JpegColorType.YCbCrRatio420);
+
+        // Insert the junk after SOI, after APP0 and before SOS, so it is skipped both on an even and an odd offset.
+        int app0End = SegmentEnd(original, 2);
+        int sos = FindSegment(original, JpegConstants.Markers.SOS);
+        byte[] corrupt = Insert(original, sos, junk);
+        corrupt = Insert(corrupt, app0End, junk);
+        corrupt = Insert(corrupt, 2, junk);
+
+        IImageInfo info = Image.Identify(corrupt);
+        Assert.Equal(new Size(32, 24), new Size(info.Width, info.Height));
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(original);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(corrupt);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    [Fact]
+    public void Identify_CancelledWhileSkippingJunkBytes_StopsReading()
+    {
+        const int junkLength = 16 * 1024 * 1024;
+        const int cancelAfter = 1024 * 1024;
+        byte[] original = EncodeTestJpeg(JpegColorType.YCbCrRatio420);
+        byte[] corrupt = Insert(original, SegmentEnd(original, 2), new byte[junkLength]);
+
+        using var cts = new CancellationTokenSource();
+        using var stream = new CancellingStream(corrupt, cancelAfter, cts);
+
+        Assert.ThrowsAny<OperationCanceledException>(() => JpegDecoder.Identify(Configuration.Default, stream, cts.Token));
+
+        // The search for the next marker must notice the cancellation instead of reading the rest of the junk.
+        Assert.True(stream.Position < cancelAfter * 2, $"Read {stream.Position} bytes after cancelling at {cancelAfter}.");
     }
 
     [Theory]
@@ -286,5 +353,48 @@ public partial class JpegDecoderTests
         Buffer.BlockCopy(bytes, 0, result, offset, bytes.Length);
         Buffer.BlockCopy(data, offset, result, offset + bytes.Length, data.Length - offset);
         return result;
+    }
+
+    // Cancels the token once the given number of bytes has been read.
+    private sealed class CancellingStream : MemoryStream
+    {
+        private readonly long cancelAfter;
+        private readonly CancellationTokenSource cts;
+
+        public CancellingStream(byte[] data, long cancelAfter, CancellationTokenSource cts)
+            : base(data)
+        {
+            this.cancelAfter = cancelAfter;
+            this.cts = cts;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            int read = base.Read(buffer, offset, count);
+            this.CancelIfPast();
+            return read;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            int read = base.Read(buffer);
+            this.CancelIfPast();
+            return read;
+        }
+
+        public override int ReadByte()
+        {
+            int read = base.ReadByte();
+            this.CancelIfPast();
+            return read;
+        }
+
+        private void CancelIfPast()
+        {
+            if (this.Position >= this.cancelAfter)
+            {
+                this.cts.Cancel();
+            }
+        }
     }
 }
