@@ -2,13 +2,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>SixLabors.ImageSharp</AssemblyName>
-    <AssemblyTitle>SixLabors.ImageSharp</AssemblyTitle>
+    <AssemblyName>PinataLabs.ImageSharp</AssemblyName>
+    <AssemblyTitle>PinataLabs.ImageSharp</AssemblyTitle>
     <RootNamespace>SixLabors.ImageSharp</RootNamespace>
-    <PackageId>SixLabors.ImageSharp</PackageId>
+    <PackageId>PinataLabs.ImageSharp</PackageId>
     <PackageIcon>sixlabors.imagesharp.128.png</PackageIcon>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/SixLabors/ImageSharp/</RepositoryUrl>
+    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/PinataLabs/ImageSharp/</RepositoryUrl>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <PackageTags>Image Resize Crop Gif Jpg Jpeg Bitmap Pbm Png Tga Tiff WebP NetCore</PackageTags>
     <Description>A new, fully featured, fully managed, cross-platform, 2D graphics API for .NET</Description>
@@ -16,8 +16,8 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!--Bump to V2 prior to tagged release.-->
-    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+    <!-- Versions continue the Apache-2.0 2.1.x line. -->
+    <MinVerMinimumMajorMinor>2.2</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
   <Choose>

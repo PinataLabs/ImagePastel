@@ -13,7 +13,7 @@
   <!--
   Allow "InternalsVisibleTo" usage in src props file.
   Usage:
-  <InternalsVisibleTo Include="[ASSEMBLY_NAME]" Key="$(SixLaborsPublicKey)" />
+  <InternalsVisibleTo Include="[ASSEMBLY_NAME]" Key="$(PinataLabsPublicKey)" />
   -->
   <PropertyGroup>
     <GeneratedInternalsVisibleToFile Condition="'$(GeneratedInternalsVisibleToFile)' == ''">$(IntermediateOutputPath)$(MSBuildProjectName).InternalsVisibleTo$(DefaultLanguageSourceExtension)</GeneratedInternalsVisibleToFile>

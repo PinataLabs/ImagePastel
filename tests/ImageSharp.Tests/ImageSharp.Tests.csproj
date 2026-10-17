@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ImageSharp.Tests.ProfilingSandbox" Key="$(SixLaborsPublicKey)" />
+    <InternalsVisibleTo Include="ImageSharp.Tests.ProfilingSandbox" Key="$(PinataLabsPublicKey)" />
   </ItemGroup>
 
   <ItemGroup>

@@ -89,8 +89,8 @@
   <!-- Public key definition for signing assemblies. -->
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\..\SixLabors.snk</AssemblyOriginatorKeyFile>
-    <SixLaborsPublicKey>00240000048000009400000006020000002400005253413100040000010001000147e6fe6766715eec6cfed61f1e7dcdbf69748a3e355c67e9d8dfd953acab1d5e012ba34b23308166fdc61ee1d0390d5f36d814a6091dd4b5ed9eda5a26afced924c683b4bfb4b3d64b0586a57eff9f02b1f84e3cb0ddd518bd1697f2c84dcbb97eb8bb5c7801be12112ed0ec86db934b0e9a5171e6bb1384b6d2f7d54dfa97</SixLaborsPublicKey>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\..\PinataLabs.snk</AssemblyOriginatorKeyFile>
+    <PinataLabsPublicKey>0024000004800000940000000602000000240000525341310004000001000100dde97b8ff0207b93d1716b19305c918545804f6e274c717e12c3c138c8df042749d729457ef7bb1ba61cd1a01b10db67e6bbbe12075492eabe0e0cae3941a059e74e39a3ba033b0379d6c6cf002b1ad329dcc186644f15cc25bc92089d27e82c9d86d78b1b1884f727d4d79ffcfa78f81f7dec275138045943e1df4f08c25cae</PinataLabsPublicKey>
     <UseSharedCompilation>true</UseSharedCompilation>
   </PropertyGroup>
 
