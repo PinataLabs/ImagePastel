@@ -940,7 +940,8 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// Decodes and assigns marker colors that identify transparent pixels in non indexed images.
+    /// Decodes and assigns marker colors that identify transparent pixels in non indexed images,
+    /// and flags indexed images whose palette has any entry that is not fully opaque.
     /// </summary>
     /// <param name="alpha">The alpha tRNS array.</param>
     /// <param name="pngMetadata">The png metadata.</param>
@@ -983,6 +984,10 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
                 pngMetadata.HasTransparency = true;
             }
+        }
+        else if (this.pngColorType == PngColorType.Palette && alpha.IndexOfAnyExcept(byte.MaxValue) >= 0)
+        {
+            pngMetadata.HasTransparency = true;
         }
     }
 
