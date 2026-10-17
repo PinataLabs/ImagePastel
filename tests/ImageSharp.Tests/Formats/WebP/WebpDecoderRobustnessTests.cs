@@ -171,6 +171,26 @@ public class WebpDecoderRobustnessTests
         AssertSameImage(original, patched);
     }
 
+    [Fact]
+    public void Decode_OddSizedVp8ChunkInVP8X_SkipsPaddingByte()
+    {
+        // Append a zero byte to the VP8 payload, so its size is odd and a padding byte follows it.
+        // A zero byte after the last partition decodes the same as the end of the data.
+        // The EXIF and XMP chunks after the VP8 chunk are only found when the padding byte is skipped.
+        byte[] original = Encode(SampleKind.LossyWithExifAndXmp);
+        int vp8 = FindChunk(original, "VP8 ");
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(vp8 + 4));
+        Assert.Equal(0u, size & 1);
+        Assert.True(FindChunk(original, "EXIF") > vp8);
+
+        int payloadEnd = vp8 + 8 + (int)size;
+        byte[] patched = [.. original.AsSpan(0, payloadEnd), 0, 0, .. original.AsSpan(payloadEnd)];
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(vp8 + 4), size + 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4)) + 2);
+
+        AssertSameImage(original, patched);
+    }
+
     [Theory]
     [InlineData(0u)]
     [InlineData(8u)]

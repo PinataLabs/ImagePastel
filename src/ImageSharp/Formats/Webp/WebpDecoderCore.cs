@@ -459,6 +459,9 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             Remaining = remaining
         };
 
+        // Skip the padding byte of an odd-sized chunk, so a following chunk is read from its start.
+        this.SkipChunkData(dataSize & 1);
+
         return new WebpImageInfo()
         {
             Width = width,
