@@ -31,10 +31,9 @@
     <PackageReference Include="NetVips" />
     <PackageReference Include="NetVips.Native" />
     <PackageReference Include="PhotoSauce.MagicScaler"/>
-    <PackageReference Include="runtime.osx.10.10-x64.CoreCompat.System.Drawing" Condition="'$(IsOSX)'=='true'" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="System.Drawing.Common" />
-    <PackageReference Include="CommandLineParser" Version="2.8.0" />
+    <PackageReference Include="CommandLineParser" />
   </ItemGroup>
 
   <ItemGroup>

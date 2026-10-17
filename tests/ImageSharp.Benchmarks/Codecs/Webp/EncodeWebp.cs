@@ -53,10 +53,7 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs
                 AlphaCompression = WebPAlphaCompression.None,
                 FilterStrength = 60,
                 SnsStrength = 50,
-                Pass = 1,
-
-                // 100 means off.
-                NearLossless = 100
+                Pass = 1
             };
 
             this.webpMagick.Quality = 75;
@@ -85,10 +82,7 @@ namespace SixLabors.ImageSharp.Benchmarks.Codecs
             var defines = new WebPWriteDefines
             {
                 Lossless = true,
-                Method = 4,
-
-                // 100 means off.
-                NearLossless = 100
+                Method = 4
             };
 
             this.webpMagick.Quality = 75;

@@ -37,6 +37,9 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
     {
         private const int Quality = 75;
 
+        // Equivalent of the removed SKFilterQuality.High.
+        private static readonly SKSamplingOptions SkiaHighQualitySampling = new(SKCubicResampler.Mitchell);
+
         // Set the quality for ImagSharp
         private readonly JpegEncoder imageSharpJpegEncoder = new() { Quality = Quality };
         private readonly ImageCodecInfo systemDrawingJpegCodec =
@@ -248,10 +251,10 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
         public void MagickResize(string input)
         {
             using var image = new MagickImage(input);
-            this.LogImageProcessed(image.Width, image.Height);
+            this.LogImageProcessed((int)image.Width, (int)image.Height);
 
             // Resize it to fit a 150x150 square
-            image.Resize(this.ThumbnailSize, this.ThumbnailSize);
+            image.Resize((uint)this.ThumbnailSize, (uint)this.ThumbnailSize);
 
             // Reduce the size of the file
             image.Strip();
@@ -270,10 +273,9 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
                 Width = this.ThumbnailSize,
                 Height = this.ThumbnailSize,
                 ResizeMode = CropScaleMode.Max,
-                SaveFormat = FileFormat.Jpeg,
-                JpegQuality = Quality,
-                JpegSubsampleMode = ChromaSubsampleMode.Subsample420
+                EncoderOptions = new JpegEncoderOptions(Quality, ChromaSubsampleMode.Subsample420, false)
             };
+            settings.TrySetEncoderFormat(ImageMimeTypes.Jpeg);
 
             // TODO: Is there a way to capture input dimensions for IncreaseTotalMegapixels?
             using var output = new FileStream(this.OutputPath(input), FileMode.Create);
@@ -286,10 +288,10 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
             this.LogImageProcessed(original.Width, original.Height);
             (int Width, int Height) scaled = this.ScaledSize(original.Width, original.Height, this.ThumbnailSize);
             using var surface = SKSurface.Create(new SKImageInfo(scaled.Width, scaled.Height, original.ColorType, original.AlphaType));
-            using var paint = new SKPaint() { FilterQuality = SKFilterQuality.High };
+            using var paint = new SKPaint();
             SKCanvas canvas = surface.Canvas;
             canvas.Scale((float)scaled.Width / original.Width);
-            canvas.DrawBitmap(original, 0, 0, paint);
+            canvas.DrawBitmap(original, 0, 0, SkiaHighQualitySampling, paint);
             canvas.Flush();
 
             using FileStream output = File.OpenWrite(this.OutputPath(input));
@@ -303,7 +305,7 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
             using var original = SKBitmap.Decode(input);
             this.LogImageProcessed(original.Width, original.Height);
             (int Width, int Height) scaled = this.ScaledSize(original.Width, original.Height, this.ThumbnailSize);
-            using var resized = original.Resize(new SKImageInfo(scaled.Width, scaled.Height), SKFilterQuality.High);
+            using var resized = original.Resize(new SKImageInfo(scaled.Width, scaled.Height), SkiaHighQualitySampling);
             if (resized == null)
             {
                 return;
@@ -325,7 +327,7 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
             SKSizeI supportedScale = codec.GetScaledDimensions((float)scaled.Width / info.Width);
 
             using var original = SKBitmap.Decode(codec, new SKImageInfo(supportedScale.Width, supportedScale.Height));
-            using SKBitmap resized = original.Resize(new SKImageInfo(scaled.Width, scaled.Height), SKFilterQuality.High);
+            using SKBitmap resized = original.Resize(new SKImageInfo(scaled.Width, scaled.Height), SkiaHighQualitySampling);
             if (resized == null)
             {
                 return;
@@ -344,7 +346,7 @@ namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave
             using var thumb = NetVipsImage.Thumbnail(input, this.ThumbnailSize, this.ThumbnailSize);
 
             // Save the results
-            thumb.Jpegsave(this.OutputPath(input), q: Quality, strip: true);
+            thumb.Jpegsave(this.OutputPath(input), q: Quality, keep: NetVips.Enums.ForeignKeep.None);
         }
     }
 }

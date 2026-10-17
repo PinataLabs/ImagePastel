@@ -238,7 +238,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
         }
 
         [Theory]
-        [WithFile(RLE8Cut, PixelTypes.Rgba32)]
         [WithFile(RLE8Delta, PixelTypes.Rgba32)]
         public void BmpDecoder_CanDecode_RunLengthEncoded_8Bit_WithDelta_MagickRefDecoder<TPixel>(TestImageProvider<TPixel> provider)
             where TPixel : unmanaged, IPixel<TPixel>
@@ -250,11 +249,23 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             }
         }
 
+        // Magick.NET 14+ rejects this truncated file, so the reference output was captured from
+        // ImageSharp after it matched Magick.NET 11.1.2.
+        [Theory]
+        [WithFile(RLE8Cut, PixelTypes.Rgba32)]
+        public void BmpDecoder_CanDecode_RunLengthEncoded_8Bit_Cut<TPixel>(TestImageProvider<TPixel> provider)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using (Image<TPixel> image = provider.GetImage(new BmpDecoder { RleSkippedPixelHandling = RleSkippedPixelHandling.FirstColorOfPalette }))
+            {
+                image.DebugSave(provider);
+                image.CompareToReferenceOutput(ImageComparer.Exact, provider);
+            }
+        }
+
         [Theory]
         [WithFile(RLE8, PixelTypes.Rgba32, false)]
-        [WithFile(RLE8Inverted, PixelTypes.Rgba32, false)]
         [WithFile(RLE8, PixelTypes.Rgba32, true)]
-        [WithFile(RLE8Inverted, PixelTypes.Rgba32, true)]
         public void BmpDecoder_CanDecode_RunLengthEncoded_8Bit<TPixel>(TestImageProvider<TPixel> provider, bool enforceDiscontiguousBuffers)
             where TPixel : unmanaged, IPixel<TPixel>
         {
@@ -267,6 +278,26 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             {
                 image.DebugSave(provider);
                 image.CompareToOriginal(provider, new MagickReferenceDecoder());
+            }
+        }
+
+        // Magick.NET 14+ rejects top-down RLE bitmaps, so the reference output was captured from
+        // ImageSharp after it matched Magick.NET 11.1.2.
+        [Theory]
+        [WithFile(RLE8Inverted, PixelTypes.Rgba32, false)]
+        [WithFile(RLE8Inverted, PixelTypes.Rgba32, true)]
+        public void BmpDecoder_CanDecode_RunLengthEncoded_8Bit_Inverted<TPixel>(TestImageProvider<TPixel> provider, bool enforceDiscontiguousBuffers)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (enforceDiscontiguousBuffers)
+            {
+                provider.LimitAllocatorBufferCapacity().InBytesSqrt(400);
+            }
+
+            using (Image<TPixel> image = provider.GetImage(new BmpDecoder { RleSkippedPixelHandling = RleSkippedPixelHandling.FirstColorOfPalette }))
+            {
+                image.DebugSave(provider);
+                image.CompareToReferenceOutput(ImageComparer.Exact, provider);
             }
         }
 

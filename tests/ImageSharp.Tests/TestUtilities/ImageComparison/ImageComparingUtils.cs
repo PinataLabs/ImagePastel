@@ -45,7 +45,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison
             using (var magickImage = new MagickImage(fileInfo))
             {
                 magickImage.AutoOrient();
-                var result = new Image<TPixel>(configuration, magickImage.Width, magickImage.Height);
+                var result = new Image<TPixel>(configuration, (int)magickImage.Width, (int)magickImage.Height);
 
                 Assert.True(result.DangerousTryGetSinglePixelMemory(out Memory<TPixel> resultPixels));
 

@@ -73,7 +73,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs
             var framesList = new List<ImageFrame<TPixel>>();
             foreach (IMagickImage<ushort> magicFrame in magickImageCollection)
             {
-                var frame = new ImageFrame<TPixel>(configuration, magicFrame.Width, magicFrame.Height);
+                var frame = new ImageFrame<TPixel>(configuration, (int)magicFrame.Width, (int)magicFrame.Height);
                 framesList.Add(frame);
 
                 MemoryGroup<TPixel> framePixels = frame.PixelBuffer.FastMemoryGroup;
