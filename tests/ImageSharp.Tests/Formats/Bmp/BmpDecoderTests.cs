@@ -101,7 +101,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             using (Image<TPixel> image = provider.GetImage(BmpDecoder))
             {
                 image.DebugSave(provider);
-                image.CompareToOriginal(provider);
+                CompareToOriginalOrReferenceOutput(image, provider);
             }
         }
 
@@ -114,7 +114,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             using (Image<TPixel> image = provider.GetImage(BmpDecoder))
             {
                 image.DebugSave(provider);
-                image.CompareToOriginal(provider);
+                CompareToOriginalOrReferenceOutput(image, provider);
             }
         }
 
@@ -166,7 +166,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             using (Image<TPixel> image = provider.GetImage(BmpDecoder))
             {
                 image.DebugSave(provider);
-                image.CompareToOriginal(provider);
+                CompareToOriginalOrReferenceOutput(image, provider);
             }
         }
 
@@ -205,7 +205,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             using (Image<TPixel> image = provider.GetImage(new BmpDecoder { RleSkippedPixelHandling = skippedPixelHandling }))
             {
                 image.DebugSave(provider);
-                image.CompareToOriginal(provider);
+                CompareToOriginalOrReferenceOutput(image, provider);
             }
         }
 
@@ -693,6 +693,22 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             {
                 using Image<Rgba32> image = Image.Load<Rgba32>(stream);
             });
+        }
+
+        // On Linux and macOS the reference decoder is Magick.NET. Magick.NET 14+ decodes 16-bit bitfield
+        // bitmaps differently and rejects truncated RLE4 data. There, compare with reference output captured
+        // from ImageSharp, which matches System.Drawing and Magick.NET 11.1.2.
+        private static void CompareToOriginalOrReferenceOutput<TPixel>(Image<TPixel> image, TestImageProvider<TPixel> provider)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (TestEnvironment.IsWindows)
+            {
+                image.CompareToOriginal(provider);
+            }
+            else
+            {
+                image.CompareToReferenceOutput(ImageComparer.Tolerant(), provider);
+            }
         }
     }
 }

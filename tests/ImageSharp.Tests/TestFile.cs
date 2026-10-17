@@ -144,7 +144,9 @@ namespace SixLabors.ImageSharp.Tests
         /// </returns>
         public Image<Rgba32> CreateRgba32Image(IImageDecoder decoder)
         {
-            return ImageSharp.Image.Load<Rgba32>(this.Image.GetConfiguration(), this.Bytes, decoder);
+            // Use Configuration.Default directly: reading this.Image here would decode and cache an
+            // undisposed image, which ValidateDisposedMemoryAllocations charges to whichever test runs first.
+            return ImageSharp.Image.Load<Rgba32>(Configuration.Default, this.Bytes, decoder);
         }
     }
 }
