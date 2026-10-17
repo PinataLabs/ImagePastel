@@ -7,15 +7,11 @@
   </Configurations>
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />
-    <File Path="src/Directory.Build.targets" />
     <File Path="src/README.md" />
     <Project Path="src/ImageSharp/ImageSharp.csproj" />
-    <Project Path="src/SharedInfrastructure/SharedInfrastructure.shproj" />
   </Folder>
   <Folder Name="/tests/">
     <File Path="tests/Directory.Build.props" />
-    <File Path="tests/Directory.Build.targets" />
-    <File Path="tests/ImageSharp.Tests.ruleset" />
     <Project Path="tests/ImageSharp.Benchmarks/ImageSharp.Benchmarks.csproj" />
     <Project Path="tests/ImageSharp.Tests.ProfilingSandbox/ImageSharp.Tests.ProfilingSandbox.csproj" />
     <Project Path="tests/ImageSharp.Tests/ImageSharp.Tests.csproj" />
@@ -577,7 +573,6 @@
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
-    <File Path=".runsettings" />
     <File Path="ci-apicompat.ps1" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Build.targets" />
