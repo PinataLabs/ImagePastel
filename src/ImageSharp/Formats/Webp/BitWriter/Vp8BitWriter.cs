@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Webp.Lossy;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 
 namespace SixLabors.ImageSharp.Formats.Webp.BitWriter;
@@ -406,6 +407,7 @@ internal class Vp8BitWriter : BitWriterBase
     /// <param name="stream">The stream to write to.</param>
     /// <param name="exifProfile">The exif profile.</param>
     /// <param name="xmpProfile">The XMP profile.</param>
+    /// <param name="iccProfile">The ICC profile.</param>
     /// <param name="width">The width of the image.</param>
     /// <param name="height">The height of the image.</param>
     /// <param name="hasAlpha">Flag indicating, if a alpha channel is present.</param>
@@ -415,6 +417,7 @@ internal class Vp8BitWriter : BitWriterBase
         Stream stream,
         ExifProfile exifProfile,
         XmpProfile xmpProfile,
+        IccProfile iccProfile,
         uint width,
         uint height,
         bool hasAlpha,
@@ -424,6 +427,7 @@ internal class Vp8BitWriter : BitWriterBase
         bool isVp8X = false;
         byte[] exifBytes = null;
         byte[] xmpBytes = null;
+        byte[] iccBytes = null;
         uint riffSize = 0;
         if (exifProfile != null)
         {
@@ -437,6 +441,13 @@ internal class Vp8BitWriter : BitWriterBase
             isVp8X = true;
             xmpBytes = xmpProfile.Data;
             riffSize += this.MetadataChunkSize(xmpBytes);
+        }
+
+        if (iccProfile != null)
+        {
+            isVp8X = true;
+            iccBytes = iccProfile.ToByteArray();
+            riffSize += this.MetadataChunkSize(iccBytes);
         }
 
         if (hasAlpha)
@@ -470,7 +481,7 @@ internal class Vp8BitWriter : BitWriterBase
         riffSize += WebpConstants.TagSize + WebpConstants.ChunkHeaderSize + vp8Size;
 
         // Emit headers and partition #0
-        this.WriteWebpHeaders(stream, size0, vp8Size, riffSize, isVp8X, width, height, exifProfile, xmpProfile, hasAlpha, alphaData, alphaDataIsCompressed);
+        this.WriteWebpHeaders(stream, size0, vp8Size, riffSize, isVp8X, width, height, exifProfile, xmpProfile, iccProfile, iccBytes, hasAlpha, alphaData, alphaDataIsCompressed);
         bitWriterPartZero.WriteToStream(stream);
 
         // Write the encoded image to the stream.
@@ -668,6 +679,8 @@ internal class Vp8BitWriter : BitWriterBase
         uint height,
         ExifProfile exifProfile,
         XmpProfile xmpProfile,
+        IccProfile iccProfile,
+        byte[] iccBytes,
         bool hasAlpha,
         Span<byte> alphaData,
         bool alphaDataIsCompressed)
@@ -677,7 +690,12 @@ internal class Vp8BitWriter : BitWriterBase
         // Write VP8X, header if necessary.
         if (isVp8X)
         {
-            this.WriteVp8XHeader(stream, exifProfile, xmpProfile, width, height, hasAlpha);
+            this.WriteVp8XHeader(stream, exifProfile, xmpProfile, iccProfile, width, height, hasAlpha);
+            if (iccProfile != null)
+            {
+                this.WriteMetadataProfile(stream, iccBytes, WebpChunkType.Iccp);
+            }
+
             if (hasAlpha)
             {
                 this.WriteAlphaChunk(stream, alphaData, alphaDataIsCompressed);
