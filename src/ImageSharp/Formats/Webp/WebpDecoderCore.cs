@@ -39,6 +39,16 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     private Stream currentStream;
 
     /// <summary>
+    /// The stream position where the RIFF payload ends. Bytes after it are not part of the image.
+    /// </summary>
+    private long riffEnd;
+
+    /// <summary>
+    /// A value indicating whether the stream ends before the end of the image data chunk.
+    /// </summary>
+    private bool imageDataTruncated;
+
+    /// <summary>
     /// The webp specific metadata.
     /// </summary>
     private WebpMetadata webpMetadata;
@@ -76,7 +86,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// <summary>
     /// Gets the dimensions of the image.
     /// </summary>
-    public Size Dimensions => new((int)this.webImageInfo.Width, (int)this.webImageInfo.Height);
+    public Size Dimensions => this.webImageInfo == null ? default : new((int)this.webImageInfo.Width, (int)this.webImageInfo.Height);
+
+    /// <summary>
+    /// Gets the number of bytes left in the stream. Image data chunks are checked against this rather than the RIFF payload,
+    /// so image data that runs past a too small RIFF size can still be decoded.
+    /// </summary>
+    private long RemainingStreamBytes => this.currentStream.Length - this.currentStream.Position;
 
     /// <inheritdoc />
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
@@ -99,15 +115,23 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
                 image = new Image<TPixel>(this.Configuration, (int)this.webImageInfo.Width, (int)this.webImageInfo.Height, this.Metadata);
                 Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
-                if (this.webImageInfo.IsLossless)
+                try
                 {
-                    var losslessDecoder = new WebpLosslessDecoder(this.webImageInfo.Vp8LBitReader, this.memoryAllocator, this.Configuration);
-                    losslessDecoder.Decode(pixels, image.Width, image.Height);
+                    if (this.webImageInfo.IsLossless)
+                    {
+                        var losslessDecoder = new WebpLosslessDecoder(this.webImageInfo.Vp8LBitReader, this.memoryAllocator, this.Configuration);
+                        losslessDecoder.Decode(pixels, image.Width, image.Height);
+                    }
+                    else
+                    {
+                        var lossyDecoder = new WebpLossyDecoder(this.webImageInfo.Vp8BitReader, this.memoryAllocator, this.Configuration);
+                        lossyDecoder.Decode(pixels, image.Width, image.Height, this.webImageInfo);
+                    }
                 }
-                else
+                catch (ImageFormatException ex) when (this.imageDataTruncated && ex is not InvalidImageContentException)
                 {
-                    var lossyDecoder = new WebpLossyDecoder(this.webImageInfo.Vp8BitReader, this.memoryAllocator, this.Configuration);
-                    lossyDecoder.Decode(pixels, image.Width, image.Height, this.webImageInfo);
+                    // The missing end of the image data is read as zeros. When that is not a valid bitstream, report the truncation.
+                    throw new InvalidImageContentException("Not enough data to decode the image", ex);
                 }
 
                 // There can be optional chunks after the image data, like EXIF and XMP.
@@ -144,6 +168,8 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// <returns>The file size in bytes.</returns>
     private uint ReadImageHeader()
     {
+        long riffStart = this.currentStream.Position;
+
         // Skip FourCC header, we already know its a RIFF file at this point.
         this.currentStream.Skip(4);
 
@@ -151,6 +177,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         // The size of the file in bytes starting at offset 8.
         // The file size in the header is the total size of the chunks that follow plus 4 bytes for the ‘WEBP’ FourCC.
         uint fileSize = this.ReadChunkSize();
+
+        // Chunks are only read up to the end of the RIFF payload, so trailing bytes after it are ignored.
+        // A stream shorter than the declared size is truncated, and reading stops at its end.
+        this.riffEnd = Math.Min(riffStart + 8 + fileSize, this.currentStream.Length);
 
         // Skip 'WEBP' from the header.
         this.currentStream.Skip(4);
@@ -205,11 +235,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             WebpThrowHelper.ThrowInvalidImageContentException("VP8X header doe not contain enough data");
         }
 
-        // The first two bit of it are reserved and should be 0.
-        if (imageFeatures >> 6 != 0)
-        {
-            WebpThrowHelper.ThrowImageFormatException("first two bits of the VP8X header are expected to be zero");
-        }
+        // The first two bits and the last bit are reserved. Readers must ignore them.
 
         // If bit 3 is set, a ICC Profile Chunk should be present.
         features.IccProfile = (imageFeatures & (1 << 5)) != 0;
@@ -226,16 +252,11 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         // If bit 7 is set, animation should be present.
         features.Animation = (imageFeatures & (1 << 1)) != 0;
 
-        // 3 reserved bytes should follow which are supposed to be zero.
+        // 3 reserved bytes follow. Writers set them to zero, but readers must ignore them.
         int bytesRead = this.currentStream.Read(this.buffer, 0, 3);
         if (bytesRead != 3)
         {
             WebpThrowHelper.ThrowInvalidImageContentException("VP8X header does not contain enough data");
-        }
-
-        if (this.buffer[0] != 0 || this.buffer[1] != 0 || this.buffer[2] != 0)
-        {
-            WebpThrowHelper.ThrowImageFormatException("reserved bytes should be zero");
         }
 
         // 3 bytes for the width.
@@ -260,36 +281,51 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         // Read all the chunks in the order they occur.
         var info = new WebpImageInfo();
-        while (this.currentStream.Position < this.currentStream.Length)
+        try
         {
-            WebpChunkType chunkType = this.ReadChunkType();
-            if (chunkType == WebpChunkType.Vp8)
+            while (this.currentStream.Position < this.riffEnd)
             {
-                info = this.ReadVp8Header(features);
+                WebpChunkType chunkType = this.ReadChunkType();
+                if (chunkType == WebpChunkType.Vp8)
+                {
+                    info = this.ReadVp8Header(features);
+                }
+                else if (chunkType == WebpChunkType.Vp8L)
+                {
+                    info = this.ReadVp8LHeader(features);
+                }
+                else if (IsOptionalVp8XChunk(chunkType))
+                {
+                    this.ParseOptionalExtendedChunks(chunkType, features);
+                }
+                else
+                {
+                    // Ignore unknown chunks.
+                    uint chunkSize = this.ReadChunkSize();
+                    this.SkipChunkData(chunkSize);
+                }
             }
-            else if (chunkType == WebpChunkType.Vp8L)
-            {
-                info = this.ReadVp8LHeader(features);
-            }
-            else if (IsOptionalVp8XChunk(chunkType))
-            {
-                this.ParseOptionalExtendedChunks(chunkType, features);
-            }
-            else
-            {
-                // Ignore unknown chunks.
-                uint chunkSize = this.ReadChunkSize();
-                this.currentStream.Skip((int)chunkSize);
-            }
-        }
 
-        if (features.Animation)
+            if (features.Animation)
+            {
+                // TODO: Animations are not yet supported.
+                return new WebpImageInfo() { Width = width, Height = height, Features = features };
+            }
+
+            if (info.Vp8BitReader == null && info.Vp8LBitReader == null)
+            {
+                WebpThrowHelper.ThrowInvalidImageContentException("No VP8 or VP8L image data chunk found");
+            }
+
+            return info;
+        }
+        catch
         {
-            // TODO: Animations are not yet supported.
-            return new WebpImageInfo() { Width = width, Height = height, Features = features };
+            // A chunk that can not be read leaves the buffers of the chunks before it unowned.
+            info.Dispose();
+            features.Dispose();
+            throw;
         }
-
-        return info;
     }
 
     /// <summary>
@@ -309,6 +345,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         }
 
         uint dataSize = BinaryPrimitives.ReadUInt32LittleEndian(this.buffer);
+        if (dataSize < WebpConstants.Vp8FrameHeaderSize)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8 data size is smaller than the frame header");
+        }
 
         // remaining counts the available image data payload.
         uint remaining = dataSize;
@@ -393,6 +433,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             PartitionLength = partitionLength
         };
 
+        // The bit reader holds the data in a single buffer, which can not be larger than int.MaxValue.
+        if (remaining >= int.MaxValue)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8 data size is too large");
+        }
+
+        this.imageDataTruncated = remaining > this.RemainingStreamBytes;
         var bitReader = new Vp8BitReader(
             this.currentStream,
             remaining,
@@ -428,6 +475,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         // VP8 data size.
         uint imageDataSize = this.ReadChunkSize();
+        this.imageDataTruncated = imageDataSize > this.RemainingStreamBytes;
+
+        // The header has a 1 byte signature and 32 bits for the size, alpha flag and version.
+        if (this.RemainingStreamBytes < 5)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the VP8L header");
+        }
 
         var bitReader = new Vp8LBitReader(this.currentStream, imageDataSize, this.memoryAllocator);
 
@@ -496,6 +550,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
             case WebpChunkType.Alpha:
                 uint alphaChunkSize = this.ReadChunkSize();
+
+                // The chunk holds a 1 byte header and the alpha data. Check its size before allocating the data.
+                if (alphaChunkSize == 0 || alphaChunkSize > this.RemainingStreamBytes)
+                {
+                    WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the alpha chunk");
+                }
+
                 features.AlphaChunkHeader = (byte)this.currentStream.ReadByte();
                 int alphaDataSize = (int)(alphaChunkSize - 1);
                 features.AlphaData = this.memoryAllocator.Allocate<byte>(alphaDataSize);
@@ -525,8 +586,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             return;
         }
 
-        long streamLength = this.currentStream.Length;
-        while (this.currentStream.Position < streamLength)
+        while (this.currentStream.Position < this.riffEnd)
         {
             // Read chunk header.
             WebpChunkType chunkType = this.ReadChunkType();
@@ -542,7 +602,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             {
                 // Skip duplicate XMP or EXIF chunk.
                 uint chunkLength = this.ReadChunkSize();
-                this.currentStream.Skip((int)chunkLength);
+                this.SkipChunkData(chunkLength);
             }
         }
     }
@@ -555,13 +615,12 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         uint exifChunkSize = this.ReadChunkSize();
         if (this.IgnoreMetadata)
         {
-            this.currentStream.Skip((int)exifChunkSize);
+            this.SkipChunkData(exifChunkSize);
         }
         else
         {
-            byte[] exifData = new byte[exifChunkSize];
-            int bytesRead = this.currentStream.Read(exifData, 0, (int)exifChunkSize);
-            if (bytesRead != exifChunkSize)
+            byte[] exifData = this.ReadChunkData(exifChunkSize);
+            if (exifData == null)
             {
                 // Ignore invalid chunk.
                 return;
@@ -580,13 +639,12 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         uint xmpChunkSize = this.ReadChunkSize();
         if (this.IgnoreMetadata)
         {
-            this.currentStream.Skip((int)xmpChunkSize);
+            this.SkipChunkData(xmpChunkSize);
         }
         else
         {
-            byte[] xmpData = new byte[xmpChunkSize];
-            int bytesRead = this.currentStream.Read(xmpData, 0, (int)xmpChunkSize);
-            if (bytesRead != xmpChunkSize)
+            byte[] xmpData = this.ReadChunkData(xmpChunkSize);
+            if (xmpData == null)
             {
                 // Ignore invalid chunk.
                 return;
@@ -605,13 +663,12 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         uint iccpChunkSize = this.ReadChunkSize();
         if (this.IgnoreMetadata)
         {
-            this.currentStream.Skip((int)iccpChunkSize);
+            this.SkipChunkData(iccpChunkSize);
         }
         else
         {
-            byte[] iccpData = new byte[iccpChunkSize];
-            int bytesRead = this.currentStream.Read(iccpData, 0, (int)iccpChunkSize);
-            if (bytesRead != iccpChunkSize)
+            byte[] iccpData = this.ReadChunkData(iccpChunkSize);
+            if (iccpData == null)
             {
                 WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the iccp chunk");
             }
@@ -625,10 +682,36 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
+    /// Reads the data of a metadata chunk. The data is only allocated once the chunk is known to fit in the rest of the RIFF payload.
+    /// </summary>
+    /// <param name="chunkSize">The chunk size in bytes.</param>
+    /// <returns>The chunk data, or null if the chunk extends past the end of the RIFF payload.</returns>
+    private byte[] ReadChunkData(uint chunkSize)
+    {
+        if (chunkSize > this.riffEnd - this.currentStream.Position)
+        {
+            // Nothing after a chunk with an invalid size can be located, so skip to the end of the payload.
+            this.currentStream.Position = this.riffEnd;
+            return null;
+        }
+
+        byte[] data = new byte[chunkSize];
+        int bytesRead = this.currentStream.Read(data, 0, (int)chunkSize);
+        return bytesRead == chunkSize ? data : null;
+    }
+
+    /// <summary>
+    /// Skips the data of a chunk, stopping at the end of the RIFF payload if the chunk extends past it.
+    /// </summary>
+    /// <param name="chunkSize">The chunk size in bytes.</param>
+    private void SkipChunkData(uint chunkSize)
+        => this.currentStream.Position = Math.Min(this.currentStream.Position + chunkSize, this.riffEnd);
+
+    /// <summary>
     /// Identifies the chunk type from the chunk.
     /// </summary>
-    /// <exception cref="ImageFormatException">
-    /// Thrown if the input stream is not valid.
+    /// <exception cref="InvalidImageContentException">
+    /// Thrown if the stream ends inside the chunk header.
     /// </exception>
     private WebpChunkType ReadChunkType()
     {
@@ -638,7 +721,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             return chunkType;
         }
 
-        throw new ImageFormatException("Invalid Webp data.");
+        throw new InvalidImageContentException("Not enough data to read the chunk type");
     }
 
     /// <summary>
@@ -646,15 +729,20 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     /// so the chunk size will be increased by 1 in those cases.
     /// </summary>
     /// <returns>The chunk size in bytes.</returns>
+    /// <exception cref="InvalidImageContentException">
+    /// Thrown if the stream ends inside the chunk header.
+    /// </exception>
     private uint ReadChunkSize()
     {
         if (this.currentStream.Read(this.buffer, 0, 4) == 4)
         {
             uint chunkSize = BinaryPrimitives.ReadUInt32LittleEndian(this.buffer);
-            return (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
+
+            // uint.MaxValue is left as is rather than wrapped to zero. No stream is long enough to hold it anyway.
+            return (chunkSize % 2 == 0 || chunkSize == uint.MaxValue) ? chunkSize : chunkSize + 1;
         }
 
-        throw new ImageFormatException("Invalid Webp data.");
+        throw new InvalidImageContentException("Not enough data to read the chunk size");
     }
 
     /// <summary>

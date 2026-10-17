@@ -29,8 +29,21 @@ internal abstract class BitReaderBase : IDisposable
     protected void ReadImageDataFromStream(Stream input, int bytesToRead, MemoryAllocator memoryAllocator)
     {
         this.Data = memoryAllocator.Allocate<byte>(bytesToRead);
-        Span<byte> dataSpan = this.Data.Memory.Span;
-        input.Read(dataSpan.Slice(0, bytesToRead), 0, bytesToRead);
+        Span<byte> dataSpan = this.Data.Memory.Span.Slice(0, bytesToRead);
+        int totalBytesRead = 0;
+        while (totalBytesRead < bytesToRead)
+        {
+            int bytesRead = input.Read(dataSpan.Slice(totalBytesRead));
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            totalBytesRead += bytesRead;
+        }
+
+        // A truncated stream leaves the end of the buffer unread. Clear it, so the missing data is read as zeros.
+        dataSpan.Slice(totalBytesRead).Clear();
     }
 
     protected virtual void Dispose(bool disposing)
