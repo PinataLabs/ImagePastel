@@ -27,7 +27,7 @@ You need the .NET 10 SDK and [Git LFS](https://git-lfs.com/).
 Install Git LFS before you clone the repository. If you do not, the test images are missing.
 
 1. Get the test images: `git lfs pull`.
-2. Build the solution: `dotnet build ImageSharp.sln -c Release`.
+2. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
 3. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
 4. Compare the public API with the baseline: `pwsh ./ci-apicompat.ps1`.
 
