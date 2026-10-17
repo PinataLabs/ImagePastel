@@ -1,0 +1,119 @@
+name: Pre-release
+
+# Publishes the head of main as a pre-release to nuget.org. No tag is created
+# and no GitHub Release is made: MinVer versions a commit that is not exactly a
+# release tag as the next version plus a pre-release suffix, for example
+# 2.2.1-beta.4 four commits after v2.2.0, so every run is a new version.
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease-label:
+        description: 'Pre-release label'
+        required: true
+        default: 'alpha'
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+      dry-run:
+        description: 'Dry run (pack, skip the nuget.org publish)'
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+jobs:
+  prerelease:
+    name: Pre-release (${{ inputs.prerelease-label }})
+    runs-on: ubuntu-latest
+    # Protect this environment: deployments only from main and v* tags, with a required reviewer.
+    environment: nuget
+    permissions:
+      contents: read
+      # Trusted Publishing exchanges the GitHub OIDC token for a short-lived nuget.org API key.
+      id-token: write
+      # Reads the CI result for the head of main.
+      actions: read
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MinVerDefaultPreReleaseIdentifiers: ${{ inputs.prerelease-label }}
+
+    steps:
+      - name: Check branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Pre-releases must be published from main (got $GITHUB_REF_NAME)"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer computes the version from tags.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Require green CI
+        run: bash .github/scripts/require-green-ci.sh "$(git rev-parse HEAD)"
+
+      # Only the package icon is needed from LFS.
+      - name: Pull LFS package icon
+        run: git lfs pull --include "build/branding/*"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Pack
+        run: dotnet pack src/ImageSharp/ImageSharp.csproj -c Release -o artifacts/packages
+
+      # A pre-release run that published a stable version would take a version number
+      # the real release then cannot have - nuget.org never reuses one. That happens
+      # when the head of main is exactly a release tag.
+      - name: Refuse a stable version
+        run: |
+          ls -la artifacts/packages
+          for package in artifacts/packages/*.nupkg; do
+            case "$(basename "$package")" in
+              *-*) ;;
+              *)
+                echo "::error::$(basename "$package") is not a pre-release version - the head of main is a release tag"
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prerelease-packages
+          path: artifacts/packages/
+
+      - name: NuGet login
+        if: ${{ !inputs.dry-run }}
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Pushes the matching .snupkg symbol package alongside.
+      - name: Push to NuGet
+        if: ${{ !inputs.dry-run }}
+        run: >
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --skip-duplicate
+
+      - name: Dry run summary
+        if: ${{ inputs.dry-run }}
+        run: |
+          {
+            echo "### Dry run - nothing was published"
+            echo
+            echo "Packed: $(cd artifacts/packages && ls *.nupkg)"
+          } >> "$GITHUB_STEP_SUMMARY"

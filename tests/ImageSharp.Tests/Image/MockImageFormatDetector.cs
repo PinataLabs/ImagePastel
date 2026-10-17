@@ -4,25 +4,24 @@
 using System;
 using SixLabors.ImageSharp.Formats;
 
-namespace SixLabors.ImageSharp.Tests
+namespace SixLabors.ImageSharp.Tests;
+
+/// <summary>
+///  You can't mock the "DetectFormat" method due to the  ReadOnlySpan{byte} parameter.
+/// </summary>
+public class MockImageFormatDetector : IImageFormatDetector
 {
-    /// <summary>
-    ///  You can't mock the "DetectFormat" method due to the  ReadOnlySpan{byte} parameter.
-    /// </summary>
-    public class MockImageFormatDetector : IImageFormatDetector
+    private IImageFormat localImageFormatMock;
+
+    public MockImageFormatDetector(IImageFormat imageFormat)
     {
-        private IImageFormat localImageFormatMock;
+        this.localImageFormatMock = imageFormat;
+    }
 
-        public MockImageFormatDetector(IImageFormat imageFormat)
-        {
-            this.localImageFormatMock = imageFormat;
-        }
+    public int HeaderSize => 1;
 
-        public int HeaderSize => 1;
-
-        public IImageFormat DetectFormat(ReadOnlySpan<byte> header)
-        {
-            return this.localImageFormatMock;
-        }
+    public IImageFormat DetectFormat(ReadOnlySpan<byte> header)
+    {
+        return this.localImageFormatMock;
     }
 }

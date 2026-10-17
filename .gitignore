@@ -227,3 +227,6 @@ artifacts/
 #lfs
 hooks/**
 lfs/**
+
+# Claude Code local state
+.claude/

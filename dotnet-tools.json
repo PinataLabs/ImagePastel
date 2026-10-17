@@ -8,6 +8,20 @@
         "apicompat"
       ],
       "rollForward": false
+    },
+    "dotnet-reportgenerator-globaltool": {
+      "version": "5.5.11",
+      "commands": [
+        "reportgenerator"
+      ],
+      "rollForward": false
+    },
+    "dotnet-t4": {
+      "version": "3.0.0",
+      "commands": [
+        "t4"
+      ],
+      "rollForward": false
     }
   }
 }

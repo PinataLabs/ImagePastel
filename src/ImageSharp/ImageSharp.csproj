@@ -52,11 +52,6 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Block8x8F.Generated.tt</DependentUpon>
     </Compile>
-    <Compile Update="Formats\Jpeg\Components\Block8x8F.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Block8x8F.Generated.tt</DependentUpon>
-    </Compile>
     <Compile Update="PixelFormats\PixelImplementations\PixelOperations\Generated\Abgr32.PixelOperations.Generated.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -142,13 +137,14 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>ImageExtensions.Save.tt</DependentUpon>
     </Compile>
+    <Compile Update="Common\SharedInfrastructure\Guard.Numeric.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Guard.Numeric.tt</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Formats\Jpeg\Components\Block8x8F.Generated.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Block8x8F.Generated.cs</LastGenOutput>
-    </None>
     <None Update="Formats\Jpeg\Components\Block8x8F.Generated.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>Block8x8F.Generated.cs</LastGenOutput>
@@ -221,11 +217,14 @@
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>ImageExtensions.Save.cs</LastGenOutput>
     </None>
+    <None Update="Common\SharedInfrastructure\Guard.Numeric.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Guard.Numeric.cs</LastGenOutput>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
 
-  <Import Project="..\SharedInfrastructure\SharedInfrastructure.projitems" Label="Shared" />
 </Project>

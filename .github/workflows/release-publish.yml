@@ -1,0 +1,125 @@
+name: Publish Release
+
+# One-click stable release:
+#
+#   1. checks the version and that CI passed on the head of main
+#   2. tags the head of main
+#   3. calls release.yml, which packs, publishes to nuget.org, and creates the GitHub Release
+#
+# Dry run is on by default: it checks everything and reports, but creates no tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 2.2.0'
+        required: true
+        type: string
+      dry-run:
+        description: 'Dry run - check the version and CI without tagging or publishing'
+        required: false
+        default: true
+        type: boolean
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    permissions:
+      # Pushes the release tag.
+      contents: write
+      # Reads the CI result for the head of main.
+      actions: read
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Releases must be published from main (got $GITHUB_REF_NAME)"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version
+        id: resolve
+        # The input is passed through the environment, never interpolated into
+        # the script - a workflow_dispatch input is attacker-controlled text.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION#v}"
+
+          if ! printf '%s' "$version" | grep -qE '^2\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$version' is not a stable 2.MINOR.PATCH version. This fork releases the v2 line only, and pre-releases go through the Pre-release workflow."
+            exit 1
+          fi
+
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+
+          # A version once pushed to nuget.org can never be reused, so refuse anything that
+          # is not an increase. Compare only v2 tags reachable from main: the fork also
+          # carries upstream v3 and v4 tags that are not part of this line.
+          latest=$(git tag --merged HEAD --list 'v2.*' --sort=-v:refname | head -n 1)
+          if [ -n "$latest" ] && \
+             [ "$(printf '%s\n%s\n' "$version" "${latest#v}" | sort -V | head -n 1)" = "$version" ]; then
+            echo "::error::$tag is not an increase over the latest tag $latest"
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (latest v2 tag on main: ${latest:-none})"
+
+      - name: Require green CI
+        run: bash .github/scripts/require-green-ci.sh "$(git rev-parse HEAD)"
+
+      - name: Dry run summary
+        if: ${{ inputs.dry-run }}
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          {
+            echo "### Dry run - nothing was published"
+            echo
+            echo "Would tag $(git rev-parse --short HEAD) as **$TAG** and publish it to nuget.org."
+            echo
+            echo "Run again with **dry-run** unchecked to tag and publish."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tag
+        if: ${{ !inputs.dry-run }}
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+  release:
+    name: Release
+    needs: prepare
+    if: ${{ !inputs.dry-run }}
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    secrets: inherit

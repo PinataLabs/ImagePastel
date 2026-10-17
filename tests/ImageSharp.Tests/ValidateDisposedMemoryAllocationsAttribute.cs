@@ -4,30 +4,29 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
-using Xunit.Sdk;
+using Xunit.v3;
 
-namespace SixLabors.ImageSharp.Tests
+namespace SixLabors.ImageSharp.Tests;
+
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+public class ValidateDisposedMemoryAllocationsAttribute : BeforeAfterTestAttribute
 {
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
-    public class ValidateDisposedMemoryAllocationsAttribute : BeforeAfterTestAttribute
+    private readonly int expected = 0;
+
+    public ValidateDisposedMemoryAllocationsAttribute()
+        : this(0)
     {
-        private readonly int expected = 0;
+    }
 
-        public ValidateDisposedMemoryAllocationsAttribute()
-            : this(0)
-        {
-        }
+    public ValidateDisposedMemoryAllocationsAttribute(int expected)
+        => this.expected = expected;
 
-        public ValidateDisposedMemoryAllocationsAttribute(int expected)
-            => this.expected = expected;
+    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
+        => MemoryAllocatorValidator.MonitorAllocations();
 
-        public override void Before(MethodInfo methodUnderTest)
-            => MemoryAllocatorValidator.MonitorAllocations();
-
-        public override void After(MethodInfo methodUnderTest)
-        {
-            MemoryAllocatorValidator.ValidateAllocations(this.expected);
-            MemoryAllocatorValidator.StopMonitoringAllocations();
-        }
+    public override void After(MethodInfo methodUnderTest, IXunitTest test)
+    {
+        MemoryAllocatorValidator.ValidateAllocations(this.expected);
+        MemoryAllocatorValidator.StopMonitoringAllocations();
     }
 }

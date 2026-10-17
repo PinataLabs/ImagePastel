@@ -6,19 +6,18 @@ using SixLabors.ImageSharp.Processing.Processors.Transforms;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Transforms
-{
-    [Trait("Category", "Processors")]
-    public class SkewTest : BaseImageOperationsExtensionTest
-    {
-        [Fact]
-        public void SkewXYCreateSkewProcessorWithAnglesSet()
-        {
-            this.operations.Skew(10, 20);
-            SkewProcessor processor = this.Verify<SkewProcessor>();
+namespace SixLabors.ImageSharp.Tests.Processing.Transforms;
 
-            Assert.Equal(10, processor.DegreesX);
-            Assert.Equal(20, processor.DegreesY);
-        }
+[Trait("Category", "Processors")]
+public class SkewTest : BaseImageOperationsExtensionTest
+{
+    [Fact]
+    public void SkewXYCreateSkewProcessorWithAnglesSet()
+    {
+        this.operations.Skew(10, 20);
+        SkewProcessor processor = this.Verify<SkewProcessor>();
+
+        Assert.Equal(10, processor.DegreesX);
+        Assert.Equal(20, processor.DegreesY);
     }
 }

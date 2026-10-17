@@ -4,16 +4,15 @@
 using System.IO;
 using SixLabors.ImageSharp.IO;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities
+namespace SixLabors.ImageSharp.Tests.TestUtilities;
+
+internal class SingleStreamFileSystem : IFileSystem
 {
-    internal class SingleStreamFileSystem : IFileSystem
-    {
-        private readonly Stream stream;
+    private readonly Stream stream;
 
-        public SingleStreamFileSystem(Stream stream) => this.stream = stream;
+    public SingleStreamFileSystem(Stream stream) => this.stream = stream;
 
-        Stream IFileSystem.Create(string path) => this.stream;
+    Stream IFileSystem.Create(string path) => this.stream;
 
-        Stream IFileSystem.OpenRead(string path) => this.stream;
-    }
+    Stream IFileSystem.OpenRead(string path) => this.stream;
 }

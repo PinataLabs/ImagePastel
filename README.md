@@ -7,13 +7,19 @@
 PinataLabs.ImageSharp is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
 
+> [!IMPORTANT]
+> This fork exists only to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
+> Pinata Labs does not offer support for this package.
+> For a supported version, use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package from [Six Labors](https://github.com/SixLabors/ImageSharp).
+
 > **Community fork.** This package is a fork of [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) 2.1.x, the last release line under the Apache License 2.0.
 > Pinata Labs maintains the fork. Pinata Labs is not affiliated with Six Labors, and Six Labors does not endorse this package.
 
 ## Security
 
 This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
-Pinata Labs does not port security fixes that Six Labors publishes after that date.
+Pinata Labs fixes security issues in this v2 line.
+If Six Labors publishes a security fix that applies to the v2 code, Pinata Labs ports the fix to this fork.
 
 To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md).
 
@@ -58,8 +64,8 @@ The package does not support .NET Framework.
 
 Versions continue the 2.x line and start at 2.2.0. The project uses [semantic versioning](https://semver.org/).
 
-Each push to `main` publishes a prerelease package to [GitHub Packages](https://github.com/PinataLabs/ImageSharp/packages).
-Each `v*` tag publishes a release to [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
+Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
+A maintainer starts each one by hand. A push to `main` does not publish a package.
 
 ## Documentation
 
@@ -75,7 +81,7 @@ The test images are in Git LFS.
 1. On Windows, enable long file paths in Git: `git config --system core.longpaths true`.
 2. Clone the repository: `git clone https://github.com/PinataLabs/ImageSharp`.
 3. Get the test images: `git lfs pull`.
-4. Build the solution: `dotnet build ImageSharp.sln -c Release`.
+4. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
 5. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
 
 The build treats all warnings as errors.

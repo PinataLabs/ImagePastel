@@ -3,6 +3,11 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.Collections.Generic" #>
+<#
+// Templates that include this file put the include directive and the next directive
+// on the same line. Visual Studio keeps the newline after an include directive and
+// dotnet-t4 drops it, so a newline there would make the two outputs differ.
+#>
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
@@ -10,7 +15,7 @@
 
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
-using Xunit.Abstractions;
+
 <#+
     private static readonly string[] UnassociatedAlphaPixelTypes =
     {
@@ -71,25 +76,25 @@ using Xunit.Abstractions;
     void GenerateSpecializedClass(string pixelType, string alpha)
     {
 #>
-        public partial class <#=pixelType#>_OperationsTests : PixelOperationsTests<<#=pixelType#>>
+    public partial class <#=pixelType#>_OperationsTests : PixelOperationsTests<<#=pixelType#>>
+    {
+        public <#=pixelType#>_OperationsTests(ITestOutputHelper output)
+            : base(output)
         {
-            public <#=pixelType#>_OperationsTests(ITestOutputHelper output)
-                : base(output)
-            {
-            }
-
-            protected override PixelOperations<<#=pixelType#>> Operations => <#=pixelType#>.PixelOperations.Instance;
-
-            [Fact]
-            public void IsSpecialImplementation() => Assert.IsType<<#=pixelType#>.PixelOperations>(PixelOperations<<#=pixelType#>>.Instance);
-
-            [Fact]
-            public void PixelTypeInfoHasCorrectAlphaRepresentation()
-            {
-                var alphaRepresentation = this.Operations.GetPixelTypeInfo().AlphaRepresentation;
-                Assert.Equal(<#=alpha#>, alphaRepresentation);
-            }
         }
+
+        protected override PixelOperations<<#=pixelType#>> Operations => <#=pixelType#>.PixelOperations.Instance;
+
+        [Fact]
+        public void IsSpecialImplementation() => Assert.IsType<<#=pixelType#>.PixelOperations>(PixelOperations<<#=pixelType#>>.Instance);
+
+        [Fact]
+        public void PixelTypeInfoHasCorrectAlphaRepresentation()
+        {
+            var alphaRepresentation = this.Operations.GetPixelTypeInfo().AlphaRepresentation;
+            Assert.Equal(<#=alpha#>, alphaRepresentation);
+        }
+    }
 <#+
     }
 

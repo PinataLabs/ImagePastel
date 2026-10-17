@@ -27,13 +27,34 @@ You need the .NET 10 SDK and [Git LFS](https://git-lfs.com/).
 Install Git LFS before you clone the repository. If you do not, the test images are missing.
 
 1. Get the test images: `git lfs pull`.
-2. Build the solution: `dotnet build ImageSharp.sln -c Release`.
+2. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
 3. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
 4. Compare the public API with the baseline: `pwsh ./ci-apicompat.ps1`.
 
 The build treats all warnings as errors. A suppression of an analyzer rule must give its reason.
 
+Some source files are generated from T4 templates (`*.tt`). Do not edit these files by hand.
+After you change a template or a `*.ttinclude` file, run `pwsh ./ci-t4.ps1` and commit the changed output. CI fails if the output is not up to date.
+
 The expected test output is in `tests/Images/External`, in Git LFS.
+
+## Publish a package (maintainers)
+
+The CI workflow builds, tests, and checks the public API. It does not publish.
+Both publish workflows require CI to have passed on the head of `main`.
+
+To publish a stable release:
+
+1. In GitHub Actions, run **Publish Release** on `main`.
+2. Enter the version, for example `2.2.1`, and keep **dry-run** selected.
+3. Read the dry-run summary.
+4. Run the workflow again with **dry-run** cleared.
+
+The workflow tags the head of `main` and calls the **Release** workflow.
+That workflow publishes the package to nuget.org and creates the GitHub Release.
+
+To publish a pre-release, run **Pre-release** on `main` and select `alpha`, `beta`, or `rc`.
+MinVer gives the version, for example `2.2.1-beta.4`.
 
 ## Code of conduct
 
