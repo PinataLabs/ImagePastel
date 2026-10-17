@@ -37,7 +37,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Pbm
 
             using (var image = new Image<L8>(10, 10))
             {
-                await image.SaveAsPbmAsync(file);
+                await image.SaveAsPbmAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -71,7 +71,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Pbm
 
             using (var image = new Image<L8>(10, 10))
             {
-                await image.SaveAsPbmAsync(file, new PbmEncoder());
+                await image.SaveAsPbmAsync(file, new PbmEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -105,7 +105,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Pbm
 
             using (var image = new Image<L8>(10, 10))
             {
-                await image.SaveAsPbmAsync(memoryStream);
+                await image.SaveAsPbmAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -141,7 +141,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Pbm
 
             using (var image = new Image<L8>(10, 10))
             {
-                await image.SaveAsPbmAsync(memoryStream, new PbmEncoder());
+                await image.SaveAsPbmAsync(memoryStream, new PbmEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

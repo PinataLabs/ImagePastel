@@ -4,6 +4,8 @@
   <PropertyGroup>
     <DebugSymbols>True</DebugSymbols>
     <AssemblyName>SixLabors.ImageSharp.Tests</AssemblyName>
+    <!-- xUnit.net v3 test projects are stand-alone executables. -->
+    <OutputType>Exe</OutputType>
     <Platforms>AnyCPU;x64;x86</Platforms>
     <RootNamespace>SixLabors.ImageSharp.Tests</RootNamespace>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
@@ -28,7 +30,6 @@
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
-    <PackageReference Include="Microsoft.DotNet.XUnitExtensions" />
     <PackageReference Include="Moq" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="System.Drawing.Common" />

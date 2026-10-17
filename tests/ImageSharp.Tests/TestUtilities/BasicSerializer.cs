@@ -4,9 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Globalization;
 using System.IO;
-using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities
 {
@@ -15,9 +14,13 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
     /// because data is being passed on command line interface. This utility allows serialization
     /// of <see cref="IXunitSerializable"/> types to strings.
     /// </summary>
+    /// <remarks>
+    /// <see cref="IXunitSerializationInfo.GetValue(string)"/> takes no type argument, so the type of
+    /// each value is stored next to it.
+    /// </remarks>
     internal class BasicSerializer : IXunitSerializationInfo
     {
-        private readonly Dictionary<string, string> map = new Dictionary<string, string>();
+        private readonly Dictionary<string, (Type Type, string Value)> map = new();
 
         public const char Separator = ':';
 
@@ -26,9 +29,9 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
             using var ms = new MemoryStream();
             using var writer = new StreamWriter(ms);
             writer.WriteLine(type.FullName);
-            foreach (KeyValuePair<string, string> kv in this.map)
+            foreach (KeyValuePair<string, (Type Type, string Value)> kv in this.map)
             {
-                writer.WriteLine($"{kv.Key}{Separator}{kv.Value}");
+                writer.WriteLine($"{kv.Key}{Separator}{kv.Value.Type.AssemblyQualifiedName}{Separator}{kv.Value.Value}");
             }
 
             writer.Flush();
@@ -45,8 +48,9 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
             var type = Type.GetType(reader.ReadLine());
             for (string s = reader.ReadLine(); s != null; s = reader.ReadLine())
             {
-                string[] kv = s.Split(Separator);
-                this.map[kv[0]] = kv[1];
+                // Assembly qualified type names contain no separator, the value may.
+                string[] parts = s.Split(Separator, 3);
+                this.map[parts[0]] = (Type.GetType(parts[1], throwOnError: true), parts[2]);
             }
 
             return type;
@@ -80,21 +84,19 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
 
             type ??= value.GetType();
 
-            this.map[key] = TypeDescriptor.GetConverter(type).ConvertToInvariantString(value);
+            this.map[key] = (type, TypeDescriptor.GetConverter(type).ConvertToInvariantString(value));
         }
 
-        public object GetValue(string key, Type type)
+        public object GetValue(string key)
         {
             Guard.NotNull(key, nameof(key));
 
-            if (!this.map.TryGetValue(key, out string str))
+            if (!this.map.TryGetValue(key, out (Type Type, string Value) entry))
             {
-                return type.IsValueType ? Activator.CreateInstance(type) : null;
+                return null;
             }
 
-            return TypeDescriptor.GetConverter(type).ConvertFromInvariantString(str);
+            return TypeDescriptor.GetConverter(entry.Type).ConvertFromInvariantString(entry.Value);
         }
-
-        public T GetValue<T>(string key) => (T)this.GetValue(key, typeof(T));
     }
 }

@@ -38,7 +38,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsWebpAsync(file);
+                await image.SaveAsWebpAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -72,7 +72,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsWebpAsync(file, new WebpEncoder());
+                await image.SaveAsWebpAsync(file, new WebpEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -106,7 +106,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsWebpAsync(memoryStream);
+                await image.SaveAsWebpAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -142,7 +142,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsWebpAsync(memoryStream, new WebpEncoder());
+                await image.SaveAsWebpAsync(memoryStream, new WebpEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

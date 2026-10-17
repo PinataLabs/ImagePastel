@@ -3,8 +3,6 @@
 
 using System;
 using System.IO;
-using Microsoft.DotNet.RemoteExecutor;
-using Microsoft.DotNet.XUnitExtensions;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
@@ -75,7 +73,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             }
 
             string providerDump = BasicSerializer.Serialize(provider);
-            RemoteExecutor.Invoke(
+            RemoteExecutorRunner.Invoke(
                     RunTest,
                     providerDump,
                     "Disco")
@@ -592,7 +590,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
             using (var stream = new MemoryStream(testFile.Bytes, false))
             {
                 var decoder = new BmpDecoder();
-                using (Image<Rgba32> image = decoder.Decode<Rgba32>(Configuration.Default, stream, default))
+                using (Image<Rgba32> image = decoder.Decode<Rgba32>(Configuration.Default, stream, TestContext.Current.CancellationToken))
                 {
                     ImageMetadata meta = image.Metadata;
                     Assert.Equal(xResolution, meta.HorizontalResolution);

@@ -38,7 +38,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsPngAsync(file);
+                await image.SaveAsPngAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -72,7 +72,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsPngAsync(file, new PngEncoder());
+                await image.SaveAsPngAsync(file, new PngEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -106,7 +106,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsPngAsync(memoryStream);
+                await image.SaveAsPngAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -142,7 +142,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Png
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsPngAsync(memoryStream, new PngEncoder());
+                await image.SaveAsPngAsync(memoryStream, new PngEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

@@ -3,7 +3,6 @@
 
 using System;
 using System.IO;
-using Microsoft.DotNet.RemoteExecutor;
 
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Memory;
@@ -53,7 +52,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
             {
                 using (var stream = new UnmanagedMemoryStream(data, length))
                 {
-                    using (Image<Rgba32> image = GifDecoder.Decode<Rgba32>(Configuration.Default, stream, default))
+                    using (Image<Rgba32> image = GifDecoder.Decode<Rgba32>(Configuration.Default, stream, TestContext.Current.CancellationToken))
                     {
                         Assert.Equal((200, 200), (image.Width, image.Height));
                     }
@@ -253,7 +252,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
             }
 
             string providerDump = BasicSerializer.Serialize(provider);
-            RemoteExecutor.Invoke(
+            RemoteExecutorRunner.Invoke(
                     RunTest,
                     providerDump,
                     "Disco")

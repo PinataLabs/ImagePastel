@@ -3,8 +3,8 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory.Internals;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -30,7 +30,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void Finalize_ResultsInSingleRelease()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -68,7 +68,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [Fact]
         public void AddRef_PreventsReleaseOnFinalize()
         {
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {

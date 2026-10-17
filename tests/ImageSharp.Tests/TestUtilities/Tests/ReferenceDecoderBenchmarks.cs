@@ -7,7 +7,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests
 {

@@ -15,7 +15,6 @@
 
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
-using Xunit.Abstractions;
 
 <#+
     private static readonly string[] UnassociatedAlphaPixelTypes =

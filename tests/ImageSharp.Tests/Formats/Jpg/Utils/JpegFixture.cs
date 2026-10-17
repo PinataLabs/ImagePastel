@@ -10,7 +10,6 @@ using SixLabors.ImageSharp.Formats.Jpeg.Components;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
-using Xunit.Abstractions;
 
 // ReSharper disable InconsistentNaming
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils

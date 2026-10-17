@@ -81,7 +81,7 @@ namespace SixLabors.ImageSharp.Tests.Processing.Processors.Quantization
         };
 
         public static readonly TheoryData<IQuantizer> Quantizers
-        = new TheoryData<IQuantizer>
+        = new TheoryData<IQuantizer>(new IQuantizer[]
         {
             // Known uses error diffusion by default.
             KnownQuantizers.Octree,
@@ -96,10 +96,10 @@ namespace SixLabors.ImageSharp.Tests.Processing.Processors.Quantization
             new WebSafePaletteQuantizer(OrderedDitherOptions),
             new WernerPaletteQuantizer(OrderedDitherOptions),
             new WuQuantizer(OrderedDitherOptions)
-        };
+        });
 
         public static readonly TheoryData<IQuantizer> DitherScaleQuantizers
-        = new TheoryData<IQuantizer>
+        = new TheoryData<IQuantizer>(new IQuantizer[]
         {
             new OctreeQuantizer(Diffuser0_ScaleDitherOptions),
             new WebSafePaletteQuantizer(Diffuser0_ScaleDitherOptions),
@@ -150,14 +150,14 @@ namespace SixLabors.ImageSharp.Tests.Processing.Processors.Quantization
             new WebSafePaletteQuantizer(OrderedDitherOptions),
             new WernerPaletteQuantizer(OrderedDitherOptions),
             new WuQuantizer(OrderedDitherOptions),
-        };
+        });
 
         public static readonly TheoryData<IDither> DefaultInstanceDitherers
-            = new TheoryData<IDither>
+            = new TheoryData<IDither>(new IDither[]
             {
                 default(ErrorDither),
                 default(OrderedDither)
-            };
+            });
 
         private static readonly ImageComparer ValidatorComparer = ImageComparer.TolerantPercentage(0.05F);
 

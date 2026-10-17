@@ -15,7 +15,6 @@ using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
-using Xunit.Abstractions;
 
 // ReSharper disable InconsistentNaming
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg
@@ -75,7 +74,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             using var ms = new MemoryStream(bytes);
             using var bufferedStream = new BufferedReadStream(Configuration.Default, ms);
             using var decoder = new JpegDecoderCore(Configuration.Default, new JpegDecoder());
-            using Image<Rgba32> image = decoder.Decode<Rgba32>(bufferedStream, cancellationToken: default);
+            using Image<Rgba32> image = decoder.Decode<Rgba32>(bufferedStream, cancellationToken: TestContext.Current.CancellationToken);
 
             // I don't know why these numbers are different. All I know is that the decoder works
             // and spectral data is exactly correct also.
@@ -97,7 +96,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
         public async Task DecodeAsync_NonGeneric_CreatesRgb24Image()
         {
             string file = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, TestImages.Jpeg.Baseline.Jpeg420Small);
-            using Image image = await Image.LoadAsync(file);
+            using Image image = await Image.LoadAsync(file, TestContext.Current.CancellationToken);
             Assert.IsType<Image<Rgb24>>(image);
         }
 

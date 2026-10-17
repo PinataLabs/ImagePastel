@@ -37,7 +37,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsTgaAsync(file);
+                await image.SaveAsTgaAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -71,7 +71,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsTgaAsync(file, new TgaEncoder());
+                await image.SaveAsTgaAsync(file, new TgaEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -105,7 +105,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsTgaAsync(memoryStream);
+                await image.SaveAsTgaAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -141,7 +141,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tga
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsTgaAsync(memoryStream, new TgaEncoder());
+                await image.SaveAsTgaAsync(memoryStream, new TgaEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

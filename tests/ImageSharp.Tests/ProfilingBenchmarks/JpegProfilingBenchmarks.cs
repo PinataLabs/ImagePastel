@@ -10,7 +10,6 @@ using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 
 using Xunit;
-using Xunit.Abstractions;
 
 // in this file, comments are used for disabling stuff for local execution
 #pragma warning disable SA1515

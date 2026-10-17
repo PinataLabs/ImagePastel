@@ -3,12 +3,12 @@
 
 using System;
 using System.IO;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests
@@ -28,7 +28,7 @@ namespace SixLabors.ImageSharp.Tests
         public void PreferContiguousImageBuffers_CreateImage_BufferIsContiguous()
         {
             // Run remotely to avoid large allocation in the test process:
-            RemoteExecutor.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
             static void RunTest()
             {
@@ -51,7 +51,7 @@ namespace SixLabors.ImageSharp.Tests
         public void PreferContiguousImageBuffers_LoadImage_BufferIsContiguous(string formatOuter)
         {
             // Run remotely to avoid large allocation in the test process:
-            RemoteExecutor.Invoke(RunTest, formatOuter).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, formatOuter).Dispose();
 
             static void RunTest(string formatInner)
             {

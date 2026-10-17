@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 
-using Xunit.Abstractions;
+using Xunit;
 
 // ReSharper disable InconsistentNaming
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils

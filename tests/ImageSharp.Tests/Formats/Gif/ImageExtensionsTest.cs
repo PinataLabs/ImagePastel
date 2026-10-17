@@ -37,7 +37,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsGifAsync(file);
+                await image.SaveAsGifAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -71,7 +71,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsGifAsync(file, new GifEncoder());
+                await image.SaveAsGifAsync(file, new GifEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -105,7 +105,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsGifAsync(memoryStream);
+                await image.SaveAsGifAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -141,7 +141,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Gif
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsGifAsync(memoryStream, new GifEncoder());
+                await image.SaveAsGifAsync(memoryStream, new GifEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

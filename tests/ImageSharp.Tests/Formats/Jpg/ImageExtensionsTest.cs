@@ -38,7 +38,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsJpegAsync(file);
+                await image.SaveAsJpegAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -72,7 +72,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsJpegAsync(file, new JpegEncoder());
+                await image.SaveAsJpegAsync(file, new JpegEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -106,7 +106,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsJpegAsync(memoryStream);
+                await image.SaveAsJpegAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -142,7 +142,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsJpegAsync(memoryStream, new JpegEncoder());
+                await image.SaveAsJpegAsync(memoryStream, new JpegEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

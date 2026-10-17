@@ -37,7 +37,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsBmpAsync(file);
+                await image.SaveAsBmpAsync(file, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -71,7 +71,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsBmpAsync(file, new BmpEncoder());
+                await image.SaveAsBmpAsync(file, new BmpEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using (Image.Load(file, out IImageFormat mime))
@@ -105,7 +105,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsBmpAsync(memoryStream);
+                await image.SaveAsBmpAsync(memoryStream, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;
@@ -141,7 +141,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Bmp
 
             using (var image = new Image<Rgba32>(10, 10))
             {
-                await image.SaveAsBmpAsync(memoryStream, new BmpEncoder());
+                await image.SaveAsBmpAsync(memoryStream, new BmpEncoder(), cancellationToken: TestContext.Current.CancellationToken);
             }
 
             memoryStream.Position = 0;

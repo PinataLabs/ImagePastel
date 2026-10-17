@@ -3,7 +3,6 @@
 
 using System;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.Common
 {

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
@@ -48,6 +49,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
             return (total, average);
         }
 
+        // Generous: the tool takes well under a second per image, but CI machines can be slow.
+        private static readonly TimeSpan DumpToolTimeout = TimeSpan.FromMinutes(2);
+
         private static string DumpToolFullPath => Path.Combine(
             TestEnvironment.ToolsDirectoryFullPath,
             @"jpeg\dump-jpeg-coeffs.exe");
@@ -67,18 +71,42 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils
             }
 
             string args = $@"""{sourceFile}"" ""{destFile}""";
-            var process = new Process
+            var startInfo = new ProcessStartInfo(DumpToolFullPath, args)
             {
-                StartInfo =
-                                      {
-                                          FileName = DumpToolFullPath,
-                                          Arguments = args,
-                                          WindowStyle = ProcessWindowStyle.Hidden
-                                      }
+                // The tool prints progress to stdout. An xUnit v3 test process reports results to the
+                // runner over stdout, so inherited output would corrupt those messages. Capture it.
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
-            process.Start();
-            process.WaitForExit();
+
+            using Process process = Process.Start(startInfo);
+            Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+            Task<string> standardError = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(DumpToolTimeout))
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(DumpToolTimeout);
+                throw new TimeoutException(
+                    $"{DumpToolFullPath} {args} did not exit within {DumpToolTimeout}." + FormatOutput(standardOutput, standardError));
+            }
+
+            // Make sure the output is complete before reading the exit code and the result file.
+            Task.WaitAll(new Task[] { standardOutput, standardError }, DumpToolTimeout);
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"{DumpToolFullPath} {args} exited with code {process.ExitCode}." + FormatOutput(standardOutput, standardError));
+            }
         }
+
+        private static string FormatOutput(Task<string> standardOutput, Task<string> standardError)
+            => $"{Environment.NewLine}STDOUT: {CompletedText(standardOutput)}{Environment.NewLine}STDERR: {CompletedText(standardError)}";
+
+        private static string CompletedText(Task<string> read)
+            => read.Wait(TimeSpan.FromSeconds(5)) ? read.Result : "(not available)";
 
         /// <summary>
         /// Extract libjpeg <see cref="SpectralData"/> from the given jpg file with  'dump-jpeg-coeffs.exe'. Windows only!

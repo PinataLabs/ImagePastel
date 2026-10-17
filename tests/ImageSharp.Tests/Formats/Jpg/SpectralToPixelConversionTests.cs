@@ -11,7 +11,6 @@ using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 {
@@ -46,8 +45,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
             // Decoding
             using var converter = new SpectralConverter<TPixel>(Configuration.Default);
             using var decoder = new JpegDecoderCore(Configuration.Default, new JpegDecoder());
-            var scanDecoder = new HuffmanScanDecoder(bufferedStream, converter, cancellationToken: default);
-            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: default);
+            var scanDecoder = new HuffmanScanDecoder(bufferedStream, converter, cancellationToken: TestContext.Current.CancellationToken);
+            decoder.ParseStream(bufferedStream, scanDecoder, cancellationToken: TestContext.Current.CancellationToken);
 
             // Test metadata
             provider.Utility.TestGroupName = nameof(JpegDecoderTests);

@@ -7,8 +7,8 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory.Internals;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -26,7 +26,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             [Fact]
             public void TrimPeriodElapsed_TrimsHalfOfUnusedArrays()
             {
-                RemoteExecutor.Invoke(RunTest).Dispose();
+                RemoteExecutorRunner.Invoke(RunTest).Dispose();
                 static void RunTest()
                 {
                     var trimSettings = new UniformUnmanagedMemoryPool.TrimSettings { TrimPeriodMilliseconds = 5_000 };
@@ -58,11 +58,11 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
             [Collection(nameof(NonParallelCollection))]
             public class NonParallel
             {
-                public static readonly bool IsNotMacOS = !TestEnvironment.IsMacOS;
+                public static bool IsNotMacOS => !TestEnvironment.IsMacOS;
 
                 // TODO: Investigate failures on macOS. All handles are released after GC.
                 // (It seems to happen more consistently on .NET 6.)
-                [ConditionalFact(nameof(IsNotMacOS))]
+                [Fact(Skip = "Fails on macOS.", SkipUnless = nameof(IsNotMacOS))]
                 public void MultiplePoolInstances_TrimPeriodElapsed_AllAreTrimmed()
                 {
                     if (!TestEnvironment.RunsOnCI)
@@ -72,7 +72,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
                         return;
                     }
 
-                    RemoteExecutor.Invoke(RunTest).Dispose();
+                    RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
                     static void RunTest()
                     {
@@ -109,13 +109,14 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
                 }
             }
 
-            public static readonly bool Is32BitProcess = !Environment.Is64BitProcess;
+            public static bool Is32BitProcess => !Environment.Is64BitProcess;
+
             private static readonly List<byte[]> PressureArrays = new();
 
-            [ConditionalFact(nameof(Is32BitProcess))]
+            [Fact(Skip = "Requires a 32-bit process.", SkipUnless = nameof(Is32BitProcess))]
             public static void GC_Collect_OnHighLoad_TrimsEntirePool()
             {
-                RemoteExecutor.Invoke(RunTest).Dispose();
+                RemoteExecutorRunner.Invoke(RunTest).Dispose();
 
                 static void RunTest()
                 {

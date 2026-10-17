@@ -3,8 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.Memory.Internals;
+using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Memory.Allocators
@@ -45,7 +45,7 @@ namespace SixLabors.ImageSharp.Tests.Memory.Allocators
         [InlineData(13)]
         public void Create_Free_AllocationsAreTracked(int count)
         {
-            RemoteExecutor.Invoke(RunTest, count.ToString()).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, count.ToString()).Dispose();
 
             static void RunTest(string countStr)
             {

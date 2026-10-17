@@ -14,7 +14,7 @@ namespace SixLabors.ImageSharp.Tests.Processing.Processors.Transforms
         public static readonly TheoryData<float> RotateAngles
             = new TheoryData<float>
         {
-            50, -50, 170, -170
+            50F, -50F, 170F, -170F
         };
 
         public static readonly TheoryData<RotateMode> RotateEnumValues

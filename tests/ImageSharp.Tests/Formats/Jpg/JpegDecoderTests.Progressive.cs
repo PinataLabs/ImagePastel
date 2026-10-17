@@ -1,7 +1,6 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using Microsoft.DotNet.RemoteExecutor;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using Xunit;
@@ -52,7 +51,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jpg
 
             string providerDump = BasicSerializer.Serialize(provider);
 
-            RemoteExecutor.Invoke(
+            RemoteExecutorRunner.Invoke(
                 RunTest,
                 providerDump,
                 "Disco").Dispose();

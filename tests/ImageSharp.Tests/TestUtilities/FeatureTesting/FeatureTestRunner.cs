@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.DotNet.RemoteExecutor;
-using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace SixLabors.ImageSharp.Tests.TestUtilities
 {
@@ -65,7 +65,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         new RemoteInvokeOptions
                         {
@@ -106,7 +106,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         intrinsic.Key.ToString(),
                         new RemoteInvokeOptions
@@ -149,7 +149,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         BasicSerializer.Serialize(serializable),
                         new RemoteInvokeOptions
@@ -192,7 +192,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         BasicSerializer.Serialize(serializable),
                         intrinsic.Key.ToString(),
@@ -239,7 +239,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         BasicSerializer.Serialize(arg1),
                         BasicSerializer.Serialize(arg2),
@@ -283,7 +283,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         serializable.ToString(),
                         new RemoteInvokeOptions
@@ -328,7 +328,7 @@ namespace SixLabors.ImageSharp.Tests.TestUtilities
                 {
                     processStartInfo.Environment[$"COMPlus_{intrinsic.Value}"] = "0";
 
-                    RemoteExecutor.Invoke(
+                    RemoteExecutorRunner.Invoke(
                         action,
                         arg0.ToString(),
                         arg1.ToString(),

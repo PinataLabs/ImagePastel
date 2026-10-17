@@ -39,21 +39,21 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public async Task Path_Agnostic_Async()
             {
-                using var img = await Image.LoadAsync(this.Path);
+                using var img = await Image.LoadAsync(this.Path, TestContext.Current.CancellationToken);
                 VerifyDecodedImage(img);
             }
 
             [Fact]
             public async Task Path_Specific_Async()
             {
-                using var img = await Image.LoadAsync<Rgb24>(this.Path);
+                using var img = await Image.LoadAsync<Rgb24>(this.Path, TestContext.Current.CancellationToken);
                 VerifyDecodedImage(img);
             }
 
             [Fact]
             public async Task Path_Agnostic_Configuration_Async()
             {
-                using var img = await Image.LoadAsync(this.Path);
+                using var img = await Image.LoadAsync(this.Path, TestContext.Current.CancellationToken);
                 VerifyDecodedImage(img);
             }
 
@@ -74,14 +74,14 @@ namespace SixLabors.ImageSharp.Tests
             [Fact]
             public async Task Path_Decoder_Agnostic_Async()
             {
-                using var img = await Image.LoadAsync(this.Path, new BmpDecoder());
+                using var img = await Image.LoadAsync(this.Path, new BmpDecoder(), TestContext.Current.CancellationToken);
                 VerifyDecodedImage(img);
             }
 
             [Fact]
             public async Task Path_Decoder_Specific_Async()
             {
-                using var img = await Image.LoadAsync<Rgb24>(this.Path, new BmpDecoder());
+                using var img = await Image.LoadAsync<Rgb24>(this.Path, new BmpDecoder(), TestContext.Current.CancellationToken);
                 VerifyDecodedImage(img);
             }
 
@@ -125,14 +125,14 @@ namespace SixLabors.ImageSharp.Tests
             public Task Async_WhenFileNotFound_Throws()
             {
                 return Assert.ThrowsAsync<System.IO.FileNotFoundException>(
-                    () => Image.LoadAsync<Rgba32>(Guid.NewGuid().ToString()));
+                    () => Image.LoadAsync<Rgba32>(Guid.NewGuid().ToString(), TestContext.Current.CancellationToken));
             }
 
             [Fact]
             public Task Async_WhenPathIsNull_Throws()
             {
                 return Assert.ThrowsAsync<ArgumentNullException>(
-                    () => Image.LoadAsync<Rgba32>((string)null));
+                    () => Image.LoadAsync<Rgba32>((string)null, TestContext.Current.CancellationToken));
             }
         }
     }
