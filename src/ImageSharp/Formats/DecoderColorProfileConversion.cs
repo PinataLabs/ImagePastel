@@ -56,6 +56,31 @@ internal static class DecoderColorProfileConversion
     }
 
     /// <summary>
+    /// Converts a decoded image of any pixel type, as <see cref="Apply{TPixel}"/> does, and returns it.
+    /// For decoders that pick the pixel type themselves.
+    /// </summary>
+    /// <param name="image">The decoded image.</param>
+    /// <param name="options">The decoder options.</param>
+    /// <param name="cancellationToken">The decoder's cancellation token, checked between bands of rows.</param>
+    /// <returns>The same image.</returns>
+    /// <exception cref="InvalidOperationException">The target profile is missing.</exception>
+    /// <exception cref="InvalidImageContentException">The target profile is corrupt.</exception>
+    /// <exception cref="NotSupportedException">The engine does not support the target profile.</exception>
+    public static Image Apply(Image image, IColorProfileDecoderOptions options, CancellationToken cancellationToken)
+    {
+        try
+        {
+            image.AcceptVisitor(new ConvertVisitor(options, cancellationToken));
+            return image;
+        }
+        catch
+        {
+            image.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Builds the transform from a source profile to the target the options ask for.
     /// </summary>
     /// <param name="options">The decoder options.</param>
@@ -195,5 +220,21 @@ internal static class DecoderColorProfileConversion
         }
 
         image.Metadata.IccProfile = perFrame ? image.Frames.RootFrame.Metadata.IccProfile : GetConvertedProfile(options);
+    }
+
+    private sealed class ConvertVisitor : IImageVisitor
+    {
+        private readonly IColorProfileDecoderOptions options;
+        private readonly CancellationToken cancellationToken;
+
+        public ConvertVisitor(IColorProfileDecoderOptions options, CancellationToken cancellationToken)
+        {
+            this.options = options;
+            this.cancellationToken = cancellationToken;
+        }
+
+        public void Visit<TPixel>(Image<TPixel> image)
+            where TPixel : unmanaged, IPixel<TPixel>
+            => Convert(image, this.options, this.cancellationToken);
     }
 }
