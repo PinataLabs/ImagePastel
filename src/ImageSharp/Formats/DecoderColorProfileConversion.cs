@@ -106,30 +106,12 @@ internal static class DecoderColorProfileConversion
         }
 
         IccProfile target = GetTarget(options);
-        if (IsTarget(source, target))
+        if (target is not null && IsTarget(source.ToByteArray(), target.ToByteArray()))
         {
             return false;
         }
 
-        try
-        {
-            transform = new IccColorTransform(source, target);
-        }
-        catch (Exception ex) when (ex is InvalidImageContentException or NotSupportedException or InvalidIccProfileException)
-        {
-            // The image keeps its profile when that profile is the problem. A target the engine
-            // cannot use is the caller's mistake, so that is reported.
-            if (target is not null)
-            {
-                CheckTarget(new IccColorTransform(null, target));
-            }
-
-            transform = null;
-            return false;
-        }
-
-        CheckTarget(transform);
-        return true;
+        return TryBuild(source, target, out transform);
     }
 
     /// <summary>
@@ -193,8 +175,34 @@ internal static class DecoderColorProfileConversion
 
     // A profile with the target's bytes needs no conversion. This also skips images whose samples a
     // decoder has already converted (CMYK) and given the target profile.
-    private static bool IsTarget(IccProfile source, IccProfile target)
-        => target is not null && source.ToByteArray().AsSpan().SequenceEqual(target.ToByteArray());
+    private static bool IsTarget(byte[] source, byte[] target)
+        => target is not null && source.AsSpan().SequenceEqual(target);
+
+    // Builds the transform from a source profile that is not the target. The source is the problem
+    // when this fails, unless the target is.
+    private static bool TryBuild(IccProfile source, IccProfile target, out IccColorTransform transform)
+    {
+        try
+        {
+            transform = new IccColorTransform(source, target);
+        }
+        catch (Exception ex) when (ex is InvalidImageContentException or NotSupportedException or InvalidIccProfileException)
+        {
+            // The image keeps its profile when that profile is the problem. A target the engine
+            // cannot use is the caller's mistake, so that is reported. A decode stops at the first
+            // profile that fails, so this check runs at most once per decode.
+            if (target is not null)
+            {
+                CheckTarget(new IccColorTransform(null, target));
+            }
+
+            transform = null;
+            return false;
+        }
+
+        CheckTarget(transform);
+        return true;
+    }
 
     // Decoded pixels hold RGB or gray. Converting to CMYK (all four components) is left to the
     // ConvertColorProfile processor, which checks the pixel type.
@@ -208,7 +216,7 @@ internal static class DecoderColorProfileConversion
 
     // The transform for a frame's profile: null when the profile cannot be used, or NoPixelChange
     // for an sRGB-equivalent profile on the way to sRGB, whose pixels already hold the target's colors.
-    private static IccColorTransform CreateFrameTransform(IColorProfileDecoderOptions options, IccProfile source, IccProfile target)
+    private static IccColorTransform CreateFrameTransform(IccProfile source, IccProfile target)
     {
         // Decoded pixels are RGB or gray; a profile of another color space (CMYK) describes
         // samples that are gone, so a decoder must convert those before they become pixels.
@@ -217,7 +225,7 @@ internal static class DecoderColorProfileConversion
             return null;
         }
 
-        if (!TryCreateTransform(options, source, out IccColorTransform transform))
+        if (!TryBuild(source, target, out IccColorTransform transform))
         {
             return null;
         }
@@ -249,16 +257,23 @@ internal static class DecoderColorProfileConversion
 
         // TIFF frames hold separate but usually equal profiles, so transforms are shared by profile bytes.
         IccTransformCache built = new();
+        byte[] targetBytes = target?.ToByteArray();
         bool any = false;
         for (int i = 0; i < count; i++)
         {
             IccProfile source = perFrame ? image.Frames[i].Metadata.IccProfile : image.Metadata.IccProfile;
-            if (source is null || IsTarget(source, target))
+            if (source is null)
             {
                 continue;
             }
 
-            IccColorTransform transform = built.GetOrCreate(source.ToByteArray(), () => CreateFrameTransform(options, source, target));
+            byte[] sourceBytes = source.ToByteArray();
+            if (IsTarget(sourceBytes, targetBytes))
+            {
+                continue;
+            }
+
+            IccColorTransform transform = built.GetOrCreate(sourceBytes, () => CreateFrameTransform(source, target));
             if (transform is null)
             {
                 return;

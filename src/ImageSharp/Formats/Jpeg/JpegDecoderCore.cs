@@ -71,6 +71,12 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     private byte[] iccData;
 
     /// <summary>
+    /// The profile parsed from <see cref="iccData"/>, and the array it was parsed from (a later APP2
+    /// segment replaces the array), so the frame header and the metadata share one parse.
+    /// </summary>
+    private (byte[] Data, IccProfile Profile) parsedIcc;
+
+    /// <summary>
     /// Whether the image has a IPTC data.
     /// </summary>
     private bool hasIptc;
@@ -666,7 +672,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             return;
         }
 
-        var profile = new IccProfile(this.iccData);
+        IccProfile profile = this.GetIccProfile();
         if (!profile.CheckIsValid())
         {
             return;
@@ -697,7 +703,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             return null;
         }
 
-        var profile = new IccProfile(this.iccData);
+        IccProfile profile = this.GetIccProfile();
         if (!profile.CheckIsValid()
             || !DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, profile, out IccColorTransform transform))
         {
@@ -705,6 +711,16 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         }
 
         return transform;
+    }
+
+    private IccProfile GetIccProfile()
+    {
+        if (!ReferenceEquals(this.parsedIcc.Data, this.iccData))
+        {
+            this.parsedIcc = (this.iccData, new IccProfile(this.iccData));
+        }
+
+        return this.parsedIcc.Profile;
     }
 
     /// <summary>
