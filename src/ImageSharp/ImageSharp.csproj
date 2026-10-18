@@ -66,30 +66,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="PixelFormats\PixelBlenders\DefaultPixelBlenders.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>DefaultPixelBlenders.Generated.tt</DependentUpon>
-    </Compile>
-    <Compile Update="PixelFormats\PixelBlenders\PorterDuffFunctions.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>PorterDuffFunctions.Generated.tt</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="PixelFormats\PixelBlenders\PorterDuffFunctions.Generated.tt">
-      <LastGenOutput>PorterDuffFunctions.Generated.cs</LastGenOutput>
-      <Generator>TextTemplatingFileGenerator</Generator>
-    </None>
-    <None Update="PixelFormats\PixelBlenders\DefaultPixelBlenders.Generated.tt">
-      <LastGenOutput>DefaultPixelBlenders.Generated.cs</LastGenOutput>
-      <Generator>TextTemplatingFileGenerator</Generator>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
 
