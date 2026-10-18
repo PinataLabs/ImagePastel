@@ -1029,6 +1029,8 @@ public static class TestImages
         public const string LittleCmsGraySrgbV4 = "Icc/LittleCms/GraySrgb-v4.icc";
         public const string LittleCmsGrayLinearV4 = "Icc/LittleCms/GrayLinear-v4.icc";
         public const string LittleCmsGrayGamma22V4 = "Icc/LittleCms/GrayGamma22-v4.icc";
+        public const string LittleCmsRec709Gamma22V4 = "Icc/LittleCms/Rec709Gamma22-v4.icc";
+        public const string LittleCmsP3Gamma182224V4 = "Icc/LittleCms/P3Gamma182224-v4.icc";
         public const string QcmsSrgb = "Icc/qcms/sRGB_lcms.icc";
         public const string QcmsRec709 = "Icc/qcms/ITU-709.icc";
         public const string QcmsRec2020 = "Icc/qcms/ITU-2020.icc";

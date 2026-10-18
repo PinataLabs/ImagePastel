@@ -9,6 +9,7 @@ Profiles for the ICC profile tests (`tests/ImageSharp.Tests/Metadata/Profiles/IC
 | `LittleCms/Gray22-v4.icc` | `cmsCreateGrayProfile(cmsD50_xyY(), cmsBuildGamma(NULL, 2.2))`, version 4.3: the `*Gray22` profile of `transicc`. | As above. |
 | `LittleCms/GrayLab18-v4.icc` | A gray profile with a gamma 1.8 `kTRC` and a **Lab** connection space (the curve gives L\*), version 4.3, written by Little CMS 2.20 with the second program below. Used by the colour engine tests. | As above. |
 | `LittleCms/LinearSrgb-v4.icc`, `LittleCms/DisplayP3-v4.icc`, `LittleCms/Rec2020-v4.icc`, `LittleCms/AdobeRgb-v4.icc`, `LittleCms/ProPhoto18-v4.icc`, `LittleCms/ProPhotoMixed-v4.icc`, `LittleCms/GraySrgb-v4.icc`, `LittleCms/GrayLinear-v4.icc`, `LittleCms/GrayGamma22-v4.icc` | Written by Little CMS 2.20 with `cmsCreateRGBProfile` and `cmsCreateGrayProfile` (version 4.4), with the third program below. They are the references for the profiles `IccProfileFactory` builds (`tests/ImageSharp.Tests/ColorManagement/IccProfileFactoryTests.cs`). | As above. |
+| `LittleCms/Rec709Gamma22-v4.icc`, `LittleCms/P3Gamma182224-v4.icc` | Written by Little CMS 2.20 with `cmsCreateRGBProfile` (version 4.4), with the fourth program below. They are the references for the profiles the BMP decoder builds from `LCS_CALIBRATED_RGB` headers (`tests/ImageSharp.Tests/Formats/Bmp/BmpMetadataTests.cs`). | As above. |
 | `qcms/sRGB_lcms.icc`, `qcms/ITU-709.icc`, `qcms/ITU-2020.icc` | [qcms](https://github.com/FirefoxGraphics/qcms) at `2ee13006ac1d17d10a53fb5b89ecd6513211c1c3`, from the repository root. | MIT, see `qcms/COPYING`. |
 | `CompactIcc/DisplayP3-v4.icc`, `CompactIcc/AdobeCompat-v2.icc`, `CompactIcc/sGrey-v4.icc`, `CompactIcc/sRGB-v2-micro.icc`, `CompactIcc/ProPhoto-v4.icc`, `CompactIcc/scRGB-v2.icc` (linear sRGB) | [Compact-ICC-Profiles](https://github.com/saucecontrol/Compact-ICC-Profiles) at `bdd8466`, as vendored in libjxl `testdata/external`. | CC0 1.0, see `CompactIcc/LICENSE`. |
 
@@ -124,6 +125,43 @@ int main(void)
     cmsFreeToneCurve(adobeGamma);
     cmsFreeToneCurve(gamma18);
     cmsFreeToneCurve(gamma22);
+    return 0;
+}
+```
+
+The BMP calibrated RGB references were written with this program, against the same sources:
+
+```c
+#include "lcms2.h"
+
+static void save(cmsHPROFILE h, const char* description, const char* path)
+{
+    cmsMLU* mlu = cmsMLUalloc(NULL, 1);
+    cmsMLUsetASCII(mlu, "en", "US", description);
+    cmsWriteTag(h, cmsSigProfileDescriptionTag, mlu);
+    cmsMLUfree(mlu);
+    cmsSaveProfileToFile(h, path);
+    cmsCloseProfile(h);
+}
+
+int main(void)
+{
+    cmsCIExyY d65 = { 0.3127, 0.3290, 1.0 };
+    cmsCIExyYTRIPLE rec709 = { { 0.64, 0.33, 1.0 }, { 0.30, 0.60, 1.0 }, { 0.15, 0.06, 1.0 } };
+    cmsCIExyYTRIPLE p3 = { { 0.680, 0.320, 1.0 }, { 0.265, 0.690, 1.0 }, { 0.150, 0.060, 1.0 } };
+    cmsToneCurve* gamma18 = cmsBuildGamma(NULL, 1.8);
+    cmsToneCurve* gamma22 = cmsBuildGamma(NULL, 2.2);
+    cmsToneCurve* gamma24 = cmsBuildGamma(NULL, 2.4);
+
+    cmsToneCurve* rec709Curves[3] = { gamma22, gamma22, gamma22 };
+    save(cmsCreateRGBProfile(&d65, &rec709, rec709Curves), "BT.709 primaries, gamma 2.2", "Rec709Gamma22-v4.icc");
+
+    cmsToneCurve* p3Curves[3] = { gamma18, gamma22, gamma24 };
+    save(cmsCreateRGBProfile(&d65, &p3, p3Curves), "P3 primaries, gamma 1.8/2.2/2.4", "P3Gamma182224-v4.icc");
+
+    cmsFreeToneCurve(gamma18);
+    cmsFreeToneCurve(gamma22);
+    cmsFreeToneCurve(gamma24);
     return 0;
 }
 ```
