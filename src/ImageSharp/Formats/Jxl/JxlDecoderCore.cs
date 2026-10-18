@@ -42,6 +42,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // The Exif and XMP of the file, read with the codestream.
     private ImageMetadata imageMetadata;
 
+    // Whether the image is CMYK: it has a Black extra channel and its embedded ICC profile is CMYK.
+    private bool isCmyk;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class with the default options.
     /// </summary>
@@ -162,6 +165,12 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
         try
         {
+            // Rendering them arrives with the rest of slice D6.
+            if (this.isCmyk || this.metadata.M.Find(JxlExtraChannelType.SpotColor) >= 0)
+            {
+                JxlThrowHelper.ThrowNotSupportedException(this.isCmyk ? "CMYK" : "Spot colours");
+            }
+
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
             bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
             JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M.NumColorPlanes, alpha, premultiplied);
@@ -335,14 +344,19 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // images decode to sRGB, and CMYK images are converted naively to RGB.
     private void SetIccProfile(byte[] icc)
     {
+        IccProfile original = new(icc);
+        bool cmykProfile = original.CheckIsValid() && original.Header.DataColorSpace == IccColorSpaceType.Cmyk;
+
+        // libjxl's ColorEncoding::IsCMYK, with the Black channel the spec requires of such an image
+        // (lib/jxl/cms/color_encoding_cms.h). Without one, the samples are the three colour channels.
+        this.isCmyk = cmykProfile && this.metadata.M.Find(JxlExtraChannelType.Black) >= 0;
         if (this.ignoreMetadata)
         {
             return;
         }
 
-        IccProfile original = new(icc);
         this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = original;
-        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && original.Header.DataColorSpace != IccColorSpaceType.Cmyk)
+        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && !cmykProfile)
         {
             // Its own copy, so the two profiles share no bytes.
             this.imageMetadata.IccProfile = original.DeepClone();
@@ -363,6 +377,22 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
+    // The description of every extra channel, which issue #111 adds to JxlMetadata. libjxl hands the
+    // name over as raw bytes (JxlDecoderGetExtraChannelName); as a string, bytes that are not UTF-8
+    // become U+FFFD.
+    private static JxlExtraChannel[] DescribeExtraChannels(List<JxlExtraChannelInfo> extraChannelInfo)
+    {
+        JxlExtraChannel[] extraChannels = new JxlExtraChannel[extraChannelInfo.Count];
+        for (int i = 0; i < extraChannels.Length; i++)
+        {
+            JxlExtraChannelInfo eci = extraChannelInfo[i];
+            JxlBitDepth bitDepth = eci.BitDepth;
+            extraChannels[i] = new JxlExtraChannel(eci.Type, Encoding.UTF8.GetString(eci.Name), bitDepth.BitsPerSample, bitDepth.ExponentBitsPerSample, bitDepth.FloatingPointSample);
+        }
+
+        return extraChannels;
+    }
+
     // Reads the signature, size header, image metadata, transform data and ICC profile, and returns
     // the offset of the first frame.
     private int ReadHeaders(byte[] data)
@@ -374,6 +404,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         const int signatureLength = 2;
         JxlCodecMetadata codecMetadata = new();
+        this.isCmyk = false;
         JxlBitReader reader = new(data, signatureLength, data.Length - signatureLength);
 
         // Basic info.
@@ -397,6 +428,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
+        jxlMetadata.ExtraChannels = DescribeExtraChannels(codecMetadata.M.ExtraChannelInfo);
         if (codecMetadata.M.HaveAnimation)
         {
             // As JxlDecoderGetBasicInfo, which leaves the animation fields 0 for a still image. A departure:

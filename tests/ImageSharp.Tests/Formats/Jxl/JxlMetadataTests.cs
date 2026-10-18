@@ -5,6 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -237,6 +238,66 @@ public class JxlMetadataTests
 
         Assert.NotSame(jxl.OriginalIccProfile, clone.OriginalIccProfile);
         Assert.Equal(jxl.OriginalIccProfile.ToByteArray(), clone.OriginalIccProfile.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData("spot", 16, new[] { "Alpha", "SpotColor", "SpotColor" })]
+    [InlineData("cmyk_layers", 8, new[] { "Black", "Alpha" })]
+    public void Identify_ExtraChannels_DescribesEachInStreamOrder(string id, int bits, string[] types)
+    {
+        JxlMetadata jxl = Identify(JxlConformanceVector.Load(id).CommittedInputPath).GetFormatMetadata(JxlFormat.Instance);
+
+        Assert.Equal(types, jxl.ExtraChannels.Select(c => c.Type.ToString()));
+        Assert.All(jxl.ExtraChannels, c =>
+        {
+            Assert.Equal((uint)bits, c.BitsPerSample);
+            Assert.Equal(0u, c.ExponentBitsPerSample);
+            Assert.False(c.IsFloatingPoint);
+        });
+    }
+
+    [Fact]
+    public void Identify_NoExtraChannels_GivesAnEmptyList()
+    {
+        JxlMetadata jxl = Identify(JxlConformanceVector.Load("delta_palette").CommittedInputPath).GetFormatMetadata(JxlFormat.Instance);
+
+        Assert.Empty(jxl.ExtraChannels);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Ink π")]
+    public void Identify_ExtraChannelName_IsReadAsAString(string name)
+    {
+        JxlMetadata jxl = Identify(JxlDecoderTests.AlphaTrianglesWithExtraChannel(1, name)).GetFormatMetadata(JxlFormat.Instance);
+
+        JxlExtraChannel channel = Assert.Single(jxl.ExtraChannels);
+        Assert.Equal(JxlExtraChannelType.Depth, channel.Type);
+        Assert.Equal(name, channel.Name);
+        Assert.Equal(9u, channel.BitsPerSample);
+    }
+
+    [Fact]
+    public void Decode_IgnoreMetadata_StillDescribesTheExtraChannels()
+    {
+        using MemoryStream stream = new(JxlDecoderTests.AlphaTrianglesWithExtraChannel(1, "Depth"));
+
+        using Image<Rgba64> image = new JxlDecoder { IgnoreMetadata = true }.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        JxlExtraChannel channel = Assert.Single(image.Metadata.GetFormatMetadata(JxlFormat.Instance).ExtraChannels);
+        Assert.Equal("Depth", channel.Name);
+    }
+
+    [Fact]
+    public void DeepClone_CopiesTheExtraChannels()
+    {
+        JxlMetadata jxl = Identify(JxlConformanceVector.Load("spot").CommittedInputPath).GetFormatMetadata(JxlFormat.Instance);
+
+        JxlMetadata clone = (JxlMetadata)jxl.DeepClone();
+        jxl.ExtraChannels = Array.Empty<JxlExtraChannel>();
+
+        Assert.Equal(3, clone.ExtraChannels.Count);
+        Assert.Equal(JxlExtraChannelType.SpotColor, clone.ExtraChannels[2].Type);
     }
 
     // Whether the codestream header signals an embedded ICC profile.

@@ -255,41 +255,117 @@ public class JxlDecoderTests
         Assert.Equal(bitsPerPixel, info.PixelType.BitsPerPixel);
     }
 
+    // The extra channel types of libjxl's ExtraChannel enum that the decoder drops from the pixels. Black
+    // is dropped too, as alpha_triangles has no CMYK profile.
     [Theory]
-    [InlineData(0, false)] // alpha
-    [InlineData(1, true)] // depth
-    public void Decode_ExtraChannelThatIsNotAlpha_ThrowsNotSupported(int type, bool throws)
+    [InlineData(1)] // depth
+    [InlineData(3)] // selection mask
+    [InlineData(4)] // black
+    [InlineData(5)] // CFA
+    [InlineData(6)] // thermal
+    [InlineData(16)] // optional
+    public void Decode_ExtraChannelThatIsDropped_GivesTheColourAndOpaqueAlpha(uint type)
     {
-        // alpha_triangles' frame, behind a header that gives its extra channel the type.
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(type));
+        using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+        using FileStream original = File.OpenRead(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        using Image<Rgb48> colour = new JxlDecoder().Decode<Rgb48>(Configuration.Default, original, CancellationToken.None);
+
+        Assert.Equal(colour.Size(), image.Size());
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Rgb48 expected = colour[x, y];
+                Assert.Equal(new Rgba64(expected.R, expected.G, expected.B, ushort.MaxValue), image[x, y]);
+            }
+        }
+    }
+
+    [Fact]
+    public void Decode_SpotColourChannel_ThrowsNotSupported()
+    {
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(2));
+
+        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    [Fact]
+    public void Decode_CmykImage_ThrowsNotSupported()
+    {
+        using FileStream stream = File.OpenRead(JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
+
+        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba32>(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    [Fact]
+    public void Decode_ExtraChannelWithDimShift_ThrowsNotSupported()
+    {
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(1, dimShift: 1));
+
+        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Returns alpha_triangles' frame behind a hand-written header that gives its one extra channel the
+    /// type, name and dim_shift. The header is 1024 x 1024 with 9-bit samples and the default colour
+    /// encoding, as alpha_triangles' own.
+    /// </summary>
+    /// <param name="type">The extra channel type, as libjxl's ExtraChannel enum.</param>
+    /// <param name="name">The extra channel name, up to 15 bytes of UTF-8.</param>
+    /// <param name="dimShift">The dim_shift, 0 or 3.</param>
+    /// <returns>The codestream.</returns>
+    internal static byte[] AlphaTrianglesWithExtraChannel(uint type, string name = "", uint dimShift = 0)
+    {
         byte[] original = File.ReadAllBytes(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        byte[] nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
         JxlTestBitWriter writer = new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);
         writer.Bit(false).Write(2, 1).Write(13, 1023).Write(3, 1); // 1024 x 1024
         writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
         writer.Bit(false).Write(2, 3).Write(6, 8).Bit(true); // 9-bit integer samples, 16-bit buffers suffice
         writer.Write(2, 1); // one extra channel
-        writer.Bit(false).Write(2, (ulong)type); // not all default, the type
+        writer.Bit(false); // not all default
+        if (type < 2)
+        {
+            writer.Write(2, type);
+        }
+        else
+        {
+            writer.Write(2, 2).Write(4, type - 2); // BitsOffset(4, 2)
+        }
+
         writer.Bit(false).Write(2, 3).Write(6, 8); // 9-bit integer samples
-        writer.Write(2, 0).Write(2, 0); // no dim shift, no name
+        writer.Write(2, dimShift == 0 ? 0UL : 1UL); // dim_shift: Val(0) or Val(3)
+        if (nameBytes.Length == 0)
+        {
+            writer.Write(2, 0);
+        }
+        else
+        {
+            writer.Write(2, 1).Write(4, (ulong)nameBytes.Length); // name length as Bits(4)
+            foreach (byte b in nameBytes)
+            {
+                writer.Write(8, b);
+            }
+        }
+
         if (type == 0)
         {
             writer.Bit(false); // straight alpha
+        }
+        else if (type == 2)
+        {
+            writer.Write(16, 0x3C00).Write(16, 0).Write(16, 0).Write(16, 0x3C00); // red spot colour, solidity 1, as F16
+        }
+        else if (type == 5)
+        {
+            writer.Write(2, 0); // CFA channel 1
         }
 
         writer.Bit(false).Bit(true).Write(2, 0); // not XYB, default colour encoding, no extensions
         writer.Bit(true); // all-default transform data
         writer.ZeroPadToByte();
-        byte[] data = writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
-        using MemoryStream stream = new(data);
-
-        if (throws)
-        {
-            Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
-        }
-        else
-        {
-            using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-            Assert.Equal(1024, image.Width);
-        }
+        return writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
     }
 
     [Fact]
