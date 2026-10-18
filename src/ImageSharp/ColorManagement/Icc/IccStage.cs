@@ -12,10 +12,10 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// channels leaves W alone, which is how alpha passes through an RGB or gray conversion untouched.
 /// </summary>
 /// <remarks>
-/// The stage kinds so far are curves (<see cref="IccCurveStage"/>), matrices
-/// (<see cref="IccMatrixStage"/>) and the PCS encodings (<see cref="IccXyzToLabStage"/>,
-/// <see cref="IccLabToXyzStage"/>). LUT-based profiles add more kinds (for example a CLUT stage)
-/// without changing the pipeline.
+/// The stage kinds are curves (<see cref="IccCurveStage"/>), matrices
+/// (<see cref="IccMatrixStage"/>), the PCS encodings (<see cref="IccXyzToLabStage"/>,
+/// <see cref="IccLabToXyzStage"/>), color lookup tables (<see cref="IccClutStage"/>) and
+/// <see cref="IccOpaqueStage"/>.
 /// </remarks>
 internal abstract class IccStage
 {

@@ -46,6 +46,9 @@ public class DecoderColorProfileConversionTests
     [InlineData("png", TestImages.Icc.QcmsRec2020)]
     [InlineData("gif", TestImages.Icc.CompactAdobeRgbV2)]
     [InlineData("bmp", TestImages.Icc.QcmsRec2020)]
+    [InlineData("png", TestImages.Icc.LittleCmsRgbLutAToBV4)]
+    [InlineData("tiff", TestImages.Icc.LittleCmsRgbLut16V2)]
+    [InlineData("webp", TestImages.Icc.LittleCmsRgbLut8V2)]
     public void Decode_ToSrgb_MatchesLittleCms(string format, string embeddedProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(embeddedProfile, null);
@@ -139,21 +142,6 @@ public class DecoderColorProfileConversionTests
 
         Assert.Equal(new Rgb24(128, 64, 32), image[0, 0]);
         Assert.Null(image.Metadata.IccProfile);
-    }
-
-    [Theory]
-    [MemberData(nameof(AllFormats))]
-    public void Decode_LutProfile_LeavesPixelsAndProfileAsTheyAre(string format)
-    {
-        // The sRGB v4 ICC preference profile (mAB/mBA tables) from a committed WebP file: not supported until LUT profiles are.
-        IccProfile lut = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Webp.Lossy.WithIccp)).Metadata.IccProfile;
-        byte[] file = CreateFileWithProfile(format, lut);
-        using Image<Rgb24> expected = Decode<Rgb24>(format, file, ignoreMetadata: true);
-
-        using Image<Rgb24> image = Decode<Rgb24>(format, file, ColorProfileConversion.ToSrgb);
-
-        AssertSamePixels(expected, image);
-        Assert.Equal(lut.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
     }
 
     [Fact]

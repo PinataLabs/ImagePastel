@@ -51,6 +51,10 @@ public class ConvertColorProfileProcessorTests
     [InlineData(null, TestImages.Icc.CompactDisplayP3V4)]
     [InlineData(TestImages.Icc.LittleCmsSrgbV4, TestImages.Icc.CompactDisplayP3V4)]
     [InlineData(TestImages.Icc.CompactDisplayP3V4, TestImages.Icc.LittleCmsSrgbV2)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLut8V2)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLut16V2)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLutAToBV4)]
+    [InlineData(TestImages.Webp.Lossy.WithIccp, TestImages.Icc.LittleCmsSrgbV2)]
     public void ConvertColorProfile_ProfileToProfile_MatchesLittleCms(string sourceProfile, string targetProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, targetProfile);
@@ -66,6 +70,7 @@ public class ConvertColorProfileProcessorTests
     [InlineData(TestImages.Icc.CompactGrayV4)]
     [InlineData(TestImages.Icc.LittleCmsGray22V4)]
     [InlineData(TestImages.Icc.LittleCmsGrayLab18V4)]
+    [InlineData(TestImages.Icc.LittleCmsGrayLutV4)]
     public void ConvertColorProfileToSrgb_GrayProfile_MatchesLittleCms(string sourceProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, null);
@@ -89,6 +94,7 @@ public class ConvertColorProfileProcessorTests
     [Theory]
     [InlineData(TestImages.Icc.LittleCmsGray22V4)]
     [InlineData(TestImages.Icc.LittleCmsGrayLab18V4)]
+    [InlineData(TestImages.Icc.LittleCmsGrayLutV4)]
     public void ConvertColorProfile_SrgbToGrayProfile_MatchesLittleCms(string targetProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(null, targetProfile);
@@ -241,15 +247,19 @@ public class ConvertColorProfileProcessorTests
         Assert.Throws<InvalidImageContentException>(() => image.Mutate(x => x.ConvertColorProfile(target)));
     }
 
-    [Fact]
-    public void ConvertColorProfile_LutBasedSourceProfile_ThrowsNotSupportedException()
+    [Theory]
+    [InlineData(TestImages.Icc.LittleCmsRgbLut8V2)]
+    [InlineData(TestImages.Icc.LittleCmsRgbLut16V2)]
+    [InlineData(TestImages.Icc.LittleCmsRgbLutAToBV4)]
+    public void ConvertColorProfileToSrgb_LutBasedRgbProfile_MatchesLittleCms(string sourceProfile)
     {
-        // The sRGB v4 ICC preference profile: mAB/mBA tables, Lab PCS.
-        using Image<Rgb24> image = new(1, 1);
-        image.Metadata.IccProfile = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Webp.Lossy.WithIccp)).Metadata.IccProfile;
+        LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, null);
+        using Image<Rgb24> image = CreateRgb24(reference);
+        image.Metadata.IccProfile = LoadProfile(sourceProfile);
 
-        Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb()));
-        Assert.Equal(new Rgb24(0, 0, 0), image[0, 0]);
+        image.Mutate(x => x.ConvertColorProfileToSrgb());
+
+        AssertPixels(image, reference, EightBitTolerance);
     }
 
     [Fact]
@@ -259,6 +269,17 @@ public class ConvertColorProfileProcessorTests
         using Image<Rgb24> image = new(1, 1);
 
         Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfile(cmyk)));
+    }
+
+    [Fact]
+    public void ConvertColorProfile_CmykPixelProfile_ThrowsNotSupportedException()
+    {
+        // A decoded CMYK JPEG keeps its CMYK profile next to RGB pixels; the processor must not read them as CMYK.
+        using Image<Rgb24> image = Image.Load<Rgb24>(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk));
+        Rgb24 before = image[0, 0];
+
+        Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb()));
+        Assert.Equal(before, image[0, 0]);
     }
 
     [Theory]
@@ -275,8 +296,13 @@ public class ConvertColorProfileProcessorTests
         Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb(options)));
     }
 
+    /// <summary>
+    /// Loads a test profile: an ICC file, or the profile embedded in an image file.
+    /// </summary>
     internal static IccProfile LoadProfile(string file)
-        => new(File.ReadAllBytes(TestFile.GetInputFileFullPath(file)));
+        => file.EndsWith(".icc", StringComparison.Ordinal)
+            ? new(File.ReadAllBytes(TestFile.GetInputFileFullPath(file)))
+            : Image.Identify(TestFile.GetInputFileFullPath(file)).Metadata.IccProfile;
 
     private static Vector3 ToVector(CieLab lab) => new(lab.L, lab.A, lab.B);
 

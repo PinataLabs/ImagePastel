@@ -9,8 +9,8 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 
 /// <summary>
 /// What the engine needs from one profile: its PCS encoding and the stages between its device
-/// values and the PCS. Each kind of profile the engine supports is a subclass; LUT-based profiles
-/// add their own.
+/// values and the PCS. Each kind of profile the engine supports is a subclass:
+/// <see cref="IccMatrixTrcModel"/>, <see cref="IccGrayTrcModel"/> and <see cref="IccLutModel"/>.
 /// </summary>
 internal abstract class IccProfileModel
 {
@@ -73,22 +73,35 @@ internal abstract class IccProfileModel
             throw Corrupt(role, $"its connection space is {pcs}");
         }
 
-        // With the perceptual intent, Little CMS prefers the intent-0 LUT tags in the direction it needs.
-        IccProfileTag lut = asSource ? IccProfileTag.AToB0 : IccProfileTag.BToA0;
-        IccProfileTag floatLut = asSource ? IccProfileTag.DToB0 : IccProfileTag.BToD0;
+        IccColorSpaceType dataColorSpace = header.DataColorSpace;
+        if (dataColorSpace is not (IccColorSpaceType.Rgb or IccColorSpaceType.Gray or IccColorSpaceType.Cmyk))
+        {
+            throw new NotSupportedException($"The {role} ICC profile's color space is {dataColorSpace}; only RGB, gray and CMYK profiles are supported.");
+        }
+
+        // With the perceptual intent, Little CMS takes the intent-0 table in the direction it needs:
+        // the floating-point one (D2B0 or B2D0) first, then A2B0 or B2A0, and the matrix/TRC tags
+        // (or the gray curve) when the profile has neither.
+        IccProfileTag lutTag = asSource ? IccProfileTag.AToB0 : IccProfileTag.BToA0;
+        IccProfileTag floatLutTag = asSource ? IccProfileTag.DToB0 : IccProfileTag.BToD0;
         foreach (IccTagDataEntry entry in entries)
         {
-            if (entry.TagSignature == lut || entry.TagSignature == floatLut)
+            if (entry.TagSignature == floatLutTag)
             {
-                throw new NotSupportedException($"The {role} ICC profile is LUT-based ({entry.TagSignature}); only matrix/TRC and gray profiles are supported.");
+                throw new NotSupportedException($"The {role} ICC profile uses a multi-process element table ({entry.TagSignature}), which is not supported.");
             }
         }
 
-        return header.DataColorSpace switch
+        if (profile.TryGetTag(lutTag, out IccTagDataEntry lut))
+        {
+            return IccLutModel.Read(lut, dataColorSpace, pcs, asSource, role);
+        }
+
+        return dataColorSpace switch
         {
             IccColorSpaceType.Rgb => IccMatrixTrcModel.Read(profile, pcs, role),
             IccColorSpaceType.Gray => IccGrayTrcModel.Read(profile, pcs, role),
-            _ => throw new NotSupportedException($"The {role} ICC profile's color space is {header.DataColorSpace}; only RGB and gray profiles are supported."),
+            _ => throw Corrupt(role, $"it is a {dataColorSpace} profile without a {lutTag} table"),
         };
     }
 

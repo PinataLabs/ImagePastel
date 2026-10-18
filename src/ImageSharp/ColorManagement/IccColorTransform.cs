@@ -21,10 +21,19 @@ namespace SixLabors.ImageSharp.ColorManagement;
 /// The engine describes sRGB itself from the IEC 61966-2-1 parameters.
 /// </para>
 /// <para>
-/// Supported so far: RGB matrix/TRC profiles (<c>rXYZ</c>, <c>gXYZ</c>, <c>bXYZ</c>, <c>rTRC</c>,
-/// <c>gTRC</c>, <c>bTRC</c>) and gray profiles (<c>kTRC</c>), with an XYZ or Lab PCS, ICC v2 or v4.
-/// Tone curves may be <c>curveType</c> (identity, gamma or table) or <c>parametricCurveType</c>
-/// (function types 0 to 4).
+/// Supported so far: RGB, gray and CMYK profiles with an XYZ or Lab PCS, ICC v2 or v4, either
+/// matrix/TRC (<c>rXYZ</c>, <c>gXYZ</c>, <c>bXYZ</c>, <c>rTRC</c>, <c>gTRC</c>, <c>bTRC</c>),
+/// gray (<c>kTRC</c>), or LUT-based (<c>A2B0</c> for a source and <c>B2A0</c> for a target, of
+/// type <c>lut8Type</c>, <c>lut16Type</c>, <c>lutAToBType</c> or <c>lutBToAType</c>). A profile
+/// with a LUT-based tag is used through it; Little CMS does the same. Tone curves may be
+/// <c>curveType</c> (identity, gamma or table) or <c>parametricCurveType</c> (function types 0 to 4).
+/// Tables are interpolated as Little CMS interpolates them: tetrahedrally for three inputs, except
+/// trilinearly for the Lab side of a target's table.
+/// </para>
+/// <para>
+/// CMYK colors fill all four channels of a <see cref="Vector4"/>: cyan, magenta, yellow and black
+/// in X, Y, Z and W, each from 0 (no ink) to 1 (full ink). Converting from a CMYK profile gives
+/// opaque colors (W is 1); converting to one writes black over W.
 /// </para>
 /// </remarks>
 public sealed class IccColorTransform
@@ -37,7 +46,10 @@ public sealed class IccColorTransform
     /// <param name="source">The profile of the colors to convert, or <see langword="null"/> for sRGB.</param>
     /// <param name="target">The profile to convert to, or <see langword="null"/> for sRGB.</param>
     /// <exception cref="InvalidImageContentException">A profile is corrupt.</exception>
-    /// <exception cref="NotSupportedException">The engine does not support a profile yet (for example a LUT-based or CMYK profile).</exception>
+    /// <exception cref="NotSupportedException">
+    /// The engine does not support a profile (for example a device link profile, a profile of another
+    /// color space, or one with a <c>D2B0</c> multi-process element table).
+    /// </exception>
     public IccColorTransform(IccProfile source, IccProfile target)
         : this(source, target, new IccColorTransformOptions())
     {
@@ -52,8 +64,8 @@ public sealed class IccColorTransform
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidImageContentException">A profile is corrupt.</exception>
     /// <exception cref="NotSupportedException">
-    /// The engine does not support a profile or an option yet (for example a LUT-based or CMYK
-    /// profile, a rendering intent other than perceptual, or black-point compensation).
+    /// The engine does not support a profile or an option yet (for example a device link profile,
+    /// a rendering intent other than perceptual, or black-point compensation).
     /// </exception>
     public IccColorTransform(IccProfile source, IccProfile target, IccColorTransformOptions options)
     {
@@ -81,12 +93,25 @@ public sealed class IccColorTransform
 
         targetModel.AddPcsToDevice(stages);
         this.pipeline = new IccPipeline(stages);
+        this.SourceColorSpace = source?.Header.DataColorSpace ?? IccColorSpaceType.Rgb;
+        this.TargetColorSpace = target?.Header.DataColorSpace ?? IccColorSpaceType.Rgb;
     }
 
     /// <summary>
+    /// Gets the data color space of the source profile: RGB, gray or CMYK.
+    /// </summary>
+    internal IccColorSpaceType SourceColorSpace { get; }
+
+    /// <summary>
+    /// Gets the data color space of the target profile: RGB, gray or CMYK.
+    /// </summary>
+    internal IccColorSpaceType TargetColorSpace { get; }
+
+    /// <summary>
     /// Converts colors in place. Each <see cref="Vector4"/> holds red, green, blue and alpha (or gray
-    /// in all three color channels) scaled to [0, 1], as <c>PixelConversionModifiers.Scale</c>
-    /// gives them. Alpha (W) is not changed. Results outside the target gamut are not clamped.
+    /// in all three color channels, or CMYK in all four) scaled to [0, 1], as
+    /// <c>PixelConversionModifiers.Scale</c> gives them. Alpha (W) is not changed unless a profile
+    /// is CMYK. Results outside the target gamut are not clamped.
     /// </summary>
     /// <param name="colors">The colors to convert.</param>
     public void Transform(Span<Vector4> colors) => this.pipeline.Invoke(colors);

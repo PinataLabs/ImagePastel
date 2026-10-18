@@ -111,7 +111,6 @@ internal static class DecoderColorProfileConversion
         try
         {
             transform = new IccColorTransform(source, target);
-            return true;
         }
         catch (Exception ex) when (ex is InvalidImageContentException or NotSupportedException or InvalidIccProfileException)
         {
@@ -119,11 +118,15 @@ internal static class DecoderColorProfileConversion
             // cannot use is the caller's mistake, so that is reported.
             if (target is not null)
             {
-                _ = new IccColorTransform(null, target);
+                CheckTarget(new IccColorTransform(null, target));
             }
 
+            transform = null;
             return false;
         }
+
+        CheckTarget(transform);
+        return true;
     }
 
     /// <summary>
@@ -148,6 +151,15 @@ internal static class DecoderColorProfileConversion
     // decoder has already converted (CMYK) and given the target profile.
     private static bool IsTarget(IccProfile source, IccProfile target)
         => target is not null && source.ToByteArray().AsSpan().SequenceEqual(target.ToByteArray());
+
+    // Decoded pixels hold RGB or gray; the engine gives CMYK in all four channels, which no pixel type maps to yet.
+    private static void CheckTarget(IccColorTransform transform)
+    {
+        if (transform.TargetColorSpace is not (IccColorSpaceType.Rgb or IccColorSpaceType.Gray))
+        {
+            throw new NotSupportedException($"Decoding to a {transform.TargetColorSpace} profile is not supported; the target must be an RGB or gray profile.");
+        }
+    }
 
     private static void Convert<TPixel>(Image<TPixel> image, IColorProfileDecoderOptions options, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
