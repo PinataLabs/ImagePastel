@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
+using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using Xunit;
 
@@ -189,6 +190,8 @@ public class IccProfileQueryTests
             return new IccProfile(File.ReadAllBytes(path));
         }
 
-        return Image.Identify(path).Metadata.IccProfile;
+        // A CMYK JPEG's profile is only its embedded profile, not its pixel profile.
+        ImageMetadata metadata = Image.Identify(path).Metadata;
+        return metadata.IccProfile ?? metadata.GetJpegMetadata().EmbeddedIccProfile;
     }
 }

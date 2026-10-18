@@ -178,7 +178,7 @@ public class CmykDecoderColorProfileConversionTests
         using Image<Rgb24> image = Decode<Rgb24>(bytes, ColorProfileConversion.None, LoadProfile(TestImages.Icc.LittleCmsSrgbV2));
 
         AssertSamePixels(formula, image);
-        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.IccProfile.DataColorSpace);
+        AssertCmykProfileIsOnlyEmbedded(image, bytes);
     }
 
     [Theory]
@@ -210,7 +210,8 @@ public class CmykDecoderColorProfileConversionTests
         using Image<Rgb24> image = Decode<Rgb24>(bytes, ColorProfileConversion.ToSrgb);
 
         AssertSamePixels(formula, image);
-        Assert.Equal(unusable, image.Metadata.IccProfile.ToByteArray());
+        AssertCmykProfileIsOnlyEmbedded(image, bytes);
+        Assert.Equal(unusable, EmbeddedIccProfile(image.Metadata, bytes).ToByteArray());
     }
 
     [Theory]
@@ -223,8 +224,41 @@ public class CmykDecoderColorProfileConversionTests
         using MemoryStream stream = new(bytes);
         IImageInfo info = detector.Identify(Configuration.Default, stream, TestContext.Current.CancellationToken);
 
-        Assert.Equal(IccColorSpaceType.Cmyk, info.Metadata.IccProfile.DataColorSpace);
+        Assert.Null(info.Metadata.IccProfile);
+        Assert.Equal(IccColorSpaceType.Cmyk, EmbeddedIccProfile(info.Metadata, bytes).DataColorSpace);
     }
+
+    [Theory]
+    [MemberData(nameof(FilesWithCmykProfile))]
+    public void Decode_WithConversion_KeepsTheEmbeddedProfile(string file)
+    {
+        byte[] bytes = ReadFile(file);
+        IccProfile target = LoadProfile(TestImages.Icc.LittleCmsSrgbV2);
+
+        using Image<Rgb24> toSrgb = Decode<Rgb24>(bytes, ColorProfileConversion.ToSrgb);
+        using Image<Rgb24> toTarget = Decode<Rgb24>(bytes, ColorProfileConversion.ToTargetProfile, target);
+
+        Assert.Equal(IccColorSpaceType.Cmyk, EmbeddedIccProfile(toSrgb.Metadata, bytes).DataColorSpace);
+        Assert.Equal(IccColorSpaceType.Cmyk, EmbeddedIccProfile(toTarget.Metadata, bytes).DataColorSpace);
+    }
+
+    // A decoded CMYK image has RGB pixels, so its CMYK profile is never the pixel profile; it stays
+    // reachable as the format's embedded ICC profile.
+    private static void AssertCmykProfileIsOnlyEmbedded(Image image, byte[] bytes)
+    {
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Equal(IccColorSpaceType.Cmyk, EmbeddedIccProfile(image.Metadata, bytes).DataColorSpace);
+        if (bytes[0] != 0xFF)
+        {
+            ImageSharp.Metadata.ImageFrameMetadata frame = image.Frames.RootFrame.Metadata;
+            Assert.Null(frame.IccProfile);
+            Assert.Null(frame.ExifProfile.GetValue(ExifTag.IccProfile));
+            Assert.Equal(IccColorSpaceType.Cmyk, frame.GetTiffMetadata().EmbeddedIccProfile.DataColorSpace);
+        }
+    }
+
+    private static IccProfile EmbeddedIccProfile(ImageSharp.Metadata.ImageMetadata metadata, byte[] bytes)
+        => bytes[0] == 0xFF ? metadata.GetJpegMetadata().EmbeddedIccProfile : metadata.GetTiffMetadata().EmbeddedIccProfile;
 
     private static byte[] ReadFile(string file) => File.ReadAllBytes(TestFile.GetInputFileFullPath(file));
 
@@ -270,7 +304,7 @@ public class CmykDecoderColorProfileConversionTests
         }
 
         byte[] inks = ReadJpegInks(file, out int width, out int height);
-        IccProfile embedded = Image.Identify(file).Metadata.IccProfile;
+        IccProfile embedded = Image.Identify(file).Metadata.GetJpegMetadata().EmbeddedIccProfile;
         MagickReadSettings settings = new() { Format = MagickFormat.Cmyk, Width = (uint)width, Height = (uint)height, Depth = 8 };
         using MagickImage magick = new(inks, settings);
         return ConvertWithMagick(magick, new ColorProfile(embedded.ToByteArray()), target);

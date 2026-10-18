@@ -653,22 +653,32 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     }
 
     /// <summary>
-    /// Initializes the ICC profile.
+    /// Initializes the ICC profile. A valid embedded profile is always exposed as
+    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>. It is also the pixel profile, unless it is a
+    /// CMYK profile: the decoded pixels are RGB, so a CMYK profile does not describe them. When the
+    /// CMYK samples were converted through it, the pixel profile is the conversion's target.
     /// </summary>
     private void InitIccProfile()
     {
+        if (!this.hasIcc)
+        {
+            return;
+        }
+
+        var profile = new IccProfile(this.iccData);
+        if (!profile.CheckIsValid())
+        {
+            return;
+        }
+
+        this.Metadata.GetJpegMetadata().EmbeddedIccProfile = profile;
         if (this.CmykTransform is not null)
         {
-            // The CMYK samples were converted through the embedded profile, which no longer describes the pixels.
             this.Metadata.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
         }
-        else if (this.hasIcc)
+        else if (profile.DataColorSpace != IccColorSpaceType.Cmyk)
         {
-            var profile = new IccProfile(this.iccData);
-            if (profile.CheckIsValid())
-            {
-                this.Metadata.IccProfile = profile;
-            }
+            this.Metadata.IccProfile = profile;
         }
     }
 

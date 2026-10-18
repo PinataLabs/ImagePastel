@@ -24,6 +24,8 @@ public sealed class JpegDecoder : IImageDecoder, IJpegDecoderOptions, IImageInfo
     /// embedded profile is corrupt or not supported; the image then keeps its embedded profile.
     /// Adobe CMYK and YCCK images with an embedded CMYK profile are converted from their CMYK samples
     /// through that profile instead of through the CMYK-to-RGB formula; without one, the formula stays.
+    /// A CMYK profile is never the pixel profile, since the decoded pixels are RGB; it is exposed as
+    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>, with or without a conversion.
     /// </summary>
     public ColorProfileConversion ColorProfileConversion { get; set; }
 

@@ -319,6 +319,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
         {
             // The pixels now hold the target's colors, so the embedded profile no longer describes
             // them. The frame keeps the target instead, and the post-decode conversion finds nothing to do.
+            tiffFrameMetaData.EmbeddedIccProfile = new IccProfile(tags.GetValue(ExifTag.IccProfile).Value);
             tags.RemoveValue(ExifTag.IccProfile);
             imageFrameMetaData.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
         }

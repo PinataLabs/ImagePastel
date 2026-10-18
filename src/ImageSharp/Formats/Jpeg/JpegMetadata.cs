@@ -3,6 +3,7 @@
 
 using System;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.Formats.Jpeg;
 
@@ -35,6 +36,7 @@ public class JpegMetadata : IDeepCloneable
     private JpegMetadata(JpegMetadata other)
     {
         this.ColorType = other.ColorType;
+        this.EmbeddedIccProfile = other.EmbeddedIccProfile?.DeepClone();
 
         this.luminanceQuality = other.luminanceQuality;
         this.chrominanceQuality = other.chrominanceQuality;
@@ -109,6 +111,15 @@ public class JpegMetadata : IDeepCloneable
     /// Gets or sets the color type.
     /// </summary>
     public JpegColorType? ColorType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the embedded ICC profile, exactly as the file stores it, or <see langword="null"/>
+    /// when there is none, it is not a valid profile, or metadata is ignored. It is not always the
+    /// pixel profile (<c>ImageMetadata.IccProfile</c>): a CMYK profile describes the file's CMYK or
+    /// YCCK samples, not the decoded RGB pixels, so a CMYK image keeps it only here, and a converted
+    /// image has the target profile (or none) as its pixel profile.
+    /// </summary>
+    public IccProfile EmbeddedIccProfile { get; set; }
 
     /// <inheritdoc/>
     public IDeepCloneable DeepClone() => new JpegMetadata(this);

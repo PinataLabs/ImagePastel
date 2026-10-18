@@ -237,7 +237,7 @@ public class DecoderColorProfileConversionTests
     [MemberData(nameof(LosslessFormats))]
     public void Decode_UnsupportedTargetProfile_ThrowsNotSupportedException(string format)
     {
-        IccProfile cmyk = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk)).Metadata.IccProfile;
+        IccProfile cmyk = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk)).Metadata.GetJpegMetadata().EmbeddedIccProfile;
         byte[] file = CreateFileWithProfile(format, TestImages.Icc.CompactAdobeRgbV2);
 
         Assert.Throws<NotSupportedException>(() => Decode<Rgb24>(format, file, ColorProfileConversion.ToTargetProfile, cmyk));

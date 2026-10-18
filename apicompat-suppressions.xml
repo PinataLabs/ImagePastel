@@ -173,4 +173,29 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>F:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccTypeSignature.Cicp</Target>
   </Suppression>
+  <!-- Addition: EmbeddedIccProfile on JPEG and TIFF metadata, #179. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Jpeg.JpegMetadata.get_EmbeddedIccProfile</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Jpeg.JpegMetadata.set_EmbeddedIccProfile(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffMetadata.get_EmbeddedIccProfile</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffMetadata.set_EmbeddedIccProfile(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffFrameMetadata.get_EmbeddedIccProfile</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffFrameMetadata.set_EmbeddedIccProfile(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
+  </Suppression>
 </Suppressions>

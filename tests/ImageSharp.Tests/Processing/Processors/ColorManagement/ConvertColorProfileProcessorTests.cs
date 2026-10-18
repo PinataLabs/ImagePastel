@@ -357,15 +357,44 @@ public class ConvertColorProfileProcessorTests
     }
 
     [Fact]
-    public void ConvertColorProfileToSrgb_DecodedCmykJpegAsRgb24_ThrowsNotSupportedException()
+    public void ConvertColorProfile_DefaultDecodedCmykTiffAsRgba32_TreatsPixelsAsSrgb()
     {
-        // A decoded CMYK JPEG keeps its CMYK profile next to formula RGB pixels. JPEG decodes to Rgb24
-        // by default, which cannot hold CMYK, so the processor refuses instead of reading RGB as CMYK.
-        using Image<Rgb24> image = Image.Load<Rgb24>(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk));
-        Rgb24 before = image[0, 0];
+        // A CMYK TIFF decoded without conversion has formula RGB pixels and no pixel profile (its CMYK
+        // profile is only the embedded one), so the processor reads the pixels as sRGB, not as CMYK:
+        // converting to sRGB changes nothing, and converting to Display P3 gives what an image with
+        // the same pixels and an explicit sRGB pixel profile gives.
+        using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.GetInputFileFullPath(TestImages.Tiff.Cmyk8BitWithIccProfile));
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetTiffMetadata().EmbeddedIccProfile.DataColorSpace);
+        IccProfile p3 = LoadProfile(TestImages.Icc.CompactDisplayP3V4);
+        using Image<Rgba32> asSrgb = image.Clone();
+        asSrgb.Metadata.IccProfile = LoadProfile(TestImages.Icc.LittleCmsSrgbV4);
+        asSrgb.Mutate(x => x.ConvertColorProfile(p3));
 
-        Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb()));
-        Assert.Equal(before, image[0, 0]);
+        using (Image<Rgba32> toSrgb = image.Clone(x => x.ConvertColorProfileToSrgb()))
+        {
+            for (int y = 0; y < image.Height; y++)
+            {
+                for (int x = 0; x < image.Width; x++)
+                {
+                    Assert.Equal(image[x, y], toSrgb[x, y]);
+                }
+            }
+        }
+
+        image.Mutate(x => x.ConvertColorProfile(p3));
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Rgba32 a = asSrgb[x, y];
+                Rgba32 b = image[x, y];
+                Assert.True(Math.Abs(a.R - b.R) <= 1 && Math.Abs(a.G - b.G) <= 1 && Math.Abs(a.B - b.B) <= 1 && a.A == b.A, $"({x}, {y}): {a} and {b}.");
+            }
+        }
+
+        Assert.Equal(p3.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
     }
 
     [Theory]
