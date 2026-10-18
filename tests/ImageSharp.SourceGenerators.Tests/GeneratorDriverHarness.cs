@@ -26,9 +26,10 @@ internal static class GeneratorDriverHarness
     /// </summary>
     public const string UpdateSnapshotsVariable = "IMAGESHARP_UPDATE_SNAPSHOTS";
 
-    private const string GateOption = "build_property.ImageSharpGeneratedSources";
-
-    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+    /// <summary>
+    /// Gets the encoding of the expected files: UTF-8 without a byte order mark.
+    /// </summary>
+    public static UTF8Encoding Utf8NoBom { get; } = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
     /// Gets the directory that holds the expected files of every target, in the source tree.
@@ -61,7 +62,7 @@ internal static class GeneratorDriverHarness
         Dictionary<string, string> options = [];
         if (gateValue is not null)
         {
-            options[GateOption] = gateValue;
+            options[ImageSharpSourceGenerator.GateProperty] = gateValue;
         }
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -91,6 +92,7 @@ internal static class GeneratorDriverHarness
 
     /// <summary>
     /// Checks generator output against the expected files in <paramref name="expectedDirectory"/>.
+    /// Both sides have their line endings normalized to <c>"\n"</c> before the comparison.
     /// </summary>
     /// <param name="diagnostics">The diagnostics the generator reported. There must be none.</param>
     /// <param name="sources">The generated text of each hint name.</param>
@@ -125,7 +127,7 @@ internal static class GeneratorDriverHarness
             // Decode without dropping a BOM, so a BOM in the expected file is a difference.
             byte[] expectedBytes = File.ReadAllBytes(Path.Combine(expectedDirectory, source.Key));
             string expected = Utf8NoBom.GetString(expectedBytes);
-            Assert.Equal(expected, Normalize(source.Value));
+            Assert.Equal(Normalize(expected), Normalize(source.Value));
         }
     }
 

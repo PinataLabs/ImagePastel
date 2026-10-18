@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+
+  <!--
+    Runs gen/ImageSharp.SourceGenerators in the project that imports this file.
+    The project must also set ImageSharpGeneratedSources to its target: Library or Tests.
+    The generated files are under artifacts/obj/<category>/<project>/<configuration>/<tfm>/generated/.
+  -->
+
+  <PropertyGroup>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <!--
+    GlobalPropertiesToRemove: a build with a global AssemblyName, such as the library build in
+    ci-apicompat.ps1, must not rename the generator too.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="ImageSharpGeneratedSources" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      GlobalPropertiesToRemove="AssemblyName" />
+  </ItemGroup>
+
+</Project>

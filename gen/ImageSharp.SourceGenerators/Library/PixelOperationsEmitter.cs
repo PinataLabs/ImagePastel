@@ -16,25 +16,13 @@ namespace SixLabors.ImageSharp.SourceGenerators.Library;
 /// </summary>
 internal sealed class PixelOperationsEmitter : IEmitter
 {
-    private const string GenericHintName = "PixelOperations{TPixel}.Generated.cs";
-    private const string PixelHintNameSuffix = ".PixelOperations.Generated.cs";
-
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } =
-        [.. PixelTypeNames.CommonPixelTypes.Select(p => p + PixelHintNameSuffix), GenericHintName];
-
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
-    {
-        if (hintName == GenericHintName)
-        {
-            EmitGeneric(writer);
-        }
-        else
-        {
-            EmitPixel(hintName.Substring(0, hintName.Length - PixelHintNameSuffix.Length), writer);
-        }
-    }
+    public IReadOnlyList<GeneratedFile> Files { get; } =
+    [
+        .. PixelTypeNames.CommonPixelTypes.Select(
+            pixelType => new GeneratedFile(pixelType + ".PixelOperations.Generated.cs", writer => EmitPixel(pixelType, writer))),
+        new("PixelOperations{TPixel}.Generated.cs", EmitGeneric),
+    ];
 
     private static void EmitPixel(string pixelType, SourceWriter writer)
     {
@@ -85,20 +73,20 @@ internal sealed class PixelOperationsEmitter : IEmitter
             EmitRgba32CompatibleVector4ConversionMethods(pixelType, pixelType.EndsWith("32"), writer);
         }
 
-        IEnumerable<string> matching32BitTypes = PixelTypeNames.OptimizedPixelTypes.Contains(pixelType)
+        IEnumerable<string> optimizedDestTypes = PixelTypeNames.OptimizedPixelTypes.Contains(pixelType)
             ? PixelTypeNames.OptimizedPixelTypes.Where(p => p != pixelType)
             : [];
 
-        foreach (string destPixelType in matching32BitTypes)
+        foreach (string destPixelType in optimizedDestTypes)
         {
-            EmitOptimized32BitConversionMethods(pixelType, destPixelType, writer);
+            EmitOptimizedConversionMethods(pixelType, destPixelType, writer);
         }
 
-        IEnumerable<string> otherCommonNon32Types = PixelTypeNames.CommonPixelTypes
+        IEnumerable<string> otherDestTypes = PixelTypeNames.CommonPixelTypes
             .Where(p => p != pixelType)
-            .Except(matching32BitTypes);
+            .Except(optimizedDestTypes);
 
-        foreach (string destPixelType in otherCommonNon32Types)
+        foreach (string destPixelType in otherDestTypes)
         {
             EmitDefaultConvertToMethod(pixelType, destPixelType, writer);
         }
@@ -170,7 +158,7 @@ internal sealed class PixelOperationsEmitter : IEmitter
             """);
     }
 
-    private static void EmitOptimized32BitConversionMethods(string thisPixelType, string otherPixelType, SourceWriter writer)
+    private static void EmitOptimizedConversionMethods(string thisPixelType, string otherPixelType, SourceWriter writer)
     {
         writer.WriteLine($$"""
             /// <inheritdoc />

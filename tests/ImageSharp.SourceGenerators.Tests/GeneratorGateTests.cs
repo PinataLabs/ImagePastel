@@ -1,6 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
@@ -19,8 +21,19 @@ public class GeneratorGateTests
         Diagnostic diagnostic = Assert.Single(result.Diagnostics);
         Assert.Equal("ISG001", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.Contains("'Libary'", diagnostic.GetMessage(), System.StringComparison.Ordinal);
+        Assert.Contains("'Libary'", diagnostic.GetMessage(), StringComparison.Ordinal);
         Assert.Empty(result.GeneratedSources);
+    }
+
+    [Fact]
+    public void UnknownValue_MessageListsTheValidValues()
+    {
+        GeneratorRunResult result = GeneratorDriverHarness.Run("Libary");
+
+        Diagnostic diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(
+            "The ImageSharpGeneratedSources property value 'Libary' is not known. Use 'Library' or 'Tests', or remove the property.",
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
     }
 
     // CompilerVisibleProperty passes an unset property as an empty value.

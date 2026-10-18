@@ -4,8 +4,6 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using SixLabors.ImageSharp.SourceGenerators.Library;
-using SixLabors.ImageSharp.SourceGenerators.Tests;
 
 namespace SixLabors.ImageSharp.SourceGenerators;
 
@@ -20,22 +18,12 @@ namespace SixLabors.ImageSharp.SourceGenerators;
 [Generator(LanguageNames.CSharp)]
 public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
 {
-    private const string GateProperty = "build_property.ImageSharpGeneratedSources";
+    /// <summary>
+    /// The analyzer config key of the <c>ImageSharpGeneratedSources</c> property.
+    /// </summary>
+    internal const string GateProperty = "build_property.ImageSharpGeneratedSources";
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
-    private static readonly IEmitter[] LibraryEmitters =
-    [
-        new GuardNumericEmitter(),
-        new ImageExtensionsSaveEmitter(),
-        new PixelOperationsEmitter(),
-        new PixelBlendersEmitter(),
-    ];
-
-    private static readonly IEmitter[] TestsEmitters =
-    [
-        new PixelOperationsTestsEmitter(),
-    ];
 
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -63,16 +51,15 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
             return;
         }
 
-        IEmitter[] emitters = target == GeneratedSourcesTarget.Library ? LibraryEmitters : TestsEmitters;
-        foreach (IEmitter emitter in emitters)
+        foreach (IEmitter emitter in target.Emitters)
         {
-            foreach (string hintName in emitter.HintNames)
+            foreach (GeneratedFile file in emitter.Files)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
 
                 SourceWriter writer = new();
-                emitter.Emit(hintName, writer);
-                context.AddSource(hintName, SourceText.From(writer.ToString(), Utf8NoBom));
+                file.Write(writer);
+                context.AddSource(file.HintName, SourceText.From(writer.ToString(), Utf8NoBom));
             }
         }
     }

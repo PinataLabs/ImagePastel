@@ -11,15 +11,7 @@ namespace SixLabors.ImageSharp.SourceGenerators;
 internal interface IEmitter
 {
     /// <summary>
-    /// Gets the hint names of the files this emitter writes. Each is a file name,
-    /// without a directory.
+    /// Gets the files this emitter writes.
     /// </summary>
-    IReadOnlyList<string> HintNames { get; }
-
-    /// <summary>
-    /// Writes the file with the given hint name.
-    /// </summary>
-    /// <param name="hintName">One of <see cref="HintNames"/>.</param>
-    /// <param name="writer">The writer for that file.</param>
-    void Emit(string hintName, SourceWriter writer);
+    IReadOnlyList<GeneratedFile> Files { get; }
 }

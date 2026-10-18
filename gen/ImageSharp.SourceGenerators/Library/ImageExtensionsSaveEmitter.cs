@@ -25,10 +25,9 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
     ];
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = ["ImageExtensions.Save.cs"];
+    public IReadOnlyList<GeneratedFile> Files { get; } = [new("ImageExtensions.Save.cs", Emit)];
 
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
+    private static void Emit(SourceWriter writer)
     {
         writer.WriteLine("""
             // Copyright (c) Six Labors.
@@ -42,9 +41,9 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
 
             """);
 
-        foreach (string fmt in Formats)
+        foreach (string format in Formats)
         {
-            writer.WriteLine($"using SixLabors.ImageSharp.Formats.{fmt};");
+            writer.WriteLine($"using SixLabors.ImageSharp.Formats.{format};");
         }
 
         writer.WriteLine("""
@@ -60,51 +59,51 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
 
         using (writer.Indent())
         {
-            foreach (string fmt in Formats)
+            foreach (string format in Formats)
             {
                 writer.WriteLine($$"""
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="path">The file path to save the image to.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the path is null.</exception>
-                    public static void SaveAs{{fmt}}(this Image source, string path) => SaveAs{{fmt}}(source, path, null);
+                    public static void SaveAs{{format}}(this Image source, string path) => SaveAs{{format}}(source, path, null);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="path">The file path to save the image to.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the path is null.</exception>
                     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-                    public static Task SaveAs{{fmt}}Async(this Image source, string path) => SaveAs{{fmt}}Async(source, path, null);
+                    public static Task SaveAs{{format}}Async(this Image source, string path) => SaveAs{{format}}Async(source, path, null);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="path">The file path to save the image to.</param>
                     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the path is null.</exception>
                     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-                    public static Task SaveAs{{fmt}}Async(this Image source, string path, CancellationToken cancellationToken)
-                        => SaveAs{{fmt}}Async(source, path, null, cancellationToken);
+                    public static Task SaveAs{{format}}Async(this Image source, string path, CancellationToken cancellationToken)
+                        => SaveAs{{format}}Async(source, path, null, cancellationToken);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="path">The file path to save the image to.</param>
                     /// <param name="encoder">The encoder to save the image with.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the path is null.</exception>
-                    public static void SaveAs{{fmt}}(this Image source, string path, {{fmt}}Encoder encoder) =>
+                    public static void SaveAs{{format}}(this Image source, string path, {{format}}Encoder encoder) =>
                         source.Save(
                             path,
-                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{fmt}}Format.Instance));
+                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{format}}Format.Instance));
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="path">The file path to save the image to.</param>
@@ -112,46 +111,46 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
                     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the path is null.</exception>
                     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-                    public static Task SaveAs{{fmt}}Async(this Image source, string path, {{fmt}}Encoder encoder, CancellationToken cancellationToken = default) =>
+                    public static Task SaveAs{{format}}Async(this Image source, string path, {{format}}Encoder encoder, CancellationToken cancellationToken = default) =>
                         source.SaveAsync(
                             path,
-                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{fmt}}Format.Instance),
+                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{format}}Format.Instance),
                             cancellationToken);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="stream">The stream to save the image to.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the stream is null.</exception>
-                    public static void SaveAs{{fmt}}(this Image source, Stream stream)
-                        => SaveAs{{fmt}}(source, stream, null);
+                    public static void SaveAs{{format}}(this Image source, Stream stream)
+                        => SaveAs{{format}}(source, stream, null);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="stream">The stream to save the image to.</param>
                     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the stream is null.</exception>
                     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-                    public static Task SaveAs{{fmt}}Async(this Image source, Stream stream, CancellationToken cancellationToken = default)
-                        => SaveAs{{fmt}}Async(source, stream, null, cancellationToken);
+                    public static Task SaveAs{{format}}Async(this Image source, Stream stream, CancellationToken cancellationToken = default)
+                        => SaveAs{{format}}Async(source, stream, null, cancellationToken);
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="stream">The stream to save the image to.</param>
                     /// <param name="encoder">The encoder to save the image with.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the stream is null.</exception>
-                    public static void SaveAs{{fmt}}(this Image source, Stream stream, {{fmt}}Encoder encoder)
+                    public static void SaveAs{{format}}(this Image source, Stream stream, {{format}}Encoder encoder)
                         => source.Save(
                             stream,
-                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{fmt}}Format.Instance));
+                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{format}}Format.Instance));
 
                     /// <summary>
-                    /// Saves the image to the given stream with the {{fmt}} format.
+                    /// Saves the image to the given stream with the {{format}} format.
                     /// </summary>
                     /// <param name="source">The image this method extends.</param>
                     /// <param name="stream">The stream to save the image to.</param>
@@ -159,10 +158,10 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
                     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
                     /// <exception cref="System.ArgumentNullException">Thrown if the stream is null.</exception>
                     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-                    public static Task SaveAs{{fmt}}Async(this Image source, Stream stream, {{fmt}}Encoder encoder, CancellationToken cancellationToken = default) =>
+                    public static Task SaveAs{{format}}Async(this Image source, Stream stream, {{format}}Encoder encoder, CancellationToken cancellationToken = default) =>
                         source.SaveAsync(
                             stream,
-                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{fmt}}Format.Instance),
+                            encoder ?? source.GetConfiguration().ImageFormatsManager.FindEncoder({{format}}Format.Instance),
                             cancellationToken);
 
                     """);

@@ -36,8 +36,6 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
         "Short4",
     ];
 
-    private static readonly string[] AssociatedAlphaPixelTypes = [];
-
     private static readonly string[] CommonPixelTypes =
     [
         "A8",
@@ -72,10 +70,9 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
     ];
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = ["PixelOperationsTests.Specialized.Generated.cs"];
+    public IReadOnlyList<GeneratedFile> Files { get; } = [new("PixelOperationsTests.Specialized.Generated.cs", Emit)];
 
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
+    private static void Emit(SourceWriter writer)
     {
         writer.WriteLine("""
             // Copyright (c) Six Labors.
@@ -97,15 +94,9 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
         {
             foreach (string pixelType in CommonPixelTypes)
             {
-                string alpha = "PixelAlphaRepresentation.None";
-                if (AssociatedAlphaPixelTypes.Contains(pixelType))
-                {
-                    alpha = "PixelAlphaRepresentation.Associated";
-                }
-                else if (UnassociatedAlphaPixelTypes.Contains(pixelType))
-                {
-                    alpha = "PixelAlphaRepresentation.Unassociated";
-                }
+                string alpha = UnassociatedAlphaPixelTypes.Contains(pixelType)
+                    ? "PixelAlphaRepresentation.Unassociated"
+                    : "PixelAlphaRepresentation.None";
 
                 EmitSpecializedClass(pixelType, alpha, writer);
             }

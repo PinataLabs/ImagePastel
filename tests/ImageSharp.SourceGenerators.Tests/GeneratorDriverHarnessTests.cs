@@ -14,7 +14,7 @@ namespace SixLabors.ImageSharp.SourceGenerators.Tests;
 /// The snapshot comparison must fail on every kind of difference, or a green snapshot run
 /// would not prove that the output is unchanged.
 /// </summary>
-public sealed class GeneratorDriverHarnessTests : IDisposable
+public class GeneratorDriverHarnessTests : IDisposable
 {
     private static readonly Diagnostic[] NoDiagnostics = [];
 
@@ -38,6 +38,14 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
         this.WriteExpected("A.cs", "class A\n{\n}\n");
 
         GeneratorDriverHarness.AssertMatchesSnapshots(NoDiagnostics, Sources(("A.cs", "class A\r\n{\r\n}\r\n")), this.directory, update: false);
+    }
+
+    [Fact]
+    public void Passes_WhenTheExpectedFileHasCrLfLineEndings()
+    {
+        this.WriteExpected("A.cs", "class A\r\n{\r\n}\r\n");
+
+        GeneratorDriverHarness.AssertMatchesSnapshots(NoDiagnostics, Sources(("A.cs", "class A\n{\n}\n")), this.directory, update: false);
     }
 
     [Fact]
@@ -72,7 +80,6 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
     }
 
     [Theory]
-    [InlineData("class A { }\r\n")]
     [InlineData("﻿class A { }\n")]
     [InlineData("class A { }")]
     [InlineData("class A  { }\n")]
@@ -114,5 +121,5 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
     }
 
     private void WriteExpected(string name, string text)
-        => File.WriteAllText(Path.Combine(this.directory, name), text, new System.Text.UTF8Encoding(false));
+        => File.WriteAllText(Path.Combine(this.directory, name), text, GeneratorDriverHarness.Utf8NoBom);
 }

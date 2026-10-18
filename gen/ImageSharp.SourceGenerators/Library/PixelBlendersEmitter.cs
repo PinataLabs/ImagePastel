@@ -15,24 +15,12 @@ namespace SixLabors.ImageSharp.SourceGenerators.Library;
 /// </summary>
 internal sealed class PixelBlendersEmitter : IEmitter
 {
-    private const string PorterDuffFunctionsHintName = "PorterDuffFunctions.Generated.cs";
-    private const string DefaultPixelBlendersHintName = "DefaultPixelBlenders.Generated.cs";
-
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = [PorterDuffFunctionsHintName, DefaultPixelBlendersHintName];
-
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
-    {
-        if (hintName == PorterDuffFunctionsHintName)
-        {
-            EmitPorterDuffFunctions(writer);
-        }
-        else
-        {
-            EmitDefaultPixelBlenders(writer);
-        }
-    }
+    public IReadOnlyList<GeneratedFile> Files { get; } =
+    [
+        new("PorterDuffFunctions.Generated.cs", EmitPorterDuffFunctions),
+        new("DefaultPixelBlenders.Generated.cs", EmitDefaultPixelBlenders),
+    ];
 
     private static void EmitPorterDuffFunctions(SourceWriter writer)
     {
@@ -58,11 +46,11 @@ internal sealed class PixelBlendersEmitter : IEmitter
 
         foreach (string blender in PixelBlenderNames.Blenders)
         {
-            EmitVectorFunctions(writer, blender);
+            EmitVectorFunctions(blender, writer);
 
             foreach (string composer in PixelBlenderNames.Composers)
             {
-                EmitPixelFunction(writer, blender, composer);
+                EmitPixelFunction(blender, composer, writer);
             }
         }
 
@@ -71,7 +59,7 @@ internal sealed class PixelBlendersEmitter : IEmitter
 
     // The member text keeps its own indentation instead of using SourceWriter.Indent, because
     // the template indents the attribute of the Dest function by three spaces, not four.
-    private static void EmitVectorFunctions(SourceWriter writer, string blender)
+    private static void EmitVectorFunctions(string blender, SourceWriter writer)
         => writer.WriteLine($$"""
                 /// <summary>
                 /// Returns the result of the "{{blender}}Src" compositing equation.
@@ -252,7 +240,7 @@ internal sealed class PixelBlendersEmitter : IEmitter
                 }
             """);
 
-    private static void EmitPixelFunction(SourceWriter writer, string blender, string composer)
+    private static void EmitPixelFunction(string blender, string composer, SourceWriter writer)
         => writer.WriteLine($$"""
 
                 /// <summary>

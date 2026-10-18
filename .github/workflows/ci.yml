@@ -82,7 +82,18 @@ jobs:
 
       # Compares the generator output with the expected files, so it runs on every OS.
       - name: Test source generator
+        if: ${{ !matrix.coverage }}
         run: dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+
+      # The generator's coverage goes into the same report as the library's.
+      - name: Test source generator with coverage
+        if: ${{ matrix.coverage }}
+        run: >
+          dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+          -p:codecov=true
+          --collect "XPlat Code Coverage"
+          --settings tests/coverlet.runsettings
+          --results-directory artifacts/coverage
 
       - name: Test
         if: ${{ !matrix.coverage }}
