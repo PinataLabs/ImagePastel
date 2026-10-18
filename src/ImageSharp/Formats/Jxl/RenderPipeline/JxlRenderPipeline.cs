@@ -31,7 +31,7 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// </summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="frameDim">The frame dimensions.</param>
-    /// <param name="numChannels">The number of channels: 3 colour channels plus the extra channels.</param>
+    /// <param name="numChannels">The number of channels: the colour planes (<see cref="Headers.JxlImageMetadata.NumColorPlanes"/>) plus the extra channels.</param>
     public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numChannels)
     {
         this.frameDim = frameDim;

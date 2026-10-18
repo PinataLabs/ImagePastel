@@ -67,6 +67,13 @@ internal sealed class JxlImageMetadata : JxlFields
     public int NumExtraChannels => this.ExtraChannelInfo.Count;
 
     /// <summary>
+    /// Gets the number of colour planes the decoder renders: one for grey stored as grey, three
+    /// otherwise. libjxl always renders three and copies grey into each; one plane is the layout of
+    /// the conformance seam (issue #111). XYB grey is three planes until the XYB conversion makes it grey.
+    /// </summary>
+    public int NumColorPlanes => this.ColorEncoding.IsGray && !this.XybEncoded ? 1 : 3;
+
+    /// <summary>
     /// Returns the index of the first extra channel of type <paramref name="type"/>, or -1. libjxl's
     /// <c>Find</c> returns the channel itself; the index also gives its render plane.
     /// </summary>

@@ -4,6 +4,7 @@
 // lib/jxl/modular/transform/transform.h and lib/jxl/modular/transform/transform.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
@@ -38,6 +39,9 @@ internal sealed class JxlTransform : JxlFields
 
     /// <summary>Gets the predictor of delta palette entries. Palette only.</summary>
     public JxlPredictor Predictor => (JxlPredictor)this.predictor;
+
+    /// <summary>Gets the squeeze steps. Squeeze only; empty means the default steps.</summary>
+    public List<JxlSqueezeParams> Squeezes { get; } = new();
 
     public override void VisitFields(JxlVisitor visitor)
     {
@@ -76,10 +80,20 @@ internal sealed class JxlTransform : JxlFields
 
         if (visitor.Conditional(this.Id == JxlTransformId.Squeeze))
         {
+            uint numSqueezes = (uint)this.Squeezes.Count;
+            numSqueezes = visitor.U32(Val(0), BitsOffset(4, 1), BitsOffset(6, 9), BitsOffset(8, 41), 0, numSqueezes);
             if (visitor.IsReading)
             {
-                // libjxl reads the squeeze parameters here.
-                JxlThrowHelper.ThrowNotSupportedException("The Modular squeeze transform");
+                this.Squeezes.Clear();
+                for (uint i = 0; i < numSqueezes; i++)
+                {
+                    this.Squeezes.Add(new JxlSqueezeParams());
+                }
+            }
+
+            for (int i = 0; i < numSqueezes; i++)
+            {
+                visitor.VisitNested(this.Squeezes[i]);
             }
         }
     }
@@ -93,6 +107,9 @@ internal sealed class JxlTransform : JxlFields
         {
             case JxlTransformId.Rct:
                 JxlRct.InvRct(input, (int)this.BeginC, (int)this.RctType);
+                break;
+            case JxlTransformId.Squeeze:
+                JxlSqueeze.InvSqueeze(input, this.Squeezes);
                 break;
             case JxlTransformId.Palette:
                 JxlPalette.InvPalette(input, this.BeginC, this.NbColors, this.NbDeltas, this.Predictor, wpHeader);
@@ -114,6 +131,9 @@ internal sealed class JxlTransform : JxlFields
         {
             case JxlTransformId.Rct:
                 CheckEqualChannels(input, this.BeginC, this.BeginC + 2);
+                break;
+            case JxlTransformId.Squeeze:
+                JxlSqueeze.MetaSqueeze(input, this.Squeezes);
                 break;
             case JxlTransformId.Palette:
                 JxlPalette.MetaPalette(input, this.BeginC, this.BeginC + this.NumC - 1, this.NbColors, this.NbDeltas);
