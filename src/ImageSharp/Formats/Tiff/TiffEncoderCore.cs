@@ -151,15 +151,15 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         using var writer = new TiffStreamWriter(stream);
         long ifdMarker = this.WriteHeader(writer);
 
-        Image<TPixel> metadataImage = image;
+        bool isRootFrame = true;
         foreach (ImageFrame<TPixel> frame in image.Frames)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var subfileType = (TiffNewSubfileType)(frame.Metadata.ExifProfile?.GetValue(ExifTag.SubfileType)?.Value ?? (int)TiffNewSubfileType.FullImage);
 
-            ifdMarker = this.WriteFrame(writer, frame, image.Metadata, metadataImage, ifdMarker);
-            metadataImage = null;
+            ifdMarker = this.WriteFrame(writer, frame, image.Metadata, isRootFrame, ifdMarker);
+            isRootFrame = false;
         }
 
         long currentOffset = writer.BaseStream.Position;
@@ -191,8 +191,8 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="writer">The <see cref="BinaryWriter" /> to write data to.</param>
     /// <param name="frame">The tiff frame.</param>
-    /// <param name="imageMetadata">The image metadata (resolution values for each frame).</param>
-    /// <param name="image">The image (common metadata for root frame).</param>
+    /// <param name="imageMetadata">The image metadata (resolution values for each frame, profiles for the root frame).</param>
+    /// <param name="isRootFrame">Whether the frame is the root frame of the image.</param>
     /// <param name="ifdOffset">The marker to write this IFD offset.</param>
     /// <returns>
     /// The next IFD offset value.
@@ -201,7 +201,7 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         TiffStreamWriter writer,
         ImageFrame<TPixel> frame,
         ImageMetadata imageMetadata,
-        Image<TPixel> image,
+        bool isRootFrame,
         long ifdOffset)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -228,10 +228,8 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
 
         colorWriter.Write(compressor, rowsPerStrip);
 
-        if (image != null)
-        {
-            entriesCollector.ProcessMetadata(image);
-        }
+        // The profiles of the image describe the root frame, so later frames are written with only their own profiles.
+        entriesCollector.ProcessMetadata(frame, isRootFrame ? imageMetadata : null);
 
         entriesCollector.ProcessFrameInfo(frame, imageMetadata);
         entriesCollector.ProcessImageFormat(this);
@@ -354,6 +352,24 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
             }
         }
 
+        // JPEG compression can only encode continuous-tone data (8 bit gray or 24 bit RGB), not bilevel or palette data.
+        bool isPalette = bitsPerPixel == TiffBitsPerPixel.Bit4 || photometricInterpretation == TiffPhotometricInterpretation.PaletteColor;
+        if (compression == TiffCompression.Jpeg && (isPalette || bitsPerPixel == TiffBitsPerPixel.Bit1))
+        {
+            if (this.CompressionType.HasValue)
+            {
+                // The compression was set in the encoder options, so the data has to follow it: RGB for palette data, gray for bilevel data.
+                bitsPerPixel = isPalette ? TiffBitsPerPixel.Bit24 : TiffBitsPerPixel.Bit8;
+                photometricInterpretation = isPalette ? TiffPhotometricInterpretation.Rgb
+                    : photometricInterpretation == TiffPhotometricInterpretation.WhiteIsZero ? TiffPhotometricInterpretation.WhiteIsZero : TiffPhotometricInterpretation.BlackIsZero;
+            }
+            else
+            {
+                // The compression comes from the metadata and does not fit the data, so it is not used.
+                compression = DefaultCompression;
+            }
+        }
+
         // BitsPerPixel should be the primary source of truth for the encoder options.
         if (bitsPerPixel.HasValue)
         {
@@ -444,6 +460,9 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         this.BitsPerPixel = bitsPerPixel;
         this.PhotometricInterpretation = photometricInterpretation;
         this.CompressionType = compression;
-        this.HorizontalPredictor = predictor;
+
+        // TIFF 6.0 defines the Predictor only for LZW, and the Deflate specification adds it for Deflate.
+        // The other compressors do not predict the strips, so a predictor from the options or the metadata is dropped.
+        this.HorizontalPredictor = compression is TiffCompression.Lzw or TiffCompression.Deflate ? predictor : TiffPredictor.None;
     }
 }

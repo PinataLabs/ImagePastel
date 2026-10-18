@@ -221,6 +221,13 @@ internal class TiffDecoderCore : IImageDecoderInternals
         var rootMetadata = TiffFrameMetadata.Parse(rootFrameExifProfile);
 
         ImageMetadata metadata = TiffDecoderMetadataCreator.Create(reader.ByteOrder, reader.IsBigTiff, rootFrameExifProfile);
+        if (!this.ignoreMetadata)
+        {
+            var rootFrameMetadata = new ImageFrameMetadata { ExifProfile = rootFrameExifProfile };
+            TiffDecoderMetadataCreator.SetFrameProfiles(rootFrameMetadata);
+            TiffDecoderMetadataCreator.SetImageProfiles(metadata, rootFrameMetadata);
+        }
+
         int width = GetImageWidth(rootFrameExifProfile);
         int height = GetImageHeight(rootFrameExifProfile);
 

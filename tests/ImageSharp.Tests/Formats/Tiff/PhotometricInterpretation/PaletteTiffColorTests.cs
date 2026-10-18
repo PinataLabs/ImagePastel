@@ -86,7 +86,7 @@ public class PaletteTiffColorTests : PhotometricInterpretationTestBase
     public void Decode_WritesPixelData(byte[] inputData, ushort bitsPerSample, ushort[] colorMap, int left, int top, int width, int height, Rgba32[][] expectedResult)
         => AssertDecode(expectedResult, pixels =>
             {
-                new PaletteTiffColor<Rgba32>(new TiffBitsPerSample(bitsPerSample, 0, 0), colorMap).Decode(inputData, pixels, left, top, width, height);
+                new PaletteTiffColor<Rgba32>(new TiffBitsPerSample(bitsPerSample, 0, 0), colorMap, false).Decode(inputData, pixels, left, top, width, height);
             });
 
     private static uint[][] GeneratePalette(int count)

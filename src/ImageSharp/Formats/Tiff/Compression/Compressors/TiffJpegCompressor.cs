@@ -28,14 +28,25 @@ internal class TiffJpegCompressor : TiffBaseCompressor
     /// <inheritdoc/>
     public override void CompressStrip(Span<byte> rows, int height)
     {
-        int pixelCount = rows.Length / 3;
-        int width = pixelCount / height;
+        // One byte per pixel is gray (BlackIsZero or WhiteIsZero), three bytes per pixel are RGB.
+        if (rows.Length / height == this.Width)
+        {
+            this.CompressStrip<L8>(rows, height, JpegColorType.Luminance);
+        }
+        else
+        {
+            this.CompressStrip<Rgb24>(rows, height, JpegColorType.Rgb);
+        }
+    }
 
+    private void CompressStrip<TPixel>(Span<byte> rows, int height, JpegColorType colorType)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
         using var memoryStream = new MemoryStream();
-        var image = Image.LoadPixelData<Rgb24>(rows, width, height);
+        using var image = Image.LoadPixelData<TPixel>(rows, this.Width, height);
         image.Save(memoryStream, new JpegEncoder()
         {
-            ColorType = JpegColorType.Rgb
+            ColorType = colorType
         });
         memoryStream.Position = 0;
         memoryStream.WriteTo(this.Output);

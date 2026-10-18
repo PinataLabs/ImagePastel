@@ -25,6 +25,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Webp;
 [ValidateDisposedMemoryAllocations]
 public class WebpDecoderRobustnessTests
 {
+    private const byte AlphaFlag = 0x10;
+
+    private const byte ExifFlag = 0x08;
+
     public enum SampleKind
     {
         SimpleLossy,
@@ -434,6 +438,216 @@ public class WebpDecoderRobustnessTests
         using Image<Rgba32> expected = Image.Load<Rgba32>(padded);
         using Image<Rgba32> actual = Image.Load<Rgba32>(truncated);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(4, 4)] // 1 + 16 bytes: odd, a padding byte follows.
+    [InlineData(5, 3)] // 1 + 15 bytes: even, no padding byte.
+    public void Decode_UncompressedAlphaChunk_DecodesAlphaAndFollowingChunks(int width, int height)
+    {
+        // The VP8 and EXIF chunks after the alpha chunk are only found when its padding byte is skipped.
+        byte[] alpha = AlphaValues(width * height);
+        byte[] data = BuildVp8XFile(
+            AlphaFlag | ExifFlag,
+            width,
+            height,
+            BuildChunk("ALPH", [0, .. alpha]),
+            Vp8Chunk(width, height),
+            BuildChunk("EXIF", ExifBytes()));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        AssertAlpha(alpha, image);
+        Assert.NotNull(image.Metadata.ExifProfile);
+    }
+
+    [Fact]
+    public void Decode_OddSizedAlphaChunk_DoesNotReadPaddingByteAsAlpha()
+    {
+        // The chunk holds one alpha byte fewer than the 15 pixels need. The padding byte after it is not alpha data.
+        const int width = 5;
+        const int height = 3;
+        byte[] alpha = AlphaValues((width * height) - 1);
+        byte[] data = BuildVp8XFile(
+            AlphaFlag,
+            width,
+            height,
+            BuildChunk("ALPH", [0, .. alpha], 0xFF),
+            Vp8Chunk(width, height));
+
+        ImageFormatException ex = Assert.Throws<ImageFormatException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+        Assert.Equal("not enough data in the ALPH chunk", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Decode_OddSizedAlphaChunkAtEndOfFileWithoutPadding_Decodes(bool riffSizeIncludesPadding)
+    {
+        // The alpha chunk is the last chunk and the file ends without its padding byte.
+        const int width = 4;
+        const int height = 4;
+        byte[] alpha = AlphaValues(width * height);
+        byte[] alphaChunk = BuildChunk("ALPH", [0, .. alpha]);
+        byte[] data = BuildVp8XFile(AlphaFlag, width, height, Vp8Chunk(width, height), alphaChunk.AsSpan(0, alphaChunk.Length - 1).ToArray());
+        if (riffSizeIncludesPadding)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), (uint)(data.Length + 1 - 8));
+        }
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        AssertAlpha(alpha, image);
+
+        IImageInfo info = Image.Identify(data);
+        Assert.Equal(width, info.Width);
+        Assert.Equal(height, info.Height);
+    }
+
+    [Fact]
+    public void Decode_TwoAlphaChunks_UsesTheLastAndReleasesTheFirst()
+    {
+        // The class checks that every buffer is returned, so the alpha data of the first chunk must be released.
+        const int width = 4;
+        const int height = 4;
+        byte[] alpha = AlphaValues(width * height);
+        byte[] data = BuildVp8XFile(
+            AlphaFlag,
+            width,
+            height,
+            BuildChunk("ALPH", [0, .. new byte[width * height]]),
+            BuildChunk("ALPH", [0, .. alpha]),
+            Vp8Chunk(width, height));
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        AssertAlpha(alpha, image);
+    }
+
+    [Fact]
+    public void Decode_OddSizedVp8LChunkInVP8X_SkipsPaddingByte()
+    {
+        // Append a zero byte to the VP8L payload, so its size is odd and a padding byte follows it.
+        // The lossless decoder ignores bytes after the end of the bitstream.
+        // The EXIF chunk after the VP8L chunk is only found when the padding byte is skipped.
+        byte[] original = Encode(SampleKind.LosslessWithExif);
+        int vp8l = FindChunk(original, "VP8L");
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(vp8l + 4));
+        Assert.Equal(0u, size & 1);
+        Assert.True(FindChunk(original, "EXIF") > vp8l);
+
+        int payloadEnd = vp8l + 8 + (int)size;
+        byte[] patched = [.. original.AsSpan(0, payloadEnd), 0, 0, .. original.AsSpan(payloadEnd)];
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(vp8l + 4), size + 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4)) + 2);
+
+        AssertSameImage(original, patched);
+    }
+
+    [Fact]
+    public void Decode_OddSizedVp8LChunkAtEndOfFileWithoutPadding_IsNotReportedAsTruncated()
+    {
+        // A 1x1 VP8L bitstream with an invalid color cache size, in a 7 byte chunk with no padding byte after it.
+        // All of the chunk's data is in the file, so the error is the bitstream error, not missing data.
+        byte[] vp8l = [0x2F, 0, 0, 0, 0, 0x02, 0];
+        byte[] chunk = BuildChunk("VP8L", vp8l);
+        byte[] data = [.. "RIFF"u8, 0, 0, 0, 0, .. "WEBP"u8, .. chunk.AsSpan(0, chunk.Length - 1)];
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), (uint)(data.Length - 8));
+
+        ImageFormatException ex = Assert.Throws<ImageFormatException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+        Assert.Equal("Invalid color cache bits found", ex.Message);
+    }
+
+    private static byte[] AlphaValues(int count)
+    {
+        byte[] alpha = new byte[count];
+        for (int i = 0; i < alpha.Length; i++)
+        {
+            alpha[i] = (byte)(255 - (i * 13));
+        }
+
+        return alpha;
+    }
+
+    private static void AssertAlpha(byte[] expected, Image<Rgba32> image)
+    {
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Assert.Equal(expected[(y * image.Width) + x], image[x, y].A);
+            }
+        }
+    }
+
+    private static byte[] ExifBytes()
+    {
+        var exif = new ExifProfile();
+        exif.SetValue(ExifTag.Software, "ImageSharp");
+        return exif.ToByteArray();
+    }
+
+    private static byte[] Vp8Chunk(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(40, 120, 200, 255));
+        using var stream = new MemoryStream();
+        image.Save(stream, new WebpEncoder { FileFormat = WebpFileFormatType.Lossy });
+        byte[] data = stream.ToArray();
+        int offset = FindChunk(data, "VP8 ");
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4));
+        return data.AsSpan(offset, 8 + (int)size + (int)(size & 1)).ToArray();
+    }
+
+    /// <summary>
+    /// Builds a chunk with its header, adding a padding byte after an odd-sized payload.
+    /// </summary>
+    private static byte[] BuildChunk(string chunkId, byte[] payload, byte paddingByte = 0)
+    {
+        byte[] chunk = new byte[8 + payload.Length + (payload.Length & 1)];
+        Encoding.ASCII.GetBytes(chunkId).CopyTo(chunk, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(chunk.AsSpan(4), (uint)payload.Length);
+        payload.CopyTo(chunk, 8);
+        if ((payload.Length & 1) == 1)
+        {
+            chunk[^1] = paddingByte;
+        }
+
+        return chunk;
+    }
+
+    /// <summary>
+    /// Builds an extended WebP file with a VP8X chunk holding the given feature flags, followed by the given chunks.
+    /// </summary>
+    private static byte[] BuildVp8XFile(byte flags, int width, int height, params byte[][] chunks)
+    {
+        byte[] vp8x = new byte[10];
+        vp8x[0] = flags;
+        WriteUInt24LittleEndian(vp8x.AsSpan(4), width - 1);
+        WriteUInt24LittleEndian(vp8x.AsSpan(7), height - 1);
+
+        using var stream = new MemoryStream();
+        stream.Write("RIFF"u8);
+        stream.Write(new byte[4]);
+        stream.Write("WEBP"u8);
+        stream.Write(BuildChunk("VP8X", vp8x));
+        foreach (byte[] chunk in chunks)
+        {
+            stream.Write(chunk);
+        }
+
+        byte[] data = stream.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), (uint)(data.Length - 8));
+        return data;
+    }
+
+    private static void WriteUInt24LittleEndian(Span<byte> destination, int value)
+    {
+        destination[0] = (byte)value;
+        destination[1] = (byte)(value >> 8);
+        destination[2] = (byte)(value >> 16);
     }
 
     private static void AssertInvalidImageContent(Exception exception, bool mustThrow, string operation)

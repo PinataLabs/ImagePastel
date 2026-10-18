@@ -122,10 +122,10 @@ dotnet_style_coalesce_expression = true:warning
 dotnet_style_null_propagation = true:warning
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
 # File header preferences
-file_header_template = Copyright (c) Six Labors.\nLicensed under the Apache License, Version 2.0.
 # SA1636: File header copyright text should match
-# Justification: .editorconfig supports file headers. If this is changed to a value other than "none", a stylecop.json file will need to added to the project.
-# dotnet_diagnostic.SA1636.severity = none
+# Justification: existing files keep the Six Labors notice, and new files carry a PinataLabs notice,
+# so the text can't match one template. SA1633 still requires every file to have a header.
+dotnet_diagnostic.SA1636.severity = none
 
 # Undocumented
 dotnet_style_operator_placement_when_wrapping = end_of_line

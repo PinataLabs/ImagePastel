@@ -133,9 +133,8 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
     [MethodImpl(InliningOptions.ShortMethod)]
     public readonly byte GetQuantizedColor(TPixel color, out TPixel match)
     {
-        // Octree only maps the RGB component of a color
-        // so cannot tell the difference between a fully transparent
-        // pixel and a black one.
+        // The tree may merge a fully transparent pixel into a leaf with other colors,
+        // so map it through the pixel map to find the exact transparent palette entry.
         if (this.isDithering || color.Equals(default))
         {
             return (byte)this.pixelMap.GetClosestColor(color, out match);
@@ -323,9 +322,10 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
         public sealed class OctreeNode
         {
             /// <summary>
-            /// Pointers to any child nodes
+            /// Pointers to any child nodes. Opaque colors use the first eight; the array
+            /// grows to sixteen when a color with an alpha bit of zero arrives.
             /// </summary>
-            private readonly OctreeNode[] children;
+            private OctreeNode[] children;
 
             /// <summary>
             /// Flag indicating that this is a leaf node
@@ -353,6 +353,13 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
             private int blue;
 
             /// <summary>
+            /// Transparency, the sum of 255 minus alpha. It stays zero for opaque colors,
+            /// so opaque leaves keep an alpha of exactly 255. A long, because a large
+            /// transparent area adds 255 per pixel.
+            /// </summary>
+            private long transparency;
+
+            /// <summary>
             /// The index of this node in the palette
             /// </summary>
             private int paletteIndex;
@@ -369,6 +376,7 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                 this.leaf = level == colorBits;
 
                 this.red = this.green = this.blue = 0;
+                this.transparency = 0;
                 this.pixelCount = 0;
 
                 // If a leaf, increment the leaf count
@@ -418,6 +426,11 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                     // Go to the next level down in the tree
                     int index = GetColorIndex(ref color, level);
 
+                    if (index >= this.children.Length)
+                    {
+                        Array.Resize(ref this.children, 16);
+                    }
+
                     OctreeNode child = this.children[index];
                     if (child is null)
                     {
@@ -438,10 +451,11 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
             public int Reduce()
             {
                 this.red = this.green = this.blue = 0;
+                this.transparency = 0;
                 int childNodes = 0;
 
                 // Loop through all children and add their information to this node
-                for (int index = 0; index < 8; index++)
+                for (int index = 0; index < this.children.Length; index++)
                 {
                     OctreeNode child = this.children[index];
                     if (child != null)
@@ -449,6 +463,7 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                         this.red += child.red;
                         this.green += child.green;
                         this.blue += child.blue;
+                        this.transparency += child.transparency;
                         this.pixelCount += child.pixelCount;
                         ++childNodes;
                         this.children[index] = null;
@@ -478,8 +493,11 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                         Vector3.Zero,
                         new Vector3(255));
 
+                    // Round to the nearest alpha. Integer math keeps opaque leaves at exactly 255.
+                    byte alpha = (byte)(byte.MaxValue - ((this.transparency + (this.pixelCount / 2)) / this.pixelCount));
+
                     Unsafe.SkipInit(out TPixel pixel);
-                    pixel.FromRgba32(new Rgba32((byte)vector.X, (byte)vector.Y, (byte)vector.Z, byte.MaxValue));
+                    pixel.FromRgba32(new Rgba32((byte)vector.X, (byte)vector.Y, (byte)vector.Z, alpha));
                     palette[index] = pixel;
 
                     // Consume the next palette index
@@ -488,7 +506,7 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                 else
                 {
                     // Loop through children looking for leaves
-                    for (int i = 0; i < 8; i++)
+                    for (int i = 0; i < this.children.Length; i++)
                     {
                         this.children[i]?.ConstructPalette(palette, ref index);
                     }
@@ -512,7 +530,7 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                 }
 
                 int colorIndex = GetColorIndex(ref pixel, level);
-                OctreeNode child = this.children[colorIndex];
+                OctreeNode child = colorIndex < this.children.Length ? this.children[colorIndex] : null;
 
                 int index = 0;
                 if (child != null)
@@ -540,7 +558,8 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
             }
 
             /// <summary>
-            /// Gets the color index at the given level.
+            /// Gets the color index at the given level. The alpha bit is inverted so that
+            /// opaque colors keep the indices of an RGB-only tree.
             /// </summary>
             /// <param name="color">The color.</param>
             /// <param name="level">The node level.</param>
@@ -553,7 +572,8 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
 
                 return ((color.R & mask) >> shift)
                     | (((color.G & mask) >> shift) << 1)
-                    | (((color.B & mask) >> shift) << 2);
+                    | (((color.B & mask) >> shift) << 2)
+                    | (((~color.A & mask) >> shift) << 3);
             }
 
             /// <summary>
@@ -567,6 +587,7 @@ public struct OctreeQuantizer<TPixel> : IQuantizer<TPixel>
                 this.red += color.R;
                 this.green += color.G;
                 this.blue += color.B;
+                this.transparency += byte.MaxValue - color.A;
             }
         }
     }

@@ -132,6 +132,91 @@ jobs:
           name: actual-output-${{ runner.os }}
           path: tests/Images/ActualOutput/
 
+  # Runs the JPEG XL tests against the full conformance data and the libjxl reference tools.
+  # The other legs run the same tests without them, so the data- and tool-dependent ones skip there.
+  # See tests/Images/Input/Jxl/Conformance/README.md.
+  jxl-oracle:
+    name: JPEG XL conformance and reference tools
+    runs-on: ubuntu-latest
+    env:
+      JXL_TOOLS_VERSION: v0.12.0
+      JXL_TOOLS_ARCHIVE: jxl-linux-x86_64-static.tar.lz
+      JXL_TOOLS_SHA256: 5318a1ea40adad76d023e0c17a03d4627f8282f83cb2b575e69be8e74f1ff456
+
+    steps:
+      - name: Configure Git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer computes the version from tags.
+          fetch-depth: 0
+
+      # Only the JPEG XL test data is needed from LFS.
+      - name: Pull LFS JPEG XL test data
+        run: git lfs pull --include "tests/Images/Input/Jxl/**"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore NuGet cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'nuget.config', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # The tests download the 665 MB of references by sha256 into this directory.
+      # The key changes only when the vectors or the pinned source change.
+      - name: Restore JPEG XL conformance cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tests/Images/External/Jxl/.cache
+          key: jxl-conformance-${{ hashFiles('tests/Images/Input/Jxl/Conformance/**/test.json', 'tests/Images/Input/Jxl/Conformance/source.json') }}
+
+      - name: Restore libjxl tools cache
+        id: jxl-tools-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/jxl-tools
+          key: jxl-tools-${{ runner.os }}-${{ env.JXL_TOOLS_VERSION }}-${{ env.JXL_TOOLS_SHA256 }}
+
+      # The static release tools run on any glibc version; the archive needs lzip.
+      - name: Download libjxl tools
+        if: ${{ steps.jxl-tools-cache.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get install -y --no-install-recommends lzip
+          curl -sSfL --proto '=https' --proto-redir '=https' -o "$RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" \
+            "https://github.com/libjxl/libjxl/releases/download/$JXL_TOOLS_VERSION/$JXL_TOOLS_ARCHIVE"
+          echo "$JXL_TOOLS_SHA256  $RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" | sha256sum --check
+          mkdir -p ~/jxl-tools
+          lzip -dc "$RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" | tar -x -C ~/jxl-tools
+
+      # The archive's folder layout is not documented, so find the folder that holds djxl.
+      - name: Locate libjxl tools
+        run: |
+          djxl="$(find ~/jxl-tools -type f -name djxl | head -n 1)"
+          if [[ -z "$djxl" ]]; then
+            echo "::error::djxl was not found in the libjxl tools archive."
+            exit 1
+          fi
+          echo "JXL_TOOLS_DIR=$(dirname "$djxl")" >> "$GITHUB_ENV"
+          "$djxl" --version
+
+      - name: Build
+        run: dotnet build tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release
+
+      # JXL_CONFORMANCE=1 downloads missing data and turns a skip into a failure.
+      - name: Test
+        env:
+          JXL_CONFORMANCE: '1'
+        run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build --filter "Format=Jxl"
+
   apicompat:
     name: Public API matches SixLabors.ImageSharp 2.1.13
     runs-on: ubuntu-latest

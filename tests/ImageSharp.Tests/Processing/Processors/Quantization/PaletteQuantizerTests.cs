@@ -258,6 +258,62 @@ public class PaletteQuantizerTests
         Assert.True(managedBytes < 64 * 1024, $"Lookups allocated {managedBytes} managed bytes.");
     }
 
+    [Fact]
+    public void PixelMapRejectsEmptyPalette()
+    {
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new EuclideanPixelMap<Rgba32>(Configuration.Default, ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void PixelMapClearRejectsEmptyPalette()
+    {
+        Rgba32[] palette = { Color.Red.ToPixel<Rgba32>(), Color.Blue.ToPixel<Rgba32>() };
+        using var map = new EuclideanPixelMap<Rgba32>(Configuration.Default, palette);
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => map.Clear(ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+
+        // The map keeps its previous palette.
+        Assert.Equal(1, map.GetClosestColor(Color.Navy.ToPixel<Rgba32>(), out Rgba32 match));
+        Assert.Equal(palette[1], match);
+    }
+
+    [Fact]
+    public void PixelSpecificPaletteQuantizerRejectsEmptyPalette()
+    {
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new PaletteQuantizer<Rgba32>(Configuration.Default, new QuantizerOptions(), ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void QuantizeRejectsEmptyPalette()
+    {
+        using var image = new Image<Rgba32>(4, 4, Color.Red.ToPixel<Rgba32>());
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => image.Mutate(x => x.Quantize(new PaletteQuantizer(ReadOnlyMemory<Color>.Empty))));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void DitherRejectsEmptyPalette()
+    {
+        using var image = new Image<Rgba32>(4, 4, Color.Red.ToPixel<Rgba32>());
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => image.Mutate(x => x.Dither(KnownDitherings.FloydSteinberg, ReadOnlyMemory<Color>.Empty)));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
     [Theory]
     [InlineData(nameof(KnownDitherings.FloydSteinberg))]
     [InlineData(nameof(KnownDitherings.Atkinson))]
@@ -285,32 +341,36 @@ public class PaletteQuantizerTests
         double ditheredError = BlockMeanAlphaError(source, dithered);
 
         Assert.True(ditheredError <= unditheredError, $"Dithered block error {ditheredError:F2} vs undithered {unditheredError:F2}.");
+    }
 
-        static double BlockMeanAlphaError(Image<Rgba32> expected, Image<Rgba32> actual)
+    /// <summary>
+    /// Gets the mean, over 8x8 blocks, of the absolute difference in average alpha. Error diffusion
+    /// spreads the error across neighbours, so this measures alpha the way a viewer sees it.
+    /// </summary>
+    internal static double BlockMeanAlphaError(Image<Rgba32> expected, Image<Rgba32> actual)
+    {
+        const int size = 8;
+        double total = 0;
+        int blocks = 0;
+        for (int by = 0; by < expected.Height; by += size)
         {
-            const int size = 8;
-            double total = 0;
-            int blocks = 0;
-            for (int by = 0; by < expected.Height; by += size)
+            for (int bx = 0; bx < expected.Width; bx += size)
             {
-                for (int bx = 0; bx < expected.Width; bx += size)
+                int difference = 0;
+                for (int y = by; y < by + size; y++)
                 {
-                    int difference = 0;
-                    for (int y = by; y < by + size; y++)
+                    for (int x = bx; x < bx + size; x++)
                     {
-                        for (int x = bx; x < bx + size; x++)
-                        {
-                            difference += actual[x, y].A - expected[x, y].A;
-                        }
+                        difference += actual[x, y].A - expected[x, y].A;
                     }
-
-                    total += Math.Abs(difference / (double)(size * size));
-                    blocks++;
                 }
-            }
 
-            return total / blocks;
+                total += Math.Abs(difference / (double)(size * size));
+                blocks++;
+            }
         }
+
+        return total / blocks;
     }
 
     private static Rgba32[] GetColorWalk(ColorWalk walk)
