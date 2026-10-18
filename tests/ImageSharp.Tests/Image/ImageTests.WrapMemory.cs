@@ -538,6 +538,6 @@ public partial class ImageTests
 
         [SupportedOSPlatformGuard("windows6.1")]
         private static bool IsBitmapTestSupported =>
-            TestEnvironment.IsWindows && TestEnvironment.Is64BitProcess && TestHelpers.ImageSharpBuiltAgainst == "net10.0";
+            TestEnvironment.IsWindows && TestEnvironment.Is64BitProcess && TestHelpers.ImageSharpBuiltAgainst != "netstandard2.1";
     }
 }

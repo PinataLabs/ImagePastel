@@ -122,7 +122,9 @@ public partial class SimdUtilsTests
             return;
         }
 
-        float[] orig = new Random(seed).GenerateRandomRoundedFloatArray(count, 0, 256);
+        // The method does not clamp, so the data stays in [0..1]. 256 / 255 wraps to 0 in the method,
+        // while (byte)256f is 0 on .NET 10 and 255 on .NET 11.
+        float[] orig = new Random(seed).GenerateRandomRoundedFloatArray(count, 0, 255);
         float[] normalized = orig.Select(f => f / 255f).ToArray();
 
         var dest = new byte[count];

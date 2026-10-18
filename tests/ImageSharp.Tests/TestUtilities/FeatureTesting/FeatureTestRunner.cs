@@ -347,6 +347,17 @@ public static class FeatureTestRunner
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the runtime honors EnableSSE42.
+    /// The .NET 11 runtime ignores it, so SSE3 to SSE4.2 and POPCNT stay enabled there.
+    /// </summary>
+    internal static bool CanDisableSse42 { get; } =
+#if NET11_0_OR_GREATER
+        false;
+#else
+        true;
+#endif
+
     internal static Dictionary<HwIntrinsics, string> ToFeatureKeyValueCollection(this HwIntrinsics intrinsics)
     {
         // Loop through and translate the given values into COMPlus equivaluents.

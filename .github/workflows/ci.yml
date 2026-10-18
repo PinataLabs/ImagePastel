@@ -147,6 +147,80 @@ jobs:
           name: actual-output-${{ runner.os }}
           path: tests/Images/ActualOutput/
 
+  # Builds and tests net11.0 with the .NET 11 pre-release SDK. global.json selects .NET 10 for
+  # every other job, and net11.0 builds only with a .NET 11 SDK (see Directory.Build.props).
+  net11:
+    name: Build and test net11.0 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      NET11_SDK_VERSION: 11.0.100-rc.2.26504.105
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Configure Git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer computes the version from tags.
+          fetch-depth: 0
+
+      # See https://github.com/actions/checkout/issues/165#issuecomment-657673315
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}-v1
+
+      - name: Pull LFS files
+        run: git lfs pull
+
+      - name: Select the .NET 11 SDK
+        run: |
+          cat > global.json <<EOF
+          {
+            "sdk": {
+              "version": "$NET11_SDK_VERSION",
+              "rollForward": "latestFeature",
+              "allowPrerelease": true
+            }
+          }
+          EOF
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.NET11_SDK_VERSION }}
+
+      - name: Restore NuGet cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-net11-${{ hashFiles('Directory.Packages.props', 'nuget.config') }}-${{ env.NET11_SDK_VERSION }}
+          restore-keys: ${{ runner.os }}-nuget-net11-
+
+      - name: Build
+        run: dotnet build tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release -f net11.0
+
+      - name: Test
+        run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build -f net11.0
+
+      - name: Upload failed test output
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: actual-output-net11-${{ runner.os }}
+          path: tests/Images/ActualOutput/
+
   # Runs the JPEG XL tests against the full conformance data and the libjxl reference tools.
   # The other legs run the same tests without them, so the data- and tool-dependent ones skip there.
   # See tests/Images/Input/Jxl/Conformance/README.md.

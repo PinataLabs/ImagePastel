@@ -81,6 +81,9 @@ The test images are in Git LFS.
 
 The build treats all warnings as errors.
 
+To also build and test `net11.0`, select a .NET 11 SDK in `global.json` (CI uses 11.0.100-rc.2.26504.105).
+The package does not include `net11.0` yet, because releases use the .NET 10 SDK.
+
 ## Contributing
 
 Read the [contribution guide](https://github.com/PinataLabs/ImageSharp/blob/main/.github/CONTRIBUTING.md) before you open an issue or a pull request.
