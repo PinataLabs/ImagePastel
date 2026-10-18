@@ -10,6 +10,12 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// sRGB (IEC 61966-2-1) as a matrix/TRC model, built from its published parameters rather than
 /// from a profile file. It stands for an image that has no pixel profile.
 /// </summary>
+/// <remarks>
+/// The primaries-to-XYZ and Bradford math repeats <see cref="IccProfileBuilder"/>'s on purpose. The
+/// builder follows libjxl in single precision and its colorants are rounded to s15Fixed16, so JPEG XL
+/// profiles stay byte-identical to libjxl's; this model computes them in double precision, so the
+/// engine's sRGB matches Little CMS's built-in sRGB more closely. Sharing one would change the other's results.
+/// </remarks>
 internal static class IccSrgb
 {
     /// <summary>

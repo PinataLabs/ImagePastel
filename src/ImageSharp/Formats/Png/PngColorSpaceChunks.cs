@@ -40,34 +40,6 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// </remarks>
 internal sealed class PngColorSpaceChunks
 {
-    // H.273 code points.
-    private const byte PrimariesBt709 = 1;
-    private const byte PrimariesBt2020 = 9;
-    private const byte PrimariesDisplayP3 = 12;
-    private const byte TransferBt709 = 1;
-    private const byte TransferBt601 = 6;
-    private const byte TransferLinear = 8;
-    private const byte TransferSrgb = 13;
-    private const byte TransferBt2020TenBit = 14;
-    private const byte TransferBt2020TwelveBit = 15;
-
-    private static readonly CieXyChromaticityCoordinates D65 = new(0.3127F, 0.3290F);
-
-    private static readonly RgbPrimariesChromaticityCoordinates Rec709Primaries = new(
-        new CieXyChromaticityCoordinates(0.64F, 0.33F),
-        new CieXyChromaticityCoordinates(0.30F, 0.60F),
-        new CieXyChromaticityCoordinates(0.15F, 0.06F));
-
-    private static readonly RgbPrimariesChromaticityCoordinates Rec2020Primaries = new(
-        new CieXyChromaticityCoordinates(0.708F, 0.292F),
-        new CieXyChromaticityCoordinates(0.170F, 0.797F),
-        new CieXyChromaticityCoordinates(0.131F, 0.046F));
-
-    private static readonly RgbPrimariesChromaticityCoordinates P3Primaries = new(
-        new CieXyChromaticityCoordinates(0.680F, 0.320F),
-        new CieXyChromaticityCoordinates(0.265F, 0.690F),
-        new CieXyChromaticityCoordinates(0.150F, 0.060F));
-
     private byte[] cicp;
     private bool hasSrgb;
     private uint gamma;
@@ -178,33 +150,6 @@ internal sealed class PngColorSpaceChunks
         }
     }
 
-    private static bool TryGetCicpPrimaries(byte code, out RgbPrimariesChromaticityCoordinates primaries)
-    {
-        switch (code)
-        {
-            case PrimariesBt709:
-                primaries = Rec709Primaries;
-                return true;
-            case PrimariesBt2020:
-                primaries = Rec2020Primaries;
-                return true;
-            case PrimariesDisplayP3:
-                primaries = P3Primaries;
-                return true;
-            default:
-                primaries = default;
-                return false;
-        }
-    }
-
-    private static IccToneCurve GetCicpToneCurve(byte code) => code switch
-    {
-        TransferBt709 or TransferBt601 or TransferBt2020TenBit or TransferBt2020TwelveBit => IccToneCurve.Rec709,
-        TransferSrgb => IccToneCurve.Srgb,
-        TransferLinear => IccToneCurve.Linear,
-        _ => null,
-    };
-
     private CieXyChromaticityCoordinates Chromaticity(int index)
         => new(this.chromaticities[index * 2] * 1e-5F, this.chromaticities[(index * 2) + 1] * 1e-5F);
 
@@ -218,10 +163,10 @@ internal sealed class PngColorSpaceChunks
 
         byte primariesCode = this.cicp[0];
         byte transferCode = this.cicp[1];
-        IccToneCurve curve = GetCicpToneCurve(transferCode);
+        IccToneCurve curve = IccStandardRgb.GetToneCurve(transferCode);
 
         // PNG holds RGB samples (matrix coefficients 0); narrow-range samples would need rescaling.
-        if (!TryGetCicpPrimaries(primariesCode, out RgbPrimariesChromaticityCoordinates primaries)
+        if (!IccStandardRgb.TryGetPrimaries(primariesCode, out (double X, double Y)[] primaries)
             || curve is null
             || this.cicp[2] != 0
             || this.cicp[3] != 1)
@@ -229,7 +174,7 @@ internal sealed class PngColorSpaceChunks
             return false;
         }
 
-        if (transferCode == TransferSrgb && (gray || primariesCode == PrimariesBt709))
+        if (transferCode == IccStandardRgb.TransferSrgb && (gray || primariesCode == IccStandardRgb.PrimariesBt709))
         {
             // sRGB: no profile.
             return true;
@@ -244,42 +189,28 @@ internal sealed class PngColorSpaceChunks
 
         profile = (primariesCode, transferCode) switch
         {
-            (PrimariesBt709, TransferLinear) => IccProfileFactory.CreateLinearSrgb(),
-            (PrimariesDisplayP3, TransferSrgb) => IccProfileFactory.CreateDisplayP3(),
-            (PrimariesBt2020, TransferBt709) => IccProfileFactory.CreateRec2020(),
-            _ => CreateCicpRgb(primaries, curve, primariesCode, transferCode),
+            (IccStandardRgb.PrimariesBt709, IccStandardRgb.TransferLinear) => IccProfileFactory.CreateLinearSrgb(),
+            (IccStandardRgb.PrimariesP3D65, IccStandardRgb.TransferSrgb) => IccProfileFactory.CreateDisplayP3(),
+            (IccStandardRgb.PrimariesBt2020, IccStandardRgb.TransferBt709) => IccProfileFactory.CreateRec2020(),
+
+            // The cicp tag holds the chunk's own code points, as the standard factory profiles hold theirs.
+            _ => IccStandardRgb.Create(primaries, curve, $"{PrimariesName(primariesCode)} primaries, {TransferName(transferCode)} transfer", (primariesCode, transferCode)),
         };
 
         return true;
     }
 
-    // A D65 RGB profile whose cicp tag holds the chunk's own code points, as the standard factory
-    // profiles hold theirs.
-    private static IccProfile CreateCicpRgb(RgbPrimariesChromaticityCoordinates primaries, IccToneCurve curve, byte primariesCode, byte transferCode)
+    private static string PrimariesName(byte code) => code switch
     {
-        string primariesName = primariesCode switch
-        {
-            PrimariesBt709 => "BT.709",
-            PrimariesBt2020 => "BT.2020",
-            _ => "Display P3",
-        };
+        IccStandardRgb.PrimariesBt709 => "BT.709",
+        IccStandardRgb.PrimariesBt2020 => "BT.2020",
+        _ => "Display P3",
+    };
 
-        string transferName = transferCode switch
-        {
-            TransferSrgb => "sRGB",
-            TransferLinear => "linear",
-            _ => "BT.709",
-        };
-
-        return IccProfileBuilder.Build(
-            IccColorSpaceType.Rgb,
-            (D65.X, D65.Y),
-            new (double X, double Y)[] { (primaries.R.X, primaries.R.Y), (primaries.G.X, primaries.G.Y), (primaries.B.X, primaries.B.Y) },
-            new[] { curve.Curve, curve.Curve, curve.Curve },
-            IccConnectionSpace.D50,
-            IccRenderingIntent.Perceptual,
-            $"{primariesName} primaries, {transferName} transfer",
-            null,
-            (primariesCode, transferCode));
-    }
+    private static string TransferName(byte code) => code switch
+    {
+        IccStandardRgb.TransferSrgb => "sRGB",
+        IccStandardRgb.TransferLinear => "linear",
+        _ => "BT.709",
+    };
 }
