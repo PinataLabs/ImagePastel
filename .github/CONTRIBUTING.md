@@ -35,9 +35,6 @@ Install Git LFS before you clone the repository. If you do not, the test images 
 
 The build treats all warnings as errors. A suppression of an analyzer rule must give its reason.
 
-Some source files are generated from T4 templates (`*.tt`). Do not edit these files by hand.
-After you change a template or a `*.ttinclude` file, run `pwsh ./ci-t4.ps1` and commit the changed output. CI fails if the output is not up to date.
-
 ## Edit generated code
 
 Some code is written at build time by the source generator in `gen/ImageSharp.SourceGenerators`.

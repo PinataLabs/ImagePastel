@@ -11,8 +11,8 @@ namespace SixLabors.ImageSharp.SourceGenerators;
 internal interface IEmitter
 {
     /// <summary>
-    /// Gets the hint names of the files this emitter writes. Each is the file name of the output
-    /// the T4 template produced, without a directory.
+    /// Gets the hint names of the files this emitter writes. Each is a file name,
+    /// without a directory.
     /// </summary>
     IReadOnlyList<string> HintNames { get; }
 

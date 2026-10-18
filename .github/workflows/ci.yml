@@ -238,40 +238,11 @@ jobs:
         shell: pwsh
         run: ./ci-apicompat.ps1
 
-  t4:
-    name: Generated code matches T4 templates
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-
-      - name: Regenerate T4 output
-        shell: pwsh
-        run: ./ci-t4.ps1
-
-      # Porcelain status also catches output that is generated but not committed.
-      # The assignment makes the step fail if git status itself fails.
-      - name: Check generated code is up to date
-        run: |
-          changes="$(git status --porcelain)"
-          if [[ -n "$changes" ]]; then
-            echo "::error::Generated code does not match its T4 templates. Run ./ci-t4.ps1 and commit the result."
-            git status --porcelain
-            git diff
-            exit 1
-          fi
-
   # Packs every push to main so the package can be downloaded from the run and
   # tried out. Nothing here publishes.
   pack:
     name: Pack
-    needs: [build, apicompat, t4]
+    needs: [build, apicompat]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
 

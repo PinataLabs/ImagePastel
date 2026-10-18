@@ -10,7 +10,7 @@ using SixLabors.ImageSharp.SourceGenerators.Tests;
 namespace SixLabors.ImageSharp.SourceGenerators;
 
 /// <summary>
-/// Generates the ImageSharp sources that were produced by T4 templates.
+/// Generates ImageSharp source files with the emitters of the selected target.
 /// </summary>
 /// <remarks>
 /// The consuming project picks its outputs with the <c>ImageSharpGeneratedSources</c> property,
