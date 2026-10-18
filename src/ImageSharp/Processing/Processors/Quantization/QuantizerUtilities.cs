@@ -129,7 +129,7 @@ public static class QuantizerUtilities
             int offsetY = bounds.Top;
             int offsetX = bounds.Left;
 
-            for (int y = bounds.Y; y < bounds.Height; y++)
+            for (int y = bounds.Top; y < bounds.Bottom; y++)
             {
                 Span<TPixel> sourceRow = sourceBuffer.DangerousGetRowSpan(y);
                 Span<byte> destinationRow = destination.GetWritablePixelRowSpanUnsafe(y - offsetY);

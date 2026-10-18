@@ -3,7 +3,10 @@
 
 using System;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Processing.Processors.Dithering;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using SixLabors.ImageSharp.Tests.Memory;
 
 using Xunit;
 
@@ -122,6 +125,78 @@ public class QuantizedImageTests
             ImageFrame<TPixel> frame = image.Frames[0];
             quantizer.BuildPaletteAndQuantizeFrame(frame, frame.Bounds());
         }
+    }
+
+    public static readonly TheoryData<int, int, int, int, string> BoundsAndDithers = CreateBoundsAndDithers();
+
+    [Theory]
+    [MemberData(nameof(BoundsAndDithers))]
+    public void QuantizeFrameMapsEveryPixelInsideBounds(int x, int y, int width, int height, string ditherName)
+    {
+        // Dirty, unpooled buffers, so an index the quantizer does not write cannot pass as a correct one.
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = new TestMemoryAllocator();
+
+        var bounds = new Rectangle(x, y, width, height);
+        using Image<Rgba32> image = CreateTwoTonePattern(20, 16);
+
+        // A zero dither scale leaves the pixels unchanged, so every dither gives the plain mapping.
+        var options = new QuantizerOptions { Dither = GetDither(ditherName), DitherScale = 0F };
+        var quantizer = new PaletteQuantizer(new[] { Color.White, Color.Black }, options);
+
+        using IQuantizer<Rgba32> frameQuantizer = quantizer.CreatePixelSpecificQuantizer<Rgba32>(configuration);
+        using IndexedImageFrame<Rgba32> quantized = frameQuantizer.QuantizeFrame(image.Frames.RootFrame, bounds);
+
+        Assert.Equal(width, quantized.Width);
+        Assert.Equal(height, quantized.Height);
+
+        // Palette order: white is 0, black is 1.
+        for (int j = 0; j < height; j++)
+        {
+            ReadOnlySpan<byte> row = quantized.DangerousGetRowSpan(j);
+            for (int i = 0; i < width; i++)
+            {
+                byte expected = IsDark(x + i, y + j) ? (byte)1 : (byte)0;
+                Assert.Equal(expected, row[i]);
+            }
+        }
+    }
+
+    private static TheoryData<int, int, int, int, string> CreateBoundsAndDithers()
+    {
+        var data = new TheoryData<int, int, int, int, string>();
+        foreach (string dither in new[] { "None", nameof(KnownDitherings.FloydSteinberg), nameof(KnownDitherings.Bayer8x8) })
+        {
+            // A band at the top, a box inside the frame, and a box that touches the right and bottom edges.
+            data.Add(0, 0, 20, 8, dither);
+            data.Add(3, 5, 9, 6, dither);
+            data.Add(11, 10, 9, 6, dither);
+        }
+
+        return data;
+    }
+
+    private static IDither GetDither(string name) => name switch
+    {
+        nameof(KnownDitherings.FloydSteinberg) => KnownDitherings.FloydSteinberg,
+        nameof(KnownDitherings.Bayer8x8) => KnownDitherings.Bayer8x8,
+        _ => null
+    };
+
+    private static bool IsDark(int x, int y) => ((x * 7) + (y * 3)) % 5 < 2;
+
+    private static Image<Rgba32> CreateTwoTonePattern(int width, int height)
+    {
+        var image = new Image<Rgba32>(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                image[x, y] = IsDark(x, y) ? new Rgba32(30, 30, 30) : new Rgba32(220, 220, 220);
+            }
+        }
+
+        return image;
     }
 
     private int GetTransparentIndex<TPixel>(IndexedImageFrame<TPixel> quantized)

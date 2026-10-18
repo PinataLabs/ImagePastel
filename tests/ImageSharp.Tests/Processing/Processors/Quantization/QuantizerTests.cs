@@ -226,6 +226,45 @@ public class QuantizerTests
     }
 
     [Theory]
+    [InlineData(0, 0, 20, 8)]
+    [InlineData(3, 5, 9, 6)]
+    [InlineData(11, 10, 9, 6)]
+    [InlineData(11, 10, 20, 20)]
+    public void QuantizeInRectangleChangesOnlyPixelsInside(int x, int y, int width, int height)
+    {
+        Rgba32 dark = new(30, 30, 30);
+        Rgba32 light = new(220, 220, 220);
+        static bool IsDark(int px, int py) => ((px * 7) + (py * 3)) % 5 < 2;
+
+        using var image = new Image<Rgba32>(20, 16);
+        for (int py = 0; py < image.Height; py++)
+        {
+            for (int px = 0; px < image.Width; px++)
+            {
+                image[px, py] = IsDark(px, py) ? dark : light;
+            }
+        }
+
+        var rectangle = new Rectangle(x, y, width, height);
+        var quantizer = new PaletteQuantizer(new[] { Color.White, Color.Black }, NoDitherOptions);
+        image.Mutate(c => c.Quantize(quantizer, rectangle));
+
+        Rgba32 black = Color.Black.ToPixel<Rgba32>();
+        Rgba32 white = Color.White.ToPixel<Rgba32>();
+        for (int py = 0; py < image.Height; py++)
+        {
+            for (int px = 0; px < image.Width; px++)
+            {
+                Rgba32 expected = rectangle.Contains(px, py)
+                    ? (IsDark(px, py) ? black : white)
+                    : (IsDark(px, py) ? dark : light);
+
+                Assert.True(expected == image[px, py], $"Pixel ({px}, {py}): expected {expected}, got {image[px, py]}.");
+            }
+        }
+    }
+
+    [Theory]
     [MemberData(nameof(DefaultInstanceDitherers))]
     public void ShouldThrowForDefaultDitherInstance(IDither dither)
     {
