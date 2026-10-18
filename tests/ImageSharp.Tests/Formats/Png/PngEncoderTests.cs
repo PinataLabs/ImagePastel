@@ -257,7 +257,8 @@ public partial class PngEncoderTests
     }
 
     // Each case covers every size, so an encoder or decoder that hangs ties up one thread per format rather than one per size.
-    [Theory(Timeout = 30_000)]
+    // The palette case quantizes 162 images and took 33 s on a CI runner with coverage, so the timeout leaves room for that.
+    [Theory(Timeout = 120_000)]
     [InlineData(PngColorType.Grayscale, PngBitDepth.Bit1)]
     [InlineData(PngColorType.Grayscale, PngBitDepth.Bit2)]
     [InlineData(PngColorType.Grayscale, PngBitDepth.Bit4)]
