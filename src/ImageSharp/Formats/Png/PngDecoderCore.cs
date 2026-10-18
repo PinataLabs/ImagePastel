@@ -702,24 +702,23 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     private void DecodeInterlacedPixelData<TPixel>(DeflateStream compressedStream, ImageFrame<TPixel> image, PngMetadata pngMetadata)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        if (this.hasImageData)
+        {
+            // The image data has already ended. A later data chunk cannot continue it, as the pass it
+            // stopped in is not kept, so decoding it would write its rows to the wrong place.
+            return;
+        }
+
         int pass = 0;
         int width = this.header.Width;
         Buffer2D<TPixel> imageBuffer = image.PixelBuffer;
         while (true)
         {
             int numColumns = Adam7.ComputeColumns(width, pass);
-
-            if (numColumns == 0)
-            {
-                pass++;
-
-                // This pass contains no data; skip to next pass
-                continue;
-            }
-
             int bytesPerInterlaceScanline = this.CalculateScanlineLength(numColumns) + 1;
 
-            while (this.currentRow < this.header.Height)
+            // A pass with no columns has no scanlines, so it reads no data and moves on to the next pass.
+            while (numColumns > 0 && this.currentRow < this.header.Height)
             {
                 while (this.currentRowBytesRead < bytesPerInterlaceScanline)
                 {
@@ -780,13 +779,13 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             }
             else
             {
-                pass = 0;
                 break;
             }
-
-            EXIT:
-            this.hasImageData = true;
         }
+
+        // Leave the loop when the data ends early too, as retrying the pass would read nothing again.
+        EXIT:
+        this.hasImageData = true;
     }
 
     /// <summary>

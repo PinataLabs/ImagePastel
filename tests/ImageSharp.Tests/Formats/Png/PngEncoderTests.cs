@@ -4,7 +4,9 @@
 // ReSharper disable InconsistentNaming
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata;
@@ -252,6 +254,105 @@ public partial class PngEncoderTests
                 optimizeMethod: PngChunkFilter.ExcludeAll);
             }
         }
+    }
+
+    // Each case covers every size, so an encoder or decoder that hangs ties up one thread per format rather than one per size.
+    // The palette case quantizes 162 images and took 33 s on a CI runner with coverage, so the timeout leaves room for that.
+    [Theory(Timeout = 120_000)]
+    [InlineData(PngColorType.Grayscale, PngBitDepth.Bit1)]
+    [InlineData(PngColorType.Grayscale, PngBitDepth.Bit2)]
+    [InlineData(PngColorType.Grayscale, PngBitDepth.Bit4)]
+    [InlineData(PngColorType.Grayscale, PngBitDepth.Bit8)]
+    [InlineData(PngColorType.Grayscale, PngBitDepth.Bit16)]
+    [InlineData(PngColorType.RgbWithAlpha, PngBitDepth.Bit8)]
+    [InlineData(PngColorType.RgbWithAlpha, PngBitDepth.Bit16)]
+    [InlineData(PngColorType.Palette, PngBitDepth.Bit8)]
+    public async Task Encode_InterlacedSmallImages_WriteEveryPassAndMatchNonInterlaced(PngColorType colorType, PngBitDepth bitDepth)
+    {
+        await Task.Run(
+            () =>
+            {
+                var failures = new List<string>();
+                for (int width = 1; width <= 9; width++)
+                {
+                    for (int height = 1; height <= 9; height++)
+                    {
+                        string failure = EncodeInterlacedSmallImage(width, height, colorType, bitDepth);
+                        if (failure is not null)
+                        {
+                            failures.Add($"{width}x{height}: {failure}");
+                        }
+                    }
+                }
+
+                Assert.Empty(failures);
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Encodes an image with and without interlacing, and returns how the interlaced file is wrong, or <see langword="null"/>.
+    /// </summary>
+    private static string EncodeInterlacedSmallImage(int width, int height, PngColorType colorType, PngBitDepth bitDepth)
+    {
+        using var source = new Image<Rgba64>(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                uint hash = (uint)((x * 73) + (y * 151) + 11) * 2654435761u;
+                source[x, y] = new Rgba64((ushort)hash, (ushort)(hash >> 7), (ushort)(hash >> 13), (ushort)(hash >> 16));
+            }
+        }
+
+        byte[] interlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.Adam7 });
+        byte[] nonInterlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.None });
+
+        // The image data holds one scanline per row of each pass with columns, and nothing for empty passes.
+        byte[] header = PngTestFileBuilder.ReadChunks(interlaced).First(c => c.Type == "IHDR").Data;
+        int bitsPerPixel = header[8] * (colorType == PngColorType.RgbWithAlpha ? 4 : 1);
+        int expectedLength = 0;
+        for (int pass = 0; pass < 7; pass++)
+        {
+            int columns = Adam7.ComputeColumns(width, pass);
+            if (columns > 0)
+            {
+                expectedLength += Adam7.ComputeBlockHeight(height, pass) * (1 + (((columns * bitsPerPixel) + 7) / 8));
+            }
+        }
+
+        int length = InflateImageData(interlaced).Length;
+        if (length != expectedLength)
+        {
+            return $"image data is {length} bytes, expected {expectedLength}";
+        }
+
+        using Image<Rgba64> expected = Image.Load<Rgba64>(nonInterlaced);
+        using Image<Rgba64> actual = Image.Load<Rgba64>(interlaced);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (expected[x, y] != actual[x, y])
+                {
+                    return $"pixel ({x}, {y}) is {actual[x, y]}, expected {expected[x, y]}";
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static byte[] InflateImageData(byte[] png)
+    {
+        byte[] zlib = PngTestFileBuilder.ReadChunks(png).Where(c => c.Type == "IDAT").SelectMany(c => c.Data).ToArray();
+        using var output = new MemoryStream();
+        using (var inflate = new ZLibStream(new MemoryStream(zlib), CompressionMode.Decompress))
+        {
+            inflate.CopyTo(output);
+        }
+
+        return output.ToArray();
     }
 
     [Theory]

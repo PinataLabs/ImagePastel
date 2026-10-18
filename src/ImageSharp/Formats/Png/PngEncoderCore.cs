@@ -1084,6 +1084,11 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
             int startRow = Adam7.FirstRow[pass];
             int startCol = Adam7.FirstColumn[pass];
             int blockWidth = Adam7.ComputeBlockWidth(width, pass);
+            if (blockWidth == 0)
+            {
+                // A pass with no columns has no scanlines, not even filter bytes.
+                continue;
+            }
 
             int bytesPerScanline = this.bytesPerPixel <= 1
                 ? ((blockWidth * this.bitDepth) + 7) / 8
@@ -1136,6 +1141,11 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
             int startRow = Adam7.FirstRow[pass];
             int startCol = Adam7.FirstColumn[pass];
             int blockWidth = Adam7.ComputeBlockWidth(width, pass);
+            if (blockWidth == 0)
+            {
+                // A pass with no columns has no scanlines, not even filter bytes.
+                continue;
+            }
 
             int bytesPerScanline = this.bytesPerPixel <= 1
                 ? ((blockWidth * this.bitDepth) + 7) / 8
