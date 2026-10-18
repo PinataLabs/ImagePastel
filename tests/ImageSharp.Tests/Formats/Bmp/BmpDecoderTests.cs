@@ -1146,6 +1146,174 @@ public class BmpDecoderTests
         return data;
     }
 
+    [Theory]
+    [InlineData(BmpInfoHeader.SizeV3)]
+    [InlineData(BmpInfoHeader.AdobeV3WithAlphaSize)]
+    [InlineData(BmpInfoHeader.SizeV4)]
+    [InlineData(BmpInfoHeader.SizeV5)]
+    public void BmpDecoder_ScalesAlphaMaskWiderThan8Bits(int infoHeaderSize)
+    {
+        // A 10 bit alpha mask in bits 22 to 31, 8 bit red and green masks and no blue mask.
+        // Raw alpha values 1023, 512, 768 and 0 scale to 255, 128, 191 and 0.
+        byte[] data = CreateBitfieldsBmp(
+            infoHeaderSize,
+            bitsPerPixel: 32,
+            redMask: 0x0000FF00,
+            greenMask: 0x000000FF,
+            blueMask: 0,
+            alphaMask: unchecked((int)0xFFC00000),
+            0xFFC01234,
+            0x80005678,
+            0xC0009ABC,
+            0x0000DEF0);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(0x12, 0x34, 0, 255), image[0, 0]);
+        Assert.Equal(new Rgba32(0x56, 0x78, 0, 128), image[1, 0]);
+        Assert.Equal(new Rgba32(0x9A, 0xBC, 0, 191), image[2, 0]);
+        Assert.Equal(new Rgba32(0xDE, 0xF0, 0, 0), image[3, 0]);
+    }
+
+    [Theory]
+    [InlineData(BmpInfoHeader.SizeV3)]
+    [InlineData(BmpInfoHeader.AdobeV3WithAlphaSize)]
+    [InlineData(BmpInfoHeader.SizeV4)]
+    [InlineData(BmpInfoHeader.SizeV5)]
+    public void BmpDecoder_ScalesMasksNarrowerThan8Bits(int infoHeaderSize)
+    {
+        // 4 bit alpha, 5 bit red, 6 bit green and 3 bit blue masks.
+        // Raw values 8, 16, 32 and 4 scale to 136, 132, 130 and 146.
+        byte[] data = CreateBitfieldsBmp(
+            infoHeaderSize,
+            bitsPerPixel: 32,
+            redMask: 0x00F80000,
+            greenMask: 0x0000FC00,
+            blueMask: 0x00000007,
+            alphaMask: unchecked((int)0xF0000000),
+            0xF0F8FC07,
+            0x80808004,
+            0x00000000);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 255, 255, 255), image[0, 0]);
+        Assert.Equal(new Rgba32(132, 130, 146, 136), image[1, 0]);
+        Assert.Equal(new Rgba32(0, 0, 0, 0), image[2, 0]);
+    }
+
+    [Theory]
+    [InlineData(BmpInfoHeader.SizeV3, 0x00FF0000, 0x0000FF00, 0x000000FF)]
+    [InlineData(BmpInfoHeader.SizeV3, 0x00007C00, 0x000003E0, 0x0000001F)]
+    [InlineData(BmpInfoHeader.SizeV4, 0x3FF00000, 0x000FFC00, 0x000003FF)]
+    public void BmpDecoder_DecodesZeroAlphaMaskAsOpaque(int infoHeaderSize, int redMask, int greenMask, int blueMask)
+    {
+        byte[] data = CreateBitfieldsBmp(
+            infoHeaderSize,
+            bitsPerPixel: 32,
+            redMask,
+            greenMask,
+            blueMask,
+            alphaMask: 0,
+            0xFFFFFFFF,
+            0x00000000);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 255, 255, 255), image[0, 0]);
+        Assert.Equal(new Rgba32(0, 0, 0, 255), image[1, 0]);
+    }
+
+    [Theory]
+    [InlineData(BmpInfoHeader.SizeV3)]
+    [InlineData(BmpInfoHeader.SizeV4)]
+    public void BmpDecoder_Scales16BitMasksOfAnyWidth(int infoHeaderSize)
+    {
+        // 3 bit red, 7 bit green and 6 bit blue masks.
+        // Raw values 4, 32 and 32 scale to 146, 64 and 130.
+        byte[] data = CreateBitfieldsBmp(
+            infoHeaderSize,
+            bitsPerPixel: 16,
+            redMask: 0xE000,
+            greenMask: 0x1FC0,
+            blueMask: 0x003F,
+            alphaMask: 0,
+            0xFFFF,
+            0x8820,
+            0x0000);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 255, 255, 255), image[0, 0]);
+        Assert.Equal(new Rgba32(146, 64, 130, 255), image[1, 0]);
+        Assert.Equal(new Rgba32(0, 0, 0, 255), image[2, 0]);
+    }
+
+    /// <summary>
+    /// Creates a single row BITFIELDS bitmap with the given masks and pixel values.
+    /// A 40 byte header stores the masks after the header, using BI_ALPHABITFIELDS when there is an alpha mask.
+    /// Larger headers store the masks inside the header.
+    /// </summary>
+    private static byte[] CreateBitfieldsBmp(
+        int infoHeaderSize,
+        short bitsPerPixel,
+        int redMask,
+        int greenMask,
+        int blueMask,
+        int alphaMask,
+        params uint[] pixels)
+    {
+        bool masksAfterHeader = infoHeaderSize == BmpInfoHeader.SizeV3;
+        BmpCompression compression = masksAfterHeader && alphaMask != 0 ? BmpCompression.BI_ALPHABITFIELDS : BmpCompression.BitFields;
+        int masksLength = !masksAfterHeader ? 0 : compression == BmpCompression.BI_ALPHABITFIELDS ? 16 : 12;
+        int bytesPerPixel = bitsPerPixel / 8;
+        int stride = ((pixels.Length * bytesPerPixel) + 3) & ~3;
+
+        int pixelDataOffset = BmpFileHeader.Size + infoHeaderSize + masksLength;
+        byte[] data = new byte[pixelDataOffset + stride];
+        Span<byte> span = data;
+
+        // File header.
+        span[0] = (byte)'B';
+        span[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(span[2..], data.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(span[10..], pixelDataOffset);
+
+        // Info header. Image size and resolution stay zero.
+        Span<byte> infoHeader = span[BmpFileHeader.Size..];
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader, infoHeaderSize);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[4..], pixels.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[8..], 1);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[12..], 1);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[14..], bitsPerPixel);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[16..], (int)compression);
+
+        // The masks follow the first 40 bytes of the header in both layouts.
+        Span<byte> masks = infoHeader[BmpInfoHeader.SizeV3..];
+        BinaryPrimitives.WriteInt32LittleEndian(masks, redMask);
+        BinaryPrimitives.WriteInt32LittleEndian(masks[4..], greenMask);
+        BinaryPrimitives.WriteInt32LittleEndian(masks[8..], blueMask);
+        if (masksLength != 12)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(masks[12..], alphaMask);
+        }
+
+        Span<byte> pixelData = span[pixelDataOffset..];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            if (bytesPerPixel == 4)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(pixelData[(i * 4)..], pixels[i]);
+            }
+            else
+            {
+                BinaryPrimitives.WriteUInt16LittleEndian(pixelData[(i * 2)..], (ushort)pixels[i]);
+            }
+        }
+
+        return data;
+    }
+
     /// <summary>
     /// Creates a bitmap with a 40 byte BITMAPINFOHEADER, an optional black color palette and zeroed pixel data.
     /// </summary>
