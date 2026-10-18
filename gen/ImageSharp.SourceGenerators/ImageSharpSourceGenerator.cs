@@ -27,6 +27,7 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
     [
         new GuardNumericEmitter(),
         new ImageExtensionsSaveEmitter(),
+        new PixelOperationsEmitter(),
     ];
 
     private static readonly IEmitter[] TestsEmitters = [];
