@@ -45,9 +45,18 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.width = (int)frameDim.XSizeUpsampled;
         this.height = (int)frameDim.YSizeUpsampled;
         this.planes = new Buffer2D<float>[numChannels];
-        for (int c = 0; c < numChannels; c++)
+        try
         {
-            this.planes[c] = allocator.Allocate2D<float>((int)frameDim.XSizeUpsampled, (int)frameDim.YSizeUpsampled);
+            for (int c = 0; c < numChannels; c++)
+            {
+                this.planes[c] = allocator.Allocate2D<float>((int)frameDim.XSizeUpsampled, (int)frameDim.YSizeUpsampled);
+            }
+        }
+        catch
+        {
+            // The constructor throws, so no caller can dispose the planes already allocated.
+            JxlPlanes.DisposeAll(this.planes);
+            throw;
         }
     }
 

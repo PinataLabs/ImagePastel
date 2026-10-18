@@ -79,7 +79,16 @@ internal sealed class JxlBlendingStage : IDisposable
         }
 
         Memory<float> zeros = this.zeros?.Memory ?? Memory<float>.Empty;
-        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
+        try
+        {
+            this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
+        }
+        catch
+        {
+            // The constructor throws, so no caller can dispose the zeros.
+            this.zeros?.Dispose();
+            throw;
+        }
 
         Buffer2D<float>[] bgPlanes = new Buffer2D<float>[numChannels];
         for (int c = 0; c < this.numColorPlanes; c++)
