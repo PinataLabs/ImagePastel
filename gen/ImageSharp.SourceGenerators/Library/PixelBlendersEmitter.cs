@@ -15,24 +15,12 @@ namespace SixLabors.ImageSharp.SourceGenerators.Library;
 /// </summary>
 internal sealed class PixelBlendersEmitter : IEmitter
 {
-    private const string PorterDuffFunctionsHintName = "PorterDuffFunctions.Generated.cs";
-    private const string DefaultPixelBlendersHintName = "DefaultPixelBlenders.Generated.cs";
-
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = [PorterDuffFunctionsHintName, DefaultPixelBlendersHintName];
-
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
-    {
-        if (hintName == PorterDuffFunctionsHintName)
-        {
-            EmitPorterDuffFunctions(writer);
-        }
-        else
-        {
-            EmitDefaultPixelBlenders(writer);
-        }
-    }
+    public IReadOnlyList<GeneratedFile> Files { get; } =
+    [
+        new("PorterDuffFunctions.Generated.cs", EmitPorterDuffFunctions),
+        new("DefaultPixelBlenders.Generated.cs", EmitDefaultPixelBlenders),
+    ];
 
     private static void EmitPorterDuffFunctions(SourceWriter writer)
     {

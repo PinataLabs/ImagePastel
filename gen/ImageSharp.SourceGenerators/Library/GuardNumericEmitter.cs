@@ -14,10 +14,9 @@ internal sealed class GuardNumericEmitter : IEmitter
     private static readonly string[] Types = ["byte", "sbyte", "short", "ushort", "char", "int", "uint", "float", "long", "ulong", "double", "decimal"];
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = ["Guard.Numeric.cs"];
+    public IReadOnlyList<GeneratedFile> Files { get; } = [new("Guard.Numeric.cs", Emit)];
 
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
+    private static void Emit(SourceWriter writer)
     {
         writer.WriteLine("""
             // Copyright (c) Six Labors.

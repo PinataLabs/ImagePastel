@@ -25,10 +25,9 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
     ];
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = ["ImageExtensions.Save.cs"];
+    public IReadOnlyList<GeneratedFile> Files { get; } = [new("ImageExtensions.Save.cs", Emit)];
 
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
+    private static void Emit(SourceWriter writer)
     {
         writer.WriteLine("""
             // Copyright (c) Six Labors.

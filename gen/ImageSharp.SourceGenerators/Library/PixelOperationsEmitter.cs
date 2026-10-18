@@ -16,25 +16,13 @@ namespace SixLabors.ImageSharp.SourceGenerators.Library;
 /// </summary>
 internal sealed class PixelOperationsEmitter : IEmitter
 {
-    private const string GenericHintName = "PixelOperations{TPixel}.Generated.cs";
-    private const string PixelHintNameSuffix = ".PixelOperations.Generated.cs";
-
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } =
-        [.. PixelTypeNames.CommonPixelTypes.Select(p => p + PixelHintNameSuffix), GenericHintName];
-
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
-    {
-        if (hintName == GenericHintName)
-        {
-            EmitGeneric(writer);
-        }
-        else
-        {
-            EmitPixel(hintName.Substring(0, hintName.Length - PixelHintNameSuffix.Length), writer);
-        }
-    }
+    public IReadOnlyList<GeneratedFile> Files { get; } =
+    [
+        .. PixelTypeNames.CommonPixelTypes.Select(
+            pixelType => new GeneratedFile(pixelType + ".PixelOperations.Generated.cs", writer => EmitPixel(pixelType, writer))),
+        new("PixelOperations{TPixel}.Generated.cs", EmitGeneric),
+    ];
 
     private static void EmitPixel(string pixelType, SourceWriter writer)
     {

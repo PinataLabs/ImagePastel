@@ -72,10 +72,9 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
     ];
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> HintNames { get; } = ["PixelOperationsTests.Specialized.Generated.cs"];
+    public IReadOnlyList<GeneratedFile> Files { get; } = [new("PixelOperationsTests.Specialized.Generated.cs", Emit)];
 
-    /// <inheritdoc/>
-    public void Emit(string hintName, SourceWriter writer)
+    private static void Emit(SourceWriter writer)
     {
         writer.WriteLine("""
             // Copyright (c) Six Labors.

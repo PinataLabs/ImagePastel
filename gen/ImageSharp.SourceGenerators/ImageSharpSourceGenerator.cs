@@ -66,13 +66,13 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
         IEmitter[] emitters = target == GeneratedSourcesTarget.Library ? LibraryEmitters : TestsEmitters;
         foreach (IEmitter emitter in emitters)
         {
-            foreach (string hintName in emitter.HintNames)
+            foreach (GeneratedFile file in emitter.Files)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
 
                 SourceWriter writer = new();
-                emitter.Emit(hintName, writer);
-                context.AddSource(hintName, SourceText.From(writer.ToString(), Utf8NoBom));
+                file.Write(writer);
+                context.AddSource(file.HintName, SourceText.From(writer.ToString(), Utf8NoBom));
             }
         }
     }
