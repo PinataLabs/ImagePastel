@@ -123,4 +123,37 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Formats.Webp.WebpDecoder.set_ColorProfileConversionTarget(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
   </Suppression>
+  <!-- Additions: ColorProfileConversion decoder option for GIF and BMP, #186. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Gif.GifDecoder.get_ColorProfileConversion</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Gif.GifDecoder.set_ColorProfileConversion(SixLabors.ImageSharp.ColorManagement.ColorProfileConversion)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Gif.GifDecoder.get_ColorProfileConversionTarget</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Gif.GifDecoder.set_ColorProfileConversionTarget(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.get_ColorProfileConversion</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.set_ColorProfileConversion(SixLabors.ImageSharp.ColorManagement.ColorProfileConversion)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.get_ColorProfileConversionTarget</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.set_ColorProfileConversionTarget(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
+  </Suppression>
 </Suppressions>
