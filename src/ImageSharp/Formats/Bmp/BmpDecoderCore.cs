@@ -897,10 +897,10 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         int rightShiftGreenMask = CalculateRightShift((uint)greenMask);
         int rightShiftBlueMask = CalculateRightShift((uint)blueMask);
 
-        // Each color channel contains either 5 or 6 Bits values.
-        int redMaskBits = CountBits((uint)redMask);
-        int greenMaskBits = CountBits((uint)greenMask);
-        int blueMaskBits = CountBits((uint)blueMask);
+        // The largest value of each color channel. Only the lower 16 bits of a mask select pixel bits.
+        int maxValueRed = (redMask & 0xFFFF) >> rightShiftRedMask;
+        int maxValueGreen = (greenMask & 0xFFFF) >> rightShiftGreenMask;
+        int maxValueBlue = (blueMask & 0xFFFF) >> rightShiftBlueMask;
 
         using IMemoryOwner<byte> buffer = this.memoryAllocator.Allocate<byte>(stride);
         Span<byte> bufferSpan = buffer.GetSpan();
@@ -914,13 +914,13 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
             int offset = 0;
             for (int x = 0; x < width; x++)
             {
-                short temp = BinaryPrimitives.ReadInt16LittleEndian(bufferSpan.Slice(offset));
+                ushort temp = BinaryPrimitives.ReadUInt16LittleEndian(bufferSpan.Slice(offset));
 
                 // Rescale values, so the values range from 0 to 255.
-                int r = (redMaskBits == 5) ? GetBytesFrom5BitValue((temp & redMask) >> rightShiftRedMask) : GetBytesFrom6BitValue((temp & redMask) >> rightShiftRedMask);
-                int g = (greenMaskBits == 5) ? GetBytesFrom5BitValue((temp & greenMask) >> rightShiftGreenMask) : GetBytesFrom6BitValue((temp & greenMask) >> rightShiftGreenMask);
-                int b = (blueMaskBits == 5) ? GetBytesFrom5BitValue((temp & blueMask) >> rightShiftBlueMask) : GetBytesFrom6BitValue((temp & blueMask) >> rightShiftBlueMask);
-                var rgb = new Rgb24((byte)r, (byte)g, (byte)b);
+                byte r = GetBytesFromMaskedValue((temp & redMask) >> rightShiftRedMask, maxValueRed);
+                byte g = GetBytesFromMaskedValue((temp & greenMask) >> rightShiftGreenMask, maxValueGreen);
+                byte b = GetBytesFromMaskedValue((temp & blueMask) >> rightShiftBlueMask, maxValueBlue);
+                var rgb = new Rgb24(r, g, b);
 
                 color.FromRgb24(rgb);
                 pixelRow[x] = color;
@@ -928,6 +928,21 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
             }
         }
     }
+
+    /// <summary>
+    /// Scales a masked and shifted value of up to 16 bits to an 8bit one.
+    /// </summary>
+    /// <param name="value">The masked and shifted value.</param>
+    /// <param name="maxValue">The largest value the mask allows.</param>
+    /// <returns>The <see cref="byte"/></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte GetBytesFromMaskedValue(int value, int maxValue) => maxValue switch
+    {
+        0 => 0,
+        0x1F => GetBytesFrom5BitValue(value),
+        0x3F => GetBytesFrom6BitValue(value),
+        _ => (byte)(((value * 255) + (maxValue / 2)) / maxValue),
+    };
 
     /// <summary>
     /// Performs final shifting from a 5bit value to an 8bit one.
@@ -1131,7 +1146,11 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         uint maxValueAlpha = 0xFFFFFFFF >> (32 - bitsAlphaMask);
         float invMaxValueAlpha = 1.0f / maxValueAlpha;
 
-        bool unusualBitMask = bitsRedMask > 8 || bitsGreenMask > 8 || bitsBlueMask > 8 || invMaxValueAlpha > 8;
+        // Only contiguous 8 bit masks can be read without scaling. A zero alpha mask means the image is opaque.
+        bool unusualBitMask = !Is8BitMask(redMask, rightShiftRedMask)
+            || !Is8BitMask(greenMask, rightShiftGreenMask)
+            || !Is8BitMask(blueMask, rightShiftBlueMask)
+            || (alphaMask != 0 && !Is8BitMask(alphaMask, rightShiftAlphaMask));
 
         using IMemoryOwner<byte> buffer = this.memoryAllocator.Allocate<byte>(stride);
         Span<byte> bufferSpan = buffer.GetSpan();
@@ -1174,6 +1193,14 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
             }
         }
     }
+
+    /// <summary>
+    /// Checks whether a color bitmask selects exactly 8 contiguous bits.
+    /// </summary>
+    /// <param name="mask">The color bit mask.</param>
+    /// <param name="rightShift">The right shift of the mask.</param>
+    /// <returns>True, if the masked and shifted value ranges from 0 to 255.</returns>
+    private static bool Is8BitMask(int mask, int rightShift) => ((uint)mask >> rightShift) == 0xFF;
 
     /// <summary>
     /// Calculates the necessary right shifts for a given color bitmask (the 0 bits to the right).
