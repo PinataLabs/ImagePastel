@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -81,6 +83,112 @@ public partial class PngDecoderTests
         Assert.Equal(new PngTextData("ikey", "ivalue", "en", "translated"), text[1]);
     }
 
+    [Fact]
+    public void Decode_IccpChunk_ReadsProfile()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(iccBytes))));
+
+        using (Image image = Image.Load(png))
+        {
+            Assert.Equal(iccBytes, image.Metadata.IccProfile?.ToByteArray());
+        }
+
+        Assert.Equal(iccBytes, Image.Identify(png).Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Decode_IccpChunk_IgnoreMetadata_DoesNotReadProfile()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(iccBytes))));
+        var decoder = new PngDecoder { IgnoreMetadata = true };
+
+        using (Image image = Image.Load(png, decoder))
+        {
+            Assert.Null(image.Metadata.IccProfile);
+        }
+
+        IImageInfo info = decoder.Identify(Configuration.Default, new MemoryStream(png), TestContext.Current.CancellationToken);
+        Assert.Null(info.Metadata.IccProfile);
+    }
+
+    [Theory]
+    [InlineData("no separator")]
+    [InlineData("empty name")]
+    [InlineData("long name")]
+    [InlineData("no compression method")]
+    [InlineData("unknown compression method")]
+    [InlineData("corrupt zlib header")]
+    [InlineData("corrupt deflate data")]
+    [InlineData("truncated zlib stream")]
+    [InlineData("invalid profile")]
+    [InlineData("zero-filled profile")]
+    public void Decode_MalformedIccpChunk_IsIgnored(string defect)
+    {
+        byte[] compressed = PngTestFileBuilder.Zlib(GetJpegIccProfileBytes());
+        byte[] data = defect switch
+        {
+            "no separator" => Encoding.Latin1.GetBytes("ICC Profile"),
+            "empty name" => IccpChunkData(string.Empty, 0, compressed),
+            "long name" => IccpChunkData(new string('a', 80), 0, compressed),
+            "no compression method" => Encoding.Latin1.GetBytes("ICC Profile\0"),
+            "unknown compression method" => IccpChunkData("ICC Profile", 1, compressed),
+            "corrupt zlib header" => IccpChunkData("ICC Profile", 0, new byte[] { 0xFF, 0xFF, 1, 2, 3 }),
+            "corrupt deflate data" => IccpChunkData("ICC Profile", 0, new byte[] { 0x78, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF }),
+            "truncated zlib stream" => IccpChunkData("ICC Profile", 0, compressed.Take(compressed.Length / 2).ToArray()),
+            "invalid profile" => IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(new byte[] { 1, 2, 3, 4 })),
+            "zero-filled profile" => IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(new byte[1_000_000])),
+            _ => throw new ArgumentOutOfRangeException(nameof(defect)),
+        };
+
+        byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("iCCP", data));
+
+        using (Image<L8> image = Image.Load<L8>(png))
+        {
+            Assert.Null(image.Metadata.IccProfile);
+            Assert.Equal(0x80, image[0, 0].PackedValue);
+        }
+
+        IImageInfo info = Image.Identify(png);
+        Assert.Equal(1, info.Width);
+        Assert.Null(info.Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Decode_SecondIccpChunk_IsIgnored()
+    {
+        byte[] first = GetJpegIccProfileBytes();
+        byte[] second = WithDataColorSpace(first, "GRAY");
+        byte[] png = BuildGrayscalePng(
+            PngTestFileBuilder.Chunk("iCCP", IccpChunkData("first", 0, PngTestFileBuilder.Zlib(first))),
+            PngTestFileBuilder.Chunk("iCCP", IccpChunkData("second", 0, PngTestFileBuilder.Zlib(second))));
+
+        using (Image image = Image.Load(png))
+        {
+            Assert.Equal(first, image.Metadata.IccProfile?.ToByteArray());
+        }
+
+        Assert.Equal(first, Image.Identify(png).Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Decode_IccpChunkAfterImageData_IsIgnored()
+    {
+        byte[] png = PngTestFileBuilder.Build(
+            PngTestFileBuilder.Header(1, 1, 8, PngColorType.Grayscale),
+            PngTestFileBuilder.Chunk("IDAT", PngTestFileBuilder.Zlib(new byte[] { 0, 0x80 })),
+            PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(GetJpegIccProfileBytes()))),
+            PngTestFileBuilder.End());
+
+        using (Image image = Image.Load(png))
+        {
+            Assert.Null(image.Metadata.IccProfile);
+        }
+
+        Assert.Null(Image.Identify(png).Metadata.IccProfile);
+    }
+
     private static void AssertDefaultResolution(ImageMetadata expected, ImageMetadata actual)
     {
         Assert.Equal(expected.ResolutionUnits, actual.ResolutionUnits);
@@ -98,5 +206,30 @@ public partial class PngDecoderTests
         chunks.Add(PngTestFileBuilder.Chunk("IDAT", PngTestFileBuilder.Zlib(new byte[] { 0, 0x80 })));
         chunks.Add(PngTestFileBuilder.End());
         return PngTestFileBuilder.Build(chunks.ToArray());
+    }
+
+    private static byte[] IccpChunkData(string profileName, byte compressionMethod, byte[] compressedProfile)
+        => Encoding.Latin1.GetBytes(profileName)
+            .Append((byte)0)
+            .Append(compressionMethod)
+            .Concat(compressedProfile)
+            .ToArray();
+
+    /// <summary>
+    /// Returns a copy of the profile with its data color space field (header offset 16) replaced.
+    /// </summary>
+    private static byte[] WithDataColorSpace(byte[] profile, string colorSpace)
+    {
+        byte[] copy = (byte[])profile.Clone();
+        Encoding.ASCII.GetBytes(colorSpace, 0, 4, copy, 16);
+        return copy;
+    }
+
+    private static byte[] GetJpegIccProfileBytes()
+    {
+        using Image jpeg = Image.Load(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes);
+        IccProfile profile = jpeg.Metadata.IccProfile;
+        Assert.NotNull(profile);
+        return profile.ToByteArray();
     }
 }

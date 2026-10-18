@@ -8,6 +8,7 @@ using System.Linq;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
@@ -383,5 +384,68 @@ public class PngMetadataTests
         Assert.Equal(expected, image.Metadata.GetPngMetadata().TransparentRgb48);
         Assert.Equal(ushort.MinValue, image[0, 0].A);
         Assert.Equal(ushort.MaxValue, image[1, 0].A);
+    }
+
+    [Theory]
+    [InlineData(TestImages.Png.Ducky, 3144, IccColorSpaceType.Rgb)]
+    [InlineData(TestImages.Png.GrayA8BitInterlaced, 400, IccColorSpaceType.Gray)]
+    public void Decode_ReadsIccProfile(string imagePath, uint expectedSize, IccColorSpaceType expectedColorSpace)
+    {
+        var testFile = TestFile.Create(imagePath);
+
+        using (Image<Rgba32> image = testFile.CreateRgba32Image())
+        {
+            IccProfile profile = image.Metadata.IccProfile;
+            Assert.NotNull(profile);
+            Assert.Equal(expectedSize, profile.Header.Size);
+            Assert.Equal(expectedColorSpace, profile.Header.DataColorSpace);
+        }
+
+        IImageInfo info = Image.Identify(testFile.Bytes);
+        Assert.Equal(expectedSize, info.Metadata.IccProfile?.Header.Size);
+    }
+
+    [Theory]
+    [InlineData(TestImages.Jpeg.Baseline.Snake)]
+    [InlineData(TestImages.Webp.Lossy.WithIccp)]
+    [InlineData(TestImages.Webp.Lossless.WithIccp)]
+    public void Encode_ImageWithIccProfile_KeepsProfileByteForByte(string imagePath)
+    {
+        using Image source = Image.Load(TestFile.Create(imagePath).Bytes);
+        IccProfile sourceProfile = source.Metadata.IccProfile;
+        Assert.NotNull(sourceProfile);
+        byte[] expected = sourceProfile.ToByteArray();
+
+        using var stream = new MemoryStream();
+        source.SaveAsPng(stream);
+        byte[] png = stream.ToArray();
+
+        using (Image image = Image.Load(png))
+        {
+            Assert.Equal(expected, image.Metadata.IccProfile?.ToByteArray());
+        }
+
+        Assert.Equal(expected, Image.Identify(png).Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Encode_TiffWithIccProfile_KeepsProfileByteForByte()
+    {
+        byte[] expected;
+        using var tiffStream = new MemoryStream();
+        using (Image jpeg = Image.Load(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes))
+        {
+            expected = jpeg.Metadata.IccProfile.ToByteArray();
+            jpeg.SaveAsTiff(tiffStream);
+        }
+
+        using Image tiff = Image.Load(tiffStream.ToArray());
+        Assert.Equal(expected, tiff.Metadata.IccProfile?.ToByteArray());
+
+        using var stream = new MemoryStream();
+        tiff.SaveAsPng(stream);
+
+        using Image image = Image.Load(stream.ToArray());
+        Assert.Equal(expected, image.Metadata.IccProfile?.ToByteArray());
     }
 }

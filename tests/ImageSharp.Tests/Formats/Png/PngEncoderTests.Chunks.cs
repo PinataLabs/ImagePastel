@@ -5,7 +5,10 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 using Xunit;
@@ -324,5 +327,116 @@ public partial class PngEncoderTests
 
             bytesSpan = bytesSpan.Slice(4 + 4 + length + 4);
         }
+    }
+
+    [Fact]
+    public void IccProfile_IsWrittenAsIccpChunk_BeforePaletteAndData_WithoutGammaOrSrgb()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        input.Metadata.IccProfile = new IccProfile(iccBytes);
+        var encoder = new PngEncoder { ColorType = PngColorType.Palette, Gamma = 0.45455F };
+
+        using var memStream = new MemoryStream();
+        input.Save(memStream, encoder);
+
+        List<(string Type, byte[] Data)> chunks = PngTestFileBuilder.ReadChunks(memStream.ToArray());
+        List<string> types = chunks.Select(c => c.Type).ToList();
+        Assert.Single(types, t => t == "iCCP");
+        Assert.DoesNotContain("gAMA", types);
+        Assert.DoesNotContain("sRGB", types);
+        Assert.True(types.IndexOf("iCCP") < types.IndexOf("PLTE"), "iCCP chunk should come before the palette chunk");
+        Assert.True(types.IndexOf("iCCP") < types.IndexOf("IDAT"), "iCCP chunk should come before the data chunk");
+
+        // Profile name (1-79 Latin-1 bytes), null separator, compression method 0, zlib stream.
+        byte[] data = chunks.Single(c => c.Type == "iCCP").Data;
+        int separator = Array.IndexOf(data, (byte)0);
+        Assert.InRange(separator, 1, 79);
+        Assert.Equal(0, data[separator + 1]);
+        using var zlib = new ZLibStream(new MemoryStream(data, separator + 2, data.Length - separator - 2), CompressionMode.Decompress);
+        using var profile = new MemoryStream();
+        zlib.CopyTo(profile);
+        Assert.Equal(iccBytes, profile.ToArray());
+    }
+
+    [Fact]
+    public void IccProfile_WithoutProfile_GammaIsStillWritten()
+    {
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        using var memStream = new MemoryStream();
+        input.Save(memStream, new PngEncoder { Gamma = 0.45455F });
+
+        List<string> types = PngTestFileBuilder.ReadChunks(memStream.ToArray()).Select(c => c.Type).ToList();
+        Assert.Contains("gAMA", types);
+        Assert.DoesNotContain("iCCP", types);
+    }
+
+    [Theory]
+    [InlineData(PngChunkFilter.None, true)]
+    [InlineData(PngChunkFilter.ExcludeGammaChunk, true)]
+    [InlineData(PngChunkFilter.ExcludeTextChunks, true)]
+    [InlineData(PngChunkFilter.ExcludeAll, false)]
+    public void IccProfile_ChunkFilter_ExcludeAllOmitsIccp(object filterObj, bool expectIccp)
+    {
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        input.Metadata.IccProfile = new IccProfile(GetJpegIccProfileBytes());
+        using var memStream = new MemoryStream();
+        input.Save(memStream, new PngEncoder { ChunkFilter = (PngChunkFilter)filterObj });
+
+        List<string> types = PngTestFileBuilder.ReadChunks(memStream.ToArray()).Select(c => c.Type).ToList();
+        Assert.Equal(expectIccp, types.Contains("iCCP"));
+    }
+
+    [Fact]
+    public void IccProfile_IgnoreMetadata_OmitsIccp()
+    {
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        input.Metadata.IccProfile = new IccProfile(GetJpegIccProfileBytes());
+        using var memStream = new MemoryStream();
+        input.Save(memStream, new PngEncoder { IgnoreMetadata = true });
+
+        Assert.DoesNotContain(PngTestFileBuilder.ReadChunks(memStream.ToArray()), c => c.Type == "iCCP");
+    }
+
+    [Theory]
+    [InlineData("CMYK", PngColorType.RgbWithAlpha, false)]
+    [InlineData("GRAY", PngColorType.RgbWithAlpha, false)]
+    [InlineData("GRAY", PngColorType.Palette, false)]
+    [InlineData("GRAY", PngColorType.Grayscale, true)]
+    [InlineData("GRAY", PngColorType.GrayscaleWithAlpha, true)]
+    [InlineData("RGB ", PngColorType.Grayscale, false)]
+    [InlineData("RGB ", PngColorType.Palette, true)]
+    public void IccProfile_IsWrittenOnlyWhenItsColorSpaceMatchesTheColorType(string colorSpace, PngColorType colorType, bool expectIccp)
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        System.Text.Encoding.ASCII.GetBytes(colorSpace, 0, 4, iccBytes, 16);
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        input.Metadata.IccProfile = new IccProfile(iccBytes);
+        using var memStream = new MemoryStream();
+        input.Save(memStream, new PngEncoder { ColorType = colorType, Gamma = 0.45455F });
+
+        List<string> types = PngTestFileBuilder.ReadChunks(memStream.ToArray()).Select(c => c.Type).ToList();
+        Assert.Equal(expectIccp, types.Contains("iCCP"));
+        Assert.Equal(!expectIccp, types.Contains("gAMA"));
+    }
+
+    [Fact]
+    public void IccProfile_Invalid_IsNotWritten_AndGammaIsKept()
+    {
+        using var input = new Image<Rgba32>(4, 4, Color.Red);
+        input.Metadata.IccProfile = new IccProfile(new byte[] { 1, 2, 3, 4 });
+        using var memStream = new MemoryStream();
+        input.Save(memStream, new PngEncoder { Gamma = 0.45455F });
+
+        List<string> types = PngTestFileBuilder.ReadChunks(memStream.ToArray()).Select(c => c.Type).ToList();
+        Assert.DoesNotContain("iCCP", types);
+        Assert.Contains("gAMA", types);
+    }
+
+    private static byte[] GetJpegIccProfileBytes()
+    {
+        using Image jpeg = Image.Load(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes);
+        Assert.NotNull(jpeg.Metadata.IccProfile);
+        return jpeg.Metadata.IccProfile.ToByteArray();
     }
 }
