@@ -9,6 +9,9 @@ using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Processing.Processors.Dithering;
+using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
@@ -648,6 +651,76 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         TestTiffEncoderCore(provider, TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, TiffPredictor.Horizontal, useExactComparer: false, compareTolerance: 0.001f);
 
     [Theory]
+    [InlineData(TiffBitsPerPixel.Bit4, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, true)]
+    public void TiffEncoder_EncodeColorPalette_WithoutDither_KeepsGradientRowsIdenticalAndMonotonic(TiffBitsPerPixel bitsPerPixel, bool zeroDitherScale)
+    {
+        // A dither scale of zero adds no error to the neighbouring pixels, so it must match no dither.
+        QuantizerOptions options = zeroDitherScale
+            ? new QuantizerOptions { Dither = KnownDitherings.FloydSteinberg, DitherScale = 0 }
+            : new QuantizerOptions { Dither = null };
+
+        using Image<Rgba32> image = CreateGrayGradient();
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = TiffPhotometricInterpretation.PaletteColor,
+            Quantizer = new PaletteQuantizer(CreateGrayPalette(), options)
+        };
+
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        decoded.ProcessPixelRows(accessor =>
+        {
+            Span<Rgba32> firstRow = accessor.GetRowSpan(0);
+            Assert.Equal(new Rgba32(0, 0, 0), firstRow[0]);
+            Assert.Equal(new Rgba32(255, 255, 255), firstRow[^1]);
+            for (int x = 1; x < firstRow.Length; x++)
+            {
+                Assert.True(firstRow[x].R >= firstRow[x - 1].R, $"Row 0 decreases at x={x}.");
+            }
+
+            for (int y = 1; y < accessor.Height; y++)
+            {
+                Assert.True(firstRow.SequenceEqual(accessor.GetRowSpan(y)), $"Row {y} differs from row 0.");
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(TiffBitsPerPixel.Bit4, "Bayer8x8", 1F)]
+    [InlineData(TiffBitsPerPixel.Bit8, "Bayer8x8", 1F)]
+    [InlineData(TiffBitsPerPixel.Bit4, "FloydSteinberg", 0.5F)]
+    [InlineData(TiffBitsPerPixel.Bit8, "FloydSteinberg", 0.5F)]
+    public void TiffEncoder_EncodeColorPalette_MatchesQuantizeWithSameDither(TiffBitsPerPixel bitsPerPixel, string ditherName, float ditherScale)
+    {
+        IDither dither = ditherName == "Bayer8x8" ? KnownDitherings.Bayer8x8 : KnownDitherings.FloydSteinberg;
+        var quantizer = new PaletteQuantizer(CreateGrayPalette(), new QuantizerOptions { Dither = dither, DitherScale = ditherScale });
+
+        // The palette has 16 entries, so the color limit of either bit depth does not change the result.
+        using Image<Rgba32> image = CreateGrayGradient();
+        using Image<Rgba32> expected = image.Clone(x => x.Quantize(quantizer));
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = TiffPhotometricInterpretation.PaletteColor,
+            Quantizer = quantizer
+        };
+
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, decoded);
+    }
+
+    [Theory]
     [WithFile(Calliphora_BiColorUncompressed, PixelTypes.Rgba32)]
     public void TiffEncoder_EncodeBiColor_BlackIsZero_Works<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => TestTiffEncoderCore(provider, TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero);
@@ -742,6 +815,43 @@ public class TiffEncoderTests : TiffEncoderBaseTester
 
         var encoder = new TiffEncoder { PhotometricInterpretation = photometricInterpretation };
         image.DebugSave(provider, encoder);
+    }
+
+    /// <summary>
+    /// Creates a 64x16 image whose rows run from black to white.
+    /// </summary>
+    private static Image<Rgba32> CreateGrayGradient()
+    {
+        var image = new Image<Rgba32>(64, 16);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    byte value = (byte)(x * 255 / (row.Length - 1));
+                    row[x] = new Rgba32(value, value, value);
+                }
+            }
+        });
+
+        return image;
+    }
+
+    /// <summary>
+    /// Creates a palette of 16 evenly spaced grays, which fits both the 4 bit and the 8 bit color map.
+    /// </summary>
+    private static Color[] CreateGrayPalette()
+    {
+        var palette = new Color[16];
+        for (int i = 0; i < palette.Length; i++)
+        {
+            byte value = (byte)(i * 255 / (palette.Length - 1));
+            palette[i] = Color.FromRgb(value, value, value);
+        }
+
+        return palette;
     }
 
     /// <summary>
