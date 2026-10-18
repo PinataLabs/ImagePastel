@@ -56,6 +56,22 @@ internal sealed class JxlBlendingStage : IDisposable
             this.ecBg[i] = references[ecInfo[i].Source];
         }
 
+        // An empty slot reads as zeros. libjxl checks the colour source for a frame saved before its
+        // colour transform only when that slot is not empty.
+        if (this.bg != null && this.bg.IsInXyb)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException($"Trying to blend XYB reference frame {frameHeader.BlendingInfo.Source} and non-XYB frame");
+        }
+
+        this.VerifyBgSize(this.bg);
+        foreach (JxlReferenceFrame ecBackground in this.ecBg)
+        {
+            this.VerifyBgSize(ecBackground);
+        }
+
+        // libjxl also rejects blending an XYB image whose output colour encoding is not the original
+        // one ("Blending in unsupported color space"). XYB frames are a later slice.
+
         // libjxl allocates its zeros only when a slot is empty; they are always allocated here.
         this.zeroes = allocator.Allocate<float>(this.ImageXSize, AllocationOptions.Clean);
         this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
@@ -167,5 +183,15 @@ internal sealed class JxlBlendingStage : IDisposable
     {
         this.zeroes.Dispose();
         this.tmp.Dispose();
+    }
+
+    // verify_bg_size. A slot's frame always starts at the image origin here: libjxl sets an origin only
+    // on the decoded frame, never on the frame it keeps for referencing.
+    private void VerifyBgSize(JxlReferenceFrame background)
+    {
+        if (background != null && (background.Width < this.ImageXSize || background.Height < this.ImageYSize))
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException($"Trying to use a {background.Width}x{background.Height} crop as a background");
+        }
     }
 }

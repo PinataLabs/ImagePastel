@@ -219,7 +219,7 @@ internal sealed class JxlTestLayers
             w.Write(2, 0); // one pass
         }
 
-        bool crop = frame.XSize != 0;
+        bool crop = frame.Crop || frame.XSize != 0;
         bool isPartialFrame = false;
         w.Bit(crop);
         if (crop)
@@ -281,10 +281,15 @@ internal sealed class JxlTestLayers
 /// <summary>The blending of a frame's colour or extra channel.</summary>
 internal readonly record struct JxlTestBlending(JxlBlendMode Mode, uint Source = 0, uint AlphaChannel = 0, bool Clamp = false);
 
-/// <summary>One frame of a <see cref="JxlTestLayers"/> codestream. A zero <see cref="XSize"/> means a full-size frame.</summary>
+/// <summary>
+/// One frame of a <see cref="JxlTestLayers"/> codestream. A zero <see cref="XSize"/> means a full-size
+/// frame, unless <see cref="Crop"/> forces the crop fields to be written.
+/// </summary>
 internal sealed record JxlTestFrame(byte[] Section)
 {
     public JxlFrameType Type { get; init; } = JxlFrameType.Regular;
+
+    public bool Crop { get; init; }
 
     public int X0 { get; init; }
 

@@ -1,9 +1,11 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
@@ -13,6 +15,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -452,6 +455,119 @@ public class JxlBoundsTests
 
         Assert.Equal(20000, info.Width);
         Assert.Equal(20000, info.Height);
+    }
+
+    // stage_blending.cc: the colour of a frame cannot blend onto a slot saved before the colour
+    // transform ("Trying to blend XYB reference frame"), whatever the image's colour space.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void Blending_ColourOntoASlotSavedBeforeTheColourTransform_Throws(bool saveBeforeColorTransform, bool throws)
+        => AssertLayers(ColourOntoSlotSavedBeforeColourTransform(saveBeforeColorTransform), throws);
+
+    // stage_blending.cc: a background smaller than the image ("Trying to use a WxH crop as a
+    // background"). Only a reference-only frame saved before the colour transform can be cropped in its
+    // slot, and only an extra channel can blend onto it, as the colour check above comes first.
+    [Theory]
+    [InlineData(24, 16, false)]
+    [InlineData(23, 16, true)]
+    [InlineData(24, 15, true)]
+    [InlineData(30, 20, false)]
+    public void Blending_OntoACropSmallerThanTheImage_Throws(int xsize, int ysize, bool throws)
+        => AssertLayers(AlphaOntoCroppedSlot(xsize, ysize), throws);
+
+    // frame_header.cc: a reference-only frame kept after the colour transform cannot be cropped.
+    [Theory]
+    [InlineData(true, 10, false)]
+    [InlineData(false, 24, false)]
+    [InlineData(false, 10, true)]
+    public void ReferenceOnlyFrame_CroppedAndNotSavedBeforeTheColourTransform_Throws(bool saveBeforeColorTransform, int xsize, bool throws)
+        => AssertLayers(CroppedReferenceOnly(saveBeforeColorTransform, xsize), throws);
+
+    // frame_header.cc: a crop with no width or height.
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(0, true)]
+    public void Crop_ZeroWidth_Throws(int xsize, bool throws)
+        => AssertLayers(LayersWithCrop(xsize), throws);
+
+    // The frame loop needs every frame up to the last one.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void Layers_EndingBeforeTheLastFrame_Throw(bool truncate, bool throws)
+    {
+        byte[] codestream = new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true })
+            .ToArray();
+        int firstFrameEnd = new JxlTestLayers(24, 16).Add(new JxlTestFrame(JxlTestLayers.ColourA)).ToArray().Length;
+        AssertLayers(truncate ? codestream.AsSpan(0, firstFrameEnd).ToArray() : codestream, throws);
+    }
+
+    // libjxl rejects the same streams.
+    [Theory]
+    [InlineData("colour_onto_slot_saved_before_ct", true)]
+    [InlineData("colour_onto_slot_saved_after_ct", false)]
+    [InlineData("alpha_onto_23x16_crop", true)]
+    [InlineData("alpha_onto_24x16_crop", false)]
+    [InlineData("cropped_reference_only_after_ct", true)]
+    [InlineData("zero_width_crop", true)]
+    public async Task Djxl_RejectsTheSameLayers(string name, bool throws)
+    {
+        byte[] codestream = name switch
+        {
+            "colour_onto_slot_saved_before_ct" => ColourOntoSlotSavedBeforeColourTransform(true),
+            "colour_onto_slot_saved_after_ct" => ColourOntoSlotSavedBeforeColourTransform(false),
+            "alpha_onto_23x16_crop" => AlphaOntoCroppedSlot(23, 16),
+            "alpha_onto_24x16_crop" => AlphaOntoCroppedSlot(24, 16),
+            "cropped_reference_only_after_ct" => CroppedReferenceOnly(false, 10),
+            _ => LayersWithCrop(0),
+        };
+        string input = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlBoundsTests)), name + ".jxl");
+        await File.WriteAllBytesAsync(input, codestream, TestContext.Current.CancellationToken);
+
+        (int exitCode, string output) = await JxlTools.RunForExitCodeAsync("djxl", TestContext.Current.CancellationToken, input, input + ".npy");
+
+        Assert.True(throws == (exitCode != 0), $"djxl exited with code {exitCode}.{Environment.NewLine}{output}");
+    }
+
+    private static byte[] ColourOntoSlotSavedBeforeColourTransform(bool saveBeforeColorTransform)
+        => new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 1, SaveBeforeColorTransform = saveBeforeColorTransform })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true, Color = new(JxlBlendMode.Add, Source: 1) })
+            .ToArray();
+
+    private static byte[] AlphaOntoCroppedSlot(int xsize, int ysize)
+        => new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Type = JxlFrameType.ReferenceOnly, XSize = xsize, YSize = ysize, SaveAsReference = 1, SaveBeforeColorTransform = true })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true, ExtraChannel = new(JxlBlendMode.Add, Source: 1) })
+            .ToArray();
+
+    private static byte[] CroppedReferenceOnly(bool saveBeforeColorTransform, int xsize)
+        => new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Type = JxlFrameType.ReferenceOnly, Crop = true, XSize = xsize, YSize = 16, SaveAsReference = 1, SaveBeforeColorTransform = saveBeforeColorTransform })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true })
+            .ToArray();
+
+    private static byte[] LayersWithCrop(int xsize)
+        => new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true, Crop = true, X0 = 2, Y0 = 2, XSize = xsize, YSize = 5 })
+            .ToArray();
+
+    private static void AssertLayers(byte[] codestream, bool throws)
+    {
+        using MemoryStream stream = new(codestream);
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
+        }
+        else
+        {
+            using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+            Assert.Single(decoded.Frames);
+        }
     }
 
     private static void AssertBitDepth(JxlTestBitWriter writer, bool throws)
