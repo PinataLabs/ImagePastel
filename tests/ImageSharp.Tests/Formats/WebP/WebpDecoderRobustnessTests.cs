@@ -4,11 +4,13 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
+using System.Linq;
 using System.Text;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
@@ -148,6 +150,62 @@ public class WebpDecoderRobustnessTests
         BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), riffSize + 2);
 
         AssertSameImage(original, patched);
+    }
+
+    [Theory]
+    [InlineData(SampleKind.LossyWithAlpha, 2)]
+    [InlineData(SampleKind.LosslessWithExif, 2)]
+    [InlineData(SampleKind.LossyWithExifAndXmp, 1)]
+    [InlineData(SampleKind.LossyWithExifAndXmp, 6)]
+    public void Decode_VP8XChunkLongerThanTenBytes_SkipsExtraBytes(SampleKind kind, int extraBytes)
+    {
+        byte[] original = Encode(kind);
+        int vp8x = FindChunk(original, "VP8X");
+        Assert.Equal(10u, BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(vp8x + 4)));
+
+        // An odd chunk size is followed by a padding byte.
+        int payloadEnd = vp8x + 8 + 10;
+        int insertedBytes = extraBytes + (extraBytes & 1);
+        byte[] patched = [.. original.AsSpan(0, payloadEnd), .. new byte[insertedBytes], .. original.AsSpan(payloadEnd)];
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(vp8x + 4), (uint)(10 + extraBytes));
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4)) + (uint)insertedBytes);
+
+        AssertSameImage(original, patched);
+    }
+
+    [Fact]
+    public void Decode_OddSizedVp8ChunkInVP8X_SkipsPaddingByte()
+    {
+        // Append a zero byte to the VP8 payload, so its size is odd and a padding byte follows it.
+        // A zero byte after the last partition decodes the same as the end of the data.
+        // The EXIF and XMP chunks after the VP8 chunk are only found when the padding byte is skipped.
+        byte[] original = Encode(SampleKind.LossyWithExifAndXmp);
+        int vp8 = FindChunk(original, "VP8 ");
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(vp8 + 4));
+        Assert.Equal(0u, size & 1);
+        Assert.True(FindChunk(original, "EXIF") > vp8);
+
+        int payloadEnd = vp8 + 8 + (int)size;
+        byte[] patched = [.. original.AsSpan(0, payloadEnd), 0, 0, .. original.AsSpan(payloadEnd)];
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(vp8 + 4), size + 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(patched.AsSpan(4), BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(4)) + 2);
+
+        AssertSameImage(original, patched);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(8u)]
+    [InlineData(9u)]
+    public void Decode_VP8XChunkShorterThanTenBytes_ThrowsInvalidImageContent(uint size)
+    {
+        byte[] patched = PatchChunkSize(Encode(SampleKind.LosslessWithExif), "VP8X", size);
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(patched);
+        });
+        Assert.Throws<InvalidImageContentException>(() => Image.Identify(patched));
     }
 
     [Theory]
@@ -312,11 +370,10 @@ public class WebpDecoderRobustnessTests
     }
 
     [Theory]
-    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFFFu)]
     [InlineData(SampleKind.SimpleLossless, "VP8L", 0xFFFFFFF0u)]
-    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x7FFFFFF0u)]
     [InlineData(SampleKind.SimpleLossy, "VP8 ", 0xFFFFFFF0u)]
-    public void Decode_ImageChunkSizeLargerThanStream_ThrowsInvalidImageContent(SampleKind kind, string chunkId, uint size)
+    public void Decode_ImageChunkSizeAboveIntMaxValue_ThrowsInvalidImageContent(SampleKind kind, string chunkId, uint size)
     {
         byte[] patched = PatchChunkSize(Encode(kind), chunkId, size);
 
@@ -324,6 +381,59 @@ public class WebpDecoderRobustnessTests
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(patched);
         });
+    }
+
+    [Theory]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossless, "VP8L", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.LosslessWithExif, "VP8L", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x10000000u)]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ", 0x7FFFFFF0u)]
+    [InlineData(SampleKind.LossyWithAlpha, "VP8 ", 0x10000000u)]
+    public void Decode_ImageChunkSizeLargerThanStream_DoesNotAllocateDeclaredSize(SampleKind kind, string chunkId, uint declaredSize)
+    {
+        // The missing end of the image data is read as zeros, so the file decodes, or fails as invalid content.
+        byte[] patched = PatchChunkSize(Encode(kind), chunkId, declaredSize);
+        var allocator = new TestMemoryAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.MemoryAllocator = allocator;
+
+        Exception loadException = Record.Exception(() =>
+        {
+            using var stream = new MemoryStream(patched);
+            using Image<Rgba32> image = Image.Load<Rgba32>(configuration, stream);
+        });
+        Exception identifyException = Record.Exception(() =>
+        {
+            using var stream = new MemoryStream(patched);
+            Image.Identify(configuration, stream);
+        });
+
+        AssertInvalidImageContent(loadException, false, "Load");
+        AssertInvalidImageContent(identifyException, false, "Identify");
+        int largest = allocator.AllocationLog.Max(a => a.LengthInBytes);
+        Assert.True(largest < 1024 * 1024, $"Decoding allocated a buffer of {largest} bytes.");
+    }
+
+    [Theory]
+    [InlineData(SampleKind.SimpleLossless, "VP8L")]
+    [InlineData(SampleKind.SimpleLossy, "VP8 ")]
+    public void Decode_ImageChunkLongerThanStream_DecodesAsIfPaddedWithZeros(SampleKind kind, string chunkId)
+    {
+        const int missingBytes = 1000;
+        byte[] original = Encode(kind);
+        int chunk = FindChunk(original, chunkId);
+        Assert.Equal(original.Length, chunk + 8 + (int)BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(chunk + 4)));
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(chunk + 4)) + missingBytes;
+
+        byte[] truncated = PatchChunkSize(original, chunkId, size);
+        byte[] padded = [.. truncated, .. new byte[missingBytes]];
+        BinaryPrimitives.WriteUInt32LittleEndian(padded.AsSpan(4), (uint)(padded.Length - 8));
+
+        using Image<Rgba32> expected = Image.Load<Rgba32>(padded);
+        using Image<Rgba32> actual = Image.Load<Rgba32>(truncated);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
 
     private static void AssertInvalidImageContent(Exception exception, bool mustThrow, string operation)

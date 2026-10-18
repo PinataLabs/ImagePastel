@@ -318,7 +318,8 @@ internal class TiffEncoderEntriesCollector
             {
                 if (encoder.PhotometricInterpretation == TiffPhotometricInterpretation.Rgb ||
                     encoder.PhotometricInterpretation == TiffPhotometricInterpretation.PaletteColor ||
-                    encoder.PhotometricInterpretation == TiffPhotometricInterpretation.BlackIsZero)
+                    encoder.PhotometricInterpretation == TiffPhotometricInterpretation.BlackIsZero ||
+                    encoder.PhotometricInterpretation == TiffPhotometricInterpretation.WhiteIsZero)
                 {
                     var predictor = new ExifShort(ExifTagValue.Predictor) { Value = (ushort)TiffPredictor.Horizontal };
 
@@ -392,7 +393,8 @@ internal class TiffEncoderEntriesCollector
                 case TiffCompression.Lzw:
                     if (encoder.PhotometricInterpretation == TiffPhotometricInterpretation.Rgb ||
                         encoder.PhotometricInterpretation == TiffPhotometricInterpretation.PaletteColor ||
-                        encoder.PhotometricInterpretation == TiffPhotometricInterpretation.BlackIsZero)
+                        encoder.PhotometricInterpretation == TiffPhotometricInterpretation.BlackIsZero ||
+                        encoder.PhotometricInterpretation == TiffPhotometricInterpretation.WhiteIsZero)
                     {
                         return (ushort)TiffCompression.Lzw;
                     }

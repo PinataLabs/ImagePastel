@@ -226,7 +226,11 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     private WebpImageInfo ReadVp8XHeader()
     {
         var features = new WebpFeatures();
-        uint fileSize = this.ReadChunkSize();
+        uint vp8XChunkSize = this.ReadPayloadSize();
+        if (vp8XChunkSize < WebpConstants.Vp8XChunkSize)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8X chunk is smaller than its 10 byte payload");
+        }
 
         // The first byte contains information about the image features used.
         int imageFeatures = this.currentStream.ReadByte();
@@ -278,6 +282,9 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         this.buffer[3] = 0;
         uint height = (uint)BinaryPrimitives.ReadInt32LittleEndian(this.buffer) + 1;
+
+        // A longer chunk can hold more data in a later version of the format. Skip it, with the padding byte of an odd size.
+        this.SkipChunkData(PaddedSize(vp8XChunkSize) - WebpConstants.Vp8XChunkSize);
 
         // Read all the chunks in the order they occur.
         var info = new WebpImageInfo();
@@ -452,6 +459,9 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
             Remaining = remaining
         };
 
+        // Skip the padding byte of an odd-sized chunk, so a following chunk is read from its start.
+        this.SkipChunkData(dataSize & 1);
+
         return new WebpImageInfo()
         {
             Width = width,
@@ -478,6 +488,13 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
         // VP8 data size.
         uint imageDataSize = this.ReadChunkSize();
+
+        // The bit reader holds the data in a single buffer, which can not be larger than int.MaxValue.
+        if (imageDataSize >= int.MaxValue)
+        {
+            WebpThrowHelper.ThrowInvalidImageContentException("VP8L data size is too large");
+        }
+
         this.imageDataTruncated = imageDataSize > this.RemainingStreamBytes;
 
         // The header has a 1 byte signature and 32 bits for the size, alpha flag and version.

@@ -107,6 +107,59 @@ public class TiffDecoderMalformedInputTests
     }
 
     [Theory]
+    [InlineData(TiffPredictor.Horizontal, false)]
+    [InlineData(TiffPredictor.Horizontal, true)]
+    [InlineData(TiffPredictor.FloatingPoint, false)]
+    public void Decode_PredictorWithoutLzwOrDeflate_IgnoresPredictor(TiffPredictor predictor, bool packBits)
+    {
+        // The samples would decode as 10, 21, 33, 46 if the horizontal predictor were applied.
+        byte[] samples = { 10, 11, 12, 13 };
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { packBits ? new byte[] { 3, 10, 11, 12, 13 } : samples });
+        page.Compression = packBits ? TiffCompression.PackBits : TiffCompression.None;
+        page.Predictor = predictor;
+
+        using Image<L8> image = Decode<L8>(BuildTiff(page));
+
+        Assert.Equal(samples[0], image[0, 0].PackedValue);
+        Assert.Equal(samples[1], image[1, 0].PackedValue);
+        Assert.Equal(samples[2], image[0, 1].PackedValue);
+        Assert.Equal(samples[3], image[1, 1].PackedValue);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Decode_PlanarWithFewerStripOffsetsThanPlanes_ThrowsImageFormatException(int stripCount)
+    {
+        byte[][] strips = Enumerable.Range(0, stripCount).Select(_ => new byte[4]).ToArray();
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8, 8, 8 }, TiffPhotometricInterpretation.Rgb, true, null, strips);
+
+        Assert.Throws<ImageFormatException>(() => Decode<Rgb24>(BuildTiff(page)).Dispose());
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    [InlineData(0, 0)]
+    public void Decode_ZeroWidthOrHeight_ThrowsImageFormatException(int width, int height)
+    {
+        TiffPage page = TiffPage.Create(width, height, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[4] });
+
+        Assert.ThrowsAny<ImageFormatException>(() => Decode<L8>(BuildTiff(page)).Dispose());
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    public void Identify_ZeroWidthOrHeight_ThrowsImageFormatException(int width, int height)
+    {
+        TiffPage page = TiffPage.Create(width, height, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[4] });
+        using MemoryStream stream = new(BuildTiff(page), false);
+
+        Assert.ThrowsAny<ImageFormatException>(() => Image.Identify(stream));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void Decode_FewerStripByteCountsThanStripOffsets_ThrowsImageFormatException(bool planar)
@@ -247,6 +300,19 @@ public class TiffDecoderMalformedInputTests
 
         Assert.Contains("16384x8193", ex.Message, StringComparison.Ordinal);
         Assert.Contains("2147745792", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(TiffCompression.Deflate)]
+    [InlineData(TiffCompression.PackBits)]
+    [InlineData(TiffCompression.Lzw)]
+    public void Decode_CompressedStripByteCountAboveIntMaxValue_ThrowsInvalidImageContentException(TiffCompression compression)
+    {
+        TiffPage page = TiffPage.Create(2, 2, new ushort[] { 8 }, TiffPhotometricInterpretation.BlackIsZero, false, null, new[] { new byte[16] });
+        page.Compression = compression;
+        page.StripByteCounts = new[] { 0x90000000u };
+
+        Assert.Throws<InvalidImageContentException>(() => Decode<L8>(BuildTiff(page)).Dispose());
     }
 
     [Fact]
@@ -560,6 +626,8 @@ public class TiffDecoderMalformedInputTests
 
         public TiffCompression Compression { get; set; } = TiffCompression.None;
 
+        public TiffPredictor? Predictor { get; set; }
+
         public bool Planar { get; private set; }
 
         public uint? RowsPerStrip { get; private set; }
@@ -613,6 +681,11 @@ public class TiffDecoderMalformedInputTests
             if (this.RowsPerStrip.HasValue)
             {
                 entries.Add((ExifTagValue.RowsPerStrip, ExifDataType.Long, new[] { this.RowsPerStrip.Value }));
+            }
+
+            if (this.Predictor.HasValue)
+            {
+                entries.Add((ExifTagValue.Predictor, ExifDataType.Short, new[] { (uint)this.Predictor.Value }));
             }
 
             if (this.Planar)

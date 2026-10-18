@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
 namespace SixLabors.ImageSharp.Formats.Pbm;
@@ -41,6 +42,25 @@ internal static class SampleScaler
         for (int i = 0; i < samples.Length; i++)
         {
             samples[i] = (byte)Scale(samples[i], maxPixelValue, byte.MaxValue);
+        }
+    }
+
+    /// <summary>
+    /// Converts 16-bit samples in place between the big-endian byte order of the binary Netpbm formats
+    /// and the in-memory layout of <see cref="PixelFormats.L16"/>. The conversion is its own inverse.
+    /// </summary>
+    /// <param name="samples">The samples to convert, two bytes per sample.</param>
+    public static void SwapShortsBigEndian(Span<byte> samples)
+    {
+        if (!BitConverter.IsLittleEndian)
+        {
+            return;
+        }
+
+        Span<ushort> values = MemoryMarshal.Cast<byte, ushort>(samples);
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = BinaryPrimitives.ReverseEndianness(values[i]);
         }
     }
 

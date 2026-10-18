@@ -61,12 +61,19 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
         this.ProcessHeader(stream);
 
         var image = new Image<TPixel>(this.Configuration, this.PixelSize.Width, this.PixelSize.Height, this.Metadata);
+        try
+        {
+            Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
 
-        Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
+            this.ProcessPixels(stream, pixels);
 
-        this.ProcessPixels(stream, pixels);
-
-        return image;
+            return image;
+        }
+        catch
+        {
+            image.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -136,15 +143,23 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
         if (!stream.SkipWhitespaceAndComments() ||
             !stream.ReadDecimal(out int width) ||
             !stream.SkipWhitespaceAndComments() ||
-            !stream.ReadDecimal(out int height) ||
-            !stream.SkipWhitespaceAndComments())
+            !stream.ReadDecimal(out int height))
         {
             ThrowPrematureEof();
         }
 
+        if (width == 0 || height == 0)
+        {
+            throw new InvalidImageContentException($"Invalid image dimensions {width}x{height}; the width and height must be greater than zero.");
+        }
+
+        // ReadDecimal reads the single white space byte that ends the last header field. In the binary formats
+        // the raster starts right after it, and its first bytes can look like white space or a comment,
+        // so only the plain formats skip more white space and comments.
         if (this.ColorType != PbmColorType.BlackAndWhite)
         {
-            if (!stream.ReadDecimal(out this.maxPixelValue))
+            if (!stream.SkipWhitespaceAndComments() ||
+                !stream.ReadDecimal(out this.maxPixelValue))
             {
                 ThrowPrematureEof();
             }
@@ -164,11 +179,18 @@ internal sealed class PbmDecoderCore : IImageDecoderInternals
                 this.ComponentType = PbmComponentType.Byte;
             }
 
-            stream.SkipWhitespaceAndComments();
+            if (this.Encoding == PbmEncoding.Plain)
+            {
+                stream.SkipWhitespaceAndComments();
+            }
         }
         else
         {
             this.ComponentType = PbmComponentType.Bit;
+            if (this.Encoding == PbmEncoding.Plain && !stream.SkipWhitespaceAndComments())
+            {
+                ThrowPrematureEof();
+            }
         }
 
         this.PixelSize = new Size(width, height);
