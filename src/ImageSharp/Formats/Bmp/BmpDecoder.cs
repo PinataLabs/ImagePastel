@@ -27,6 +27,12 @@ public sealed class BmpDecoder : IImageDecoder, IBmpDecoderOptions, IImageInfoDe
     /// </summary>
     public RleSkippedPixelHandling RleSkippedPixelHandling { get; set; } = RleSkippedPixelHandling.Black;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the metadata should be ignored when the image is being decoded.
+    /// When set, the embedded ICC profile of a V5 bitmap is not read.
+    /// </summary>
+    public bool IgnoreMetadata { get; set; }
+
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>

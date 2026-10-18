@@ -10,6 +10,7 @@ using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
@@ -154,7 +155,11 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
             }
         }
 
-        int infoHeaderSize = this.writeV4Header ? BmpInfoHeader.SizeV4 : BmpInfoHeader.SizeV3;
+        // A pixel profile needs a V5 header, which can embed it. Without one, the header is V3, or V4 for transparency.
+        byte[] iccProfileData = GetIccProfileData(metadata.IccProfile);
+        int infoHeaderSize = iccProfileData is not null
+            ? BmpInfoHeader.SizeV5
+            : this.writeV4Header ? BmpInfoHeader.SizeV4 : BmpInfoHeader.SizeV3;
         var infoHeader = new BmpInfoHeader(
             headerSize: infoHeaderSize,
             height: image.Height,
@@ -190,9 +195,20 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
             colorPaletteSize = ColorPaletteSize1Bit;
         }
 
+        int iccProfileSize = 0;
+        if (iccProfileData is not null)
+        {
+            // The profile follows the pixel data. Its offset is relative to the start of the info header.
+            iccProfileSize = iccProfileData.Length;
+            infoHeader.CsType = BmpColorSpaceType.ProfileEmbedded;
+            infoHeader.Intent = ToBmpRenderingIntent(metadata.IccProfile.Header.RenderingIntent);
+            infoHeader.ProfileData = infoHeaderSize + colorPaletteSize + infoHeader.ImageSize;
+            infoHeader.ProfileSize = iccProfileSize;
+        }
+
         var fileHeader = new BmpFileHeader(
             type: BmpConstants.TypeMarkers.Bitmap,
-            fileSize: BmpFileHeader.Size + infoHeaderSize + colorPaletteSize + infoHeader.ImageSize,
+            fileSize: BmpFileHeader.Size + infoHeaderSize + colorPaletteSize + infoHeader.ImageSize + iccProfileSize,
             reserved: 0,
             offset: BmpFileHeader.Size + infoHeaderSize + colorPaletteSize);
 
@@ -201,7 +217,11 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
 
         stream.Write(buffer, 0, BmpFileHeader.Size);
 
-        if (this.writeV4Header)
+        if (infoHeaderSize == BmpInfoHeader.SizeV5)
+        {
+            infoHeader.WriteV5Header(buffer);
+        }
+        else if (this.writeV4Header)
         {
             infoHeader.WriteV4Header(buffer);
         }
@@ -214,8 +234,34 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
 
         this.WriteImage(stream, image.Frames.RootFrame);
 
+        if (iccProfileData is not null)
+        {
+            stream.Write(iccProfileData, 0, iccProfileData.Length);
+        }
+
         stream.Flush();
     }
+
+    /// <summary>
+    /// Gets the bytes of the pixel profile to embed, or null when there is none or it is not a valid profile.
+    /// </summary>
+    /// <param name="iccProfile">The pixel profile.</param>
+    /// <returns>The profile bytes, or null.</returns>
+    private static byte[] GetIccProfileData(IccProfile iccProfile)
+        => iccProfile is not null && iccProfile.CheckIsValid() ? iccProfile.ToByteArray() : null;
+
+    /// <summary>
+    /// Maps an ICC rendering intent to the matching <c>bV5Intent</c> value.
+    /// </summary>
+    /// <param name="intent">The ICC rendering intent.</param>
+    /// <returns>The bitmap rendering intent.</returns>
+    private static BmpRenderingIntent ToBmpRenderingIntent(IccRenderingIntent intent) => intent switch
+    {
+        IccRenderingIntent.MediaRelativeColorimetric => BmpRenderingIntent.Graphics,
+        IccRenderingIntent.Saturation => BmpRenderingIntent.Business,
+        IccRenderingIntent.AbsoluteColorimetric => BmpRenderingIntent.AbsoluteColorimetric,
+        _ => BmpRenderingIntent.Images,
+    };
 
     /// <summary>
     /// Writes the pixel data to the binary stream.
