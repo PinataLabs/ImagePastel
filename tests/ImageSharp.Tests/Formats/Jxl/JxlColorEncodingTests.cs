@@ -33,6 +33,7 @@ public class JxlColorEncodingTests
     {
         IccProfileTag.MediaWhitePoint,
         IccProfileTag.ChromaticAdaptation,
+        IccProfileTag.Cicp,
         IccProfileTag.RedMatrixColumn,
         IccProfileTag.GreenMatrixColumn,
         IccProfileTag.BlueMatrixColumn,
@@ -167,7 +168,7 @@ public class JxlColorEncodingTests
     }
 
     // The header fields and tags that describe the colour, within the tolerance of the fixed-point
-    // encoding. The description, copyright and cicp tags are left out.
+    // encoding; the cicp code points exactly. The description and copyright tags are left out.
     private static void AssertSameColour(IccProfile expected, IccProfile actual)
     {
         Assert.Equal(expected.Header.DataColorSpace, actual.Header.DataColorSpace);
@@ -193,6 +194,9 @@ public class JxlColorEncodingTests
                     break;
                 case IccFix16ArrayTagDataEntry matrix:
                     AssertClose(tag, matrix.Data, Assert.IsType<IccFix16ArrayTagDataEntry>(a).Data);
+                    break;
+                case IccCicpTagDataEntry cicp:
+                    Assert.Equal(cicp, Assert.IsType<IccCicpTagDataEntry>(a));
                     break;
                 case IccParametricCurveTagDataEntry curve:
                     IccParametricCurve c = curve.Curve;

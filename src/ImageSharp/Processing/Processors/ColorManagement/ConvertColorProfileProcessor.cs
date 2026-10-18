@@ -57,7 +57,10 @@ public sealed class ConvertColorProfileProcessor : IImageProcessor
 
     /// <inheritdoc />
     /// <exception cref="InvalidImageContentException">The image's pixel profile or the target profile is corrupt.</exception>
-    /// <exception cref="System.NotSupportedException">The engine does not support a profile or an option yet.</exception>
+    /// <exception cref="System.NotSupportedException">
+    /// The engine does not support a profile or an option yet, or a profile is CMYK (no pixel type
+    /// holds CMYK yet).
+    /// </exception>
     public IImageProcessor<TPixel> CreatePixelSpecificProcessor<TPixel>(Configuration configuration, Image<TPixel> source, Rectangle sourceRectangle)
         where TPixel : unmanaged, IPixel<TPixel>
         => new ConvertColorProfileProcessor<TPixel>(configuration, this, source, sourceRectangle);

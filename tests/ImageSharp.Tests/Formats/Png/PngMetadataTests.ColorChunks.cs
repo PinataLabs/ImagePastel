@@ -120,6 +120,23 @@ public partial class PngMetadataTests
     }
 
     [Theory]
+    [InlineData(1, 1)]
+    [InlineData(1, 6)]
+    [InlineData(1, 8)]
+    [InlineData(9, 1)]
+    [InlineData(9, 14)]
+    [InlineData(9, 8)]
+    [InlineData(12, 13)]
+    [InlineData(12, 15)]
+    public void Decode_Cicp_BuiltProfileCarriesTheCodePoints(byte primaries, byte transfer)
+    {
+        using Image image = Image.Load(CreatePng(PngColorType.Rgb, B.Cicp(primaries, transfer)));
+
+        Assert.True(image.Metadata.IccProfile.TryGetTag(IccProfileTag.Cicp, out IccCicpTagDataEntry cicp));
+        Assert.Equal((primaries, transfer, (byte)0, (byte)1), (cicp.ColorPrimaries, cicp.TransferCharacteristics, cicp.MatrixCoefficients, cicp.VideoFullRangeFlag));
+    }
+
+    [Theory]
     [MemberData(nameof(SourceCombinations))]
     public void Decode_SeveralColorSpaceChunks_UsesTheOneWithPrecedence(int sources, bool reverseOrder)
     {

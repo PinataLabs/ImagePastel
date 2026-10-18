@@ -4,6 +4,7 @@
 using System;
 using System.Buffers.Binary;
 using SixLabors.ImageSharp.ColorManagement;
+using SixLabors.ImageSharp.ColorManagement.Icc;
 using SixLabors.ImageSharp.ColorSpaces.Conversion;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
@@ -31,7 +32,9 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// A <c>cICP</c> chunk is used only when this decoder supports its code points (ITU-T H.273): BT.709,
 /// BT.2020 or SMPTE EG 432-1 (Display P3) primaries; the BT.709 (also code points 6, 14 and 15), sRGB or
 /// linear transfer function; RGB matrix coefficients (0); and full range. Other code points, such as
-/// PQ or HLG, leave the chunk ignored, so a lower-precedence chunk describes the image.
+/// PQ or HLG, leave the chunk ignored, so a lower-precedence chunk describes the image. An RGB profile
+/// built from a <c>cICP</c> chunk carries a <c>cicp</c> tag with the chunk's primaries and transfer
+/// function; a gray one has none (the ICC tag is for RGB).
 /// </para>
 /// </remarks>
 internal sealed class PngColorSpaceChunks
@@ -245,11 +248,40 @@ internal sealed class PngColorSpaceChunks
         {
             (PrimariesBt709, TransferLinear) => IccProfileFactory.CreateLinearSrgb(),
             (PrimariesDisplayP3, TransferSrgb) => IccProfileFactory.CreateDisplayP3(),
-            (PrimariesBt2020, not TransferSrgb and not TransferLinear) => IccProfileFactory.CreateRec2020(),
-            (PrimariesBt709, _) => IccProfileFactory.CreateRgb(primaries, D65, curve, description: "Rec. 709"),
-            _ => IccProfileFactory.CreateRgb(primaries, D65, curve),
+            (PrimariesBt2020, TransferBt709) => IccProfileFactory.CreateRec2020(),
+            _ => CreateCicpRgb(primaries, curve, primariesCode, transferCode),
         };
 
         return true;
+    }
+
+    // A D65 RGB profile whose cicp tag holds the chunk's own code points, as the standard factory
+    // profiles hold theirs.
+    private static IccProfile CreateCicpRgb(RgbPrimariesChromaticityCoordinates primaries, IccToneCurve curve, byte primariesCode, byte transferCode)
+    {
+        string primariesName = primariesCode switch
+        {
+            PrimariesBt709 => "BT.709",
+            PrimariesBt2020 => "BT.2020",
+            _ => "Display P3",
+        };
+
+        string transferName = transferCode switch
+        {
+            TransferSrgb => "sRGB",
+            TransferLinear => "linear",
+            _ => "BT.709",
+        };
+
+        return IccProfileBuilder.Build(
+            IccColorSpaceType.Rgb,
+            (D65.X, D65.Y),
+            new (double X, double Y)[] { (primaries.R.X, primaries.R.Y), (primaries.G.X, primaries.G.Y), (primaries.B.X, primaries.B.Y) },
+            new[] { curve.Curve, curve.Curve, curve.Curve },
+            IccConnectionSpace.D50,
+            IccRenderingIntent.Perceptual,
+            $"{primariesName} primaries, {transferName} transfer",
+            null,
+            (primariesCode, transferCode));
     }
 }

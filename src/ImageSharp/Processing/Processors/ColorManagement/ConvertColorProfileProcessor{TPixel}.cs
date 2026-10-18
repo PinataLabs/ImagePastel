@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Threading;
 using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -36,6 +37,12 @@ internal sealed class ConvertColorProfileProcessor<TPixel> : ImageProcessor<TPix
         if (sourceProfile is not null || this.targetProfile is not null)
         {
             this.transform = new IccColorTransform(sourceProfile, this.targetProfile, definition.Options);
+
+            // The converter carries CMYK in all four channels; no pixel type maps to that yet.
+            if (this.transform.SourceColorSpace == IccColorSpaceType.Cmyk || this.transform.TargetColorSpace == IccColorSpaceType.Cmyk)
+            {
+                throw new NotSupportedException("Converting images from or to a CMYK profile is not supported yet.");
+            }
         }
     }
 
