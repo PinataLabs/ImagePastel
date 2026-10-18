@@ -45,12 +45,15 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
     /// Initializes a new instance of the <see cref="EuclideanPixelMap{TPixel}"/> class.
     /// </summary>
     /// <param name="configuration">The configuration.</param>
-    /// <param name="palette">The color palette to map from.</param>
+    /// <param name="palette">The color palette to map from. Must not be empty.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="palette"/> is empty.</exception>
     public EuclideanPixelMap(Configuration configuration, ReadOnlyMemory<TPixel> palette)
     {
         this.configuration = configuration;
-        this.cache = new ColorDistanceCache(configuration.MemoryAllocator);
+
+        // Check the palette before allocating the cache, so a rejected palette does not leak it.
         this.SetPalette(palette);
+        this.cache = new ColorDistanceCache(configuration.MemoryAllocator);
     }
 
     /// <summary>
@@ -112,7 +115,8 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
     /// <summary>
     /// Clears the map, resetting it to use the given palette.
     /// </summary>
-    /// <param name="palette">The color palette to map from.</param>
+    /// <param name="palette">The color palette to map from. Must not be empty.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="palette"/> is empty.</exception>
     public void Clear(ReadOnlyMemory<TPixel> palette)
     {
         this.SetPalette(palette);
@@ -121,6 +125,9 @@ internal sealed class EuclideanPixelMap<TPixel> : IDisposable
 
     private void SetPalette(ReadOnlyMemory<TPixel> palette)
     {
+        // Every lookup returns a palette entry, so an empty palette has nothing to return.
+        Guard.MustBeGreaterThan(palette.Length, 0, nameof(palette));
+
         this.Palette = palette;
         this.rgbaPalette = new Rgba32[palette.Length];
         PixelOperations<TPixel>.Instance.ToRgba32(this.configuration, palette.Span, this.rgbaPalette);
