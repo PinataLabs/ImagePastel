@@ -808,6 +808,150 @@ public class BmpDecoderTests
     }
 
     [Theory]
+    [InlineData((int)BmpCompression.RLE8, 8)]
+    [InlineData((int)BmpCompression.RLE4, 4)]
+    [InlineData((int)BmpCompression.RLE24, 24)]
+    public void BmpDecoder_ThrowsInvalidImageContentException_BeforeAllocating_WhenRleDataIsTooShort(int compression, short bitsPerPixel)
+    {
+        // 4000x4000 with only an end of bitmap command. The RLE8 file is 64 bytes.
+        byte[] data = CreateRleBmp(width: 4000, height: 4000, bitsPerPixel, (BmpCompression)compression, 0x00, 0x01);
+
+        var allocator = new TestMemoryAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = allocator;
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(configuration, data);
+        });
+
+        long allocatedBytes = 0;
+        foreach (TestMemoryAllocator.AllocationRequest request in allocator.AllocationLog)
+        {
+            allocatedBytes += request.LengthInBytes;
+        }
+
+        Assert.True(allocatedBytes < 1024 * 1024, $"Allocated {allocatedBytes} bytes.");
+    }
+
+    [Theory]
+    [InlineData((int)BmpCompression.RLE8, 8)]
+    [InlineData((int)BmpCompression.RLE4, 4)]
+    [InlineData((int)BmpCompression.RLE24, 24)]
+    public void BmpDecoder_DecodesRleBitmap_ThatSkipsMostRowsWithDeltas(int compression, short bitsPerPixel)
+    {
+        // Four delta commands skip 999 of the 1000 rows, and the end of bitmap command skips the last row.
+        // This is 18 bytes of RLE data. The same bitmap with only the end of bitmap command is rejected.
+        byte[] rleData =
+        {
+            0x00, 0x02, 0x00, 0xFF,
+            0x00, 0x02, 0x00, 0xFF,
+            0x00, 0x02, 0x00, 0xFF,
+            0x00, 0x02, 0x00, 0xEA,
+            0x00, 0x01
+        };
+        byte[] deltas = CreateRleBmp(width: 100, height: 1000, bitsPerPixel, (BmpCompression)compression, rleData);
+        byte[] endOfBitmapOnly = CreateRleBmp(width: 100, height: 1000, bitsPerPixel, (BmpCompression)compression, 0x00, 0x01);
+
+        using (Image<Rgba32> image = Image.Load<Rgba32>(deltas))
+        {
+            Assert.Equal(new Size(100, 1000), image.Size());
+        }
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(endOfBitmapOnly);
+        });
+    }
+
+    [Theory]
+    [InlineData(10, 280, true)] // 2 bytes of RLE data may cover 255 * (10 + 1) = 2805 pixels.
+    [InlineData(10, 281, false)]
+    [InlineData(1, 510, true)] // 255 * (1 + 1) = 510 pixels.
+    [InlineData(1, 511, false)]
+    public void BmpDecoder_BoundsRleBitmapSize_ByRleDataLength(int width, int height, bool isValid)
+    {
+        byte[] data = CreateRleBmp(width, height, bitsPerPixel: 8, BmpCompression.RLE8, 0x00, 0x01);
+
+        if (isValid)
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+            Assert.Equal(new Size(width, height), image.Size());
+        }
+        else
+        {
+            Assert.Throws<InvalidImageContentException>(() =>
+            {
+                using Image<Rgba32> image = Image.Load<Rgba32>(data);
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData((int)BmpCompression.RLE8, 8, 65535, 257)] // 65535 * 65535 bytes.
+    [InlineData((int)BmpCompression.RLE24, 24, 26755, 105)] // 26755 * 26755 * 3 bytes.
+    public void BmpDecoder_ThrowsInvalidImageContentException_BeforeAllocating_WhenRleBufferIsTooLarge(int compression, short bitsPerPixel, int size, int deltaCount)
+    {
+        // The deltas give the bitmap enough RLE data for its size, but the uncompressed data is over int.MaxValue bytes.
+        byte[] rleData = new byte[(deltaCount * 4) + 2];
+        for (int i = 0; i < deltaCount; i++)
+        {
+            rleData[(i * 4) + 1] = 0x02;
+            rleData[(i * 4) + 3] = 0xFF;
+        }
+
+        rleData[^1] = 0x01;
+        byte[] data = CreateRleBmp(size, size, bitsPerPixel, (BmpCompression)compression, rleData);
+
+        var allocator = new TestMemoryAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = allocator;
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(configuration, data);
+        });
+
+        Assert.Empty(allocator.AllocationLog);
+    }
+
+    /// <summary>
+    /// Creates a run length encoded bitmap with the given RLE data. RLE4 and RLE8 bitmaps get a 40 byte
+    /// BITMAPINFOHEADER and a black palette of two colors. RLE24 bitmaps get a 64 byte OS/2 2.x header,
+    /// which stores RLE24 as compression 4.
+    /// </summary>
+    private static byte[] CreateRleBmp(int width, int height, short bitsPerPixel, BmpCompression compression, params byte[] rleData)
+    {
+        bool isRle24 = compression == BmpCompression.RLE24;
+        int infoHeaderSize = isRle24 ? BmpInfoHeader.Os2v2Size : BmpInfoHeader.SizeV3;
+        int paletteLength = isRle24 ? 0 : 2;
+        int pixelDataOffset = BmpFileHeader.Size + infoHeaderSize + (paletteLength * 4);
+        byte[] data = new byte[pixelDataOffset + rleData.Length];
+        Span<byte> span = data;
+
+        // File header.
+        span[0] = (byte)'B';
+        span[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(span[2..], data.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(span[10..], pixelDataOffset);
+
+        // Info header. The first 40 bytes of the OS/2 2.x header match the BITMAPINFOHEADER.
+        Span<byte> infoHeader = span[BmpFileHeader.Size..];
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader, infoHeaderSize);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[4..], width);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[8..], height);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[12..], 1);
+        BinaryPrimitives.WriteInt16LittleEndian(infoHeader[14..], bitsPerPixel);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[16..], isRle24 ? 4 : (int)compression);
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader[32..], paletteLength);
+
+        rleData.CopyTo(span[pixelDataOffset..]);
+        return data;
+    }
+
+    [Theory]
     [InlineData(1, (int)BmpCompression.RGB, false, 0)]
     [InlineData(2, (int)BmpCompression.RGB, false, 0)]
     [InlineData(4, (int)BmpCompression.RGB, false, 0)]

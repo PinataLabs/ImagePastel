@@ -127,6 +127,7 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         {
             int bytesPerColorMapEntry = this.ReadImageHeaders(stream, out bool inverted, out byte[] palette);
             this.VerifyUncompressedPixelDataLength();
+            this.VerifyRlePixelDataLength();
 
             if (this.infoHeader.Compression is BmpCompression.RLE4 or BmpCompression.RLE8)
             {
@@ -272,6 +273,48 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         {
             BmpThrowHelper.ThrowInvalidImageContentException(
                 $"The bitmap needs {requiredLength} bytes of pixel data, but only {remainingLength} bytes remain in the stream.");
+        }
+    }
+
+    /// <summary>
+    /// Checks that the stream holds enough data to cover every pixel of a run length encoded bitmap,
+    /// so that a small file cannot make the decoder allocate a large pixel buffer.
+    /// </summary>
+    /// <remarks>
+    /// No RLE command moves the decoder further per byte than a delta: 4 bytes that skip up to 255 rows and 255 pixels.
+    /// A run covers at most 255 pixels and an end of line at most one row. The end of bitmap command is counted
+    /// like a delta, so a bitmap with nothing but that command may be up to 255 rows tall.
+    /// </remarks>
+    private void VerifyRlePixelDataLength()
+    {
+        if (this.infoHeader.Compression is not (BmpCompression.RLE4 or BmpCompression.RLE8 or BmpCompression.RLE24))
+        {
+            return;
+        }
+
+        // The uncompressed bitmap is held in one buffer, which must not be longer than int.MaxValue bytes.
+        long pixelCount = (long)this.infoHeader.Width * this.infoHeader.Height;
+        long bufferLength = this.infoHeader.Compression is BmpCompression.RLE24 ? pixelCount * 3 : pixelCount;
+        if (bufferLength > int.MaxValue)
+        {
+            BmpThrowHelper.ThrowInvalidImageContentException(
+                $"The bitmap has {pixelCount} pixels, which is too many to decode with {this.infoHeader.Compression} compression.");
+        }
+
+        long remainingLength = this.stream.Length - this.stream.Position;
+        long commandCount = (remainingLength + 3) / 4;
+
+        // One delta per row covers the whole bitmap. This also keeps the product below from overflowing.
+        if (commandCount >= this.infoHeader.Height)
+        {
+            return;
+        }
+
+        long maxPixelCount = commandCount * 255 * (this.infoHeader.Width + 1L);
+        if (pixelCount > maxPixelCount)
+        {
+            BmpThrowHelper.ThrowInvalidImageContentException(
+                $"The bitmap has {pixelCount} pixels, but the {remainingLength} bytes of RLE data that remain in the stream cover at most {maxPixelCount} pixels.");
         }
     }
 
