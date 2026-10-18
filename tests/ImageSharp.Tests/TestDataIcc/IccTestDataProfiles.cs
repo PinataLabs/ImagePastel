@@ -9,6 +9,22 @@ namespace SixLabors.ImageSharp.Tests;
 
 internal static class IccTestDataProfiles
 {
+    /// <summary>
+    /// The size of <see cref="Profile_SharedTrc_Array"/>: header (128), tag count (4),
+    /// three tag table entries (3 * 12) and one curve padded to a 4-byte boundary (16).
+    /// </summary>
+    public const int Profile_SharedTrc_Size = 184;
+
+    /// <summary>
+    /// The offset of the tag table in every profile (ICC.1 section 7.3).
+    /// </summary>
+    public const int TagTableOffset = 128;
+
+    /// <summary>
+    /// The gamma stored in <see cref="Profile_SharedTrc_Array"/>.
+    /// </summary>
+    public const float Profile_SharedTrc_Gamma = 0x0233 / 256f;
+
     public static readonly IccProfileId Header_Random_Id_Value = new IccProfileId(0x84A8D460, 0xC716B6F3, 0x9B0E4C3D, 0xAB95F838);
     public static readonly IccProfileId Profile_Random_Id_Value = new IccProfileId(0x917D6DE6, 0x84C958D1, 0x3BB0F5BB, 0xADD1134F);
 
@@ -111,6 +127,33 @@ internal static class IccTestDataProfiles
 #pragma warning restore SA1118 // Parameter should not span multiple lines
         IccTestDataTagDataEntry.TagDataEntryHeader_UnknownArr,
         IccTestDataTagDataEntry.Unknown_Arr);
+
+    /// <summary>
+    /// A matrix/TRC style profile whose rTRC, gTRC and bTRC tags all point at the same
+    /// curveType data (a single gamma of 0x0233 / 256 = 2.19921875), as djxl writes them.
+    /// </summary>
+    public static readonly byte[] Profile_SharedTrc_Array = ArrayHelper.Concat(
+        CreateHeaderRandomArray(Profile_SharedTrc_Size, 3, Header_Random_Id_Array),
+#pragma warning disable SA1118 // Parameter should not span multiple lines
+        new byte[]
+        {
+            0x72, 0x54, 0x52, 0x43,     // tag signature (rTRC)
+            0x00, 0x00, 0x00, 0xA8,     // tag offset (168)
+            0x00, 0x00, 0x00, 0x0E,     // tag size (14)
+            0x67, 0x54, 0x52, 0x43,     // tag signature (gTRC)
+            0x00, 0x00, 0x00, 0xA8,     // tag offset (168)
+            0x00, 0x00, 0x00, 0x0E,     // tag size (14)
+            0x62, 0x54, 0x52, 0x43,     // tag signature (bTRC)
+            0x00, 0x00, 0x00, 0xA8,     // tag offset (168)
+            0x00, 0x00, 0x00, 0x0E,     // tag size (14)
+
+            0x63, 0x75, 0x72, 0x76,     // type signature (curv)
+            0x00, 0x00, 0x00, 0x00,     // reserved
+            0x00, 0x00, 0x00, 0x01,     // entry count (1 = gamma)
+            0x02, 0x33,                 // gamma (u8Fixed8Number)
+            0x00, 0x00,                 // padding
+        });
+#pragma warning restore SA1118 // Parameter should not span multiple lines
 
     public static readonly IccProfile Profile_Random_Val = new IccProfile(
         CreateHeaderRandomValue(

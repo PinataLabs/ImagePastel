@@ -1,0 +1,86 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+
+using System;
+using System.Buffers;
+using System.Numerics;
+using SixLabors.ImageSharp.ColorManagement;
+using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.PixelFormats;
+
+namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+
+/// <summary>
+/// Implements the 'Separated' photometric interpretation with the CMYK ink set, planar, with 8 or 16 bits per sample.
+/// </summary>
+/// <typeparam name="TPixel">The pixel format.</typeparam>
+internal class CmykPlanarTiffColor<TPixel> : TiffBasePlanarColorDecoder<TPixel>
+    where TPixel : unmanaged, IPixel<TPixel>
+{
+    private readonly Configuration configuration;
+
+    private readonly MemoryAllocator memoryAllocator;
+
+    private readonly int bitsPerSample;
+
+    private readonly bool isBigEndian;
+
+    private readonly IccColorTransform transform;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CmykPlanarTiffColor{TPixel}"/> class.
+    /// </summary>
+    /// <param name="configuration">The configuration.</param>
+    /// <param name="memoryAllocator">The memory allocator.</param>
+    /// <param name="bitsPerSample">The bits per sample: 8 or 16.</param>
+    /// <param name="isBigEndian">Whether 16-bit samples are big endian.</param>
+    /// <param name="transform">
+    /// The transform from the embedded CMYK profile, or <see langword="null"/> to convert with the
+    /// CMYK-to-RGB formula.
+    /// </param>
+    public CmykPlanarTiffColor(Configuration configuration, MemoryAllocator memoryAllocator, int bitsPerSample, bool isBigEndian, IccColorTransform transform)
+    {
+        this.configuration = configuration;
+        this.memoryAllocator = memoryAllocator;
+        this.bitsPerSample = bitsPerSample;
+        this.isBigEndian = isBigEndian;
+        this.transform = transform;
+    }
+
+    /// <inheritdoc/>
+    public override void Decode(IMemoryOwner<byte>[] data, Buffer2D<TPixel> pixels, int left, int top, int width, int height)
+    {
+        Span<byte> cyan = data[0].GetSpan();
+        Span<byte> magenta = data[1].GetSpan();
+        Span<byte> yellow = data[2].GetSpan();
+        Span<byte> black = data[3].GetSpan();
+
+        using IMemoryOwner<Vector4> rowBuffer = this.memoryAllocator.Allocate<Vector4>(width);
+        Span<Vector4> row = rowBuffer.GetSpan();
+        int bytesPerRow = width * this.bitsPerSample / 8;
+        int offset = 0;
+        for (int y = top; y < top + height; y++)
+        {
+            TiffCmykSamples.ReadPlanar(
+                cyan.Slice(offset, bytesPerRow),
+                magenta.Slice(offset, bytesPerRow),
+                yellow.Slice(offset, bytesPerRow),
+                black.Slice(offset, bytesPerRow),
+                this.bitsPerSample,
+                this.isBigEndian,
+                row);
+            if (this.transform is null)
+            {
+                TiffCmykFormula.ToRgb(row);
+            }
+            else
+            {
+                IccPixelConversion.ConvertRow(this.transform, row);
+            }
+
+            Span<TPixel> pixelRow = pixels.DangerousGetRowSpan(y).Slice(left, width);
+            PixelOperations<TPixel>.Instance.FromVector4Destructive(this.configuration, row, pixelRow, PixelConversionModifiers.Scale);
+            offset += bytesPerRow;
+        }
+    }
+}

@@ -231,10 +231,35 @@ internal static class IccTestDataLut
         new byte[16] { 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
         CLUTf32_Grad);
 
+    /// <summary>
+    /// A CLUT whose dimensions have different grid-point counts (2 x 4), as lutAToBType and
+    /// lutBToAType allow: it holds 2 * 4 = 8 entries.
+    /// </summary>
+    public static readonly IccClut CLUT16_ValNonUniform = new IccClut(
+        new float[][]
+        {
+            new float[] { 1f / ushort.MaxValue },
+            new float[] { 2f / ushort.MaxValue },
+            new float[] { 3f / ushort.MaxValue },
+            new float[] { 4f / ushort.MaxValue },
+            new float[] { 5f / ushort.MaxValue },
+            new float[] { 6f / ushort.MaxValue },
+            new float[] { 7f / ushort.MaxValue },
+            new float[] { 8f / ushort.MaxValue },
+        },
+        new byte[] { 2, 4 },
+        IccClutDataType.UInt16);
+
+    public static readonly byte[] CLUT_16NonUniform = ArrayHelper.Concat(
+        new byte[16] { 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+        new byte[4] { 0x02, 0x00, 0x00, 0x00 },
+        new byte[] { 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00, 0x07, 0x00, 0x08 });
+
     public static readonly object[][] ClutTestData =
     {
         new object[] { CLUT_8, CLUT_Val8, 2, 3, false },
         new object[] { CLUT_16, CLUT_Val16, 2, 3, false },
         new object[] { CLUT_f32, CLUT_Valf32, 2, 3, true },
+        new object[] { CLUT_16NonUniform, CLUT16_ValNonUniform, 2, 1, false },
     };
 }

@@ -37,6 +37,36 @@ public class IccDataReaderTagDataEntryTests
 
     [Theory]
     [MemberData(
+        nameof(IccTestDataTagDataEntry.CicpTagDataEntryTestData),
+        MemberType = typeof(IccTestDataTagDataEntry))]
+    internal void ReadCicpTagDataEntry(byte[] data, IccCicpTagDataEntry expected, uint size)
+    {
+        IccDataReader reader = CreateReader(data);
+
+        IccCicpTagDataEntry output = reader.ReadCicpTagDataEntry(size);
+
+        Assert.Equal(expected, output);
+    }
+
+    [Fact]
+    public void ReadTagDataEntry_CicpType_ReadsCicpEntry()
+    {
+        // A whole tag as it appears in a profile: 'cicp', 4 reserved bytes, then the four code points.
+        byte[] data = { 0x63, 0x69, 0x63, 0x70, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0D, 0x00, 0x01 };
+        IccDataReader reader = CreateReader(data);
+
+        IccTagDataEntry output = reader.ReadTagDataEntry(new IccTagTableEntry(IccProfileTag.Cicp, 0, 12));
+
+        IccCicpTagDataEntry cicp = Assert.IsType<IccCicpTagDataEntry>(output);
+        Assert.Equal(IccTypeSignature.Cicp, cicp.Signature);
+        Assert.Equal(12, cicp.ColorPrimaries);
+        Assert.Equal(13, cicp.TransferCharacteristics);
+        Assert.Equal(0, cicp.MatrixCoefficients);
+        Assert.Equal(1, cicp.VideoFullRangeFlag);
+    }
+
+    [Theory]
+    [MemberData(
         nameof(IccTestDataTagDataEntry.ColorantOrderTagDataEntryTestData),
         MemberType = typeof(IccTestDataTagDataEntry))]
     internal void ReadColorantOrderTagDataEntry(byte[] data, IccColorantOrderTagDataEntry expected)

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 using System;
 using System.Buffers.Binary;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace SixLabors.ImageSharp.Formats.Bmp;
@@ -94,7 +93,10 @@ internal struct BmpInfoHeader
         int blueZ = 0,
         int gammeRed = 0,
         int gammeGreen = 0,
-        int gammeBlue = 0)
+        int gammeBlue = 0,
+        BmpRenderingIntent intent = 0,
+        int profileData = 0,
+        int profileSize = 0)
     {
         this.HeaderSize = headerSize;
         this.Width = width;
@@ -111,7 +113,7 @@ internal struct BmpInfoHeader
         this.GreenMask = greenMask;
         this.BlueMask = blueMask;
         this.AlphaMask = alphaMask;
-        this.CsType = csType;
+        this.CsType = (BmpColorSpaceType)csType;
         this.RedX = redX;
         this.RedY = redY;
         this.RedZ = redZ;
@@ -124,6 +126,10 @@ internal struct BmpInfoHeader
         this.GammaRed = gammeRed;
         this.GammaGreen = gammeGreen;
         this.GammaBlue = gammeBlue;
+        this.Intent = intent;
+        this.ProfileData = profileData;
+        this.ProfileSize = profileSize;
+        this.Reserved = 0;
     }
 
     /// <summary>
@@ -209,69 +215,102 @@ internal struct BmpInfoHeader
     public int AlphaMask { get; set; }
 
     /// <summary>
-    /// Gets or sets the Color space type. Not used yet.
+    /// Gets or sets the color space type (<c>bV5CSType</c>). Present in V4 and V5 headers.
     /// </summary>
-    public int CsType { get; set; }
+    public BmpColorSpaceType CsType { get; set; }
 
     /// <summary>
-    /// Gets or sets the X coordinate of red endpoint. Not used yet.
+    /// Gets or sets the X coordinate of the red endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int RedX { get; set; }
 
     /// <summary>
-    /// Gets or sets the Y coordinate of red endpoint. Not used yet.
+    /// Gets or sets the Y coordinate of the red endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int RedY { get; set; }
 
     /// <summary>
-    /// Gets or sets the Z coordinate of red endpoint. Not used yet.
+    /// Gets or sets the Z coordinate of the red endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int RedZ { get; set; }
 
     /// <summary>
-    /// Gets or sets the X coordinate of green endpoint. Not used yet.
+    /// Gets or sets the X coordinate of the green endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GreenX { get; set; }
 
     /// <summary>
-    /// Gets or sets the Y coordinate of green endpoint. Not used yet.
+    /// Gets or sets the Y coordinate of the green endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GreenY { get; set; }
 
     /// <summary>
-    /// Gets or sets the Z coordinate of green endpoint. Not used yet.
+    /// Gets or sets the Z coordinate of the green endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GreenZ { get; set; }
 
     /// <summary>
-    /// Gets or sets the X coordinate of blue endpoint. Not used yet.
+    /// Gets or sets the X coordinate of the blue endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int BlueX { get; set; }
 
     /// <summary>
-    /// Gets or sets the Y coordinate of blue endpoint. Not used yet.
+    /// Gets or sets the Y coordinate of the blue endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int BlueY { get; set; }
 
     /// <summary>
-    /// Gets or sets the Z coordinate of blue endpoint. Not used yet.
+    /// Gets or sets the Z coordinate of the blue endpoint (a CIEXYZ value in FXPT2DOT30 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int BlueZ { get; set; }
 
     /// <summary>
-    /// Gets or sets the Gamma red coordinate scale value. Not used yet.
+    /// Gets or sets the red tone response curve gamma (unsigned 16.16 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GammaRed { get; set; }
 
     /// <summary>
-    /// Gets or sets the Gamma green coordinate scale value. Not used yet.
+    /// Gets or sets the green tone response curve gamma (unsigned 16.16 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GammaGreen { get; set; }
 
     /// <summary>
-    /// Gets or sets the Gamma blue coordinate scale value. Not used yet.
+    /// Gets or sets the blue tone response curve gamma (unsigned 16.16 fixed point).
+    /// Only meaningful when <see cref="CsType"/> is <see cref="BmpColorSpaceType.CalibratedRgb"/>.
     /// </summary>
     public int GammaBlue { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rendering intent (<c>bV5Intent</c>). Present in V5 headers only.
+    /// </summary>
+    public BmpRenderingIntent Intent { get; set; }
+
+    /// <summary>
+    /// Gets or sets the offset, in bytes, from the start of the info header to the profile data (<c>bV5ProfileData</c>).
+    /// Present in V5 headers only.
+    /// </summary>
+    public int ProfileData { get; set; }
+
+    /// <summary>
+    /// Gets or sets the size, in bytes, of the profile data (<c>bV5ProfileSize</c>). Present in V5 headers only.
+    /// </summary>
+    public int ProfileSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets the reserved field (<c>bV5Reserved</c>), which must be zero. Present in V5 headers only.
+    /// </summary>
+    public int Reserved { get; set; }
 
     /// <summary>
     /// Parses the BITMAPCOREHEADER (BMP Version 2) consisting of the headerSize, width, height, planes, and bitsPerPixel fields (12 bytes).
@@ -420,6 +459,25 @@ internal struct BmpInfoHeader
             throw new ArgumentException(nameof(data), $"Must be {SizeV4} bytes. Was {data.Length} bytes.");
         }
 
+        // The V5 fields that follow the V4 fields stay zero.
+        BmpInfoHeader header = default;
+        data.Slice(0, SizeV4).CopyTo(MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref header, 1)));
+        return header;
+    }
+
+    /// <summary>
+    /// Parses the full BMP Version 5 BITMAPV5HEADER header (124 bytes).
+    /// </summary>
+    /// <param name="data">The data to parse.</param>
+    /// <returns>The parsed header.</returns>
+    /// <seealso href="https://learn.microsoft.com/windows/win32/api/wingdi/ns-wingdi-bitmapv5header"/>
+    public static BmpInfoHeader ParseV5(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < SizeV5)
+        {
+            throw new ArgumentException($"Must be {SizeV5} bytes. Was {data.Length} bytes.", nameof(data));
+        }
+
         return MemoryMarshal.Cast<byte, BmpInfoHeader>(data)[0];
     }
 
@@ -444,14 +502,23 @@ internal struct BmpInfoHeader
     }
 
     /// <summary>
-    /// Writes a complete Bitmap V4 header to a buffer.
+    /// Writes a complete Bitmap V4 header to a buffer (108 bytes).
     /// </summary>
     /// <param name="buffer">The buffer to write to.</param>
     public void WriteV4Header(Span<byte> buffer)
     {
-        ref BmpInfoHeader dest = ref Unsafe.As<byte, BmpInfoHeader>(ref MemoryMarshal.GetReference(buffer));
+        BmpInfoHeader header = this;
+        MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref header, 1)).Slice(0, SizeV4).CopyTo(buffer);
+    }
 
-        dest = this;
+    /// <summary>
+    /// Writes a complete Bitmap V5 header to a buffer (124 bytes).
+    /// </summary>
+    /// <param name="buffer">The buffer to write to.</param>
+    public void WriteV5Header(Span<byte> buffer)
+    {
+        BmpInfoHeader header = this;
+        MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref header, 1)).CopyTo(buffer);
     }
 
     /// <summary>

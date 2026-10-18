@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Formats.Tiff.Compression;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
@@ -13,6 +14,7 @@ using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Tiff;
@@ -43,6 +45,16 @@ internal class TiffDecoderCore : IImageDecoderInternals
     private readonly FrameDecodingMode decodingMode;
 
     /// <summary>
+    /// The options for converting from the embedded color profile.
+    /// </summary>
+    private readonly IColorProfileDecoderOptions colorProfileOptions;
+
+    /// <summary>
+    /// The CMYK transforms built so far in this decode, by profile bytes.
+    /// </summary>
+    private readonly IccTransformCache cmykTransforms = new();
+
+    /// <summary>
     /// The stream to decode from.
     /// </summary>
     private BufferedReadStream inputStream;
@@ -69,6 +81,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
         this.Configuration = configuration ?? Configuration.Default;
         this.ignoreMetadata = options.IgnoreMetadata;
         this.decodingMode = options.DecodingMode;
+        this.colorProfileOptions = options;
         this.memoryAllocator = this.Configuration.MemoryAllocator;
     }
 
@@ -152,6 +165,12 @@ internal class TiffDecoderCore : IImageDecoderInternals
     /// </summary>
     public TiffPredictor Predictor { get; set; }
 
+    /// <summary>
+    /// Gets or sets the transform from the current frame's embedded CMYK profile, or
+    /// <see langword="null"/> to convert CMYK samples with the CMYK-to-RGB formula.
+    /// </summary>
+    public IccColorTransform CmykTransform { get; set; }
+
     /// <inheritdoc/>
     public Configuration Configuration { get; }
 
@@ -224,7 +243,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
         if (!this.ignoreMetadata)
         {
             var rootFrameMetadata = new ImageFrameMetadata { ExifProfile = rootFrameExifProfile };
-            TiffDecoderMetadataCreator.SetFrameProfiles(rootFrameMetadata);
+            TiffDecoderMetadataCreator.SetFrameProfiles(rootFrameMetadata, rootMetadata.PhotometricInterpretation);
             TiffDecoderMetadataCreator.SetImageProfiles(metadata, rootFrameMetadata);
         }
 
@@ -254,6 +273,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
         TiffFrameMetadata.Parse(tiffFrameMetaData, tags);
 
         this.VerifyAndParse(tags, tiffFrameMetaData);
+        this.CmykTransform = this.CreateCmykTransform(tags);
 
         int width = GetImageWidth(tags);
         int height = GetImageHeight(tags);
@@ -300,7 +320,41 @@ internal class TiffDecoderCore : IImageDecoderInternals
             throw;
         }
 
+        if (this.CmykTransform is not null)
+        {
+            // The pixels now hold the target's colors, so the embedded profile no longer describes
+            // them. The frame keeps the target instead, and the post-decode conversion finds nothing to do.
+            tiffFrameMetaData.EmbeddedIccProfile = new IccProfile(tags.GetValue(ExifTag.IccProfile).Value);
+            tags.RemoveValue(ExifTag.IccProfile);
+            imageFrameMetaData.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
+        }
+
         return frame;
+    }
+
+    /// <summary>
+    /// Builds the transform for CMYK samples from the frame's embedded profile, when the options ask
+    /// for a conversion and the profile is a CMYK profile the engine can use.
+    /// </summary>
+    /// <param name="tags">The IFD tags.</param>
+    /// <returns>The transform, or <see langword="null"/> to keep the CMYK-to-RGB formula.</returns>
+    private IccColorTransform CreateCmykTransform(ExifProfile tags)
+    {
+        if (this.ColorType is not (TiffColorType.Cmyk8888 or TiffColorType.Cmyk16161616 or TiffColorType.Cmyk8888Planar or TiffColorType.Cmyk16161616Planar))
+        {
+            return null;
+        }
+
+        byte[] profileBytes = tags.GetValue(ExifTag.IccProfile)?.Value;
+        if (profileBytes is null)
+        {
+            return null;
+        }
+
+        // Frames usually repeat the same profile, so they share its transform.
+        return this.cmykTransforms.GetOrCreate(
+            profileBytes,
+            () => DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, new IccProfile(profileBytes), out IccColorTransform transform) ? transform : null);
     }
 
     private IMemoryOwner<ulong> ConvertNumbers(Array array, out Span<ulong> span)
@@ -494,6 +548,8 @@ internal class TiffDecoderCore : IImageDecoderInternals
                 this.byteOrder);
 
             TiffBasePlanarColorDecoder<TPixel> colorDecoder = TiffColorDecoderFactory<TPixel>.CreatePlanar(
+                this.Configuration,
+                this.memoryAllocator,
                 this.ColorType,
                 this.BitsPerSample,
                 this.ExtraSamplesType,
@@ -501,7 +557,8 @@ internal class TiffDecoderCore : IImageDecoderInternals
                 this.ReferenceBlackAndWhite,
                 this.YcbcrCoefficients,
                 this.YcbcrSubSampling,
-                this.byteOrder);
+                this.byteOrder,
+                this.CmykTransform);
 
             for (int i = 0; i < stripsPerPlane; i++)
             {
@@ -591,7 +648,8 @@ internal class TiffDecoderCore : IImageDecoderInternals
             this.ReferenceBlackAndWhite,
             this.YcbcrCoefficients,
             this.YcbcrSubSampling,
-            this.byteOrder);
+            this.byteOrder,
+            this.CmykTransform);
 
         for (int stripIndex = 0; stripIndex < stripOffsets.Length; stripIndex++)
         {

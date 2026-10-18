@@ -12,6 +12,7 @@ using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using SixLabors.ImageSharp.Tests.Formats.Png;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
@@ -32,6 +33,7 @@ public class JxlColorEncodingTests
     {
         IccProfileTag.MediaWhitePoint,
         IccProfileTag.ChromaticAdaptation,
+        IccProfileTag.Cicp,
         IccProfileTag.RedMatrixColumn,
         IccProfileTag.GreenMatrixColumn,
         IccProfileTag.BlueMatrixColumn,
@@ -105,10 +107,11 @@ public class JxlColorEncodingTests
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
         Assert.NotNull(image.Metadata.IccProfile);
-        AssertSameColour(reference.Metadata.IccProfile, image.Metadata.IccProfile);
+        IccProfile djxlProfile = DjxlProfile(name);
+        AssertSameColour(djxlProfile, image.Metadata.IccProfile);
 
         // The built profile survives being written and read back.
-        AssertSameColour(reference.Metadata.IccProfile, new IccProfile(image.Metadata.IccProfile.ToByteArray()));
+        AssertSameColour(djxlProfile, new IccProfile(image.Metadata.IccProfile.ToByteArray()));
     }
 
     [Fact]
@@ -165,7 +168,7 @@ public class JxlColorEncodingTests
     }
 
     // The header fields and tags that describe the colour, within the tolerance of the fixed-point
-    // encoding. The description, copyright and cicp tags are left out.
+    // encoding; the cicp code points exactly. The description and copyright tags are left out.
     private static void AssertSameColour(IccProfile expected, IccProfile actual)
     {
         Assert.Equal(expected.Header.DataColorSpace, actual.Header.DataColorSpace);
@@ -173,31 +176,15 @@ public class JxlColorEncodingTests
         Assert.Equal(expected.Header.Class, actual.Header.Class);
         Assert.Equal(expected.Header.RenderingIntent, actual.Header.RenderingIntent);
 
-        // IccReader gives tags that share their data one entry, with the signature of the last of them,
-        // so the tone curves are compared as curves rather than by tag.
-        IccParametricCurve expectedCurve = Assert.Single(expected.Entries.OfType<IccParametricCurveTagDataEntry>().Distinct()).Curve;
-        foreach (IccParametricCurveTagDataEntry entry in actual.Entries.OfType<IccParametricCurveTagDataEntry>())
+        foreach (IccProfileTag tag in ColourTags)
         {
-            Assert.Equal(expectedCurve.Type, entry.Curve.Type);
-            AssertClose(entry.TagSignature, new[] { expectedCurve.G, expectedCurve.A, expectedCurve.B, expectedCurve.C, expectedCurve.D }, new[] { entry.Curve.G, entry.Curve.A, entry.Curve.B, entry.Curve.C, entry.Curve.D });
-        }
-
-        IccProfileTag[] channelCurves = expected.Header.DataColorSpace == IccColorSpaceType.Gray
-            ? new[] { IccProfileTag.GrayTrc }
-            : new[] { IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc };
-        Assert.All(actual.Entries.OfType<IccParametricCurveTagDataEntry>(), e => Assert.Contains(e.TagSignature, channelCurves));
-
-        foreach (IccProfileTag tag in ColourTags.Except(new[] { IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc, IccProfileTag.GrayTrc }))
-        {
-            IccTagDataEntry e = expected.Entries.FirstOrDefault(t => t.TagSignature == tag);
-            IccTagDataEntry a = actual.Entries.FirstOrDefault(t => t.TagSignature == tag);
-            if (e == null)
+            if (!expected.TryGetTag(tag, out IccTagDataEntry e))
             {
-                Assert.Null(a);
+                Assert.False(actual.TryGetTag(tag, out IccTagDataEntry _), $"The built profile has an unexpected {tag} tag.");
                 continue;
             }
 
-            Assert.True(a != null, $"The built profile has no {tag} tag.");
+            Assert.True(actual.TryGetTag(tag, out IccTagDataEntry a), $"The built profile has no {tag} tag.");
             switch (e)
             {
                 case IccXyzTagDataEntry xyz:
@@ -207,6 +194,9 @@ public class JxlColorEncodingTests
                     break;
                 case IccFix16ArrayTagDataEntry matrix:
                     AssertClose(tag, matrix.Data, Assert.IsType<IccFix16ArrayTagDataEntry>(a).Data);
+                    break;
+                case IccCicpTagDataEntry cicp:
+                    Assert.Equal(cicp, Assert.IsType<IccCicpTagDataEntry>(a));
                     break;
                 case IccParametricCurveTagDataEntry curve:
                     IccParametricCurve c = curve.Curve;
@@ -233,6 +223,20 @@ public class JxlColorEncodingTests
     {
         using FileStream stream = File.OpenRead(path);
         return new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None).Metadata;
+    }
+
+    // The profile libjxl built, from the iCCP chunk of djxl's PNG. For spaces that ITU-T H.273 names, djxl
+    // also writes a cICP chunk, which takes precedence over iCCP when the PNG decodes, so it is dropped here.
+    private static IccProfile DjxlProfile(string name)
+    {
+        byte[][] chunks = PngTestFileBuilder.ReadChunks(File.ReadAllBytes(ReferencePath(name)))
+            .Where(c => c.Type != "cICP")
+            .Select(c => PngTestFileBuilder.Chunk(c.Type, c.Data))
+            .ToArray();
+
+        IccProfile profile = Image.Identify(PngTestFileBuilder.Build(chunks)).Metadata.IccProfile;
+        Assert.NotNull(profile);
+        return profile;
     }
 
     private static string ReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "colour_" + name + ".png");

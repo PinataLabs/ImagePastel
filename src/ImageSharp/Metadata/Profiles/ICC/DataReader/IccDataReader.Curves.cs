@@ -41,6 +41,7 @@ internal sealed partial class IccDataReader
     public IccResponseCurve ReadResponseCurve(int channelCount)
     {
         var type = (IccCurveMeasurementEncodings)this.ReadUInt32();
+        this.CheckElementCount((ulong)channelCount, 16, "rcs2"); // a measurement count and an XYZ value per channel
         var measurement = new uint[channelCount];
         for (int i = 0; i < channelCount; i++)
         {
@@ -56,6 +57,7 @@ internal sealed partial class IccDataReader
         var response = new IccResponseNumber[channelCount][];
         for (int i = 0; i < channelCount; i++)
         {
+            this.CheckElementCount(measurement[i], 6, "rcs2"); // a 16-bit device code and an s15Fixed16 value
             response[i] = new IccResponseNumber[measurement[i]];
             for (uint j = 0; j < measurement[i]; j++)
             {
@@ -175,6 +177,7 @@ internal sealed partial class IccDataReader
     public IccSampledCurveElement ReadSampledCurveElement()
     {
         uint count = this.ReadUInt32();
+        this.CheckElementCount(count, 4, "mpet"); // 32-bit floats of a sampled curve segment
         var entries = new float[count];
         for (int i = 0; i < count; i++)
         {

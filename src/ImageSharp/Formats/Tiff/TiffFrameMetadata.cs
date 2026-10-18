@@ -3,6 +3,7 @@
 
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.Formats.Tiff;
 
@@ -28,6 +29,7 @@ public class TiffFrameMetadata : IDeepCloneable
         this.Compression = other.Compression;
         this.PhotometricInterpretation = other.PhotometricInterpretation;
         this.Predictor = other.Predictor;
+        this.EmbeddedIccProfile = other.EmbeddedIccProfile?.DeepClone();
     }
 
     /// <summary>
@@ -54,6 +56,15 @@ public class TiffFrameMetadata : IDeepCloneable
     /// Gets or sets a mathematical operator that is applied to the image data before an encoding scheme is applied.
     /// </summary>
     public TiffPredictor? Predictor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the embedded ICC profile of this frame, exactly as the file stores it, or
+    /// <see langword="null"/> when there is none or metadata is ignored. It is not always the pixel
+    /// profile (<c>ImageFrameMetadata.IccProfile</c>): a CMYK profile describes the file's CMYK
+    /// samples, not the decoded RGB pixels, so a CMYK frame keeps it only here, and a converted frame
+    /// has the target profile (or none) as its pixel profile.
+    /// </summary>
+    public IccProfile EmbeddedIccProfile { get; set; }
 
     /// <summary>
     /// Returns a new <see cref="TiffFrameMetadata"/> instance parsed from the given Exif profile.

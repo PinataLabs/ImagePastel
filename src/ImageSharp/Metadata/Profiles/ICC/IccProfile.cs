@@ -90,6 +90,121 @@ public sealed class IccProfile : IDeepCloneable<IccProfile>
         }
     }
 
+    /// <summary>
+    /// Gets the color space of the device data the profile describes, for example
+    /// <see cref="IccColorSpaceType.Rgb"/>, <see cref="IccColorSpaceType.Cmyk"/> or <see cref="IccColorSpaceType.Gray"/>.
+    /// This is a shortcut for <see cref="IccProfileHeader.DataColorSpace"/>.
+    /// </summary>
+    public IccColorSpaceType DataColorSpace => this.Header.DataColorSpace;
+
+    /// <summary>
+    /// Gets the profile class, for example <see cref="IccProfileClass.DisplayDevice"/> or
+    /// <see cref="IccProfileClass.OutputDevice"/>.
+    /// This is a shortcut for <see cref="IccProfileHeader.Class"/>.
+    /// </summary>
+    public IccProfileClass Class => this.Header.Class;
+
+    /// <summary>
+    /// Gets the profile description (the <c>desc</c> tag) as text, for example "Display P3".
+    /// </summary>
+    /// <remarks>
+    /// Version 2 profiles store the description as <c>textDescriptionType</c>: the ASCII text is
+    /// returned, or the Unicode text when there is no ASCII text. Version 4 profiles store it as
+    /// <c>multiLocalizedUnicodeType</c>: the US English text is returned, then any English text,
+    /// then the first text. Either type is accepted whatever the profile version.
+    /// </remarks>
+    /// <value>The description, or <see langword="null"/> when the profile has no readable description.</value>
+    public string Description
+    {
+        get
+        {
+            if (!this.TryGetTag(IccProfileTag.ProfileDescription, out IccTagDataEntry entry))
+            {
+                return null;
+            }
+
+            string text = entry switch
+            {
+                IccTextDescriptionTagDataEntry desc => string.IsNullOrEmpty(desc.Ascii) ? desc.Unicode : desc.Ascii,
+                IccMultiLocalizedUnicodeTagDataEntry mluc => SelectText(mluc.Texts),
+                IccTextTagDataEntry plain => plain.Text,
+                _ => null
+            };
+
+            text = text?.TrimEnd('\0');
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+    }
+
+    /// <summary>
+    /// Finds the tag with the given signature and returns its data as <typeparamref name="T"/>.
+    /// </summary>
+    /// <remarks>
+    /// Every tag is found by its own signature, also when the profile stores one copy of data that
+    /// several tags share (for example <c>rTRC</c>, <c>gTRC</c> and <c>bTRC</c>). When a malformed
+    /// profile has more than one tag with the signature, the first one is returned.
+    /// Pass <see cref="IccTagDataEntry"/> as <typeparamref name="T"/> to get the tag whatever its
+    /// type, for example a tone curve that may be stored as <c>curveType</c> or <c>parametricCurveType</c>.
+    /// </remarks>
+    /// <typeparam name="T">The type of tag data to get.</typeparam>
+    /// <param name="signature">The tag signature, for example <see cref="IccProfileTag.RedMatrixColumn"/>.</param>
+    /// <param name="entry">
+    /// When this method returns <see langword="true"/>, the tag data; otherwise <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if the profile has the tag and its data is a <typeparamref name="T"/>;
+    /// <see langword="false"/> if the tag is missing, could not be read, or has another type.
+    /// </returns>
+    public bool TryGetTag<T>(IccProfileTag signature, out T entry)
+        where T : IccTagDataEntry
+    {
+        foreach (IccTagDataEntry candidate in this.Entries)
+        {
+            if (candidate.TagSignature == signature)
+            {
+                entry = candidate as T;
+                return entry is not null;
+            }
+        }
+
+        entry = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether the profile is equivalent to sRGB (IEC 61966-2-1): same primaries, white point
+    /// and tone curve, within the tolerances below.
+    /// </summary>
+    /// <remarks>
+    /// The profile must be an RGB matrix/TRC profile with an XYZ connection space:
+    /// <list type="bullet">
+    /// <item><description>
+    /// Primaries and white point: each component of the <c>rXYZ</c>, <c>gXYZ</c> and <c>bXYZ</c>
+    /// colorants is within 0.002 of the sRGB colorants, which are the sRGB primaries with a D65 white
+    /// Bradford-adapted to the D50 connection space (red 0.4361, 0.2225, 0.0139; green 0.3851, 0.7169,
+    /// 0.0971; blue 0.1431, 0.0606, 0.7142). The colorants of the sRGB profiles from Little CMS, qcms
+    /// and HP differ from these by less than 0.0004.
+    /// </description></item>
+    /// <item><description>
+    /// Media white point: the <c>wtpt</c> tag, when present, is within 0.002 of D65 (0.9505, 1, 1.0891),
+    /// as version 2 profiles often store it, or of the D50 connection-space white (0.9642, 1, 0.8249).
+    /// </description></item>
+    /// <item><description>
+    /// Tone curve: for each of <c>rTRC</c>, <c>gTRC</c> and <c>bTRC</c> and every 8-bit code value,
+    /// decoding with the profile's curve and encoding with the sRGB curve gives back the code value
+    /// within less than half a code value. So converting 8-bit pixels between the profile and sRGB
+    /// changes none of them.
+    /// </description></item>
+    /// <item><description>
+    /// The profile has no <c>AToB</c>, <c>BToA</c>, <c>DToB</c> or <c>BToD</c> tags, because a color
+    /// engine would use those tables in place of the matrix and curves.
+    /// </description></item>
+    /// </list>
+    /// LUT-based profiles that describe sRGB, gray profiles and CMYK profiles are not equivalent.
+    /// </remarks>
+    /// <returns><see langword="true"/> if the profile is equivalent to sRGB; otherwise <see langword="false"/>.</returns>
+    public bool IsSrgb() => IccSrgbCheck.IsSrgb(this);
+
     /// <inheritdoc/>
     public IccProfile DeepClone() => new IccProfile(this);
 
@@ -180,6 +295,32 @@ public sealed class IccProfile : IDeepCloneable<IccProfile>
             var writer = new IccWriter();
             return writer.Write(this);
         }
+    }
+
+    private static string SelectText(IccLocalizedString[] texts)
+    {
+        if (texts is null || texts.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (IccLocalizedString text in texts)
+        {
+            if (text.Culture.Name == "en-US")
+            {
+                return text.Text;
+            }
+        }
+
+        foreach (IccLocalizedString text in texts)
+        {
+            if (text.Culture.TwoLetterISOLanguageName == "en")
+            {
+                return text.Text;
+            }
+        }
+
+        return texts[0].Text;
     }
 
     private void InitializeHeader()

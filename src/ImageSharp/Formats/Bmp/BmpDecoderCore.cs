@@ -11,6 +11,7 @@ using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Bmp;
@@ -1333,6 +1334,9 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
     {
         Span<byte> buffer = stackalloc byte[BmpInfoHeader.MaxHeaderSize];
 
+        // A V5 header's profile offset is relative to the start of the info header.
+        long infoHeaderStart = this.stream.Position;
+
         // Read the header size.
         this.stream.Read(buffer, 0, BmpInfoHeader.HeaderSizeSize);
 
@@ -1408,7 +1412,7 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         {
             // >= 108 bytes
             infoHeaderType = headerSize == BmpInfoHeader.SizeV4 ? BmpInfoHeaderType.WinVersion4 : BmpInfoHeaderType.WinVersion5;
-            this.infoHeader = BmpInfoHeader.ParseV4(buffer);
+            this.infoHeader = headerSize == BmpInfoHeader.SizeV5 ? BmpInfoHeader.ParseV5(buffer) : BmpInfoHeader.ParseV4(buffer);
         }
         else
         {
@@ -1438,6 +1442,71 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         this.bmpMetadata = this.metadata.GetBmpMetadata();
         this.bmpMetadata.InfoHeaderType = infoHeaderType;
         this.bmpMetadata.BitsPerPixel = (BmpBitsPerPixel)bitsPerPixel;
+
+        // V4 and V5 headers carry a color space. A V4 header has no profile fields, and other
+        // header sizes of 108 bytes or more are read as V4.
+        if (headerSize >= BmpInfoHeader.SizeV4 && !this.options.IgnoreMetadata)
+        {
+            if (this.infoHeader.CsType == BmpColorSpaceType.CalibratedRgb)
+            {
+                this.metadata.IccProfile = BmpCalibratedRgbProfile.Create(this.infoHeader);
+            }
+            else if (headerSize == BmpInfoHeader.SizeV5)
+            {
+                this.ReadEmbeddedIccProfile(infoHeaderStart);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the ICC profile that a V5 header embeds and sets it as the pixel profile.
+    /// <c>LCS_sRGB</c> and <c>LCS_WINDOWS_COLOR_SPACE</c> mean sRGB, so they give no pixel profile.
+    /// A linked profile names a file, and is ignored.
+    /// A profile that lies outside the stream, overlaps the info header, or is not a valid profile is dropped.
+    /// </summary>
+    /// <param name="infoHeaderStart">The stream position of the start of the info header.</param>
+    private void ReadEmbeddedIccProfile(long infoHeaderStart)
+    {
+        // The smallest and largest profile sizes IccProfile.CheckIsValid accepts.
+        const int MinProfileSize = 128;
+        const int MaxProfileSize = 50_000_000;
+
+        if (this.infoHeader.CsType != BmpColorSpaceType.ProfileEmbedded)
+        {
+            return;
+        }
+
+        int offset = this.infoHeader.ProfileData;
+        int size = this.infoHeader.ProfileSize;
+        long profileStart = infoHeaderStart + offset;
+        if (offset < BmpInfoHeader.SizeV5
+            || size is < MinProfileSize or > MaxProfileSize
+            || profileStart + size > this.stream.Length)
+        {
+            return;
+        }
+
+        long position = this.stream.Position;
+        byte[] profileBytes = new byte[size];
+        this.stream.Position = profileStart;
+        int bytesRead = 0;
+        int read;
+        while (bytesRead < size && (read = this.stream.Read(profileBytes, bytesRead, size - bytesRead)) > 0)
+        {
+            bytesRead += read;
+        }
+
+        this.stream.Position = position;
+
+        if (bytesRead == size)
+        {
+            // BMP pixels are always color, so only an RGB profile describes them.
+            var profile = new IccProfile(profileBytes);
+            if (profile.CheckIsValid() && DecoderColorProfileConversion.CanBePixelProfile(profile, gray: false))
+            {
+                this.metadata.IccProfile = profile;
+            }
+        }
     }
 
     /// <summary>

@@ -75,6 +75,71 @@ internal static class PngTestFileBuilder
     public static byte[] End() => Chunk("IEND", default);
 
     /// <summary>
+    /// Encodes a gAMA chunk: the gamma times 100000.
+    /// </summary>
+    public static byte[] Gamma(uint value)
+    {
+        byte[] data = new byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(data, value);
+        return Chunk("gAMA", data);
+    }
+
+    /// <summary>
+    /// Encodes a cHRM chunk: white x, y, then red, green and blue x, y, each times 100000.
+    /// </summary>
+    public static byte[] Chromaticities(uint whiteX, uint whiteY, uint redX, uint redY, uint greenX, uint greenY, uint blueX, uint blueY)
+    {
+        uint[] values = { whiteX, whiteY, redX, redY, greenX, greenY, blueX, blueY };
+        byte[] data = new byte[32];
+        for (int i = 0; i < values.Length; i++)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(i * 4), values[i]);
+        }
+
+        return Chunk("cHRM", data);
+    }
+
+    /// <summary>
+    /// Encodes an sRGB chunk with the perceptual rendering intent.
+    /// </summary>
+    public static byte[] StandardRgb() => Chunk("sRGB", new byte[] { 0 });
+
+    /// <summary>
+    /// Encodes a cICP chunk with the given ITU-T H.273 code points.
+    /// </summary>
+    public static byte[] Cicp(byte primaries, byte transfer, byte matrix = 0, byte fullRange = 1)
+        => Chunk("cICP", new[] { primaries, transfer, matrix, fullRange });
+
+    /// <summary>
+    /// Encodes an iCCP chunk holding the given profile bytes.
+    /// </summary>
+    public static byte[] EmbeddedProfile(byte[] profile)
+    {
+        byte[] compressed = Zlib(profile);
+        byte[] data = new byte[compressed.Length + 3];
+        data[0] = (byte)'x'; // Profile name "x", null separator, compression method 0.
+        compressed.CopyTo(data, 3);
+        return Chunk("iCCP", data);
+    }
+
+    /// <summary>
+    /// Inserts chunks into a PNG file straight after its IHDR chunk.
+    /// </summary>
+    public static byte[] InsertAfterHeader(byte[] png, params byte[][] chunks)
+    {
+        int headerEnd = Signature.Length + 12 + BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(Signature.Length));
+        using var stream = new MemoryStream();
+        stream.Write(png, 0, headerEnd);
+        foreach (byte[] chunk in chunks)
+        {
+            stream.Write(chunk);
+        }
+
+        stream.Write(png, headerEnd, png.Length - headerEnd);
+        return stream.ToArray();
+    }
+
+    /// <summary>
     /// Compresses filtered scanline data into a single zlib stream.
     /// </summary>
     public static byte[] Zlib(byte[] scanlines)
