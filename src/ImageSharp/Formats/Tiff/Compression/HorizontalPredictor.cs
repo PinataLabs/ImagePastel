@@ -44,12 +44,14 @@ internal static class HorizontalPredictor
                 UndoRgb24Bit(pixelBytes, width);
                 break;
             case TiffColorType.Rgba8888:
+            case TiffColorType.Cmyk8888:
                 UndoRgba32Bit(pixelBytes, width);
                 break;
             case TiffColorType.Rgb161616:
                 UndoRgb48Bit(pixelBytes, width, isBigEndian);
                 break;
             case TiffColorType.Rgba16161616:
+            case TiffColorType.Cmyk16161616:
                 UndoRgba64Bit(pixelBytes, width, isBigEndian);
                 break;
             case TiffColorType.Rgb323232:

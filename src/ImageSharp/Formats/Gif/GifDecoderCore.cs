@@ -14,6 +14,7 @@ using System.Threading;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -367,6 +368,12 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
                 return;
             }
 
+            if (this.buffer.AsSpan(0, GifConstants.ApplicationBlockSize).SequenceEqual(GifConstants.IccApplicationIdentificationBytes))
+            {
+                this.ReadIccProfile(stream);
+                return;
+            }
+
             int subBlockSize = stream.ReadByte();
 
             // TODO: There's also a NETSCAPE buffer extension.
@@ -387,6 +394,32 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
         }
 
         SkipBlock(stream, appLength); // Not supported by any known decoder.
+    }
+
+    /// <summary>
+    /// Reads the profile of an ICC profile application extension and sets it as the pixel profile.
+    /// A profile that is truncated or not valid is skipped, as is any profile after the first.
+    /// </summary>
+    /// <param name="stream">The <see cref="BufferedReadStream"/> positioned at the first data sub-block.</param>
+    private void ReadIccProfile(BufferedReadStream stream)
+    {
+        if (this.skipMetadata || this.metadata!.IccProfile != null)
+        {
+            SkipBlock(stream);
+            return;
+        }
+
+        byte[]? data = GifIccProfileApplicationExtension.Read(stream);
+        if (data is null)
+        {
+            return;
+        }
+
+        IccProfile profile = new(data);
+        if (profile.CheckIsValid())
+        {
+            this.metadata.IccProfile = profile;
+        }
     }
 
     /// <summary>

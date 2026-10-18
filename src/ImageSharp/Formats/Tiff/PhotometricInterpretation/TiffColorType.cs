@@ -276,5 +276,25 @@ internal enum TiffColorType
     /// <summary>
     /// The pixels are stored in YCbCr format as planar.
     /// </summary>
-    YCbCrPlanar
+    YCbCrPlanar,
+
+    /// <summary>
+    /// Separated CMYK with 8 bits for each ink.
+    /// </summary>
+    Cmyk8888,
+
+    /// <summary>
+    /// Separated CMYK with 16 bits for each ink.
+    /// </summary>
+    Cmyk16161616,
+
+    /// <summary>
+    /// Separated CMYK. Planar configuration of data. 8 bits for each ink.
+    /// </summary>
+    Cmyk8888Planar,
+
+    /// <summary>
+    /// Separated CMYK. Planar configuration of data. 16 bits for each ink.
+    /// </summary>
+    Cmyk16161616Planar
 }

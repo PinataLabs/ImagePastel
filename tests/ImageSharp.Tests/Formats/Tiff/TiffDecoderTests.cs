@@ -10,6 +10,7 @@ using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 using static SixLabors.ImageSharp.Tests.TestImages.Tiff;
 
@@ -30,6 +31,8 @@ public class TiffDecoderTests : TiffDecoderBaseTester
     [WithFile(RgbUncompressedTiled, PixelTypes.Rgba32)]
     [WithFile(MultiframeDifferentSize, PixelTypes.Rgba32)]
     [WithFile(MultiframeDifferentVariants, PixelTypes.Rgba32)]
+    [WithFile(InkSetNotCmyk, PixelTypes.Rgba32)]
+    [WithFile(CmykJpegCompressed, PixelTypes.Rgba32)]
     public void ThrowsNotSupported<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => Assert.Throws<NotSupportedException>(() => provider.GetImage(TiffDecoder));
 
@@ -82,6 +85,47 @@ public class TiffDecoderTests : TiffDecoderBaseTester
     [WithFile(Calliphora_BiColorUncompressed, PixelTypes.Rgba32)]
     public void TiffDecoder_CanDecode_Uncompressed<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => TestTiffDecoder(provider);
+
+    // The reference is Magick.NET with the profiles removed, which converts CMYK with the same formula as the JPEG decoder.
+    [Theory]
+    [WithFile(Cmyk8BitContiguous, PixelTypes.Rgba32)]
+    [WithFile(Cmyk8BitPlanar, PixelTypes.Rgba32)]
+    [WithFile(Cmyk8BitDeflatePredictor, PixelTypes.Rgba32)]
+    [WithFile(Cmyk8BitWithIccProfile, PixelTypes.Rgba32)]
+    public void TiffDecoder_CanDecode_Cmyk_8Bit<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel> => TestTiffDecoder(provider, MagickReferenceDecoder.CmykToSrgbInstance, useExactComparer: false);
+
+    [Theory]
+    [WithFile(Cmyk16BitContiguousLittleEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
+    [WithFile(Cmyk16BitContiguousBigEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
+    [WithFile(Cmyk16BitPlanarLittleEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
+    [WithFile(Cmyk16BitPlanarBigEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
+    [WithFile(Cmyk16BitDeflatePredictorBigEndian, PixelTypes.Rgba64)]
+    public void TiffDecoder_CanDecode_Cmyk_16Bit<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel> => TestTiffDecoder(provider, MagickReferenceDecoder.CmykToSrgbInstance, useExactComparer: false);
+
+    [Fact]
+    public void TiffDecoder_Cmyk_ExposesEmbeddedIccProfile()
+    {
+        byte[] expected = TestFile.Create(CmykTestIccProfile).Bytes;
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.Create(Cmyk8BitWithIccProfile).Bytes);
+
+        Assert.Equal(expected, image.Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(expected, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData(Cmyk8BitContiguous, 32)]
+    [InlineData(Cmyk16BitPlanarBigEndian, 64)]
+    public void Identify_Cmyk_ReportsBitsPerPixel(string imagePath, int expectedPixelSize)
+    {
+        IImageInfo info = Image.Identify(TestFile.Create(imagePath).Bytes);
+
+        Assert.Equal(expectedPixelSize, info.PixelType?.BitsPerPixel);
+        Assert.Equal(48, info.Width);
+        Assert.Equal(32, info.Height);
+    }
 
     [Theory]
     [WithFile(FlowerRgb888Planar6Strips, PixelTypes.Rgba32)]
