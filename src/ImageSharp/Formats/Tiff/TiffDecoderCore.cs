@@ -238,7 +238,7 @@ internal class TiffDecoderCore : IImageDecoderInternals
         if (!this.ignoreMetadata)
         {
             var rootFrameMetadata = new ImageFrameMetadata { ExifProfile = rootFrameExifProfile };
-            TiffDecoderMetadataCreator.SetFrameProfiles(rootFrameMetadata);
+            TiffDecoderMetadataCreator.SetFrameProfiles(rootFrameMetadata, rootMetadata.PhotometricInterpretation);
             TiffDecoderMetadataCreator.SetImageProfiles(metadata, rootFrameMetadata);
         }
 

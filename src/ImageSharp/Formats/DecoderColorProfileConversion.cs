@@ -159,6 +159,18 @@ internal static class DecoderColorProfileConversion
     }
 
     /// <summary>
+    /// Gets whether an embedded profile can be the pixel profile of the decoded pixels: an RGB
+    /// profile for a color image, a gray profile for a grayscale one. Any other profile (CMYK, or
+    /// gray on color) describes samples the pixels do not hold, so a decoder does not make it the
+    /// pixel profile.
+    /// </summary>
+    /// <param name="profile">The embedded profile.</param>
+    /// <param name="gray">Whether the file holds a grayscale image.</param>
+    /// <returns><see langword="true"/> when the profile's data color space matches the image.</returns>
+    public static bool CanBePixelProfile(IccProfile profile, bool gray)
+        => profile.DataColorSpace == (gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb);
+
+    /// <summary>
     /// Gets the pixel profile of a converted image: a copy of the target, or <see langword="null"/> for sRGB.
     /// </summary>
     /// <param name="options">The decoder options.</param>

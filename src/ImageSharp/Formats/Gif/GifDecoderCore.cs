@@ -415,8 +415,9 @@ internal sealed class GifDecoderCore : IImageDecoderInternals
             return;
         }
 
+        // GIF pixels are always color, so only an RGB profile describes them.
         IccProfile profile = new(data);
-        if (profile.CheckIsValid())
+        if (profile.CheckIsValid() && DecoderColorProfileConversion.CanBePixelProfile(profile, gray: false))
         {
             this.metadata.IccProfile = profile;
         }

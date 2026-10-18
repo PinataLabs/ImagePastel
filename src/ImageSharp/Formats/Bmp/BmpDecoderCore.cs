@@ -1500,8 +1500,9 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
 
         if (bytesRead == size)
         {
+            // BMP pixels are always color, so only an RGB profile describes them.
             var profile = new IccProfile(profileBytes);
-            if (profile.CheckIsValid())
+            if (profile.CheckIsValid() && DecoderColorProfileConversion.CanBePixelProfile(profile, gray: false))
             {
                 this.metadata.IccProfile = profile;
             }
