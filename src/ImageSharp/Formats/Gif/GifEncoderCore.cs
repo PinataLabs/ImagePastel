@@ -10,6 +10,7 @@ using System.Threading;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
@@ -124,7 +125,7 @@ internal sealed class GifEncoderCore : IImageEncoderInternals
 
         // Write application extensions.
         XmpProfile xmpProfile = image.Metadata.XmpProfile ?? image.Frames.RootFrame.Metadata.XmpProfile;
-        this.WriteApplicationExtensions(stream, image.Frames.Count, gifMetadata.RepeatCount, xmpProfile);
+        this.WriteApplicationExtensions(stream, image.Frames.Count, gifMetadata.RepeatCount, image.Metadata.IccProfile, xmpProfile);
 
         if (useGlobalTable)
         {
@@ -326,14 +327,22 @@ internal sealed class GifEncoderCore : IImageEncoderInternals
     /// <param name="stream">The stream to write to.</param>
     /// <param name="frameCount">The frame count fo this image.</param>
     /// <param name="repeatCount">The animated image repeat count.</param>
+    /// <param name="iccProfile">The pixel profile. Null if the image has none.</param>
     /// <param name="xmpProfile">The XMP metadata profile. Null if profile is not to be written.</param>
-    private void WriteApplicationExtensions(Stream stream, int frameCount, ushort repeatCount, XmpProfile xmpProfile)
+    private void WriteApplicationExtensions(Stream stream, int frameCount, ushort repeatCount, IccProfile iccProfile, XmpProfile xmpProfile)
     {
         // Application Extension: Loop repeat count.
         if (frameCount > 1 && repeatCount != 1)
         {
             var loopingExtension = new GifNetscapeLoopingApplicationExtension(repeatCount);
             this.WriteExtension(loopingExtension, stream);
+        }
+
+        // Application Extension: ICC Profile. GIF colors are RGB, so only a valid RGB profile describes them.
+        if (iccProfile != null && iccProfile.CheckIsValid() && iccProfile.Header.DataColorSpace == IccColorSpaceType.Rgb)
+        {
+            var iccExtension = new GifIccProfileApplicationExtension(iccProfile.ToByteArray());
+            this.WriteExtension(iccExtension, stream);
         }
 
         // Application Extension: XMP Profile.
