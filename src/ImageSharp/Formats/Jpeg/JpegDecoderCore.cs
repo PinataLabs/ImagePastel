@@ -8,6 +8,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
@@ -43,6 +44,11 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     /// The buffer used to read markers from the stream.
     /// </summary>
     private readonly byte[] markerBuffer = new byte[2];
+
+    /// <summary>
+    /// The options for converting from the embedded color profile.
+    /// </summary>
+    private readonly IColorProfileDecoderOptions colorProfileOptions;
 
     /// <summary>
     /// Whether the image has an EXIF marker.
@@ -118,6 +124,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     {
         this.Configuration = configuration ?? Configuration.Default;
         this.IgnoreMetadata = options.IgnoreMetadata;
+        this.colorProfileOptions = options;
     }
 
     /// <inheritdoc />
@@ -154,6 +161,9 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
 
     /// <inheritdoc/>
     public Block8x8F[] QuantizationTables { get; private set; }
+
+    /// <inheritdoc/>
+    public IccColorTransform CmykTransform { get; private set; }
 
     /// <summary>
     /// Finds the next file marker within the byte stream, skipping any bytes before it one at a time.
@@ -643,18 +653,56 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     }
 
     /// <summary>
-    /// Initializes the ICC profile.
+    /// Initializes the ICC profile. A valid embedded profile is always exposed as
+    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>. It is also the pixel profile, unless it is a
+    /// CMYK profile: the decoded pixels are RGB, so a CMYK profile does not describe them. When the
+    /// CMYK samples were converted through it, the pixel profile is the conversion's target.
     /// </summary>
     private void InitIccProfile()
     {
-        if (this.hasIcc)
+        if (!this.hasIcc)
         {
-            var profile = new IccProfile(this.iccData);
-            if (profile.CheckIsValid())
-            {
-                this.Metadata.IccProfile = profile;
-            }
+            return;
         }
+
+        var profile = new IccProfile(this.iccData);
+        if (!profile.CheckIsValid())
+        {
+            return;
+        }
+
+        this.Metadata.GetJpegMetadata().EmbeddedIccProfile = profile;
+        if (this.CmykTransform is not null)
+        {
+            this.Metadata.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
+        }
+        else if (profile.DataColorSpace != IccColorSpaceType.Cmyk)
+        {
+            this.Metadata.IccProfile = profile;
+        }
+    }
+
+    /// <summary>
+    /// Builds the transform for CMYK and YCCK samples from the embedded profile, when the options ask
+    /// for a conversion and the profile is a CMYK profile the engine can use. The profile must come
+    /// before the frame header, as it does in the files Adobe and libjpeg write.
+    /// </summary>
+    /// <returns>The transform, or <see langword="null"/> to keep the CMYK-to-RGB formula.</returns>
+    private IccColorTransform CreateCmykTransform()
+    {
+        if (this.ColorSpace is not (JpegColorSpace.Cmyk or JpegColorSpace.Ycck) || !this.hasIcc)
+        {
+            return null;
+        }
+
+        var profile = new IccProfile(this.iccData);
+        if (!profile.CheckIsValid()
+            || !DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, profile, out IccColorTransform transform))
+        {
+            return null;
+        }
+
+        return transform;
     }
 
     /// <summary>
@@ -1242,6 +1290,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         if (!metadataOnly)
         {
             this.Frame.Init(maxH, maxV);
+            this.CmykTransform = this.CreateCmykTransform();
             this.scanDecoder.InjectFrameData(this.Frame, this);
         }
     }

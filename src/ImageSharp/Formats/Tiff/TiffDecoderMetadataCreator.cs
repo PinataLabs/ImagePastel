@@ -43,7 +43,10 @@ internal static class TiffDecoderMetadataCreator
     }
 
     /// <summary>
-    /// Reads the IPTC, XMP and ICC profiles of a frame from the frame's EXIF profile.
+    /// Reads the IPTC, XMP and ICC profiles of a frame from the frame's EXIF profile. The embedded ICC
+    /// profile goes to <see cref="TiffFrameMetadata.EmbeddedIccProfile"/>, and is also the frame's
+    /// pixel profile unless it is a CMYK profile: the decoded pixels are RGB, so a CMYK profile does
+    /// not describe them (it is then removed from the frame's EXIF profile too).
     /// </summary>
     /// <param name="frameMetaData">The frame metadata. Its EXIF profile must be set.</param>
     public static void SetFrameProfiles(ImageFrameMetadata frameMetaData)
@@ -62,7 +65,16 @@ internal static class TiffDecoderMetadataCreator
         IExifValue<byte[]> iccProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.IccProfile);
         if (iccProfileBytes != null)
         {
-            frameMetaData.IccProfile = new IccProfile(iccProfileBytes.Value);
+            var profile = new IccProfile(iccProfileBytes.Value);
+            frameMetaData.GetTiffMetadata().EmbeddedIccProfile = profile;
+            if (IsCmykProfile(iccProfileBytes.Value, profile))
+            {
+                frameMetaData.ExifProfile.RemoveValue(ExifTag.IccProfile);
+            }
+            else
+            {
+                frameMetaData.IccProfile = profile;
+            }
         }
     }
 
@@ -77,6 +89,7 @@ internal static class TiffDecoderMetadataCreator
         // where other encoders look for them. The instances are shared, so an edit through either one is kept.
         imageMetaData.IccProfile = rootFrameMetaData.IccProfile;
         imageMetaData.IptcProfile = rootFrameMetaData.IptcProfile;
+        imageMetaData.GetTiffMetadata().EmbeddedIccProfile = rootFrameMetaData.GetTiffMetadata().EmbeddedIccProfile;
     }
 
     public static ImageMetadata Create(ByteOrder byteOrder, bool isBigTiff, ExifProfile exifProfile)
@@ -106,6 +119,10 @@ internal static class TiffDecoderMetadataCreator
             imageMetaData.VerticalResolution = verticalResolution.Value;
         }
     }
+
+    // Profiles are kept without validation, so a header too short to read is not a CMYK profile.
+    private static bool IsCmykProfile(byte[] bytes, IccProfile profile)
+        => bytes.Length >= 128 && profile.DataColorSpace == IccColorSpaceType.Cmyk;
 
     private static bool TryGetIptc(IReadOnlyList<IExifValue> exifValues, out byte[] iptcBytes)
     {

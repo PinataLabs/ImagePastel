@@ -57,5 +57,8 @@ internal abstract class SpectralConverter
     /// <param name="frame">The jpeg frame with the color space to convert to.</param>
     /// <param name="jpegData">The raw JPEG data.</param>
     /// <returns>The color converter.</returns>
-    protected virtual JpegColorConverterBase GetColorConverter(JpegFrame frame, IRawJpegData jpegData) => JpegColorConverterBase.GetConverter(jpegData.ColorSpace, frame.Precision);
+    protected virtual JpegColorConverterBase GetColorConverter(JpegFrame frame, IRawJpegData jpegData)
+        => jpegData.CmykTransform is null
+            ? JpegColorConverterBase.GetConverter(jpegData.ColorSpace, frame.Precision)
+            : new JpegColorConverterBase.FromCmykIcc(jpegData.ColorSpace, frame.Precision, jpegData.CmykTransform);
 }

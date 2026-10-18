@@ -231,7 +231,8 @@ public partial class JpegDecoderTests
                         Assert.Null(exifProfile);
                     }
 
-                    IccProfile iccProfile = imageInfo.Metadata.IccProfile;
+                    // The embedded profile: a CMYK one is not the pixel profile, but the file still has it.
+                    IccProfile iccProfile = imageInfo.Metadata.GetJpegMetadata().EmbeddedIccProfile;
 
                     if (iccProfilePresent)
                     {

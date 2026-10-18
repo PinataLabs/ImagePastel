@@ -111,8 +111,11 @@ public class TiffDecoderTests : TiffDecoderBaseTester
 
         using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.Create(Cmyk8BitWithIccProfile).Bytes);
 
-        Assert.Equal(expected, image.Metadata.IccProfile?.ToByteArray());
-        Assert.Equal(expected, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
+        // The CMYK profile does not describe the formula RGB pixels, so it is not the pixel profile.
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Null(image.Frames.RootFrame.Metadata.IccProfile);
+        Assert.Equal(expected, image.Metadata.GetTiffMetadata().EmbeddedIccProfile?.ToByteArray());
+        Assert.Equal(expected, image.Frames.RootFrame.Metadata.GetTiffMetadata().EmbeddedIccProfile?.ToByteArray());
     }
 
     [Theory]

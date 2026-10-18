@@ -4,6 +4,7 @@
 using System;
 using System.Buffers;
 using System.Numerics;
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -24,6 +25,8 @@ internal class CmykPlanarTiffColor<TPixel> : TiffBasePlanarColorDecoder<TPixel>
 
     private readonly bool isBigEndian;
 
+    private readonly IccColorTransform transform;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CmykPlanarTiffColor{TPixel}"/> class.
     /// </summary>
@@ -31,12 +34,17 @@ internal class CmykPlanarTiffColor<TPixel> : TiffBasePlanarColorDecoder<TPixel>
     /// <param name="memoryAllocator">The memory allocator.</param>
     /// <param name="bitsPerSample">The bits per sample: 8 or 16.</param>
     /// <param name="isBigEndian">Whether 16-bit samples are big endian.</param>
-    public CmykPlanarTiffColor(Configuration configuration, MemoryAllocator memoryAllocator, int bitsPerSample, bool isBigEndian)
+    /// <param name="transform">
+    /// The transform from the embedded CMYK profile, or <see langword="null"/> to convert with the
+    /// CMYK-to-RGB formula.
+    /// </param>
+    public CmykPlanarTiffColor(Configuration configuration, MemoryAllocator memoryAllocator, int bitsPerSample, bool isBigEndian, IccColorTransform transform)
     {
         this.configuration = configuration;
         this.memoryAllocator = memoryAllocator;
         this.bitsPerSample = bitsPerSample;
         this.isBigEndian = isBigEndian;
+        this.transform = transform;
     }
 
     /// <inheritdoc/>
@@ -61,7 +69,14 @@ internal class CmykPlanarTiffColor<TPixel> : TiffBasePlanarColorDecoder<TPixel>
                 this.bitsPerSample,
                 this.isBigEndian,
                 row);
-            TiffCmykFormula.ToRgb(row);
+            if (this.transform is null)
+            {
+                TiffCmykFormula.ToRgb(row);
+            }
+            else
+            {
+                IccPixelConversion.ConvertRow(this.transform, row);
+            }
 
             Span<TPixel> pixelRow = pixels.DangerousGetRowSpan(y).Slice(left, width);
             PixelOperations<TPixel>.Instance.FromVector4Destructive(this.configuration, row, pixelRow, PixelConversionModifiers.Scale);

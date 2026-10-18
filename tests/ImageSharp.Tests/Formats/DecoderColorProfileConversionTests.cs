@@ -173,20 +173,6 @@ public class DecoderColorProfileConversionTests
         Assert.Null(image.Metadata.IccProfile);
     }
 
-    [Fact]
-    public void Decode_Jpeg_CmykProfile_LeavesPixelsAndProfileAsTheyAre()
-    {
-        // ISO Coated v2 (ECI): a CMYK profile, which the decoded RGB pixels no longer match.
-        byte[] file = File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk));
-        using Image<Rgb24> expected = Decode<Rgb24>("jpeg", file);
-
-        using Image<Rgb24> image = Decode<Rgb24>("jpeg", file, ColorProfileConversion.ToSrgb);
-
-        AssertSamePixels(expected, image);
-        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.IccProfile.DataColorSpace);
-        Assert.Equal(expected.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
-    }
-
     [Theory]
     [MemberData(nameof(AllFormats))]
     public void Decode_CorruptProfile_LeavesPixelsAndProfileAsTheyAre(string format)
@@ -251,7 +237,7 @@ public class DecoderColorProfileConversionTests
     [MemberData(nameof(LosslessFormats))]
     public void Decode_UnsupportedTargetProfile_ThrowsNotSupportedException(string format)
     {
-        IccProfile cmyk = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk)).Metadata.IccProfile;
+        IccProfile cmyk = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk)).Metadata.GetJpegMetadata().EmbeddedIccProfile;
         byte[] file = CreateFileWithProfile(format, TestImages.Icc.CompactAdobeRgbV2);
 
         Assert.Throws<NotSupportedException>(() => Decode<Rgb24>(format, file, ColorProfileConversion.ToTargetProfile, cmyk));

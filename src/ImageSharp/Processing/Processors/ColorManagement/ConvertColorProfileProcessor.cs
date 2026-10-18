@@ -32,11 +32,12 @@ namespace SixLabors.ImageSharp.Processing.Processors.ColorManagement;
 /// <see cref="System.NotSupportedException"/> when either profile is CMYK.
 /// </para>
 /// <para>
-/// A CMYK JPEG or TIFF decoded without a color profile conversion has RGB pixels from a simple
-/// CMYK formula, but keeps the file's CMYK profile as its pixel profile. Before converting such an
-/// image, decode it with the decoder's <c>ColorProfileConversion</c> option instead, or remove the
-/// profile; otherwise <see cref="Rgba32"/>, <see cref="Rgba64"/> and <see cref="RgbaVector"/> pixels
-/// would be read as CMYK.
+/// Decoders never give an image a CMYK pixel profile. A CMYK JPEG or TIFF decoded without a color
+/// profile conversion has RGB pixels from a simple CMYK formula and no pixel profile, so this
+/// processor treats them as sRGB; the file's CMYK profile stays reachable as the embedded ICC
+/// profile (<c>JpegMetadata.EmbeddedIccProfile</c>, <c>TiffMetadata.EmbeddedIccProfile</c>). To get
+/// the colors that profile defines, decode with the decoder's <c>ColorProfileConversion</c> option,
+/// which converts the CMYK samples themselves.
 /// </para>
 /// </remarks>
 public sealed class ConvertColorProfileProcessor : IImageProcessor

@@ -15,7 +15,7 @@ namespace SixLabors.ImageSharp.Formats;
 /// <summary>
 /// Runs the <see cref="ColorProfileConversion"/> decoder option. A decoder calls
 /// <see cref="Apply{TPixel}"/> on the image it is about to return; a decoder that converts samples
-/// itself before they become pixels (CMYK) uses <see cref="TryCreateTransform"/> and
+/// itself before they become pixels (CMYK) uses <see cref="TryCreateCmykTransform"/> and
 /// <see cref="GetConvertedProfile"/>.
 /// </summary>
 internal static class DecoderColorProfileConversion
@@ -127,6 +127,35 @@ internal static class DecoderColorProfileConversion
 
         CheckTarget(transform);
         return true;
+    }
+
+    /// <summary>
+    /// Builds the transform from the embedded profile of CMYK samples to the target the options ask
+    /// for. A decoder of CMYK samples uses it to replace the CMYK-to-RGB formula; afterwards the
+    /// image's pixel profile is <see cref="GetConvertedProfile"/>.
+    /// </summary>
+    /// <param name="options">The decoder options.</param>
+    /// <param name="source">The embedded profile, or <see langword="null"/>.</param>
+    /// <param name="transform">
+    /// The transform, from ink amounts (0 = no ink, 1 = full ink) to the target's colors, or
+    /// <see langword="null"/> when this returns <see langword="false"/>.
+    /// </param>
+    /// <returns>
+    /// <see langword="false"/> when the formula stays: as for <see cref="TryCreateTransform"/>, or
+    /// when the source profile is not a CMYK profile.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">The target profile is missing.</exception>
+    /// <exception cref="InvalidImageContentException">The target profile is corrupt.</exception>
+    /// <exception cref="NotSupportedException">The engine does not support the target profile.</exception>
+    public static bool TryCreateCmykTransform(IColorProfileDecoderOptions options, IccProfile source, out IccColorTransform transform)
+    {
+        if (TryCreateTransform(options, source, out transform) && transform.SourceColorSpace == IccColorSpaceType.Cmyk)
+        {
+            return true;
+        }
+
+        transform = null;
+        return false;
     }
 
     /// <summary>

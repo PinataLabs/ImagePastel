@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using SixLabors.ImageSharp.ColorManagement;
 
 namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
 
@@ -24,4 +25,11 @@ internal interface IRawJpegData : IDisposable
     /// Gets the quantization tables, in natural order.
     /// </summary>
     Block8x8F[] QuantizationTables { get; }
+
+    /// <summary>
+    /// Gets the transform from the embedded CMYK profile for <see cref="JpegColorSpace.Cmyk"/> and
+    /// <see cref="JpegColorSpace.Ycck"/> samples, or <see langword="null"/> to convert them with the
+    /// CMYK-to-RGB formula.
+    /// </summary>
+    IccColorTransform CmykTransform { get; }
 }
