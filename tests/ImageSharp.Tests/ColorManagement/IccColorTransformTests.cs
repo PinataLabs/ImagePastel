@@ -19,6 +19,11 @@ public class IccColorTransformTests
     // In 8-bit code values. The transform runs in float and does not round.
     private const float Tolerance = 0.02F;
 
+    // In 8-bit code values, or percent of ink for CMYK. Little CMS rounds the inputs of tabulated
+    // curves to 16 bits and interpolates 16-bit tables in fixed point; the engine works in float.
+    // Near black, where the test profiles' curves are steep, that differs by up to about 0.15.
+    private const float LutTolerance = 0.2F;
+
     [Fact]
     public void Transform_IsReusableForManyRows()
     {
@@ -61,6 +66,89 @@ public class IccColorTransformTests
         Assert.True(colors[0].X < 0);
     }
 
+    [Theory]
+    [InlineData(TestImages.Icc.LittleCmsRgbLut8V2, null)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLut8V2)]
+    [InlineData(TestImages.Icc.LittleCmsRgbLut16V2, null)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLut16V2)]
+    [InlineData(TestImages.Icc.LittleCmsRgbLutAToBV4, null)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbLutAToBV4)]
+    [InlineData(TestImages.Icc.LittleCmsGrayLutV4, null)]
+    [InlineData(null, TestImages.Icc.LittleCmsGrayLutV4)]
+    [InlineData(TestImages.Webp.Lossy.WithIccp, TestImages.Icc.LittleCmsSrgbV2)]
+    public void Transform_LutBasedProfile_MatchesLittleCms(string sourceProfile, string targetProfile)
+    {
+        LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, targetProfile);
+        IccColorTransform transform = new(Load(sourceProfile), Load(targetProfile));
+
+        for (int row = 0; row < reference.Count; row++)
+        {
+            Vector4[] colors = [reference.ScaledInput(row, 0.25F)];
+
+            transform.Transform(colors);
+
+            AssertClose(row, reference.ScaledOutput(row, 0.25F), Clamp(colors[0]), LutTolerance / 255);
+        }
+    }
+
+    [Theory]
+    [InlineData(TestImages.Icc.LittleCmsFakeCmykV4)]
+    [InlineData(TestImages.Icc.TiffCmykTestProfile)]
+    public void Transform_CmykSourceToSrgb_MatchesLittleCms(string sourceProfile)
+    {
+        LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, null);
+        IccColorTransform transform = new(Load(sourceProfile), null);
+
+        for (int row = 0; row < reference.Count; row++)
+        {
+            // C, M, Y and K in X, Y, Z and W.
+            Vector4[] colors = [reference.ScaledInput(row, 0)];
+
+            transform.Transform(colors);
+
+            // CMYK has no alpha, so the result is opaque.
+            AssertClose(row, reference.ScaledOutput(row, 1), Clamp(colors[0]), LutTolerance / 255);
+        }
+    }
+
+    [Fact]
+    public void Transform_SrgbToCmykTarget_MatchesLittleCms()
+    {
+        LittleCmsReference reference = LittleCmsReferences.Get(null, TestImages.Icc.LittleCmsFakeCmykV4);
+        IccColorTransform transform = new(null, Load(TestImages.Icc.LittleCmsFakeCmykV4));
+
+        for (int row = 0; row < reference.Count; row++)
+        {
+            Vector4[] colors = [reference.ScaledInput(row, 0.25F)];
+
+            transform.Transform(colors);
+
+            // C, M, Y and K in X, Y, Z and W, in percent in the reference.
+            AssertClose(row, reference.ScaledOutput(row, 0), colors[0], LutTolerance / 100);
+        }
+    }
+
+    [Fact]
+    public void Constructor_LutWithWrongChannelCount_ThrowsInvalidImageContentException()
+    {
+        // An RGB table (three inputs) in a profile that says it is CMYK.
+        IccProfile rgb = Load(TestImages.Icc.LittleCmsRgbLut16V2);
+        IccProfileHeader header = rgb.Header;
+        header.DataColorSpace = IccColorSpaceType.Cmyk;
+        IccProfile profile = new(new IccProfile(header, rgb.Entries).ToByteArray());
+
+        Assert.Throws<InvalidImageContentException>(() => new IccColorTransform(profile, null));
+    }
+
+    [Fact]
+    public void Constructor_CmykProfileWithoutTable_ThrowsInvalidImageContentException()
+    {
+        IccProfile cmyk = Load(TestImages.Icc.TiffCmykTestProfile);
+        IccProfile profile = new(cmyk.Header, Array.FindAll(cmyk.Entries, e => e.TagSignature != IccProfileTag.AToB0));
+
+        Assert.Throws<InvalidImageContentException>(() => new IccColorTransform(profile, null));
+    }
+
     [Fact]
     public void Constructor_NullOptions_Throws()
         => Assert.Throws<ArgumentNullException>(() => new IccColorTransform(null, null, null));
@@ -68,6 +156,19 @@ public class IccColorTransformTests
     [Fact]
     public void Constructor_CorruptTarget_ThrowsInvalidImageContentException()
         => Assert.Throws<InvalidImageContentException>(() => new IccColorTransform(null, new IccProfile(new byte[16])));
+
+    private static IccProfile Load(string file) => file is null ? null : ConvertColorProfileProcessorTests.LoadProfile(file);
+
+    // transicc -s clips the color channels to the gamut.
+    private static Vector4 Clamp(Vector4 v) => new(Math.Clamp(v.X, 0, 1), Math.Clamp(v.Y, 0, 1), Math.Clamp(v.Z, 0, 1), v.W);
+
+    private static void AssertClose(int row, Vector4 expected, Vector4 actual, float tolerance)
+    {
+        Vector4 difference = Vector4.Abs(expected - actual);
+        Assert.True(
+            difference.X <= tolerance && difference.Y <= tolerance && difference.Z <= tolerance && difference.W <= tolerance,
+            $"Row {row}: expected {expected}, got {actual}.");
+    }
 
     private static Vector4 ToScaled((float R, float G, float B) code, float alpha) => new(code.R / 255, code.G / 255, code.B / 255, alpha);
 

@@ -18,8 +18,11 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// </remarks>
 internal sealed class IccGrayTrcModel : IccProfileModel
 {
-    // ITU-R BT.709 luma coefficients, as ColorNumerics.GetBT709Luminance uses them.
-    private static readonly IccMatrix Luma = new(
+    /// <summary>
+    /// The gray value of RGB: the ITU-R BT.709 luma coefficients, as ColorNumerics.GetBT709Luminance
+    /// uses them, in all three rows.
+    /// </summary>
+    internal static readonly IccMatrix Luma = new(
         (0.2126, 0.7152, 0.0722),
         (0.2126, 0.7152, 0.0722),
         (0.2126, 0.7152, 0.0722));

@@ -78,13 +78,7 @@ internal sealed partial class IccDataReader
     public IccClut ReadClut8(int inChannelCount, int outChannelCount, byte[] gridPointCount)
     {
         int start = this.currentIndex;
-        int length = 0;
-        for (int i = 0; i < inChannelCount; i++)
-        {
-            length += (int)Math.Pow(gridPointCount[i], inChannelCount);
-        }
-
-        length /= inChannelCount;
+        int length = this.GetClutLength(inChannelCount, outChannelCount, gridPointCount, 1);
 
         const float Max = byte.MaxValue;
 
@@ -112,13 +106,7 @@ internal sealed partial class IccDataReader
     public IccClut ReadClut16(int inChannelCount, int outChannelCount, byte[] gridPointCount)
     {
         int start = this.currentIndex;
-        int length = 0;
-        for (int i = 0; i < inChannelCount; i++)
-        {
-            length += (int)Math.Pow(gridPointCount[i], inChannelCount);
-        }
-
-        length /= inChannelCount;
+        int length = this.GetClutLength(inChannelCount, outChannelCount, gridPointCount, 2);
 
         const float Max = ushort.MaxValue;
 
@@ -146,13 +134,7 @@ internal sealed partial class IccDataReader
     public IccClut ReadClutF32(int inChCount, int outChCount, byte[] gridPointCount)
     {
         int start = this.currentIndex;
-        int length = 0;
-        for (int i = 0; i < inChCount; i++)
-        {
-            length += (int)Math.Pow(gridPointCount[i], inChCount);
-        }
-
-        length /= inChCount;
+        int length = this.GetClutLength(inChCount, outChCount, gridPointCount, 4);
 
         var values = new float[length][];
         for (int i = 0; i < length; i++)
@@ -166,5 +148,25 @@ internal sealed partial class IccDataReader
 
         this.currentIndex = start + (length * outChCount * 4);
         return new IccClut(values, gridPointCount, IccClutDataType.Float);
+    }
+
+    /// <summary>
+    /// Gets the number of grid points of a CLUT, the product of the grid-point counts of its
+    /// dimensions, and checks that its values fit in the remaining data.
+    /// </summary>
+    /// <param name="inChannelCount">Input channel count</param>
+    /// <param name="outChannelCount">Output channel count</param>
+    /// <param name="gridPointCount">Grid point count for each CLUT channel</param>
+    /// <param name="bytesPerValue">The size of one value in bytes</param>
+    /// <returns>The number of grid points</returns>
+    private int GetClutLength(int inChannelCount, int outChannelCount, byte[] gridPointCount, int bytesPerValue)
+    {
+        long length = IccClut.GetGridPointTotal(gridPointCount, inChannelCount);
+        if (length * outChannelCount * bytesPerValue > this.data.Length - this.currentIndex)
+        {
+            throw new InvalidIccProfileException($"The CLUT of {length} grid points does not fit in the profile data");
+        }
+
+        return (int)length;
     }
 }
