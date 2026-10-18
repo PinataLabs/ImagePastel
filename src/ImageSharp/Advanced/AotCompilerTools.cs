@@ -20,6 +20,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors;
 using SixLabors.ImageSharp.Processing.Processors.Binarization;
+using SixLabors.ImageSharp.Processing.Processors.ColorManagement;
 using SixLabors.ImageSharp.Processing.Processors.Convolution;
 using SixLabors.ImageSharp.Processing.Processors.Dithering;
 using SixLabors.ImageSharp.Processing.Processors.Drawing;
@@ -322,6 +323,7 @@ internal static class AotCompilerTools
         AotCompileImageProcessor<TPixel, AchromatopsiaProcessor>();
         AotCompileImageProcessor<TPixel, BlackWhiteProcessor>();
         AotCompileImageProcessor<TPixel, BrightnessProcessor>();
+        AotCompileImageProcessor<TPixel, ConvertColorProfileProcessor>();
         AotCompileImageProcessor<TPixel, ContrastProcessor>();
         AotCompileImageProcessor<TPixel, DeuteranomalyProcessor>();
         AotCompileImageProcessor<TPixel, DeuteranopiaProcessor>();

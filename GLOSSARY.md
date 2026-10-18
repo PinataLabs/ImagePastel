@@ -26,6 +26,20 @@ _Avoid_: output profile, image profile
 A per-pixel channel of a JPEG XL image beyond its colour channels, such as alpha, black, a spot colour or depth. The image header describes each one by type.
 _Avoid_: auxiliary channel, additional plane
 
+### Colour management
+
+**Profile connection space** (PCS):
+The device-independent colour space through which an ICC conversion passes: the source profile maps device values to it and the target profile maps it to device values. It is CIE XYZ or CIE Lab, both relative to a D50 white.
+_Avoid_: working space, intermediate space
+
+**Rendering intent**:
+The rule an ICC conversion follows for colours that the target cannot show: perceptual, relative colorimetric, saturation or absolute colorimetric. A profile can hold a different table for each one.
+_Avoid_: conversion mode, gamut mapping mode
+
+**Matrix/TRC profile**:
+An RGB ICC profile that describes its colours with three tone curves (TRCs) and a 3x3 matrix of colorants, instead of lookup tables. Gray profiles are the one-channel case: a single tone curve.
+_Avoid_: shaper profile, simple profile
+
 ### JPEG XL testing
 
 **Conformance vector**:
