@@ -334,26 +334,32 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // The pixel-profile rules of issue #105, with #111's CMYK exception: the embedded ICC is always the
     // original profile, and it is the pixel profile only where the pixels are the coded samples. XYB
     // images decode to sRGB, and CMYK images are converted naively to RGB.
-    private void SetIccProfile(byte[] icc)
+    private void SetIccProfile(IccProfile original)
     {
-        IccProfile original = new(icc);
-        bool cmykProfile = original.CheckIsValid() && original.Header.DataColorSpace == IccColorSpaceType.Cmyk;
-
-        // libjxl's ColorEncoding::IsCMYK, with the Black channel the spec requires of such an image
-        // (lib/jxl/cms/color_encoding_cms.h). Without one, the samples are the three colour channels.
-        this.isCmyk = cmykProfile && this.metadata.M.Find(JxlExtraChannelType.Black) >= 0;
         if (this.ignoreMetadata)
         {
             return;
         }
 
         this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = original;
-        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && !cmykProfile)
+        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && !IsCmykProfile(original))
         {
             // Its own copy, so the two profiles share no bytes.
             this.imageMetadata.IccProfile = original.DeepClone();
         }
     }
+
+    // libjxl's ColorEncoding::IsCMYK: the profile's data colour space is CMYK.
+    private static bool IsCmykProfile(IccProfile profile)
+        => profile.CheckIsValid() && profile.Header.DataColorSpace == IccColorSpaceType.Cmyk;
+
+    // Whether the samples are CMYK, which the image sink converts to RGB. libjxl's IsCMYK looks at the
+    // profile alone, and its CMS takes K from the first extra channel. This decoder also requires the
+    // Black channel the spec gives such an image (lib/jxl/cms/color_encoding_cms.h), and takes K from
+    // it wherever it is. libjxl has no check that rejects a CMYK profile without one, so neither has
+    // this decoder: the samples are then the three colour channels.
+    private static bool IsCmyk(JxlImageMetadata metadata, IccProfile profile)
+        => IsCmykProfile(profile) && metadata.Find(JxlExtraChannelType.Black) >= 0;
 
     // The rest of #105's rules: sRGB, and grey with the sRGB curve, get no pixel profile; every other
     // colour encoding gets a built one. libjxl builds a profile for every colour encoding as it reads the header and
@@ -396,7 +402,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         const int signatureLength = 2;
         JxlCodecMetadata codecMetadata = new();
-        this.isCmyk = false;
         JxlBitReader reader = new(data, signatureLength, data.Length - signatureLength);
 
         // Basic info.
@@ -434,10 +439,13 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
-            this.SetIccProfile(JxlIccReader.Read(reader));
+            IccProfile original = new(JxlIccReader.Read(reader));
+            this.isCmyk = IsCmyk(codecMetadata.M, original);
+            this.SetIccProfile(original);
         }
         else
         {
+            this.isCmyk = false;
             jxlMetadata.ColorEncoding = codecMetadata.M.ColorEncoding.Clone();
             this.SetColorEncodingProfile(codecMetadata.M.ColorEncoding);
         }

@@ -350,7 +350,7 @@ public class JxlDecoderTests
     [Fact]
     public void Decode_ExtraChannelWithDimShift_ThrowsNotSupported()
     {
-        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(1, dimShift: 1));
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(1, dimShift: 3));
 
         Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
     }
@@ -385,6 +385,11 @@ public class JxlDecoderTests
         }
 
         writer.Bit(false).Write(2, 3).Write(6, 8); // 9-bit integer samples
+        if (dimShift is not (0 or 3))
+        {
+            throw new ArgumentOutOfRangeException(nameof(dimShift), dimShift, "Expected 0 or 3.");
+        }
+
         writer.Write(2, dimShift == 0 ? 0UL : 1UL); // dim_shift: Val(0) or Val(3)
         if (nameBytes.Length == 0)
         {
@@ -497,13 +502,12 @@ public class JxlDecoderTests
         Assert.Null(configuration.ImageFormatsManager.FindFormatByFileExtension("jxl"));
     }
 
+    private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);
+
     private static ushort Quantize16(float value) => (ushort)Math.Round(Math.Clamp(value, 0F, 1F) * 65535F);
 
     // The djxl output for a generated file: see the README next to the generated files.
     private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
-
-    // The first byte of the frame in a bare codestream with no ICC profile and no preview.
-    private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);
 
     // Checks the image has alpha_triangles' colour, and is opaque.
     private static void AssertAlphaTrianglesColourWithOpaqueAlpha(Image<Rgba64> image)
@@ -539,6 +543,7 @@ public class JxlDecoderTests
         return count;
     }
 
+    // The first byte of the frame in a bare codestream with no ICC profile and no preview.
     private static int FrameOffset(byte[] codestream)
     {
         JxlCodecMetadata metadata = new();

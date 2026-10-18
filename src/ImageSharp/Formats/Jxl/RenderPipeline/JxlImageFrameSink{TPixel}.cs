@@ -39,9 +39,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     private readonly int alphaPlane;
     private readonly bool unpremultiply;
 
-    // The plane of each spot colour channel, in stream order, and its RGB and solidity.
-    private readonly int[] spotPlanes;
-    private readonly float[][] spotColors;
+    // The spot colour channels, in stream order.
+    private readonly SpotChannel[] spotChannels;
 
     // The plane of the Black channel of a CMYK image, or -1.
     private readonly int blackPlane;
@@ -68,28 +67,24 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         this.unpremultiply = alphaChannel >= 0 && metadata.ExtraChannelInfo[alphaChannel].AlphaAssociated;
 
         // As PreparePipeline, which does not use Find because there may be several spot colour channels.
-        List<int> spotPlanes = new();
-        List<float[]> spotColors = new();
+        List<SpotChannel> spotChannels = new();
         for (int i = 0; i < metadata.NumExtraChannels; i++)
         {
             JxlExtraChannelInfo eci = metadata.ExtraChannelInfo[i];
             if (eci.Type == JxlExtraChannelType.SpotColor)
             {
-                spotPlanes.Add(colorPlanes + i);
-                spotColors.Add(eci.SpotColor);
+                spotChannels.Add(new SpotChannel(colorPlanes + i, eci.SpotColor));
             }
         }
 
-        this.spotPlanes = spotPlanes.ToArray();
-        this.spotColors = spotColors.ToArray();
+        this.spotChannels = spotChannels.ToArray();
         this.blackPlane = cmyk ? colorPlanes + metadata.Find(JxlExtraChannelType.Black) : -1;
     }
 
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
         // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, clamp, then
-        // quantise. The sRGB
-        // transfer for XYB arrives with a later slice.
+        // quantise. The sRGB transfer for XYB arrives with a later slice.
         ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
         this.framesWritten++;
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
@@ -98,9 +93,9 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         for (int y = 0; y < height; y++)
         {
             this.ReadColor(planes, y, row);
-            for (int i = 0; i < this.spotPlanes.Length; i++)
+            foreach (SpotChannel spot in this.spotChannels)
             {
-                this.RenderSpotColor(planes[this.spotPlanes[i]].DangerousGetRowSpan(y), this.spotColors[i], row);
+                this.RenderSpotColor(planes[spot.Plane].DangerousGetRowSpan(y), spot.Color, row);
             }
 
             if (this.blackPlane >= 0)
@@ -190,5 +185,19 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
                 p.Z = (mix * spotColor[2]) + ((1.0f - mix) * p.Z);
             }
         }
+    }
+
+    // A spot colour channel: its plane, and its RGB and solidity from the header.
+    private readonly struct SpotChannel
+    {
+        public SpotChannel(int plane, float[] color)
+        {
+            this.Plane = plane;
+            this.Color = color;
+        }
+
+        public int Plane { get; }
+
+        public float[] Color { get; }
     }
 }

@@ -289,6 +289,16 @@ public class JxlMetadataTests
     }
 
     [Fact]
+    public void Identify_IgnoreMetadata_StillDescribesTheExtraChannels()
+    {
+        using FileStream stream = File.OpenRead(JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
+
+        IImageInfo info = new JxlDecoder { IgnoreMetadata = true }.Identify(Configuration.Default, stream, CancellationToken.None);
+
+        Assert.Equal(new[] { "Black", "Alpha" }, info.Metadata.GetFormatMetadata(JxlFormat.Instance).ExtraChannels.Select(c => c.Type.ToString()));
+    }
+
+    [Fact]
     public void DeepClone_CopiesTheExtraChannels()
     {
         JxlMetadata jxl = Identify(JxlConformanceVector.Load("spot").CommittedInputPath).GetFormatMetadata(JxlFormat.Instance);
