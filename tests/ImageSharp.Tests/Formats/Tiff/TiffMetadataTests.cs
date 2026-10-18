@@ -322,6 +322,109 @@ public class TiffMetadataTests
     }
 
     [Fact]
+    public void Decode_WithIccProfile_ImageProfileIsRootFrameProfile()
+    {
+        using Image<Rgba32> source = CreateImageWithIccProfile(GetJpegIccProfileBytes());
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
+
+        Assert.NotNull(image.Metadata.IccProfile);
+        Assert.Same(image.Frames.RootFrame.Metadata.IccProfile, image.Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Decode_WithIptcProfile_ImageProfileIsRootFrameProfile()
+    {
+        // Load the file directly: the test image provider returns clones, and cloning does not keep shared instances.
+        using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.Create(IptcData).Bytes);
+
+        Assert.NotNull(image.Metadata.IptcProfile);
+        Assert.Same(image.Frames.RootFrame.Metadata.IptcProfile, image.Metadata.IptcProfile);
+    }
+
+    [Fact]
+    public void Identify_WithIccProfile_ExposesProfileOnImage()
+    {
+        byte[] iccBytes = GetJpegIccProfileBytes();
+        using Image<Rgba32> source = CreateImageWithIccProfile(iccBytes);
+
+        IImageInfo info = Image.Identify(EncodeTiff(source));
+
+        Assert.Equal(iccBytes, info.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData(IptcData, "author")]
+    [InlineData(InvalidIptcData, "Studio Mantyniemi")]
+    public void Identify_WithIptcProfile_ExposesProfileOnImage(string imagePath, string expectedByline)
+    {
+        IImageInfo info = Image.Identify(TestFile.Create(imagePath).Bytes);
+
+        Assert.Equal(expectedByline, info.Metadata.IptcProfile?.GetValues(IptcTag.Byline).Single().Value);
+    }
+
+    [Fact]
+    public void Identify_IgnoreMetadata_ExposesNoProfiles()
+    {
+        using Image<Rgba32> source = CreateImageWithIccProfile(GetJpegIccProfileBytes());
+        source.Metadata.IptcProfile = new IptcProfile();
+        source.Metadata.IptcProfile.SetValue(IptcTag.Byline, "image author");
+        using var stream = new MemoryStream(EncodeTiff(source));
+
+        IImageInfo info = new TiffDecoder { IgnoreMetadata = true }.Identify(Configuration.Default, stream, TestContext.Current.CancellationToken);
+
+        Assert.Null(info.Metadata.IccProfile);
+        Assert.Null(info.Metadata.IptcProfile);
+    }
+
+    [Theory]
+    [InlineData(ExifDataType.Byte, new byte[] { 0x1c })]
+    [InlineData(ExifDataType.Undefined, new byte[] { 0x1c })]
+    [InlineData(ExifDataType.Long, new byte[] { 0x1c, 0, 0, 0 })]
+    public void IdentifyAndDecode_SingleValueIptcEntry_ExposesNoIptcProfile(ExifDataType type, byte[] value)
+    {
+        // A single value is too short to hold an IPTC record.
+        var builder = new TiffTestFileBuilder();
+        AddOnePixelRgbPage(builder, GetJpegIccProfileBytes());
+        byte[] tiff = builder.AddEntry(ExifTagValue.IPTC, type, 1, value).Build();
+
+        IImageInfo info = Image.Identify(tiff);
+        using Image<Rgba32> image = Image.Load<Rgba32>(tiff);
+
+        Assert.Null(info.Metadata.IptcProfile);
+        Assert.Null(image.Frames.RootFrame.Metadata.IptcProfile);
+        Assert.NotNull(image.Frames.RootFrame.Metadata.IccProfile);
+    }
+
+    [Theory]
+    [InlineData(SampleMetadata)]
+    [InlineData(IptcData)]
+    [InlineData(InvalidIptcData)]
+    [InlineData(RgbUncompressed)]
+    [InlineData(LittleEndianByteOrder)]
+    [InlineData(MultiframeDeflateWithPreview)]
+    [InlineData(TestImages.BigTiff.BigTIFF)]
+    public void Identify_ImageMetadata_MatchesDecode(string imagePath)
+    {
+        byte[] bytes = TestFile.Create(imagePath).Bytes;
+
+        IImageInfo info = Image.Identify(bytes);
+        using Image<Rgba32> image = Image.Load<Rgba32>(bytes);
+
+        ImageMetadata expected = image.Metadata;
+        ImageMetadata actual = info.Metadata;
+        Assert.Equal(expected.IccProfile?.ToByteArray(), actual.IccProfile?.ToByteArray());
+        Assert.Equal(GetIptcValues(expected.IptcProfile), GetIptcValues(actual.IptcProfile));
+        Assert.Equal(expected.ExifProfile?.ToByteArray(), actual.ExifProfile?.ToByteArray());
+        Assert.Equal(expected.XmpProfile?.ToByteArray(), actual.XmpProfile?.ToByteArray());
+        Assert.Equal(expected.HorizontalResolution, actual.HorizontalResolution);
+        Assert.Equal(expected.VerticalResolution, actual.VerticalResolution);
+        Assert.Equal(expected.ResolutionUnits, actual.ResolutionUnits);
+        Assert.Equal(expected.GetTiffMetadata().ByteOrder, actual.GetTiffMetadata().ByteOrder);
+        Assert.Equal(expected.GetTiffMetadata().FormatType, actual.GetTiffMetadata().FormatType);
+    }
+
+    [Fact]
     public void Encode_DecodedTiffWithIccProfile_KeepsProfile()
     {
         byte[] iccBytes = GetJpegIccProfileBytes();
