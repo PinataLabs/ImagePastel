@@ -33,34 +33,50 @@ internal static class TiffDecoderMetadataCreator
         {
             for (int i = 0; i < frames.Count; i++)
             {
-                ImageFrame<TPixel> frame = frames[i];
-                ImageFrameMetadata frameMetaData = frame.Metadata;
-                if (TryGetIptc(frameMetaData.ExifProfile.Values, out byte[] iptcBytes))
-                {
-                    frameMetaData.IptcProfile = new IptcProfile(iptcBytes);
-                }
-
-                IExifValue<byte[]> xmpProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.XMP);
-                if (xmpProfileBytes != null)
-                {
-                    frameMetaData.XmpProfile = new XmpProfile(xmpProfileBytes.Value);
-                }
-
-                IExifValue<byte[]> iccProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.IccProfile);
-                if (iccProfileBytes != null)
-                {
-                    frameMetaData.IccProfile = new IccProfile(iccProfileBytes.Value);
-                }
+                SetFrameProfiles(frames[i].Metadata);
             }
 
-            // The profiles of the first frame describe the image, so they are also exposed at image level,
-            // where other encoders look for them. The instances are shared, so an edit through either one is kept.
-            ImageFrameMetadata rootFrameMetaData = frames[0].Metadata;
-            imageMetaData.IccProfile = rootFrameMetaData.IccProfile;
-            imageMetaData.IptcProfile = rootFrameMetaData.IptcProfile;
+            SetImageProfiles(imageMetaData, frames[0].Metadata);
         }
 
         return imageMetaData;
+    }
+
+    /// <summary>
+    /// Reads the IPTC, XMP and ICC profiles of a frame from the frame's EXIF profile.
+    /// </summary>
+    /// <param name="frameMetaData">The frame metadata. Its EXIF profile must be set.</param>
+    public static void SetFrameProfiles(ImageFrameMetadata frameMetaData)
+    {
+        if (TryGetIptc(frameMetaData.ExifProfile.Values, out byte[] iptcBytes))
+        {
+            frameMetaData.IptcProfile = new IptcProfile(iptcBytes);
+        }
+
+        IExifValue<byte[]> xmpProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.XMP);
+        if (xmpProfileBytes != null)
+        {
+            frameMetaData.XmpProfile = new XmpProfile(xmpProfileBytes.Value);
+        }
+
+        IExifValue<byte[]> iccProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.IccProfile);
+        if (iccProfileBytes != null)
+        {
+            frameMetaData.IccProfile = new IccProfile(iccProfileBytes.Value);
+        }
+    }
+
+    /// <summary>
+    /// Exposes the ICC and IPTC profiles of the first frame at image level.
+    /// </summary>
+    /// <param name="imageMetaData">The image metadata.</param>
+    /// <param name="rootFrameMetaData">The metadata of the first frame.</param>
+    public static void SetImageProfiles(ImageMetadata imageMetaData, ImageFrameMetadata rootFrameMetaData)
+    {
+        // The profiles of the first frame describe the image, so they are also exposed at image level,
+        // where other encoders look for them. The instances are shared, so an edit through either one is kept.
+        imageMetaData.IccProfile = rootFrameMetaData.IccProfile;
+        imageMetaData.IptcProfile = rootFrameMetaData.IptcProfile;
     }
 
     public static ImageMetadata Create(ByteOrder byteOrder, bool isBigTiff, ExifProfile exifProfile)
@@ -98,16 +114,16 @@ internal static class TiffDecoderMetadataCreator
 
         if (iptc != null)
         {
-            if (iptc.DataType == ExifDataType.Byte || iptc.DataType == ExifDataType.Undefined)
+            // A single value is read as a scalar rather than an array. It is too short to hold an IPTC record.
+            if ((iptc.DataType == ExifDataType.Byte || iptc.DataType == ExifDataType.Undefined) && iptc.GetValue() is byte[] bytes)
             {
-                iptcBytes = (byte[])iptc.GetValue();
+                iptcBytes = bytes;
                 return true;
             }
 
             // Some Encoders write the data type of IPTC as long.
-            if (iptc.DataType == ExifDataType.Long)
+            if (iptc.DataType == ExifDataType.Long && iptc.GetValue() is uint[] iptcValues)
             {
-                uint[] iptcValues = (uint[])iptc.GetValue();
                 iptcBytes = new byte[iptcValues.Length * 4];
                 Buffer.BlockCopy(iptcValues, 0, iptcBytes, 0, iptcValues.Length * 4);
                 if (iptcBytes[0] == 0x1c)

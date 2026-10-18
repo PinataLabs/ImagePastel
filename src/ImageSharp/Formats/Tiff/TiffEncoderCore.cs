@@ -151,15 +151,15 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         using var writer = new TiffStreamWriter(stream);
         long ifdMarker = this.WriteHeader(writer);
 
-        Image<TPixel> metadataImage = image;
+        bool isRootFrame = true;
         foreach (ImageFrame<TPixel> frame in image.Frames)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var subfileType = (TiffNewSubfileType)(frame.Metadata.ExifProfile?.GetValue(ExifTag.SubfileType)?.Value ?? (int)TiffNewSubfileType.FullImage);
 
-            ifdMarker = this.WriteFrame(writer, frame, image.Metadata, metadataImage, ifdMarker);
-            metadataImage = null;
+            ifdMarker = this.WriteFrame(writer, frame, image.Metadata, isRootFrame, ifdMarker);
+            isRootFrame = false;
         }
 
         long currentOffset = writer.BaseStream.Position;
@@ -191,8 +191,8 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="writer">The <see cref="BinaryWriter" /> to write data to.</param>
     /// <param name="frame">The tiff frame.</param>
-    /// <param name="imageMetadata">The image metadata (resolution values for each frame).</param>
-    /// <param name="image">The image (common metadata for root frame).</param>
+    /// <param name="imageMetadata">The image metadata (resolution values for each frame, profiles for the root frame).</param>
+    /// <param name="isRootFrame">Whether the frame is the root frame of the image.</param>
     /// <param name="ifdOffset">The marker to write this IFD offset.</param>
     /// <returns>
     /// The next IFD offset value.
@@ -201,7 +201,7 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         TiffStreamWriter writer,
         ImageFrame<TPixel> frame,
         ImageMetadata imageMetadata,
-        Image<TPixel> image,
+        bool isRootFrame,
         long ifdOffset)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -228,10 +228,8 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
 
         colorWriter.Write(compressor, rowsPerStrip);
 
-        if (image != null)
-        {
-            entriesCollector.ProcessMetadata(image);
-        }
+        // The profiles of the image describe the root frame, so later frames are written with only their own profiles.
+        entriesCollector.ProcessMetadata(frame, isRootFrame ? imageMetadata : null);
 
         entriesCollector.ProcessFrameInfo(frame, imageMetadata);
         entriesCollector.ProcessImageFormat(this);
