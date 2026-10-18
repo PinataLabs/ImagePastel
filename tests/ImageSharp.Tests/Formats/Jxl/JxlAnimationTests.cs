@@ -126,7 +126,8 @@ public class JxlAnimationTests
             .Add(Last(JxlTestLayers.ColourA) with { Duration = 7 })
             .ToArray();
 
-        IImageInfo info = Image.Identify(CreateConfiguration(), new MemoryStream(codestream));
+        using MemoryStream stream = new(codestream);
+        IImageInfo info = Image.Identify(CreateConfiguration(), stream);
 
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.Equal(70000, metadata.LoopCount);

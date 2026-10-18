@@ -163,6 +163,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M.NumColorPlanes, alpha, premultiplied);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
             List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+
+            // JxlDecoderGetFrameHeader and JxlDecoderGetFrameName: the duration is 0 unless the image is
+            // animated, as the frame header only stores it then. libjxl hands the name over as raw
+            // bytes; as a string, bytes that are not UTF-8 become U+FFFD.
             for (int i = 0; i < displayed.Count; i++)
             {
                 JxlFrameMetadata frameMetadata = image.Frames[i].Metadata.GetFormatMetadata(JxlFormat.Instance);
@@ -390,8 +394,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
         if (codecMetadata.M.HaveAnimation)
         {
-            // As JxlDecoderGetBasicInfo, which leaves the animation fields 0 for a still image. LoopCount
-            // is an int (issue #108); a count past int.MaxValue, which libjxl keeps, is near enough forever.
+            // As JxlDecoderGetBasicInfo, which leaves the animation fields 0 for a still image. A departure:
+            // LoopCount is an int (issue #108), so a loop count past int.MaxValue, which libjxl keeps as a
+            // uint32, saturates at int.MaxValue.
             JxlAnimationHeader animation = codecMetadata.M.Animation;
             jxlMetadata.LoopCount = (int)Math.Min(animation.NumLoops, int.MaxValue);
             jxlMetadata.TicksPerSecondNumerator = animation.TpsNumerator;

@@ -14,8 +14,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// Writes each rendered frame into a frame of an <see cref="Image{TPixel}"/>, clamped to [0, 1]: the
-/// first into the root frame, each later one into a new frame. The first alpha channel becomes the pixel alpha, un-premultiplied if it is premultiplied; other extra
-/// channels are dropped (issue #111). A grey plane goes into every colour component.
+/// first into the root frame, each later one into a new frame. The first alpha channel becomes the
+/// pixel alpha, un-premultiplied if it is premultiplied; other extra channels are dropped (issue #111).
+/// A grey plane goes into every colour component.
 /// </summary>
 /// <typeparam name="TPixel">The pixel type.</typeparam>
 internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
