@@ -284,16 +284,6 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
 
-    [Fact]
-    public void Decode_DepthExtraChannel_IsNotSupported()
-    {
-        // Extra channels other than alpha are a later slice; the decoder says so rather than dropping them.
-        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "depth.jxl");
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => Image.Load<Rgba32>(CreateConfiguration(), path));
-        Assert.Contains("Depth", ex.Message, StringComparison.Ordinal);
-    }
-
     [Theory]
     [InlineData(1)] // noise
     [InlineData(2)] // patches

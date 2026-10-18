@@ -14,6 +14,16 @@ The repository is licensed under the BSD 3-Clause License, Copyright (c) the JPE
 
 The conformance tests skip when the data they need is not in the cache. Set `JXL_CONFORMANCE=1` to download missing data and to fail instead of skipping.
 
+#### Rendered references
+
+The conformance references are the planes as coded: `djxl` writes them with `--norender_spotcolors`. `Image.Load` renders spot colours over the colour, so its test compares with a reference made by `djxl` v0.12.0 with spot rendering on, its default:
+
+```sh
+djxl spot/input.jxl ../../../External/ReferenceOutput/JxlDecoderTests/spot.png
+```
+
+The PNG is 16-bit RGBA, with the vector's ICC profile in its `iCCP` chunk.
+
 #### Source images
 
 | Vector | Input committed | Source licence | Author or source |

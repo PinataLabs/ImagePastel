@@ -1,6 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
@@ -26,6 +29,9 @@ internal sealed class JxlMetadata : IDeepCloneable
         this.LoopCount = other.LoopCount;
         this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
         this.TicksPerSecondDenominator = other.TicksPerSecondDenominator;
+
+        // The descriptions are immutable, so a copy of the list is independent.
+        this.ExtraChannels = other.ExtraChannels.ToArray();
     }
 
     /// <summary>
@@ -63,6 +69,12 @@ internal sealed class JxlMetadata : IDeepCloneable
     /// It is 0 for a still image.
     /// </summary>
     public uint TicksPerSecondDenominator { get; set; }
+
+    /// <summary>
+    /// Gets or sets the extra channels of the image, in stream order: every one the header describes, including
+    /// those the decoder leaves out of the pixels. It is empty, not null, for an image with none.
+    /// </summary>
+    public IReadOnlyList<JxlExtraChannel> ExtraChannels { get; internal set; } = Array.Empty<JxlExtraChannel>();
 
     /// <inheritdoc/>
     public IDeepCloneable DeepClone() => new JxlMetadata(this);

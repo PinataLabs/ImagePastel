@@ -5,12 +5,15 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ImageMagick;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -255,41 +258,182 @@ public class JxlDecoderTests
         Assert.Equal(bitsPerPixel, info.PixelType.BitsPerPixel);
     }
 
+    // The extra channel types of libjxl's ExtraChannel enum that the decoder drops from the pixels. Black
+    // is dropped too, as alpha_triangles has no CMYK profile.
     [Theory]
-    [InlineData(0, false)] // alpha
-    [InlineData(1, true)] // depth
-    public void Decode_ExtraChannelThatIsNotAlpha_ThrowsNotSupported(int type, bool throws)
+    [InlineData(1)] // depth
+    [InlineData(3)] // selection mask
+    [InlineData(4)] // black
+    [InlineData(5)] // CFA
+    [InlineData(6)] // thermal
+    [InlineData(16)] // optional
+    public void Decode_ExtraChannelThatIsDropped_GivesTheColourAndOpaqueAlpha(uint type)
     {
-        // alpha_triangles' frame, behind a header that gives its extra channel the type.
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(type));
+        using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        AssertAlphaTrianglesColourWithOpaqueAlpha(image);
+    }
+
+    // The generated files are one colour each: see make_extra_channels.py.
+    [Theory]
+    [InlineData("depth", 255)] // (200, 100, 50) with depth 7: the depth is dropped
+    [InlineData("two_alpha_a", 128)] // (200, 100, 50) with alphas 128 and 255: the second alpha is dropped
+    public void Load_ExtraChannelsAfterTheFirstAlpha_AreDropped(string name, byte alpha)
+    {
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, name + ".jxl"));
+
+        Assert.Equal(16, image.Width);
+        Assert.Equal(16, image.Height);
+        Assert.All(Pixels(image), p => Assert.Equal(new Rgba32(200, 100, 50, alpha), p));
+    }
+
+    [Fact]
+    public void Decode_SpotColourWithSolidityZero_LeavesTheColourUnchanged()
+    {
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(2, spotSolidity: 0));
+        using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        AssertAlphaTrianglesColourWithOpaqueAlpha(image);
+    }
+
+    [Fact]
+    public void Load_Spot_ChoosesA16BitPixelType()
+    {
+        using Image image = Image.Load(CreateConfiguration(), JxlConformanceVector.Load("spot").CommittedInputPath);
+
+        Assert.IsType<Image<Rgba64>>(image);
+    }
+
+    [Fact]
+    public void Load_Spot_RendersBothInksAsDjxlDoes()
+    {
+        // The two spot channels overlap, so the comparison also checks they are rendered in stream order.
+        string path = JxlConformanceVector.Load("spot").CommittedInputPath;
+        using (FileStream stream = File.OpenRead(path))
+        {
+            using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+            Assert.True(CountOverlap(planes.Frames[0].Planes[4], planes.Frames[0].Planes[5]) > 0);
+        }
+
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using Image<Rgba64> reference = Image.Load<Rgba64>(GeneratedReferencePath("spot"));
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+    }
+
+    [Fact]
+    public async Task Load_CmykLayers_ConvertsTheReferencePlanesNaively()
+    {
+        // The conformance reference holds the planes as coded: C, M, Y, K and alpha, where 0 is full ink.
+        // The expected pixel is R = C K, G = M K, B = Y K with the alpha kept (issue #111), quantised.
+        JxlConformanceVector vector = JxlConformanceVector.Load("cmyk_layers");
+        NpyArray planes = await JxlConformanceData.LoadReferenceImageAsync(vector, TestContext.Current.CancellationToken);
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), vector.CommittedInputPath);
+
+        Assert.Equal(new[] { 1, image.Height, image.Width, 5 }, planes.Shape);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                int i = ((y * image.Width) + x) * 5;
+                float k = planes.Data[i + 3];
+                Rgba32 expected = new(Quantize8(planes.Data[i] * k), Quantize8(planes.Data[i + 1] * k), Quantize8(planes.Data[i + 2] * k), Quantize8(planes.Data[i + 4]));
+                Rgba32 actual = image[x, y];
+
+                // Within one quantisation step.
+                Assert.InRange(actual.R - expected.R, -1, 1);
+                Assert.InRange(actual.G - expected.G, -1, 1);
+                Assert.InRange(actual.B - expected.B, -1, 1);
+                Assert.InRange(actual.A - expected.A, -1, 1);
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_CmykLayers_ChoosesRgba32AndHasNoPixelProfile()
+    {
+        using Image image = Image.Load(CreateConfiguration(), JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
+
+        Assert.IsType<Image<Rgba32>>(image);
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.Header.DataColorSpace);
+    }
+
+    [Fact]
+    public void Decode_ExtraChannelWithDimShift_ThrowsNotSupported()
+    {
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(1, dimShift: 3));
+
+        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Returns alpha_triangles' frame behind a hand-written header that gives its one extra channel the
+    /// type, name and dim_shift. The header is 1024 x 1024 with 9-bit samples and the default colour
+    /// encoding, as alpha_triangles' own.
+    /// </summary>
+    /// <param name="type">The extra channel type, as libjxl's ExtraChannel enum.</param>
+    /// <param name="name">The extra channel name, up to 15 bytes of UTF-8.</param>
+    /// <param name="dimShift">The dim_shift, 0 or 3.</param>
+    /// <param name="spotSolidity">The solidity of a red spot colour, as an F16.</param>
+    /// <returns>The codestream.</returns>
+    internal static byte[] AlphaTrianglesWithExtraChannel(uint type, string name = "", uint dimShift = 0, ushort spotSolidity = 0x3C00)
+    {
         byte[] original = File.ReadAllBytes(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        byte[] nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
         JxlTestBitWriter writer = new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);
         writer.Bit(false).Write(2, 1).Write(13, 1023).Write(3, 1); // 1024 x 1024
         writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
         writer.Bit(false).Write(2, 3).Write(6, 8).Bit(true); // 9-bit integer samples, 16-bit buffers suffice
         writer.Write(2, 1); // one extra channel
-        writer.Bit(false).Write(2, (ulong)type); // not all default, the type
+        writer.Bit(false); // not all default
+        if (type < 2)
+        {
+            writer.Write(2, type);
+        }
+        else
+        {
+            writer.Write(2, 2).Write(4, type - 2); // BitsOffset(4, 2)
+        }
+
         writer.Bit(false).Write(2, 3).Write(6, 8); // 9-bit integer samples
-        writer.Write(2, 0).Write(2, 0); // no dim shift, no name
+        if (dimShift is not (0 or 3))
+        {
+            throw new ArgumentOutOfRangeException(nameof(dimShift), dimShift, "Expected 0 or 3.");
+        }
+
+        writer.Write(2, dimShift == 0 ? 0UL : 1UL); // dim_shift: Val(0) or Val(3)
+        if (nameBytes.Length == 0)
+        {
+            writer.Write(2, 0);
+        }
+        else
+        {
+            writer.Write(2, 1).Write(4, (ulong)nameBytes.Length); // name length as Bits(4)
+            foreach (byte b in nameBytes)
+            {
+                writer.Write(8, b);
+            }
+        }
+
         if (type == 0)
         {
             writer.Bit(false); // straight alpha
+        }
+        else if (type == 2)
+        {
+            writer.Write(16, 0x3C00).Write(16, 0).Write(16, 0).Write(16, spotSolidity); // red, as F16
+        }
+        else if (type == 5)
+        {
+            writer.Write(2, 0); // CFA channel 1
         }
 
         writer.Bit(false).Bit(true).Write(2, 0); // not XYB, default colour encoding, no extensions
         writer.Bit(true); // all-default transform data
         writer.ZeroPadToByte();
-        byte[] data = writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
-        using MemoryStream stream = new(data);
-
-        if (throws)
-        {
-            Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
-        }
-        else
-        {
-            using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-            Assert.Equal(1024, image.Width);
-        }
+        return writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
     }
 
     [Fact]
@@ -371,10 +515,53 @@ public class JxlDecoderTests
         Assert.Null(configuration.ImageFormatsManager.FindFormatByFileExtension("jxl"));
     }
 
+    private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);
+
     private static ushort Quantize16(float value) => (ushort)Math.Round(Math.Clamp(value, 0F, 1F) * 65535F);
 
     // The djxl output for a generated file: see the README next to the generated files.
     private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
+
+    private static Rgba32[] Pixels(Image<Rgba32> image)
+    {
+        Rgba32[] pixels = new Rgba32[image.Width * image.Height];
+        image.CopyPixelDataTo(pixels);
+        return pixels;
+    }
+
+    // Checks the image has alpha_triangles' colour, and is opaque.
+    private static void AssertAlphaTrianglesColourWithOpaqueAlpha(Image<Rgba64> image)
+    {
+        using FileStream original = File.OpenRead(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        using Image<Rgb48> colour = new JxlDecoder().Decode<Rgb48>(Configuration.Default, original, CancellationToken.None);
+
+        Assert.Equal(colour.Size(), image.Size());
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Rgb48 expected = colour[x, y];
+                Assert.Equal(new Rgba64(expected.R, expected.G, expected.B, ushort.MaxValue), image[x, y]);
+            }
+        }
+    }
+
+    // The number of pixels where both planes are above 0.
+    private static int CountOverlap(Buffer2D<float> a, Buffer2D<float> b)
+    {
+        int count = 0;
+        for (int y = 0; y < a.Height; y++)
+        {
+            Span<float> rowA = a.DangerousGetRowSpan(y);
+            Span<float> rowB = b.DangerousGetRowSpan(y);
+            for (int x = 0; x < a.Width; x++)
+            {
+                count += rowA[x] > 0 && rowB[x] > 0 ? 1 : 0;
+            }
+        }
+
+        return count;
+    }
 
     // The first byte of the frame in a bare codestream with no ICC profile and no preview.
     private static int FrameOffset(byte[] codestream)

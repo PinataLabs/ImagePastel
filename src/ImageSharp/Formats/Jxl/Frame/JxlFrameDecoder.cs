@@ -149,19 +149,12 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform");
         }
 
-        foreach (JxlExtraChannelInfo eci in metadata.M.ExtraChannelInfo)
-        {
-            if (eci.Type != JxlExtraChannelType.Alpha)
-            {
-                JxlThrowHelper.ThrowNotSupportedException($"The {eci.Type} extra channel");
-            }
-        }
-
         if (frameHeader.FrameType == JxlFrameType.Dc || frameHeader.Flags != JxlFrameFlags.None)
         {
             JxlThrowHelper.ThrowNotSupportedException("Patches, splines, noise or DC frames");
         }
 
+        // An extra channel with a dim_shift has an upsampling of at least 2 here.
         if (frameHeader.Upsampling != 1 || frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))
         {
             JxlThrowHelper.ThrowNotSupportedException("Upsampling");
