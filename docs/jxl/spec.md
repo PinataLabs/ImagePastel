@@ -62,7 +62,7 @@ Merge each slice to `main` on its own. Every JXL type stays `internal` until its
 
 ### Order
 
-1. **T1 → D1**, then a **re-estimation gate.** D1 records three measurements: the C#:C++ line ratio, the hours per 1,000 lines, and whether the general MA-tree path is fast enough without libjxl's fast paths. Use them to update the size column below before raising issues for later slices.
+1. **T1 → D1**, then a **re-estimation gate.** D1 records three measurements: the C#:C++ line ratio, the hours per 1,000 lines, and whether the general MA-tree path is fast enough without libjxl's fast paths. Use them to update the size column below before raising issues for later slices. Done: see the [outcome](#re-estimation-gate-outcome).
 2. **D2 to D15** in order.
 3. **The encoder track** (T2, E1 to E6) can start any time after D4, in parallel with the decoder. It needs the shared core, headers and colour types. F1 comes last.
 
@@ -78,6 +78,21 @@ Measured on D1 ([#127](https://github.com/PinataLabs/ImageSharp/issues/127)), po
 
 The 7,150 ported lines leave out these parts of the touched files: the writer-side field visitors, LZ77 and checkpoints in the symbol reader, the four Modular fast paths and their lookup tables, encoder-only predictor helpers, the VarDCT and JPEG branches of the frame and Modular glue, ICC synthesis, and debug strings.
 
+### Re-estimation gate: outcome
+
+Applied to the slice tables below after D1.
+
+- **The C++ sizes hold.** The libjxl files that D1 touches total 9,081 lines against the estimate of 9.2K, so the research counts are kept, with the corrections below.
+- **Work that D1 deferred moves to the slice that needs it:**
+  - LZ77 (about 0.15K) is already in D2.
+  - The ICC codec and the container are already in D4.
+  - The VarDCT branches of the Modular and frame glue (about 0.45K: VarDCT DC, AC metadata, raw quant tables, AC global) are added to D8.
+  - The TOC permutation and the progressive section scheduling (about 0.15K) are added to D13.
+  - The reference-frame bookkeeping (about 0.05K) is added to D5.
+- **No slice is added for the four Modular fast paths** (about 0.35K). The general path is fast enough, and the PRD has no performance target.
+- **Totals.** The rest of the decoder (D2 to D15) is about 19.0K C++ lines: about 13.6K C# and about 3.2 agent hours. The encoder track (T2, E1 to E6) is about 12.8K C++ lines: about 9.2K C# and about 2.2 agent hours.
+- **Treat the hour estimates as a floor.** D1 passed its conformance vector on the first run, because its integer code is exact. The float slices (D8, D9, D11, D12, E3 to E5) must match references within tight thresholds, and debugging a numeric mismatch can take longer than the port. Plan about twice the estimate for them.
+
 ### Rules for every slice
 
 - **Conformance:** the named vectors pass at their Level 10 thresholds, and at Level 5 for any `_5` copies, in the `jxl-oracle` job.
@@ -87,48 +102,48 @@ The 7,150 ported lines leave out these parts of the touched files: the writer-si
 
 ## Slices
 
-The size column is a rough count of libjxl C++ lines, taken from the [decoder](https://github.com/PinataLabs/ImageSharp/issues/102) and [encoder](https://github.com/PinataLabs/ImageSharp/issues/103) research. These are estimates; replace them at the gate.
+The size column is a rough count of libjxl C++ lines, taken from the [decoder](https://github.com/PinataLabs/ImageSharp/issues/102) and [encoder](https://github.com/PinataLabs/ImageSharp/issues/103) research and corrected at the [re-estimation gate](#re-estimation-gate-outcome). The C# column is the size times 0.72, and the agent-hours column is the size times 0.17 hours per 1,000 lines, both measured on D1. Agent hours are wall-clock time for an AI agent, not a human rate.
 
 ### Test infrastructure
 
-| # | Ships | Done-check | Size |
-|---|---|---|---|
-| T1 ([#126](https://github.com/PinataLabs/ImageSharp/issues/126)) | `*.jxl` LFS pattern; conformance inputs, `test.json` files, READMEs and notices entry; `.npy` reader; sha256 fetch cache with `JXL_CONFORMANCE=1`; `jxl-oracle` CI job skeleton; `MagickReferenceDecoder` widened to 16-bit for JXL | Harness self-test: **Magick's** decode of `delta_palette` passes its thresholds | test code only |
-| T2 | Managed SSIMULACRA2 port; cjxl calibration table (about 6 images × d{1,2,4} × 3 levels) with its generating command | Within 0.5 of the libjxl `ssimulacra2` binary in `jxl-oracle`; table committed | ≈ 0.6K |
+| # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
+|---|---|---|---|---|---|
+| T1 ([#126](https://github.com/PinataLabs/ImageSharp/issues/126)) | `*.jxl` LFS pattern; conformance inputs, `test.json` files, READMEs and notices entry; `.npy` reader; sha256 fetch cache with `JXL_CONFORMANCE=1`; `jxl-oracle` CI job skeleton; `MagickReferenceDecoder` widened to 16-bit for JXL | Harness self-test: **Magick's** decode of `delta_palette` passes its thresholds | test code only | — | — |
+| T2 | Managed SSIMULACRA2 port; cjxl calibration table (about 6 images × d{1,2,4} × 3 levels) with its generating command | Within 0.5 of the libjxl `ssimulacra2` binary in `jxl-oracle`; table committed | ≈ 0.6K | ≈ 0.43K | ≈ 0.1 |
 
 ### Decoder
 
-| # | Ships | Done-check | Size |
-|---|---|---|---|
-| D1 ([#127](https://github.com/PinataLabs/ImageSharp/issues/127)) | **Porting spike, first real slice:** bit reader, fields, image headers, entropy (prefix, ANS, hybrid uint, context map; no LZ77), Modular general path, RCT and palette (including delta), single-frame frame header and TOC, simple pipeline with `PlanesSink` and `ImageFrameSink<TPixel>`, `Identify` | `delta_palette`; measurements recorded in this file | ≈ 9.2K |
-| D2 | Alpha extra channel, 9–16-bit and float32 samples, LZ77, un-premultiply in the sink, pixel-type choice for the non-generic `Decode` | `alpha_nonpremultiplied`, `alpha_triangles`, `lossless_pfm` (bit-exact), `lz77_flower` | ≈ 0.8K |
-| D3 | Squeeze; greyscale output | `grayscale_public_university` | ≈ 0.5K |
-| D4 | Container and box parsing (`jxlc`, `jxlp`, `brob`, 64-bit sizes); ICC codec; Exif/XMP mapped to ImageSharp profiles; pixel-profile rules; enum → ICC builder; `JxlMetadata` colour fields | `OriginalIccProfile` bytes equal `original.icc` for every ICC vector (via `Identify`); `square-extended-size-container`; `1x1_exif_xmp` | ≈ 2.2K |
-| D5 | Multi-frame: blending, layers, reference frames, coalescing, animation, orientation, `JxlFrameMetadata`, `MaxFrames` | `sunset_logo`, `blendmodes`, `mul_no_extra_channels`, `animation_newtons_cradle`, `cropped_traffic_light` | ≈ 2.1K |
-| D6 | Spot-colour rendering, CMYK naive conversion, `JxlMetadata.ExtraChannels` | `spot`, `cmyk_layers` | ≈ 0.3K |
-| D7 | Patches on Modular frames | `patches_lossless` | ≈ 0.5K |
-| D8 | VarDCT core: DCT8, quantiser and DC, coefficient orders, VarDCT group decode, XYB → sRGB, `JxlFastMath` | `cjxl -e 2 --gaborish=0 --epf=0` files with `djxl` references; `JxlFastMath` unit tests within libjxl's error bounds | ≈ 4.3K |
-| D9 | All transform sizes and AFV, adaptive quantisation, chroma-from-luma, Gaborish, EPF | `bike`, `opsin_inverse`, `grayscale` (linear at the seam), `alpha_premultiplied`, `animation_icos4d` | ≈ 3.0K |
-| D10 | Upsampling, chroma upsampling, YCbCr | `upsampling`, `cafe` (fetched), `grayscale_jpeg`, `bench_oriented_brg` | ≈ 0.6K |
-| D11 | All transfer functions (709, DCI, gamma, PQ, HLG) and their ICC tables | `pq_gradient`; a `cjxl`-made HLG file | ≈ 1.6K |
-| D12 | Patches on VarDCT frames, splines, noise | `patches`, `animation_spline`, `noise`, libjxl `splines.jxl` and `spline_on_first_frame.jxl` | ≈ 1.4K |
-| D13 | Progressive: passes, LF/DC frames, TOC permutation | `progressive` (fetched) | ≈ 1.0K |
-| D14 | Hardening sweep: OSS-Fuzz regression theory, bounds audit, pixel-cap and cancellation tests | All 44 OSS-Fuzz inputs decode or throw an allowed exception within 10 s | small |
-| D15 | **Decoder release:** types public, default configuration, parse-only tests for features with no pixel reference | All 27 vectors pass in `jxl-oracle`; Magick cross-check on every leg | small |
+| # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
+|---|---|---|---|---|---|
+| D1 ([#127](https://github.com/PinataLabs/ImageSharp/issues/127)) | **Porting spike, first real slice:** bit reader, fields, image headers, entropy (prefix, ANS, hybrid uint, context map; no LZ77), Modular general path, RCT and palette (including delta), single-frame frame header and TOC, simple pipeline with `PlanesSink` and `ImageFrameSink<TPixel>`, `Identify` | `delta_palette`; measurements recorded in this file | 7.15K ported (9.2K estimated; 1.9K deferred, see the gate) | 5.15K (actual) | 1.2 (actual) |
+| D2 | Alpha extra channel, 9–16-bit and float32 samples, LZ77, un-premultiply in the sink, pixel-type choice for the non-generic `Decode` | `alpha_nonpremultiplied`, `alpha_triangles`, `lossless_pfm` (bit-exact), `lz77_flower` | ≈ 0.8K | ≈ 0.58K | ≈ 0.1 |
+| D3 | Squeeze; greyscale output | `grayscale_public_university` | ≈ 0.5K | ≈ 0.36K | ≈ 0.1 |
+| D4 | Container and box parsing (`jxlc`, `jxlp`, `brob`, 64-bit sizes); ICC codec; Exif/XMP mapped to ImageSharp profiles; pixel-profile rules; enum → ICC builder; `JxlMetadata` colour fields | `OriginalIccProfile` bytes equal `original.icc` for every ICC vector (via `Identify`); `square-extended-size-container`; `1x1_exif_xmp` | ≈ 2.2K | ≈ 1.58K | ≈ 0.4 |
+| D5 | Multi-frame: blending, layers, reference frames, coalescing, animation, orientation, `JxlFrameMetadata`, `MaxFrames` | `sunset_logo`, `blendmodes`, `mul_no_extra_channels`, `animation_newtons_cradle`, `cropped_traffic_light` | ≈ 2.15K (2.1K + 0.05K reference bookkeeping from D1) | ≈ 1.55K | ≈ 0.4 |
+| D6 | Spot-colour rendering, CMYK naive conversion, `JxlMetadata.ExtraChannels` | `spot`, `cmyk_layers` | ≈ 0.3K | ≈ 0.22K | ≈ 0.1 |
+| D7 | Patches on Modular frames | `patches_lossless` | ≈ 0.5K | ≈ 0.36K | ≈ 0.1 |
+| D8 | VarDCT core: DCT8, quantiser and DC, coefficient orders, VarDCT group decode, XYB → sRGB, `JxlFastMath` | `cjxl -e 2 --gaborish=0 --epf=0` files with `djxl` references; `JxlFastMath` unit tests within libjxl's error bounds | ≈ 4.75K (4.3K + 0.45K VarDCT glue from D1) | ≈ 3.42K | ≈ 0.8 |
+| D9 | All transform sizes and AFV, adaptive quantisation, chroma-from-luma, Gaborish, EPF | `bike`, `opsin_inverse`, `grayscale` (linear at the seam), `alpha_premultiplied`, `animation_icos4d` | ≈ 3.0K | ≈ 2.16K | ≈ 0.5 |
+| D10 | Upsampling, chroma upsampling, YCbCr | `upsampling`, `cafe` (fetched), `grayscale_jpeg`, `bench_oriented_brg` | ≈ 0.6K | ≈ 0.43K | ≈ 0.1 |
+| D11 | All transfer functions (709, DCI, gamma, PQ, HLG) and their ICC tables | `pq_gradient`; a `cjxl`-made HLG file | ≈ 1.6K | ≈ 1.15K | ≈ 0.3 |
+| D12 | Patches on VarDCT frames, splines, noise | `patches`, `animation_spline`, `noise`, libjxl `splines.jxl` and `spline_on_first_frame.jxl` | ≈ 1.4K | ≈ 1.01K | ≈ 0.2 |
+| D13 | Progressive: passes, LF/DC frames, TOC permutation | `progressive` (fetched) | ≈ 1.15K (1.0K + 0.15K TOC permutation and section scheduling from D1) | ≈ 0.83K | ≈ 0.2 |
+| D14 | Hardening sweep: OSS-Fuzz regression theory, bounds audit, pixel-cap and cancellation tests | All 44 OSS-Fuzz inputs decode or throw an allowed exception within 10 s | small | — | — |
+| D15 | **Decoder release:** types public, default configuration, parse-only tests for features with no pixel reference | All 27 vectors pass in `jxl-oracle`; Magick cross-check on every leg | small | — | — |
 
 ### Encoder
 
-| # | Ships | Done-check | Size |
-|---|---|---|---|
-| E1 | Encoder core: bit writer, `Write` field visitor, ANS and prefix writers, context-map writer, Modular with predefined trees, frame and TOC assembly; lossless Fastest (fixed WP tree, global palette, YCoCg); ICC embedded verbatim | Bit-exact round-trip on the lossless corpus through both decoders; `djxl` accepts the output | ≈ 4.9K |
-| E2 | Lossless Default and Thorough: MA-tree learning, RCT search, local palette, RLE LZ77, e6/e7 parameters | Bit-exact at all three levels | ≈ 1.6K |
-| E3 | Lossy Fastest: `TryFromIccProfile` and the colour rules, forward XYB, DCT8, constant quant field, AC tokens, DC/AC-metadata streams, alpha with the predefined tree | Fastest rows of the calibration table; colour-rule tests (an unrecognised ICC throws, a mismatched profile is ignored) | ≈ 1.8K |
-| E4 | Lossy Default: adaptive quantisation, AC-strategy search with all transforms, chroma-from-luma, Gaborish, coefficient reordering, near-lossless DC | Default rows of the calibration table | ≈ 3.5K |
-| E5 | Lossy Thorough: full AC-strategy search, dynamic EPF sharpness | Thorough rows of the calibration table | ≈ 0.4K |
-| E6 | **Encoder release:** `JxlEncoder` public, `SaveAsJxl` / `SaveAsJxlAsync`, Exif/XMP boxes in a container | Public-API tests; metadata round-trip through our decoder and Magick | small |
+| # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
+|---|---|---|---|---|---|
+| E1 | Encoder core: bit writer, `Write` field visitor, ANS and prefix writers, context-map writer, Modular with predefined trees, frame and TOC assembly; lossless Fastest (fixed WP tree, global palette, YCoCg); ICC embedded verbatim | Bit-exact round-trip on the lossless corpus through both decoders; `djxl` accepts the output | ≈ 4.9K | ≈ 3.53K | ≈ 0.8 |
+| E2 | Lossless Default and Thorough: MA-tree learning, RCT search, local palette, RLE LZ77, e6/e7 parameters | Bit-exact at all three levels | ≈ 1.6K | ≈ 1.15K | ≈ 0.3 |
+| E3 | Lossy Fastest: `TryFromIccProfile` and the colour rules, forward XYB, DCT8, constant quant field, AC tokens, DC/AC-metadata streams, alpha with the predefined tree | Fastest rows of the calibration table; colour-rule tests (an unrecognised ICC throws, a mismatched profile is ignored) | ≈ 1.8K | ≈ 1.3K | ≈ 0.3 |
+| E4 | Lossy Default: adaptive quantisation, AC-strategy search with all transforms, chroma-from-luma, Gaborish, coefficient reordering, near-lossless DC | Default rows of the calibration table | ≈ 3.5K | ≈ 2.52K | ≈ 0.6 |
+| E5 | Lossy Thorough: full AC-strategy search, dynamic EPF sharpness | Thorough rows of the calibration table | ≈ 0.4K | ≈ 0.29K | ≈ 0.1 |
+| E6 | **Encoder release:** `JxlEncoder` public, `SaveAsJxl` / `SaveAsJxlAsync`, Exif/XMP boxes in a container | Public-API tests; metadata round-trip through our decoder and Magick | small | — | — |
 
 ### Hardening
 
-| # | Ships | Done-check | Size |
-|---|---|---|---|
-| F1 | SharpFuzz harness `tests/ImageSharp.Fuzz`, seeded with the conformance and libjxl inputs; runs locally only | One hour with no new failure; each crash it finds is committed as `tests/Images/Input/Jxl/issues/fuzz/IssueNNN-<Exception>.jxl` | test code only |
+| # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
+|---|---|---|---|---|---|
+| F1 | SharpFuzz harness `tests/ImageSharp.Fuzz`, seeded with the conformance and libjxl inputs; runs locally only | One hour with no new failure; each crash it finds is committed as `tests/Images/Input/Jxl/issues/fuzz/IssueNNN-<Exception>.jxl` | test code only | — | — |
