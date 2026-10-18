@@ -165,4 +165,12 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.set_ColorProfileConversionTarget(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
   </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfileTag.Cicp</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccTypeSignature.Cicp</Target>
+  </Suppression>
 </Suppressions>

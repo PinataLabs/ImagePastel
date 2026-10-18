@@ -49,6 +49,10 @@ public class IccReaderArrayTagSizeTests
         // ucrbgType has two 4-byte counts after the header.
         { (uint)IccTypeSignature.UcrBg, 7 },
         { (uint)IccTypeSignature.UcrBg, 15 },
+
+        // cicpType has four 1-byte code points after the header.
+        { (uint)IccTypeSignature.Cicp, 8 },
+        { (uint)IccTypeSignature.Cicp, 11 },
     };
 
     public static TheoryData<uint> SizedTypes => new()
@@ -63,6 +67,7 @@ public class IccReaderArrayTagSizeTests
         (uint)IccTypeSignature.Text,
         (uint)IccTypeSignature.DeviceSettings,
         (uint)IccTypeSignature.Data,
+        (uint)IccTypeSignature.Cicp,
     };
 
     [Theory]

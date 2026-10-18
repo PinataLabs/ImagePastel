@@ -108,6 +108,12 @@ public enum IccProfileTag : uint
     Chromaticity = 0x6368726D,
 
     /// <summary>
+    /// cicp - This tag (ICC v4.4) identifies the color space of the profile with the coding-independent code points
+    /// of ITU-T H.273.
+    /// </summary>
+    Cicp = 0x63696370,
+
+    /// <summary>
     /// clro - This tag specifies the laydown order of colorants.
     /// </summary>
     ColorantOrder = 0x636C726F,
