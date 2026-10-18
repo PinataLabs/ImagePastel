@@ -25,6 +25,8 @@ These files cover features that no conformance vector checks. They were made for
 | `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG: no pixel profile until D11. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `orientation_1.jxl` to `orientation_8.jxl` | Lossless Modular, 37 x 23 8-bit RGBA, with codestream orientations 1 to 8. The files differ only in the three orientation bits; every pixel differs, so a wrong flip or transpose shows. Orientations 5 to 8 decode to 23 x 37. | `External/ReferenceOutput/JxlDecoderTests/orientation_1.png` to `orientation_8.png` |
 | `orientation_exif.jxl` | The same image with orientation 6, in a container with an uncompressed `Exif` box whose orientation tag is also 6. | `External/ReferenceOutput/JxlDecoderTests/orientation_exif.png`, whose Exif (a `zTXt` "Raw profile type exif" chunk) has the orientation reset to 1 |
+| `two_alpha_a.jxl`, `two_alpha_b.jxl` | Lossless Modular, 16 x 16 8-bit RGB with two alpha extra channels, one colour each: (200, 100, 50) with alphas 128 and 255, and (40, 220, 160) with alphas 64 and 192. Their image headers are equal, so the layer tests stack the frame of one on the other and blend the second alpha channel with the first as its alpha. | `djxl` on each layered codestream, in `JxlLayersTests` |
+| `depth.jxl` | Lossless Modular, 16 x 16 8-bit RGB with a depth extra channel, which the decoder does not support yet. | None: decoding throws `NotSupportedException` |
 | `animation_from_apng.jxl` | Lossless Modular, 30 x 20 8-bit RGBA animation made from a four-frame APNG. The APNG's second frame has a delay of 0, so it becomes a frame with no duration that is blended into the next one: the animation shows three frames, of 120, 250 and 80 ticks at 1000 ticks per second. The later frames are cropped, and one blends over the canvas. | `External/ReferenceOutput/JxlDecoderTests/animation_from_apng.npy`: every displayed frame, as float32 (frames, height, width, channels) |
 
 #### How `premultiplied_alpha` was made
@@ -146,3 +148,16 @@ djxl animation_from_apng.jxl ../../../External/ReferenceOutput/JxlDecoderTests/a
 - `make_animation.py` writes `animation_source.png`, an APNG with four frames and no disposal. It is not committed; the script makes it again.
 - `cjxl` keeps every APNG frame as a JPEG XL frame, with the APNG delay in milliseconds as its duration (1000 ticks per second). `jxlinfo -v` lists the zero-delay frame as a "Layer" with a duration of 0.
 - Given a `.png` output, `djxl` writes an APNG, and this repository's PNG decoder reads only its first frame. Given `.npy`, it writes every displayed frame, coalesced onto the full canvas: three frames, one fewer than the APNG.
+
+#### How the extra-channel files were made
+
+```sh
+py -3 make_extra_channels.py
+cjxl two_alpha_a_source.pam two_alpha_a.jxl -d 0
+cjxl two_alpha_b_source.pam two_alpha_b.jxl -d 0
+cjxl depth_source.pam depth.jxl -d 0
+```
+
+- `make_extra_channels.py` writes the source PAMs. They are not committed; the script makes them again.
+- In a PAM header, `cjxl` reads each `TUPLTYPE` line after the first as one more extra channel: `TUPLTYPE RGB_ALPHA` then `TUPLTYPE Alpha` gives two alpha channels, and `TUPLTYPE RGB` then `TUPLTYPE Depth` a depth channel.
+- `jxlinfo -v` lists the channels as "RGB+Alpha+Alpha" and "RGB+Depth".

@@ -334,7 +334,8 @@ internal sealed class JxlTestLayers
             WriteBlending(w, frame.Color, this.numExtraChannels, isPartialFrame);
             for (int i = 0; i < this.numExtraChannels; i++)
             {
-                WriteBlending(w, frame.ExtraChannel, this.numExtraChannels, isPartialFrame);
+                JxlTestBlending extraChannel = frame.ExtraChannels != null ? frame.ExtraChannels[i] : frame.ExtraChannel;
+                WriteBlending(w, extraChannel, this.numExtraChannels, isPartialFrame);
             }
 
             if (this.Animation)
@@ -395,6 +396,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public JxlTestBlending Color { get; init; } = new(JxlBlendMode.Replace);
 
     public JxlTestBlending ExtraChannel { get; init; } = new(JxlBlendMode.Replace);
+
+    /// <summary>Gets the blending of each extra channel, when they differ; it overrides <see cref="ExtraChannel"/>.</summary>
+    public JxlTestBlending[] ExtraChannels { get; init; }
 
     public uint Duration { get; init; }
 

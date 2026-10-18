@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -152,6 +153,156 @@ public class JxlLayersTests
         AssertEveryPixel(decoded.Frames[1], (x, y) => x is >= 4 and < 14 && y is >= 3 and < 9 ? (40, 220, 160, 64) : (200, 100, 50, 128));
     }
 
+    // The tests below check the blend modes without djxl, which the SonarQube job does not have. The
+    // expected values are djxl's, from DecodeToPlanes_MatchesDjxl on the same codestreams.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Blend_PremultipliedAlpha_AddsTheBackgroundWeightedByOneMinusTheAlpha(bool clamp)
+    {
+        // R = 40 + 200 (1 - 64 / 255). The colour blend also blends the alpha.
+        byte[] codestream = TwoLayers(new(JxlBlendMode.Blend, Clamp: clamp), new(JxlBlendMode.Replace), premultiplied: true).ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (189.80393F, 294.90199F, 197.45099F, 159.87451F));
+    }
+
+    [Fact]
+    public void AlphaWeightedAdd_AddsTheColourWeightedByTheAlpha()
+    {
+        // R = 200 + 40 * 64 / 255. The alpha is replaced.
+        byte[] codestream = TwoLayers(new(JxlBlendMode.AlphaWeightedAdd), new(JxlBlendMode.Replace)).ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (210.03923F, 155.21570F, 90.15687F, 64F));
+    }
+
+    [Fact]
+    public void AlphaWeightedAdd_WithClamp_ClampsTheAlphaToOne()
+    {
+        byte[] codestream = TwoLayers(new(JxlBlendMode.AlphaWeightedAdd, Clamp: true), new(JxlBlendMode.Replace), top: JxlTestLayers.Ramp).ToArray();
+
+        using JxlDecodedImage decoded = DecodeToPlanes(codestream);
+
+        // At (20, 15) the ramp's alpha is 324, clamped to 255: R = 200 + 252 rather than 200 + 252 * 324 / 255.
+        AssertPixel(decoded.Frames[0], 0, 0, (200.24708F, 103.17648F, 50.17647F, 9F));
+        AssertPixel(decoded.Frames[0], 20, 15, (452F, 190F, 230F, 324F));
+    }
+
+    [Fact]
+    public void AlphaWeightedAdd_OfTheAlphaChannel_KeepsTheBackgroundAlpha()
+    {
+        byte[] codestream = TwoLayers(new(JxlBlendMode.Replace), new(JxlBlendMode.AlphaWeightedAdd)).ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (40, 220, 160, 128));
+    }
+
+    [Fact]
+    public void Mul_WithClamp_ClampsTheForegroundToOne()
+    {
+        byte[] codestream = TwoLayers(new(JxlBlendMode.Mul, Clamp: true), new(JxlBlendMode.Replace), top: JxlTestLayers.Ramp).ToArray();
+
+        using JxlDecodedImage decoded = DecodeToPlanes(codestream);
+
+        // R = 200 * 7 / 255 at (0, 0). At (20, 15) the ramp's red is 252 and its blue 180, both under
+        // 255; the alpha is replaced, and is not clamped.
+        AssertPixel(decoded.Frames[0], 0, 0, (5.49020F, 35.29412F, 0.98039F, 9F));
+        AssertPixel(decoded.Frames[0], 20, 15, (197.64709F, 35.29412F, 35.29412F, 324F));
+    }
+
+    [Theory]
+    [InlineData(false, 1)] // kBlend
+    [InlineData(true, 2)] // kAlphaWeightedAdd
+    public void BlendModesThatNeedAlpha_OnAnImageWithoutAlpha_ReplaceOrAdd(bool alphaWeightedAdd, int factor)
+    {
+        JxlBlendMode mode = alphaWeightedAdd ? JxlBlendMode.AlphaWeightedAdd : JxlBlendMode.Blend;
+
+        // libjxl's kBlendAbove copies the foreground and kAlphaWeightedAddAbove adds it when the image has
+        // no alpha. Both frames hold the same grey image, so the result is that image, or twice it.
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "greyscale.jxl");
+        JxlTestLayers single = JxlTestLayers.FromFile(File.ReadAllBytes(path), out byte[] section).Add(JxlTestFrame.Last(section));
+        JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(path), out _)
+            .Add(new JxlTestFrame(section))
+            .Add(JxlTestFrame.Last(section) with { Color = new(mode) });
+
+        using JxlDecodedImage expected = DecodeToPlanes(single.ToArray());
+        using JxlDecodedImage actual = DecodeToPlanes(layers.ToArray());
+
+        Buffer2D<float> expectedPlane = Assert.Single(expected.Frames[0].Planes);
+        Buffer2D<float> actualPlane = Assert.Single(actual.Frames[0].Planes);
+        for (int y = 0; y < actual.Height; y++)
+        {
+            for (int x = 0; x < actual.Width; x++)
+            {
+                Assert.Equal(factor * expectedPlane[x, y], actualPlane[x, y], 1e-6F);
+            }
+        }
+    }
+
+    [Fact]
+    public void Blend_OfASecondAlphaChannel_IsWeightedByTheAlphaItNames()
+    {
+        // Two generated files of one colour each, with two alpha channels: (200, 100, 50, 128, 255) and
+        // (40, 220, 160, 64, 192). The top frame blends the second alpha channel weighted by the first.
+        JxlTestLayers layers = TwoAlphaLayers(new JxlTestBlending[] { new(JxlBlendMode.Replace), new(JxlBlendMode.Blend, AlphaChannel: 0) });
+
+        using JxlDecodedImage decoded = DecodeToPlanes(layers.ToArray());
+
+        // (192 * 64 + 255 * 128 * (255 - 64) / 255) / (255 - (255 - 64) * (255 - 128) / 255) = 229.78.
+        JxlDecodedFrame frame = Assert.Single(decoded.Frames);
+        Assert.Equal(5, frame.Planes.Count);
+        float[] expected = { 40, 220, 160, 64, 229.78025F };
+        for (int c = 0; c < expected.Length; c++)
+        {
+            Assert.Equal(expected[c], frame.Planes[c][3, 5] * 255F, 1e-3F);
+        }
+    }
+
+    [Theory]
+    [InlineData(30, 4, 6, 6)] // starts right of the image
+    [InlineData(-10, 4, 6, 6)] // ends left of the image
+    public void CroppedFrame_WhollyOutsideTheImage_LeavesTheBackground(int x0, int y0, int xsize, int ysize)
+    {
+        byte[] codestream = new JxlTestLayers(Width, Height)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = x0, Y0 = y0, XSize = xsize, YSize = ysize, Color = new(JxlBlendMode.Add) })
+            .ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
+    }
+
+    [Fact]
+    public void Decode_DepthExtraChannel_IsNotSupported()
+    {
+        // Extra channels other than alpha are a later slice; the decoder says so rather than dropping them.
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "depth.jxl");
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => Image.Load<Rgba32>(CreateConfiguration(), path));
+        Assert.Contains("Depth", ex.Message, StringComparison.Ordinal);
+    }
+
+    // Each allocation of a decode, in turn, fails. Whichever it is, the decode throws and every buffer it
+    // took is released: the frame planes, the image-sized planes of a blended frame, the copies kept in
+    // reference slots and the image itself.
+    [Fact]
+    public void Load_RunningOutOfMemoryAtAnyAllocation_ReleasesEveryBuffer()
+    {
+        byte[] codestream = BufferHungryLayers().ToArray();
+
+        FailingMemoryAllocator counter = new(failAt: int.MaxValue);
+        using (Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(counter), codestream))
+        {
+            Assert.Equal(3, image.Frames.Count);
+        }
+
+        Assert.Equal(0, counter.Outstanding);
+        Assert.True(counter.Allocations > 0);
+        for (int failAt = 1; failAt <= counter.Allocations; failAt++)
+        {
+            FailingMemoryAllocator allocator = new(failAt);
+            Assert.Throws<InvalidMemoryOperationException>(() => Image.Load<Rgba32>(CreateConfiguration(allocator), codestream));
+            Assert.True(allocator.Outstanding == 0, $"Allocation {failAt} of {counter.Allocations} failed and left {allocator.Outstanding} buffers.");
+        }
+    }
+
     public static TheoryData<string> DjxlCases => new(Cases.Keys);
 
     // Every blend mode on the colour and on the alpha extra channel, with its clamp flag, and the
@@ -241,7 +392,52 @@ public class JxlLayersTests
         ["skip_progressive"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
             .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Type = JxlFrameType.SkipProgressive, Color = new(JxlBlendMode.Blend) }),
+        ["colour_blend_premultiplied_clamp"] = TwoLayers(new(JxlBlendMode.Blend, Clamp: true), new(JxlBlendMode.Replace), premultiplied: true),
+        ["crop_ends_left_of_the_image"] = new JxlTestLayers(Width, Height)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = -10, Y0 = 4, XSize = 6, YSize = 6, Color = new(JxlBlendMode.Add) }),
+        ["buffer_hungry"] = BufferHungryLayers(),
+
+        // Two alpha channels: the second is blended, added or multiplied with the first as its alpha.
+        ["two_alpha_blend_by_first"] = TwoAlphaLayers(new JxlTestBlending[] { new(JxlBlendMode.Replace), new(JxlBlendMode.Blend, AlphaChannel: 0) }),
+        ["two_alpha_alpha_weighted_add_by_first"] = TwoAlphaLayers(new JxlTestBlending[] { new(JxlBlendMode.Blend), new(JxlBlendMode.AlphaWeightedAdd, AlphaChannel: 0) }),
+        ["two_alpha_colour_blend_by_second"] = TwoAlphaLayers(new JxlTestBlending[] { new(JxlBlendMode.Replace), new(JxlBlendMode.Replace) }, new(JxlBlendMode.Blend, AlphaChannel: 1)),
+
+        // No alpha: kBlend copies the foreground and kAlphaWeightedAdd adds it.
+        ["grey_no_alpha_blend"] = GreyNoAlphaLayers(JxlBlendMode.Blend),
+        ["grey_no_alpha_alpha_weighted_add"] = GreyNoAlphaLayers(JxlBlendMode.AlphaWeightedAdd),
     };
+
+    // An animation whose frames take every kind of buffer: a displayed frame saved to a slot, a cropped
+    // frame blended onto it and saved, a frame saved before its colour transform and blended, and a last
+    // frame that blends from both.
+    private static JxlTestLayers BufferHungryLayers()
+        => new JxlTestLayers(Width, Height, animation: true)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 10, SaveAsReference = 1 })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { Duration = 10, X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1), SaveAsReference = 2 })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { ExtraChannel = new(JxlBlendMode.Add, Source: 2), SaveAsReference = 3, SaveBeforeColorTransform = true })
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Duration = 10, Color = new(JxlBlendMode.Add, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 3) });
+
+    // Two full-size frames of the generated 64 x 64 8-bit grey file, which has no alpha.
+    private static JxlTestLayers GreyNoAlphaLayers(JxlBlendMode mode)
+    {
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "greyscale.jxl");
+        JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(path), out byte[] section);
+        return layers
+            .Add(new JxlTestFrame(section))
+            .Add(JxlTestFrame.Last(section) with { Color = new(mode) });
+    }
+
+    // The generated 16 x 16 files with two alpha channels: two_alpha_a under two_alpha_b.
+    private static JxlTestLayers TwoAlphaLayers(JxlTestBlending[] extraChannels, JxlTestBlending color = default)
+    {
+        string directory = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated");
+        JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(directory, "two_alpha_a.jxl")), out byte[] bottom);
+        JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(directory, "two_alpha_b.jxl")), out byte[] top);
+        return layers
+            .Add(new JxlTestFrame(bottom))
+            .Add(JxlTestFrame.Last(top) with { Color = color, ExtraChannels = extraChannels });
+    }
 
     // Two full-size frames of the generated 64 x 64 16-bit grey and alpha file.
     private static JxlTestLayers GreyLayers(JxlTestBlending color, JxlTestBlending extraChannel)
@@ -264,8 +460,8 @@ public class JxlLayersTests
         return new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
     }
 
-    // Checks every sample against 8-bit values, which may pass 255: the planes are not clamped.
-    private static void AssertEveryPixel(JxlDecodedImage decoded, Func<int, int, (int R, int G, int B, int A)> expected)
+    // Checks every sample against values in 8-bit units, which may pass 255: the planes are not clamped.
+    private static void AssertEveryPixel(JxlDecodedImage decoded, Func<int, int, (float R, float G, float B, float A)> expected)
     {
         using (decoded)
         {
@@ -276,30 +472,90 @@ public class JxlLayersTests
         }
     }
 
-    private static void AssertEveryPixel(JxlDecodedFrame frame, Func<int, int, (int R, int G, int B, int A)> expected)
+    private static void AssertEveryPixel(JxlDecodedFrame frame, Func<int, int, (float R, float G, float B, float A)> expected)
     {
-        IReadOnlyList<Buffer2D<float>> planes = frame.Planes;
-        Assert.Equal(4, planes.Count);
+        Assert.Equal(4, frame.Planes.Count);
         for (int y = 0; y < Height; y++)
         {
             for (int x = 0; x < Width; x++)
             {
-                (int r, int g, int b, int a) = expected(x, y);
-                int[] want = { r, g, b, a };
-                for (int c = 0; c < 4; c++)
-                {
-                    float sample = planes[c].DangerousGetRowSpan(y)[x];
-                    Assert.True(MathF.Abs(sample - (want[c] / 255F)) < 1e-6F, $"({x}, {y}) channel {c}: {sample * 255F}, expected {want[c]}.");
-                }
+                AssertPixel(frame, x, y, expected(x, y));
             }
         }
     }
 
-    private static Configuration CreateConfiguration()
+    private static void AssertPixel(JxlDecodedFrame frame, int x, int y, (float R, float G, float B, float A) expected)
+    {
+        float[] want = { expected.R, expected.G, expected.B, expected.A };
+        for (int c = 0; c < 4; c++)
+        {
+            float sample = frame.Planes[c].DangerousGetRowSpan(y)[x];
+            Assert.True(MathF.Abs(sample - (want[c] / 255F)) < 1e-6F, $"({x}, {y}) channel {c}: {sample * 255F}, expected {want[c]}.");
+        }
+    }
+
+    private static Configuration CreateConfiguration(MemoryAllocator allocator = null)
     {
         Configuration configuration = Configuration.CreateDefaultInstance();
         configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
         configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
+        if (allocator != null)
+        {
+            // One thread, so the allocations come in the same order on every decode.
+            configuration.MemoryAllocator = allocator;
+            configuration.MaxDegreeOfParallelism = 1;
+        }
+
         return configuration;
+    }
+
+    // Counts the buffers it hands out and not yet returned, and throws on allocation failAt (from 1).
+    // Only the float and pixel buffers count: those of the render pipeline, the reference slots and the
+    // image. The Modular decoder's int buffers never fail here, as it does not yet release them all
+    // when an allocation fails.
+    private sealed class FailingMemoryAllocator : MemoryAllocator
+    {
+        private readonly int failAt;
+
+        public FailingMemoryAllocator(int failAt) => this.failAt = failAt;
+
+        public int Allocations { get; private set; }
+
+        public int Outstanding { get; private set; }
+
+        public override IMemoryOwner<T> Allocate<T>(int length, AllocationOptions options = AllocationOptions.None)
+        {
+            if (typeof(T) != typeof(int) && ++this.Allocations == this.failAt)
+            {
+                throw new InvalidMemoryOperationException($"Allocation {this.failAt} fails.");
+            }
+
+            this.Outstanding++;
+            return new Owner<T>(this, new T[length]);
+        }
+
+        protected internal override int GetBufferCapacityInBytes() => int.MaxValue;
+
+        private sealed class Owner<T> : IMemoryOwner<T>
+        {
+            private FailingMemoryAllocator allocator;
+
+            public Owner(FailingMemoryAllocator allocator, T[] array)
+            {
+                this.allocator = allocator;
+                this.Memory = array;
+            }
+
+            public Memory<T> Memory { get; }
+
+            public void Dispose()
+            {
+                if (this.allocator != null)
+                {
+                    this.allocator.Outstanding--;
+                    this.allocator = null;
+                }
+            }
+        }
     }
 }
