@@ -25,6 +25,7 @@ These files cover features that no conformance vector checks. They were made for
 | `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG: no pixel profile until D11. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `orientation_1.jxl` to `orientation_8.jxl` | Lossless Modular, 37 x 23 8-bit RGBA, with codestream orientations 1 to 8. The files differ only in the three orientation bits; every pixel differs, so a wrong flip or transpose shows. Orientations 5 to 8 decode to 23 x 37. | `External/ReferenceOutput/JxlDecoderTests/orientation_1.png` to `orientation_8.png` |
 | `orientation_exif.jxl` | The same image with orientation 6, in a container with an uncompressed `Exif` box whose orientation tag is also 6. | `External/ReferenceOutput/JxlDecoderTests/orientation_exif.png`, whose Exif (a `zTXt` "Raw profile type exif" chunk) has the orientation reset to 1 |
+| `animation_from_apng.jxl` | Lossless Modular, 30 x 20 8-bit RGBA animation made from a four-frame APNG. The APNG's second frame has a delay of 0, so it becomes a frame with no duration that is blended into the next one: the animation shows three frames, of 120, 250 and 80 ticks at 1000 ticks per second. The later frames are cropped, and one blends over the canvas. | `External/ReferenceOutput/JxlDecoderTests/animation_from_apng.npy`: every displayed frame, as float32 (frames, height, width, channels) |
 
 #### How `premultiplied_alpha` was made
 
@@ -133,3 +134,15 @@ djxl orientation_exif.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orie
 - `--container=0` drops the Exif box but keeps the codestream orientation, so `orientation_base.jxl` is a bare codestream with orientation 6. Its orientation field is present, because the orientation is not 1.
 - Given that file, `make_orientation.py` rewrites its three orientation bits to each orientation and writes `orientation_1.jxl` to `orientation_8.jxl`. `orientation_6.jxl` equals `orientation_base.jxl`. Neither the source PNG nor the base file is committed; the commands make them again.
 - `djxl` orients its output by default, and when it writes the Exif it resets the orientation tag to 1 (`ResetExifOrientation`).
+
+#### How `animation_from_apng` was made
+
+```sh
+py -3 make_animation.py
+cjxl animation_source.png animation_from_apng.jxl -d 0
+djxl animation_from_apng.jxl ../../../External/ReferenceOutput/JxlDecoderTests/animation_from_apng.npy
+```
+
+- `make_animation.py` writes `animation_source.png`, an APNG with four frames and no disposal. It is not committed; the script makes it again.
+- `cjxl` keeps every APNG frame as a JPEG XL frame, with the APNG delay in milliseconds as its duration (1000 ticks per second). `jxlinfo -v` lists the zero-delay frame as a "Layer" with a duration of 0.
+- Given a `.png` output, `djxl` writes an APNG, and this repository's PNG decoder reads only its first frame. Given `.npy`, it writes every displayed frame, coalesced onto the full canvas: three frames, one fewer than the APNG.

@@ -28,6 +28,8 @@ public class JxlAnimationTests
 
     private static string BlendingDirectory => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", "blending");
 
+    private static string AnimationFromApngPath => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "animation_from_apng.jxl");
+
     [Fact]
     public void Load_CroppedTrafficLight_GivesTheFourFramesExactly()
     {
@@ -66,6 +68,37 @@ public class JxlAnimationTests
         uint[] expected = vector.Frames.Select(f => (uint)Math.Round(f.Duration.Value * 100)).ToArray();
         Assert.Equal(expected, Durations(image));
         Assert.Equal(vector.Frames.Select(f => f.Name), Names(image));
+    }
+
+    [Fact]
+    public void DecodeToPlanes_AnimationFromApng_DropsTheZeroDelayFrameAndMatchesDjxl()
+    {
+        // make_animation.py writes a four-frame APNG whose second frame has a delay of 0.
+        const int apngFrames = 4;
+        NpyArray expected = NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "animation_from_apng.npy"));
+
+        using FileStream stream = File.OpenRead(AnimationFromApngPath);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+
+        Assert.Equal(apngFrames - 1, decoded.Frames.Count);
+        Assert.Equal(expected.Shape, actual.Shape);
+        for (int i = 0; i < expected.Data.Length; i++)
+        {
+            Assert.True(MathF.Abs(expected.Data[i] - actual.Data[i]) <= 1e-6F, $"Sample {i}: djxl {expected.Data[i]}, ImageSharp {actual.Data[i]}.");
+        }
+    }
+
+    [Fact]
+    public void Load_AnimationFromApng_GivesTheApngDelays()
+    {
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), AnimationFromApngPath);
+
+        // cjxl counts APNG delays in milliseconds; the zero-delay frame is blended into the 250 ms one.
+        JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.Equal(1000u, metadata.TicksPerSecondNumerator);
+        Assert.Equal(1u, metadata.TicksPerSecondDenominator);
+        Assert.Equal(new uint[] { 120, 250, 80 }, Durations(image));
     }
 
     [Fact]
@@ -151,6 +184,38 @@ public class JxlAnimationTests
         using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default, new JxlDecoder { MaxFrames = 2 }).DecodeToPlanes(stream, CancellationToken);
 
         Assert.Equal(2, decoded.Frames.Count);
+    }
+
+    [Fact]
+    public void DeepClone_CopiesTheAnimationFields()
+    {
+        JxlMetadata metadata = new() { LoopCount = 3, TicksPerSecondNumerator = 30000, TicksPerSecondDenominator = 1001 };
+        JxlFrameMetadata frameMetadata = new() { Duration = 42, Name = "frame" };
+
+        JxlMetadata clone = (JxlMetadata)metadata.DeepClone();
+        JxlFrameMetadata frameClone = (JxlFrameMetadata)frameMetadata.DeepClone();
+
+        Assert.Equal(3, clone.LoopCount);
+        Assert.Equal(30000u, clone.TicksPerSecondNumerator);
+        Assert.Equal(1001u, clone.TicksPerSecondDenominator);
+        Assert.Equal(42u, frameClone.Duration);
+        Assert.Equal("frame", frameClone.Name);
+    }
+
+    [Fact]
+    public void Clone_KeepsTheFrameDurationsAndNames()
+    {
+        byte[] codestream = new JxlTestLayers(Width, Height, animation: true) { NumLoops = 2 }
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 7, Name = "a" })
+            .Add(Last(JxlTestLayers.ColourB) with { Duration = 9, Name = "b" })
+            .ToArray();
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), codestream);
+
+        using Image<Rgba32> clone = image.Clone();
+
+        Assert.Equal(new uint[] { 7, 9 }, Durations(clone));
+        Assert.Equal(new[] { "a", "b" }, Names(clone));
+        Assert.Equal(2, clone.Metadata.GetFormatMetadata(JxlFormat.Instance).LoopCount);
     }
 
     private static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
