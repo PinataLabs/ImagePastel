@@ -18,8 +18,8 @@ internal class TiffEncoderEntriesCollector
 
     public List<IExifValue> Entries { get; } = new List<IExifValue>();
 
-    public void ProcessMetadata(Image image)
-        => new MetadataProcessor(this).Process(image);
+    public void ProcessMetadata(ImageFrame frame, ImageMetadata imageMetadata)
+        => new MetadataProcessor(this).Process(frame, imageMetadata);
 
     public void ProcessFrameInfo(ImageFrame frame, ImageMetadata imageMetadata)
         => new FrameInfoProcessor(this).Process(frame, imageMetadata);
@@ -56,19 +56,19 @@ internal class TiffEncoderEntriesCollector
         {
         }
 
-        public void Process(Image image)
+        public void Process(ImageFrame frame, ImageMetadata imageMetadata)
         {
-            ImageFrameMetadata rootFrameMetadata = image.Frames.RootFrame.Metadata;
-            ExifProfile rootFrameExifProfile = rootFrameMetadata.ExifProfile ?? new ExifProfile();
-            XmpProfile rootFrameXmpProfile = rootFrameMetadata.XmpProfile;
+            ImageFrameMetadata frameMetadata = frame.Metadata;
+            ExifProfile frameExifProfile = frameMetadata.ExifProfile ?? new ExifProfile();
+            XmpProfile frameXmpProfile = frameMetadata.XmpProfile;
 
-            // The root frame is written as the first IFD, so its own profiles take precedence over those of the image.
+            // The frame's own profiles take precedence over those of the image.
             // This keeps edits to a decoded frame's profiles even after a clone, which copies the frame and image profiles separately.
-            IccProfile iccProfile = rootFrameMetadata.IccProfile ?? image.Metadata.IccProfile;
-            IptcProfile iptcProfile = rootFrameMetadata.IptcProfile ?? image.Metadata.IptcProfile;
+            IccProfile iccProfile = frameMetadata.IccProfile ?? imageMetadata?.IccProfile;
+            IptcProfile iptcProfile = frameMetadata.IptcProfile ?? imageMetadata?.IptcProfile;
 
-            this.ProcessProfiles(rootFrameExifProfile, rootFrameXmpProfile, iccProfile, iptcProfile);
-            this.ProcessMetadata(rootFrameExifProfile);
+            this.ProcessProfiles(frameExifProfile, frameXmpProfile, iccProfile, iptcProfile);
+            this.ProcessMetadata(frameExifProfile);
 
             if (!this.Collector.Entries.Exists(t => t.Tag == ExifTag.Software))
             {

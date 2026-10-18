@@ -1,9 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
@@ -441,6 +444,98 @@ public class TiffMetadataTests
 
         Assert.Equal(iccBytes, image.Frames.RootFrame.Metadata.IccProfile?.ToByteArray());
         Assert.Equal("image author", image.Frames.RootFrame.Metadata.IptcProfile?.GetValues(IptcTag.Byline).Single().Value);
+    }
+
+    [Fact]
+    public void Encode_DecodedMultiframeWithIccProfiles_KeepsEachProfileOnItsFrame()
+    {
+        byte[] rootIccBytes = GetJpegIccProfileBytes();
+        byte[] secondIccBytes = IccTestDataProfiles.Profile_Random_Array;
+        var builder = new TiffTestFileBuilder();
+        AddOnePixelRgbPage(builder, rootIccBytes);
+        AddOnePixelRgbPage(builder, secondIccBytes);
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(builder.Build());
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(decoded));
+
+        Assert.Equal(2, image.Frames.Count);
+        Assert.Equal(rootIccBytes, image.Frames[0].Metadata.IccProfile?.ToByteArray());
+        Assert.Equal(secondIccBytes, image.Frames[1].Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Fact]
+    public void Encode_MultiframeWithFrameProfiles_WritesEachFrameProfilesToItsOwnIfd()
+    {
+        byte[] rootIccBytes = GetJpegIccProfileBytes();
+        byte[] secondIccBytes = IccTestDataProfiles.Profile_Random_Array;
+        using var source = new Image<Rgba32>(8, 8);
+        source.Frames.CreateFrame();
+        source.Frames.CreateFrame();
+        SetFrameProfiles(source.Frames[0].Metadata, rootIccBytes, "page 1");
+        SetFrameProfiles(source.Frames[1].Metadata, secondIccBytes, "page 2");
+        source.Metadata.IccProfile = new IccProfile(rootIccBytes);
+        source.Metadata.IptcProfile = new IptcProfile();
+        source.Metadata.IptcProfile.SetValue(IptcTag.Byline, "image author");
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(EncodeTiff(source));
+
+        Assert.Equal(3, image.Frames.Count);
+        AssertFrameProfiles(image.Frames[0].Metadata, rootIccBytes, "page 1");
+        AssertFrameProfiles(image.Frames[1].Metadata, secondIccBytes, "page 2");
+
+        // A frame without profiles of its own does not take those of another frame or of the image.
+        ImageFrameMetadata thirdFrameMetadata = image.Frames[2].Metadata;
+        Assert.Null(thirdFrameMetadata.IccProfile);
+        Assert.Null(thirdFrameMetadata.IptcProfile);
+        Assert.Null(thirdFrameMetadata.XmpProfile);
+        Assert.Null(thirdFrameMetadata.ExifProfile.GetValue(ExifTag.ImageDescription));
+    }
+
+    // The expected hashes were captured from the encoder output before the fix for #90,
+    // which writes the metadata of every frame. Single-page output must not change.
+    // A change that is meant to alter single-page output must check the new output and recapture these hashes.
+    [Theory]
+    [InlineData(false, "D2B1045E53C83749186F1CD6E419885D2173A7F0D4BD5EC416B898857E24F524")]
+    [InlineData(true, "E07EDC36FDF3BC8DE5E9BAFD8252F418F21E38AD6D2B6E6048C6AB5E6073780C")]
+    public void Encode_SinglePage_OutputIsUnchanged(bool withProfiles, string expectedSha256)
+    {
+        using var source = new Image<Rgba32>(5, 3);
+        for (int y = 0; y < source.Height; y++)
+        {
+            for (int x = 0; x < source.Width; x++)
+            {
+                source[x, y] = new Rgba32((byte)(x * 50), (byte)(y * 100), (byte)((x + y) * 30), 255);
+            }
+        }
+
+        if (withProfiles)
+        {
+            source.Metadata.HorizontalResolution = 300;
+            source.Metadata.VerticalResolution = 300;
+            SetFrameProfiles(source.Frames.RootFrame.Metadata, GetJpegIccProfileBytes(), "single page");
+        }
+
+        string actualSha256 = Convert.ToHexString(SHA256.HashData(EncodeTiff(source)));
+
+        Assert.Equal(expectedSha256, actualSha256);
+    }
+
+    private static void SetFrameProfiles(ImageFrameMetadata metadata, byte[] iccBytes, string text)
+    {
+        metadata.IccProfile = new IccProfile(iccBytes);
+        metadata.IptcProfile = new IptcProfile();
+        metadata.IptcProfile.SetValue(IptcTag.Byline, text);
+        metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes($"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">{text}</x:xmpmeta>"));
+        metadata.ExifProfile = new ExifProfile();
+        metadata.ExifProfile.SetValue(ExifTag.ImageDescription, text);
+    }
+
+    private static void AssertFrameProfiles(ImageFrameMetadata metadata, byte[] iccBytes, string text)
+    {
+        Assert.Equal(iccBytes, metadata.IccProfile?.ToByteArray());
+        Assert.Equal(text, metadata.IptcProfile?.GetValues(IptcTag.Byline).Single().Value);
+        Assert.Equal(Encoding.UTF8.GetBytes($"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">{text}</x:xmpmeta>"), metadata.XmpProfile?.Data);
+        Assert.Equal(text, metadata.ExifProfile?.GetValue(ExifTag.ImageDescription)?.Value);
     }
 
     private static byte[] GetJpegIccProfileBytes()
