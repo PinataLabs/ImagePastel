@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ImageMagick;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -12,6 +13,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -308,11 +310,41 @@ public class JxlDecoderTests
     }
 
     [Fact]
-    public void Decode_CmykImage_ThrowsNotSupported()
+    public async Task Load_CmykLayers_ConvertsTheReferencePlanesNaively()
     {
-        using FileStream stream = File.OpenRead(JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
+        // The conformance reference holds the planes as coded: C, M, Y, K and alpha, where 0 is full ink.
+        // The expected pixel is R = C K, G = M K, B = Y K with the alpha kept (issue #111), quantised.
+        JxlConformanceVector vector = JxlConformanceVector.Load("cmyk_layers");
+        NpyArray planes = await JxlConformanceData.LoadReferenceImageAsync(vector, TestContext.Current.CancellationToken);
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), vector.CommittedInputPath);
 
-        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba32>(Configuration.Default, stream, CancellationToken.None));
+        Assert.Equal(new[] { 1, image.Height, image.Width, 5 }, planes.Shape);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                int i = ((y * image.Width) + x) * 5;
+                float k = planes.Data[i + 3];
+                Rgba32 expected = new(Quantize8(planes.Data[i] * k), Quantize8(planes.Data[i + 1] * k), Quantize8(planes.Data[i + 2] * k), Quantize8(planes.Data[i + 4]));
+                Rgba32 actual = image[x, y];
+
+                // Within one quantisation step.
+                Assert.InRange(actual.R - expected.R, -1, 1);
+                Assert.InRange(actual.G - expected.G, -1, 1);
+                Assert.InRange(actual.B - expected.B, -1, 1);
+                Assert.InRange(actual.A - expected.A, -1, 1);
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_CmykLayers_ChoosesRgba32AndHasNoPixelProfile()
+    {
+        using Image image = Image.Load(CreateConfiguration(), JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
+
+        Assert.IsType<Image<Rgba32>>(image);
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.Header.DataColorSpace);
     }
 
     [Fact]
@@ -471,6 +503,8 @@ public class JxlDecoderTests
     private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
 
     // The first byte of the frame in a bare codestream with no ICC profile and no preview.
+    private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);
+
     // Checks the image has alpha_triangles' colour, and is opaque.
     private static void AssertAlphaTrianglesColourWithOpaqueAlpha(Image<Rgba64> image)
     {
