@@ -30,10 +30,14 @@ internal static class HorizontalPredictor
             case TiffColorType.BlackIsZero8:
             case TiffColorType.WhiteIsZero8:
             case TiffColorType.PaletteColor:
+
+            // A planar buffer holds one ink, so the predictor works on single samples.
+            case TiffColorType.Cmyk8888Planar:
                 UndoGray8Bit(pixelBytes, width);
                 break;
             case TiffColorType.BlackIsZero16:
             case TiffColorType.WhiteIsZero16:
+            case TiffColorType.Cmyk16161616Planar:
                 UndoGray16Bit(pixelBytes, width, isBigEndian);
                 break;
             case TiffColorType.BlackIsZero32:

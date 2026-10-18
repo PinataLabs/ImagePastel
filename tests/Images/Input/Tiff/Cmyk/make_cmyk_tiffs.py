@@ -265,6 +265,8 @@ def main():
     write_tiff('cmyk-planar-16_msb.tiff', 16, '>', planar=True)
     write_tiff('cmyk-contig-08_deflate_predictor.tiff', 8, compression=COMPRESSION_DEFLATE, predictor=True)
     write_tiff('cmyk-contig-16_msb_deflate_predictor.tiff', 16, '>', compression=COMPRESSION_DEFLATE, predictor=True)
+    write_tiff('cmyk-planar-08_deflate_predictor.tiff', 8, planar=True, compression=COMPRESSION_DEFLATE, predictor=True)
+    write_tiff('cmyk-planar-16_msb_deflate_predictor.tiff', 16, '>', planar=True, compression=COMPRESSION_DEFLATE, predictor=True)
 
     profile = make_cmyk_profile()
     with open('cmyk-test-profile.icc', 'wb') as f:
