@@ -269,6 +269,26 @@ public class TiffEncoderTests : TiffEncoderBaseTester
     }
 
     [Theory]
+    [WithFile(RgbLzwPredictor, PixelTypes.Rgba32, TiffCompression.None)]
+    [WithFile(RgbLzwPredictor, PixelTypes.Rgba32, TiffCompression.PackBits)]
+    [WithFile(RgbDeflatePredictor, PixelTypes.Rgba32, TiffCompression.Jpeg)]
+    public void TiffEncoder_PredictorFromMetadata_IsNotWrittenForOtherCompression<TPixel>(TestImageProvider<TPixel> provider, TiffCompression compression)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        // arrange
+        using Image<TPixel> input = provider.GetImage();
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder { Compression = compression });
+
+        // assert
+        byte[] tiff = memStream.ToArray();
+        Assert.Equal((int)compression, ReadFirstIfdValue(tiff, ExifTagValue.Compression));
+        Assert.False(ReadFirstIfdFieldTypes(tiff).ContainsKey(ExifTagValue.Predictor), "The strips are not predicted, but a Predictor tag is written.");
+    }
+
+    [Theory]
     [WithFile(RgbUncompressed, PixelTypes.Rgba32, TiffCompression.CcittGroup3Fax, TiffCompression.CcittGroup3Fax)]
     [WithFile(RgbUncompressed, PixelTypes.Rgba32, TiffCompression.CcittGroup4Fax, TiffCompression.CcittGroup4Fax)]
     [WithFile(RgbUncompressed, PixelTypes.Rgba32, TiffCompression.Ccitt1D, TiffCompression.Ccitt1D)]
@@ -458,6 +478,156 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         byte[] tiff = memStream.ToArray();
         int stripOffset = ReadFirstIfdValue(tiff, ExifTagValue.StripOffsets);
         Assert.Equal(new[] { expectedWhiteSample, expectedWhiteSample, expectedWhiteSample, expectedWhiteSample }, tiff.AsSpan(stripOffset, 4).ToArray());
+    }
+
+    [Theory]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Lzw, TiffPredictor.Horizontal, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Ccitt1D, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.CcittGroup3Fax, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.CcittGroup4Fax, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, TiffPredictor.Horizontal, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.None, TiffPredictor.Horizontal, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Deflate, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Lzw, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Jpeg, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.PackBits, TiffPredictor.Horizontal, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Deflate, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Lzw, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Jpeg, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Deflate, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.None, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.None, TiffPredictor.Horizontal, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.PackBits, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Deflate, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Deflate, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Lzw, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Lzw, TiffPredictor.Horizontal, true)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Jpeg, null, false)]
+    [InlineData(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb, TiffCompression.Jpeg, TiffPredictor.Horizontal, false)]
+    public void TiffEncoder_CompressionAndPredictorTagsMatchStripData(
+        TiffBitsPerPixel bitsPerPixel,
+        TiffPhotometricInterpretation photometricInterpretation,
+        TiffCompression compression,
+        TiffPredictor? predictor,
+        bool expectPredictorTag)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRoundTripInput(bitsPerPixel, photometricInterpretation);
+        using var memStream = new MemoryStream();
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = photometricInterpretation,
+            Compression = compression,
+            HorizontalPredictor = predictor
+        };
+
+        // act
+        input.Save(memStream, encoder);
+
+        // assert
+        byte[] tiff = memStream.ToArray();
+        Assert.Equal((int)compression, ReadFirstIfdValue(tiff, ExifTagValue.Compression));
+        if (expectPredictorTag)
+        {
+            Assert.Equal((int)TiffPredictor.Horizontal, ReadFirstIfdValue(tiff, ExifTagValue.Predictor));
+        }
+        else
+        {
+            Assert.False(ReadFirstIfdFieldTypes(tiff).ContainsKey(ExifTagValue.Predictor), "The strips are not predicted, but a Predictor tag is written.");
+        }
+
+        // The pixels only round trip if the tags describe the strip data.
+        memStream.Position = 0;
+        using var output = Image.Load<Rgba32>(memStream);
+        ImageComparer comparer = compression == TiffCompression.Jpeg ? ImageComparer.TolerantPercentage(1F) : ImageComparer.Exact;
+        comparer.VerifySimilarity(input, output);
+    }
+
+    [Theory]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero, TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.BlackIsZero)]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.WhiteIsZero, TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.WhiteIsZero)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor, TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb)]
+    public void TiffEncoder_JpegCompressionOption_WithBilevelOrPaletteData_EncodesContinuousToneJpeg(
+        TiffBitsPerPixel bitsPerPixel,
+        TiffPhotometricInterpretation photometricInterpretation,
+        TiffBitsPerPixel expectedBitsPerPixel,
+        TiffPhotometricInterpretation expectedPhotometricInterpretation)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRoundTripInput(bitsPerPixel, photometricInterpretation);
+        using var memStream = new MemoryStream();
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = photometricInterpretation,
+            Compression = TiffCompression.Jpeg
+        };
+
+        // act
+        input.Save(memStream, encoder);
+
+        // assert
+        Assert.Equal((int)TiffCompression.Jpeg, ReadFirstIfdValue(memStream.ToArray(), ExifTagValue.Compression));
+        memStream.Position = 0;
+        using var output = Image.Load<Rgba32>(memStream);
+        TiffFrameMetadata frameMetadata = output.Frames.RootFrame.Metadata.GetTiffMetadata();
+        Assert.Equal(expectedBitsPerPixel, frameMetadata.BitsPerPixel);
+        Assert.Equal(expectedPhotometricInterpretation, frameMetadata.PhotometricInterpretation);
+        ImageComparer.TolerantPercentage(1F).VerifySimilarity(input, output);
+    }
+
+    [Theory]
+    [InlineData(TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero)]
+    [InlineData(TiffBitsPerPixel.Bit4, TiffPhotometricInterpretation.PaletteColor)]
+    [InlineData(TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor)]
+    public void TiffEncoder_JpegCompressionFromMetadata_WithBilevelOrPaletteData_WritesUncompressed(
+        TiffBitsPerPixel bitsPerPixel,
+        TiffPhotometricInterpretation photometricInterpretation)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRoundTripInput(bitsPerPixel, photometricInterpretation);
+        TiffFrameMetadata inputMetadata = input.Frames.RootFrame.Metadata.GetTiffMetadata();
+        inputMetadata.BitsPerPixel = bitsPerPixel;
+        inputMetadata.PhotometricInterpretation = photometricInterpretation;
+        inputMetadata.Compression = TiffCompression.Jpeg;
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder());
+
+        // assert
+        Assert.Equal((int)TiffCompression.None, ReadFirstIfdValue(memStream.ToArray(), ExifTagValue.Compression));
+        memStream.Position = 0;
+        using var output = Image.Load<Rgba32>(memStream);
+        Assert.Equal(bitsPerPixel, output.Frames.RootFrame.Metadata.GetTiffMetadata().BitsPerPixel);
+        ImageComparer.Exact.VerifySimilarity(input, output);
     }
 
     [Theory]
@@ -821,6 +991,37 @@ public class TiffEncoderTests : TiffEncoderBaseTester
                 Assert.True(expected == image[x, y], $"Pixel ({x},{y}) is {image[x, y]}, expected {expected}.");
             }
         }
+    }
+
+    /// <summary>
+    /// Creates an image that the given bit depth and photometric interpretation store without loss.
+    /// </summary>
+    private static Image<Rgba32> CreateRoundTripInput(TiffBitsPerPixel bitsPerPixel, TiffPhotometricInterpretation photometricInterpretation)
+    {
+        const int width = 32;
+        const int height = 16;
+        if (bitsPerPixel == TiffBitsPerPixel.Bit1)
+        {
+            return CreateBlackDiagonalOnWhite(width, height);
+        }
+
+        var image = new Image<Rgba32>(width, height);
+        Rgba32[] palette = { Color.Black, Color.White, Color.Red, Color.Blue };
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                byte gray = (byte)((x * 8) + y);
+                image[x, y] = photometricInterpretation switch
+                {
+                    TiffPhotometricInterpretation.PaletteColor => palette[((x / 4) + (y / 4)) % palette.Length],
+                    TiffPhotometricInterpretation.Rgb => new Rgba32((byte)(x * 8), (byte)(y * 16), 128),
+                    _ => new Rgba32(gray, gray, gray),
+                };
+            }
+        }
+
+        return image;
     }
 
     private static Image<Rgba32> CreateRandomColorImage(int width, int height)

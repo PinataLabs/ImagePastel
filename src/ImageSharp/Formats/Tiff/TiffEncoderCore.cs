@@ -354,6 +354,24 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
             }
         }
 
+        // JPEG compression can only encode continuous-tone data (8 bit gray or 24 bit RGB), not bilevel or palette data.
+        bool isPalette = bitsPerPixel == TiffBitsPerPixel.Bit4 || photometricInterpretation == TiffPhotometricInterpretation.PaletteColor;
+        if (compression == TiffCompression.Jpeg && (isPalette || bitsPerPixel == TiffBitsPerPixel.Bit1))
+        {
+            if (this.CompressionType.HasValue)
+            {
+                // The compression was set in the encoder options, so the data has to follow it: RGB for palette data, gray for bilevel data.
+                bitsPerPixel = isPalette ? TiffBitsPerPixel.Bit24 : TiffBitsPerPixel.Bit8;
+                photometricInterpretation = isPalette ? TiffPhotometricInterpretation.Rgb
+                    : photometricInterpretation == TiffPhotometricInterpretation.WhiteIsZero ? TiffPhotometricInterpretation.WhiteIsZero : TiffPhotometricInterpretation.BlackIsZero;
+            }
+            else
+            {
+                // The compression comes from the metadata and does not fit the data, so it is not used.
+                compression = DefaultCompression;
+            }
+        }
+
         // BitsPerPixel should be the primary source of truth for the encoder options.
         if (bitsPerPixel.HasValue)
         {
@@ -444,6 +462,9 @@ internal sealed class TiffEncoderCore : IImageEncoderInternals
         this.BitsPerPixel = bitsPerPixel;
         this.PhotometricInterpretation = photometricInterpretation;
         this.CompressionType = compression;
-        this.HorizontalPredictor = predictor;
+
+        // TIFF 6.0 defines the Predictor only for LZW, and the Deflate specification adds it for Deflate.
+        // The other compressors do not predict the strips, so a predictor from the options or the metadata is dropped.
+        this.HorizontalPredictor = compression is TiffCompression.Lzw or TiffCompression.Deflate ? predictor : TiffPredictor.None;
     }
 }
