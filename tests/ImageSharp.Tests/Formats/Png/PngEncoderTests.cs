@@ -257,7 +257,7 @@ public partial class PngEncoderTests
     }
 
     // Each case covers every size, so an encoder or decoder that hangs ties up one thread per format rather than one per size.
-    // The palette case quantizes 162 images and took 33 s on a CI runner with coverage, so the timeout leaves room for that.
+    // The palette case quantizes 162 images; with the default quantizer it took over 120 s on the coverage runner.
     [Theory(Timeout = 120_000)]
     [InlineData(PngColorType.Grayscale, PngBitDepth.Bit1)]
     [InlineData(PngColorType.Grayscale, PngBitDepth.Bit2)]
@@ -305,8 +305,11 @@ public partial class PngEncoderTests
             }
         }
 
-        byte[] interlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.Adam7 });
-        byte[] nonInterlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.None });
+        // The default Wu quantizer clears tables sized for any image, about 100 ms an image however small
+        // it is. A fixed palette gives both encodes the same indices for a fraction of that.
+        IQuantizer quantizer = colorType == PngColorType.Palette ? new WebSafePaletteQuantizer() : null;
+        byte[] interlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.Adam7, Quantizer = quantizer });
+        byte[] nonInterlaced = EncodeToBytes(source, new PngEncoder { ColorType = colorType, BitDepth = bitDepth, InterlaceMethod = PngInterlaceMode.None, Quantizer = quantizer });
 
         // The image data holds one scanline per row of each pass with columns, and nothing for empty passes.
         byte[] header = PngTestFileBuilder.ReadChunks(interlaced).First(c => c.Type == "IHDR").Data;
