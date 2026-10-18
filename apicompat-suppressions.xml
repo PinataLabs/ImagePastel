@@ -7,6 +7,15 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.get_TimeZoneOffset</Target>
   </Suppression>
+  <!-- Addition: BmpDecoder.IgnoreMetadata, #183. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.get_IgnoreMetadata</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Formats.Bmp.BmpDecoder.set_IgnoreMetadata(System.Boolean)</Target>
+  </Suppression>
   <!-- Additions: IccProfile convenience API (description, colour space, class, typed tag lookup, sRGB check), #172. -->
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
