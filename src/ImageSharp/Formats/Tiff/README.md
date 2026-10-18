@@ -53,7 +53,7 @@
 |Rgb (Planar)               |       |   Y   | General implementation only |
 |PaletteColor               |   Y   |   Y   | General implementation only |
 |TransparencyMask           |       |       |                          |
-|Separated (TIFF Extension) |       |       |                          |
+|Separated (TIFF Extension) |       |   Y   | CMYK ink set only, 8 and 16-bit, chunky and planar. Converted to RGB with the same CMYK-to-RGB formula as the JPEG decoder; an embedded profile is exposed but not applied. |
 |YCbCr (TIFF Extension)     |       |   Y   |                          |
 |CieLab (TIFF Extension)    |       |       |                          |
 |IccLab (TechNote 1)        |       |       |                          |
@@ -124,9 +124,9 @@
 |CleanFaxData               |       |       |                          |
 |ConsecutiveBadFaxLines     |       |       |                          |
 |SubIFDs                    |       |   -   |                          |
-|InkSet                     |       |       |                          |
+|InkSet                     |       |   Y   | Only 1 (CMYK), the default. Other ink sets throw `NotSupportedException`. |
 |InkNames                   |       |       |                          |
-|NumberOfInks               |       |       |                          |
+|NumberOfInks               |       |   Y   | Only 4.                  |
 |DotRange                   |       |       |                          |
 |TargetPrinter              |       |       |                          |
 |SampleFormat               |       |   -   |                          |

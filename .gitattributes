@@ -87,6 +87,8 @@
 *.dll               binary
 *.eot               binary
 *.exe               binary
+*.icc               binary
+*.icm               binary
 *.otf               binary
 *.pdf               binary
 *.ppt               binary

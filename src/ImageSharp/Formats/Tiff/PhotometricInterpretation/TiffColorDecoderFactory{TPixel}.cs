@@ -387,12 +387,20 @@ internal static class TiffColorDecoderFactory<TPixel>
             case TiffColorType.YCbCr:
                 return new YCbCrTiffColor<TPixel>(memoryAllocator, referenceBlackAndWhite, ycbcrCoefficients, ycbcrSubSampling);
 
+            case TiffColorType.Cmyk8888:
+            case TiffColorType.Cmyk16161616:
+                DebugGuard.IsTrue(bitsPerSample.Channels == 4, "bitsPerSample");
+                DebugGuard.IsTrue(colorMap == null, "colorMap");
+                return new CmykTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian);
+
             default:
                 throw TiffThrowHelper.InvalidColorType(colorType.ToString());
         }
     }
 
     public static TiffBasePlanarColorDecoder<TPixel> CreatePlanar(
+        Configuration configuration,
+        MemoryAllocator memoryAllocator,
         TiffColorType colorType,
         TiffBitsPerSample bitsPerSample,
         TiffExtraSampleType? extraSampleType,
@@ -414,6 +422,12 @@ internal static class TiffColorDecoderFactory<TPixel>
 
             case TiffColorType.YCbCrPlanar:
                 return new YCbCrPlanarTiffColor<TPixel>(referenceBlackAndWhite, ycbcrCoefficients, ycbcrSubSampling);
+
+            case TiffColorType.Cmyk8888Planar:
+            case TiffColorType.Cmyk16161616Planar:
+                DebugGuard.IsTrue(bitsPerSample.Channels == 4, "bitsPerSample");
+                DebugGuard.IsTrue(colorMap == null, "colorMap");
+                return new CmykPlanarTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian);
 
             case TiffColorType.Rgb161616Planar:
                 DebugGuard.IsTrue(colorMap == null, "colorMap");
