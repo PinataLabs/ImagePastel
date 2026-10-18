@@ -14,7 +14,7 @@ namespace SixLabors.ImageSharp.SourceGenerators.Tests;
 /// The snapshot comparison must fail on every kind of difference, or a green snapshot run
 /// would not prove that the output is unchanged.
 /// </summary>
-public sealed class GeneratorDriverHarnessTests : IDisposable
+public class GeneratorDriverHarnessTests : IDisposable
 {
     private static readonly Diagnostic[] NoDiagnostics = [];
 
