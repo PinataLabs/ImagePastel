@@ -158,7 +158,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
             JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.NumColorPlanes, alpha, premultiplied);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
-            new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
+            this.DecodeFrames(data, frameOffset, sink, cancellationToken);
             return image;
         }
         catch
@@ -201,7 +201,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
-            new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
+            this.DecodeFrames(data, frameOffset, sink, cancellationToken);
             return planesSink.Image;
         }
         catch
@@ -209,6 +209,22 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             planesSink.Image.Dispose();
             throw;
         }
+    }
+
+    // The frame loop of JxlDecoderProcessCodestream: frame after frame, each from where the previous
+    // frame's sections end, until the last one. Frames are coalesced, as djxl does by default, so only
+    // the displayed frame reaches the sink.
+    private void DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
+    {
+        using JxlReferenceFrames references = new();
+        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
+        JxlFrameHeader frameHeader;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            frameHeader = frameDecoder.DecodeFrame(data, offset, sink, cancellationToken, out offset);
+        }
+        while (!frameHeader.IsLast);
     }
 
     private static void CheckPixelCap(ulong xsize, ulong ysize)

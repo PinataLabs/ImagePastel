@@ -23,6 +23,10 @@ public class JxlConformanceDecoderTests
     [InlineData("alpha_nonpremultiplied")]
     [InlineData("alpha_triangles")]
     [InlineData("lossless_pfm")]
+    [InlineData("mul_no_extra_channels")]
+    [InlineData("blendmodes")]
+    [InlineData("blendmodes_5")]
+    [InlineData("sunset_logo")]
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

@@ -2,8 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
-// ProcessDCGroup, ProcessACGroup, ProcessSections, FinalizeFrame), restricted to Modular frames, and
-// DequantMatrices::DecodeDC from lib/jxl/quant_weights.cc.
+// ProcessDCGroup, ProcessACGroup, ProcessSections, FinalizeFrame), restricted to Modular frames,
+// DequantMatrices::DecodeDC from lib/jxl/quant_weights.cc, and the per-frame steps of the frame loop
+// in JxlDecoderProcessCodestream (lib/jxl/decode.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -32,25 +33,29 @@ internal sealed class JxlFrameDecoder
 
     private readonly Configuration configuration;
     private readonly JxlCodecMetadata metadata;
+    private readonly JxlReferenceFrames references;
 
-    public JxlFrameDecoder(Configuration configuration, JxlCodecMetadata metadata)
+    public JxlFrameDecoder(Configuration configuration, JxlCodecMetadata metadata, JxlReferenceFrames references)
     {
         this.configuration = configuration;
         this.metadata = metadata;
+        this.references = references;
     }
 
     /// <summary>
-    /// Decodes the frame that starts at byte <paramref name="offset"/> and hands it to <paramref name="sink"/>.
-    /// Throws <see cref="InvalidImageContentException"/> for invalid data, <see cref="NotSupportedException"/>
-    /// for features of later slices, and <see cref="InvalidMemoryOperationException"/> for frames over the
-    /// pixel cap.
+    /// Decodes the frame that starts at byte <paramref name="offset"/>: blends it onto its reference
+    /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
+    /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data,
+    /// <see cref="NotSupportedException"/> for features of later slices, and
+    /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap.
     /// </summary>
     /// <param name="data">The codestream.</param>
     /// <param name="offset">The first byte of the frame.</param>
-    /// <param name="sink">The sink.</param>
+    /// <param name="sink">The sink for the displayed frame.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="frameEnd">The byte after the frame's last section, where the next frame starts.</param>
     /// <returns>The frame header.</returns>
-    public JxlFrameHeader DecodeFrame(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlFrameHeader DecodeFrame(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken, out int frameEnd)
     {
         int availIn = data.Length - offset;
         JxlBitReader reader = new(data, offset, availIn);
@@ -88,8 +93,19 @@ internal sealed class JxlFrameDecoder
             pos += sizes[i];
         }
 
+        frameEnd = offset + (int)pos;
+
+        // decode.cc: the frame is shown if it is the last one, or the last of a still (an animation
+        // frame with a duration). Every other frame only feeds later frames through its slot.
+        bool isLastOfStill = frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
+
+        // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
+        int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
+        using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
+            ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled, numChannels)
+            : null;
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim);
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numChannels);
 
         ProcessSections(frameHeader, frameDim, sections, modularFrameDecoder, pipeline, cancellationToken);
 
@@ -99,7 +115,14 @@ internal sealed class JxlFrameDecoder
         }
 
         modularFrameDecoder.FinalizeDecoding(frameHeader, pipeline);
-        pipeline.Finish(sink);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, blending, isLastOfStill ? sink : null);
+
+        // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
+        if (saved != null)
+        {
+            this.references.Save(frameHeader.SaveAsReference, saved);
+        }
+
         return frameHeader;
     }
 
@@ -125,14 +148,14 @@ internal sealed class JxlFrameDecoder
             }
         }
 
-        if (frameHeader.FrameType != JxlFrameType.Regular || !frameHeader.IsLast)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("More than one frame");
-        }
-
-        if (frameHeader.Flags != JxlFrameFlags.None)
+        if (frameHeader.FrameType == JxlFrameType.Dc || frameHeader.Flags != JxlFrameFlags.None)
         {
             JxlThrowHelper.ThrowNotSupportedException("Patches, splines, noise or DC frames");
+        }
+
+        if (!frameHeader.IsLast && frameHeader.AnimationFrame.Duration > 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Animations with more than one displayed frame");
         }
 
         if (frameHeader.Upsampling != 1 || frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))
@@ -143,11 +166,6 @@ internal sealed class JxlFrameDecoder
         if (frameHeader.Passes.NumPasses != 1)
         {
             JxlThrowHelper.ThrowNotSupportedException("Progressive passes");
-        }
-
-        if (frameHeader.CustomSizeOrOrigin || frameHeader.BlendingInfo.Mode != JxlBlendMode.Replace)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Cropped or blended frames");
         }
 
         if (frameHeader.LoopFilter.Gab || frameHeader.LoopFilter.EpfIters > 0)
