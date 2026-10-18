@@ -114,12 +114,109 @@ internal class TiffEncoderEntriesCollector
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether the tag describes how the image data is laid out or encoded.
+        /// The encoder writes these tags for the data it writes, so they are never copied from the source profile.
+        /// </summary>
+        /// <param name="tag">The tag.</param>
+        /// <returns><see langword="true"/> if the tag describes the image data.</returns>
+        private static bool IsImageDataTag(ExifTag tag)
+        {
+            switch ((ExifTagValue)(ushort)tag)
+            {
+                // Image structure (TIFF 6.0 sections 3 to 8 and 18 to 19).
+                case ExifTagValue.ImageWidth:
+                case ExifTagValue.ImageLength:
+                case ExifTagValue.BitsPerSample:
+                case ExifTagValue.Compression:
+                case ExifTagValue.PhotometricInterpretation:
+                case ExifTagValue.FillOrder:
+                case ExifTagValue.StripOffsets:
+                case ExifTagValue.SamplesPerPixel:
+                case ExifTagValue.RowsPerStrip:
+                case ExifTagValue.StripByteCounts:
+                case ExifTagValue.StripRowCounts:
+                case ExifTagValue.MinSampleValue:
+                case ExifTagValue.MaxSampleValue:
+                case ExifTagValue.PlanarConfiguration:
+                case ExifTagValue.FreeOffsets:
+                case ExifTagValue.FreeByteCounts:
+                case ExifTagValue.Predictor:
+                case ExifTagValue.ColorMap:
+                case ExifTagValue.Indexed:
+                case ExifTagValue.ExtraSamples:
+                case ExifTagValue.SampleFormat:
+                case ExifTagValue.SMinSampleValue:
+                case ExifTagValue.SMaxSampleValue:
+                case ExifTagValue.Decode:
+
+                // Tiles (section 15).
+                case ExifTagValue.TileWidth:
+                case ExifTagValue.TileLength:
+                case ExifTagValue.TileOffsets:
+                case ExifTagValue.TileByteCounts:
+
+                // Compression options (sections 11 and 22, TIFF Technical Note 2, TIFF-FX).
+                case ExifTagValue.T4Options:
+                case ExifTagValue.T6Options:
+                case ExifTagValue.T82ptions:
+                case ExifTagValue.JPEGTables:
+                case ExifTagValue.JPEGProc:
+                case ExifTagValue.JPEGInterchangeFormat:
+                case ExifTagValue.JPEGInterchangeFormatLength:
+                case ExifTagValue.JPEGRestartInterval:
+                case ExifTagValue.JPEGLosslessPredictors:
+                case ExifTagValue.JPEGPointTransforms:
+                case ExifTagValue.JPEGQTables:
+                case ExifTagValue.JPEGDCTables:
+                case ExifTagValue.JPEGACTables:
+
+                // YCbCr and CMYK sample encoding (sections 16 and 21).
+                case ExifTagValue.YCbCrCoefficients:
+                case ExifTagValue.YCbCrSubsampling:
+                case ExifTagValue.YCbCrPositioning:
+                case ExifTagValue.ReferenceBlackWhite:
+                case ExifTagValue.InkSet:
+                case ExifTagValue.InkNames:
+                case ExifTagValue.NumberOfInks:
+                case ExifTagValue.DotRange:
+
+                // Color filter array samples (TIFF/EP) and TIFF-FX fax profiles, coding methods and layers.
+                case ExifTagValue.CFARepeatPatternDim:
+                case ExifTagValue.CFAPattern2:
+                case ExifTagValue.FaxProfile:
+                case ExifTagValue.CodingMethods:
+                case ExifTagValue.VersionYear:
+                case ExifTagValue.ModeNumber:
+                case ExifTagValue.DefaultImageColor:
+                case ExifTagValue.ImageLayer:
+
+                // Their number of values depends on BitsPerSample.
+                case ExifTagValue.GrayResponseUnit:
+                case ExifTagValue.GrayResponseCurve:
+                case ExifTagValue.TransferFunction:
+                case ExifTagValue.TransferRange:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the field type can be written to a TIFF file.
+        /// The BigTIFF types Long8, SignedLong8 and Ifd8 are not TIFF 6.0 types, and IFD offsets would point into the source file.
+        /// </summary>
+        /// <param name="entry">The entry.</param>
+        /// <returns><see langword="true"/> if the entry can be copied with its field type.</returns>
+        private static bool HasCopyableDataType(IExifValue entry)
+            => entry.DataType is not (ExifDataType.Ifd or ExifDataType.Long8 or ExifDataType.SignedLong8 or ExifDataType.Ifd8);
+
         private void ProcessMetadata(ExifProfile exifProfile)
         {
             foreach (IExifValue entry in exifProfile.Values)
             {
                 // todo: skip subIfd
-                if (entry.DataType == ExifDataType.Ifd)
+                if (!HasCopyableDataType(entry))
                 {
                     continue;
                 }
@@ -163,6 +260,11 @@ internal class TiffEncoderEntriesCollector
             {
                 foreach (IExifValue entry in exifProfile.Values)
                 {
+                    if (IsImageDataTag(entry.Tag) || !HasCopyableDataType(entry))
+                    {
+                        continue;
+                    }
+
                     if (!this.Collector.Entries.Exists(t => t.Tag == entry.Tag) && entry.GetValue() != null)
                     {
                         ExifParts entryPart = ExifTags.GetPart(entry.Tag);

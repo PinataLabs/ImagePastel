@@ -92,9 +92,16 @@ internal sealed class JpegTiffCompression : TiffBaseDecompressor
                     break;
             }
         }
+        else if (this.photometricInterpretation is TiffPhotometricInterpretation.BlackIsZero or TiffPhotometricInterpretation.WhiteIsZero)
+        {
+            // A gray strip holds one sample per pixel.
+            // The strip is decoded as JPEG, not by format detection, which could decode a strip that points at a TIFF again.
+            using Image<L8> image = new JpegDecoder().Decode<L8>(this.configuration, stream, CancellationToken.None);
+            CopyImageBytesToBuffer(buffer, image.Frames.RootFrame.PixelBuffer);
+        }
         else
         {
-            using var image = Image.Load<Rgb24>(stream);
+            using Image<Rgb24> image = new JpegDecoder().Decode<Rgb24>(this.configuration, stream, CancellationToken.None);
             CopyImageBytesToBuffer(buffer, image.Frames.RootFrame.PixelBuffer);
         }
     }

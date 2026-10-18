@@ -315,6 +315,21 @@ public class TiffDecoderMalformedInputTests
         Assert.Throws<InvalidImageContentException>(() => Decode<L8>(BuildTiff(page)).Dispose());
     }
 
+    [Theory]
+    [InlineData(TiffPhotometricInterpretation.BlackIsZero)]
+    [InlineData(TiffPhotometricInterpretation.Rgb)]
+    public void Decode_JpegStripHoldingAnotherFormat_ThrowsInvalidImageContentException(TiffPhotometricInterpretation photometric)
+    {
+        // Without JPEGTables each strip is a whole JPEG stream. A strip that holds a TIFF is not decoded by format detection,
+        // which would also decode a strip that points at its own file again and again.
+        ushort[] bitsPerSample = photometric == TiffPhotometricInterpretation.Rgb ? new ushort[] { 8, 8, 8 } : new ushort[] { 8 };
+        byte[] nestedTiff = BuildTiff(TiffPage.Create(2, 2, bitsPerSample, photometric, false, null, new[] { new byte[4 * bitsPerSample.Length] }));
+        TiffPage page = TiffPage.Create(2, 2, bitsPerSample, photometric, false, null, new[] { nestedTiff });
+        page.Compression = TiffCompression.Jpeg;
+
+        Assert.Throws<InvalidImageContentException>(() => Decode<Rgba32>(BuildTiff(page)).Dispose());
+    }
+
     [Fact]
     public void Decode_FrameAboveAllocationLimit_ThrowsWithRealDimensions()
     {
