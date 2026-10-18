@@ -22,11 +22,12 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// No pixel profile means sRGB, so an <c>sRGB</c> chunk and a <c>cICP</c> chunk for sRGB give none.
 /// </para>
 /// <para>
-/// A <c>gAMA</c> chunk without a <c>cHRM</c> chunk describes the BT.709 (sRGB) primaries and a D65 white
-/// with its gamma, as the spec suggests in section 13.14 for a missing <c>cHRM</c>. A <c>cHRM</c> chunk
-/// without a <c>gAMA</c> chunk gives no profile: there is no tone curve, and the spec notes that
-/// decoders can do little with it (section 12.2). A <c>gAMA</c> of zero is ignored (section 13.13). An
-/// invalid <c>cHRM</c> chunk is ignored. Grayscale images get a gray profile with the white point only.
+/// Only a <c>cHRM</c> chunk together with a <c>gAMA</c> chunk builds a profile. A <c>gAMA</c> chunk
+/// alone gives none: it does not say which primaries the image has (its value stays in
+/// <see cref="PngMetadata.Gamma"/>). A <c>cHRM</c> chunk without a <c>gAMA</c> chunk gives none either:
+/// there is no tone curve, and the spec notes that decoders can do little with it (section 12.2). A
+/// <c>gAMA</c> of zero is ignored (section 13.13). An invalid <c>cHRM</c> chunk is ignored. Grayscale
+/// images get a gray profile with the white point only.
 /// </para>
 /// <para>
 /// A <c>cICP</c> chunk is used only when this decoder supports its code points (ITU-T H.273): BT.709,
@@ -147,7 +148,8 @@ internal sealed class PngColorSpaceChunks
             return embeddedProfile;
         }
 
-        if (this.hasSrgb || this.gamma == 0)
+        // gAMA alone does not say which primaries the image has, so only cHRM with gAMA builds a profile.
+        if (this.hasSrgb || this.gamma == 0 || this.chromaticities is null)
         {
             return null;
         }
@@ -163,21 +165,17 @@ internal sealed class PngColorSpaceChunks
             return null;
         }
 
-        if (this.chromaticities is not null)
+        CieXyChromaticityCoordinates white = this.Chromaticity(0);
+        RgbPrimariesChromaticityCoordinates primaries = new(this.Chromaticity(1), this.Chromaticity(2), this.Chromaticity(3));
+        try
         {
-            CieXyChromaticityCoordinates white = this.Chromaticity(0);
-            RgbPrimariesChromaticityCoordinates primaries = new(this.Chromaticity(1), this.Chromaticity(2), this.Chromaticity(3));
-            try
-            {
-                return gray ? IccProfileFactory.CreateGray(white, curve) : IccProfileFactory.CreateRgb(primaries, white, curve);
-            }
-            catch (ArgumentException)
-            {
-                // An invalid cHRM chunk is ignored.
-            }
+            return gray ? IccProfileFactory.CreateGray(white, curve) : IccProfileFactory.CreateRgb(primaries, white, curve);
         }
-
-        return gray ? IccProfileFactory.CreateGray(curve) : IccProfileFactory.CreateRgb(Rec709Primaries, D65, curve);
+        catch (ArgumentException)
+        {
+            // An invalid cHRM chunk is ignored, which leaves gAMA alone.
+            return null;
+        }
     }
 
     private static bool TryGetCicpPrimaries(byte code, out RgbPrimariesChromaticityCoordinates primaries)

@@ -66,7 +66,7 @@ public class DecoderColorProfileConversionTests
     [Theory]
     [InlineData("cICP Display P3", TestImages.Icc.CompactDisplayP3V4)]
     [InlineData("cHRM+gAMA Adobe RGB", TestImages.Icc.CompactAdobeRgbV2)]
-    [InlineData("gAMA 1", TestImages.Icc.CompactLinearSrgbV2)]
+    [InlineData("cHRM+gAMA linear sRGB", TestImages.Icc.CompactLinearSrgbV2)]
     public void Decode_Png_ColorSpaceChunks_ToSrgb_MatchesLittleCms(string chunks, string sameSpaceProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(sameSpaceProfile, null);
@@ -74,7 +74,7 @@ public class DecoderColorProfileConversionTests
         {
             "cICP Display P3" => new[] { PngTestFileBuilder.Cicp(12, 13) },
             "cHRM+gAMA Adobe RGB" => new[] { PngTestFileBuilder.Chromaticities(31270, 32900, 64000, 33000, 21000, 71000, 15000, 6000), PngTestFileBuilder.Gamma(45471) },
-            _ => new[] { PngTestFileBuilder.Gamma(100000) },
+            _ => new[] { PngTestFileBuilder.Chromaticities(31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000), PngTestFileBuilder.Gamma(100000) },
         };
         byte[] file = PngTestFileBuilder.InsertAfterHeader(Encode("png", CreateRgb24(reference), null), colorChunks);
 
