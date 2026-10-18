@@ -30,6 +30,14 @@ public class ConvertColorProfileProcessorTests
     // Float results, as a CIE76 colour difference in Lab: far below what is visible (about 1).
     private const float FloatDeltaE = 0.05F;
 
+    // The pixel types that can hold CMYK, and the number of rows in each Little CMS reference table.
+    private const PixelTypes CmykPixelTypes = PixelTypes.Rgba32 | PixelTypes.Rgba64 | PixelTypes.RgbaVector;
+    private const int ReferenceRows = 12;
+
+    // RGB after a round trip through CMYK held in 16 bits or float, in 8-bit code values: the converter-level
+    // difference from Little CMS for LUT profiles (about 0.2).
+    private const float CmykRoundTripTolerance = 0.25F;
+
     [Theory]
     [InlineData(TestImages.Icc.CompactAdobeRgbV2)]
     [InlineData(TestImages.Icc.CompactProPhotoV4)]
@@ -262,19 +270,97 @@ public class ConvertColorProfileProcessorTests
         AssertPixels(image, reference, EightBitTolerance);
     }
 
-    [Fact]
-    public void ConvertColorProfile_CmykTarget_ThrowsNotSupportedException()
+    [Theory]
+    [WithBlankImages(ReferenceRows, 1, CmykPixelTypes)]
+    public void ConvertColorProfile_SrgbToCmykProfile_MatchesLittleCms<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
-        IccProfile cmyk = Image.Identify(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk)).Metadata.IccProfile;
-        using Image<Rgb24> image = new(1, 1);
+        LittleCmsReference reference = LittleCmsReferences.Get(null, TestImages.Icc.LittleCmsFakeCmykV4);
+        using Image<TPixel> image = provider.GetImage();
+        SetInputs(image, reference);
 
-        Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfile(cmyk)));
+        image.Mutate(x => x.ConvertColorProfile(LoadProfile(TestImages.Icc.LittleCmsFakeCmykV4)));
+
+        // C, M, Y and K land in the four components; the reference is in percent of ink.
+        float tolerance = CmykTolerance<TPixel>();
+        for (int i = 0; i < reference.Count; i++)
+        {
+            AssertClose(i, reference.ScaledOutput(i, 0), image[i, 0].ToScaledVector4(), tolerance);
+        }
+    }
+
+    [Theory]
+    [WithBlankImages(ReferenceRows, 1, CmykPixelTypes)]
+    public void ConvertColorProfileToSrgb_CmykImage_MatchesLittleCmsRoundTrip<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        bool eightBit = typeof(TPixel) == typeof(Rgba32);
+        LittleCmsReference reference = LittleCmsReferences.GetRoundTrip(TestImages.Icc.LittleCmsFakeCmykV4, eightBit);
+        using Image<TPixel> image = provider.GetImage();
+        SetInputs(image, reference);
+
+        image.Mutate(x => x.ConvertColorProfile(LoadProfile(TestImages.Icc.LittleCmsFakeCmykV4)));
+        image.Mutate(x => x.ConvertColorProfileToSrgb());
+
+        float tolerance = eightBit ? EightBitTolerance : CmykRoundTripTolerance;
+        for (int i = 0; i < reference.Count; i++)
+        {
+            Vector4 actual = image[i, 0].ToScaledVector4() * 255;
+            AssertClose(i, reference.Output(i), (actual.X, actual.Y, actual.Z), tolerance);
+
+            // CMYK has no alpha, so the colours come back opaque.
+            Assert.Equal(255F, actual.W);
+        }
     }
 
     [Fact]
-    public void ConvertColorProfile_CmykPixelProfile_ThrowsNotSupportedException()
+    public void ConvertColorProfile_CmykTarget_SetsTargetAsPixelProfile()
     {
-        // A decoded CMYK JPEG keeps its CMYK profile next to RGB pixels; the processor must not read them as CMYK.
+        IccProfile target = LoadProfile(TestImages.Icc.LittleCmsFakeCmykV4);
+        using Image<Rgba32> image = new(2, 2);
+        image.Frames.RootFrame.Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactAdobeRgbV2);
+        image.Metadata.IccProfile = image.Frames.RootFrame.Metadata.IccProfile;
+
+        image.Mutate(x => x.ConvertColorProfile(target));
+
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.IccProfile.DataColorSpace);
+        Assert.Equal(target.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+        Assert.Equal(target.ToByteArray(), image.Frames.RootFrame.Metadata.IccProfile.ToByteArray());
+    }
+
+    [Theory]
+    [WithBlankImages(1, 1, PixelTypes.Rgb24 | PixelTypes.Bgra32 | PixelTypes.Argb32 | PixelTypes.L16 | PixelTypes.Rgb48 | PixelTypes.HalfVector4)]
+    public void ConvertColorProfile_CmykTargetWithOtherPixelType_ThrowsNotSupportedException<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = provider.GetImage();
+        IccProfile cmyk = LoadProfile(TestImages.Icc.LittleCmsFakeCmykV4);
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfile(cmyk)));
+
+        AssertNamesCmykPixelTypes(ex);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    [Theory]
+    [WithBlankImages(1, 1, PixelTypes.Rgb24 | PixelTypes.Bgra32 | PixelTypes.L8)]
+    public void ConvertColorProfileToSrgb_CmykPixelProfileWithOtherPixelType_ThrowsNotSupportedException<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = provider.GetImage();
+        image.Metadata.IccProfile = LoadProfile(TestImages.Icc.LittleCmsFakeCmykV4);
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb()));
+
+        AssertNamesCmykPixelTypes(ex);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.IccProfile.DataColorSpace);
+    }
+
+    [Fact]
+    public void ConvertColorProfileToSrgb_DecodedCmykJpegAsRgb24_ThrowsNotSupportedException()
+    {
+        // A decoded CMYK JPEG keeps its CMYK profile next to formula RGB pixels. JPEG decodes to Rgb24
+        // by default, which cannot hold CMYK, so the processor refuses instead of reading RGB as CMYK.
         using Image<Rgb24> image = Image.Load<Rgb24>(TestFile.GetInputFileFullPath(TestImages.Jpeg.Baseline.Cmyk));
         Rgb24 before = image[0, 0];
 
@@ -316,6 +402,39 @@ public class ConvertColorProfileProcessorTests
         }
 
         return image;
+    }
+
+    // Writes the reference inputs into the first row, opaque.
+    private static void SetInputs<TPixel>(Image<TPixel> image, LittleCmsReference reference)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        for (int i = 0; i < reference.Count; i++)
+        {
+            TPixel pixel = default;
+            pixel.FromScaledVector4(reference.ScaledInput(i, 1));
+            image[i, 0] = pixel;
+        }
+    }
+
+    // CMYK results, per component scaled to [0, 1]. Little CMS and the engine differ by up to 0.2 % of
+    // ink near black (lcms quantises table-curve inputs to 16 bits); 8-bit storage adds half a code.
+    private static float CmykTolerance<TPixel>()
+        where TPixel : unmanaged, IPixel<TPixel>
+        => typeof(TPixel) == typeof(Rgba32) ? (0.5F / 255) + 0.002F : 0.002F;
+
+    private static void AssertNamesCmykPixelTypes(NotSupportedException ex)
+    {
+        Assert.Contains(nameof(Rgba32), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(Rgba64), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(RgbaVector), ex.Message, StringComparison.Ordinal);
+    }
+
+    private static void AssertClose(int pixel, Vector4 expected, Vector4 actual, float tolerance)
+    {
+        Vector4 difference = Vector4.Abs(expected - actual);
+        Assert.True(
+            difference.X <= tolerance && difference.Y <= tolerance && difference.Z <= tolerance && difference.W <= tolerance,
+            $"Pixel {pixel}: expected {expected}, got {actual}.");
     }
 
     private static void AssertPixels(Image<Rgb24> image, LittleCmsReference reference, float tolerance)

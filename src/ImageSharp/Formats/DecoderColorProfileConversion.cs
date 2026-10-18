@@ -152,7 +152,8 @@ internal static class DecoderColorProfileConversion
     private static bool IsTarget(IccProfile source, IccProfile target)
         => target is not null && source.ToByteArray().AsSpan().SequenceEqual(target.ToByteArray());
 
-    // Decoded pixels hold RGB or gray; the engine gives CMYK in all four channels, which no pixel type maps to yet.
+    // Decoded pixels hold RGB or gray. Converting to CMYK (all four components) is left to the
+    // ConvertColorProfile processor, which checks the pixel type.
     private static void CheckTarget(IccColorTransform transform)
     {
         if (transform.TargetColorSpace is not (IccColorSpaceType.Rgb or IccColorSpaceType.Gray))

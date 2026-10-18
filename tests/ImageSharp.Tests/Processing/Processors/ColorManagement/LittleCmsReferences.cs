@@ -404,6 +404,49 @@ internal static class LittleCmsReferences
         ]),
     };
 
+    // sRGB -> CMYK profile -> sRGB, each step a transicc table: first
+    // transicc -n -c0 -t1 -i*sRGB -o<profile> (CMYK in percent, not clipped), then
+    // transicc -n -s -c0 -t1 -i<profile> -o*sRGB on those CMYK values. The 8-bit tables round the
+    // CMYK to 8-bit code values (percent * 255 / 100) between the two steps, as Rgba32 stores them.
+    // Rows are the sRGB input and the sRGB result, in 8-bit code values.
+    private static readonly Dictionary<(string Profile, bool EightBit), LittleCmsReference> RoundTrips = new()
+    {
+        [(TestImages.Icc.LittleCmsFakeCmykV4, false)] = Rgb(
+        [
+            [0, 0, 0, 0.7885F, 0.8906F, 0.8953F],
+            [255, 255, 255, 253.7706F, 254.6651F, 254.0551F],
+            [255, 0, 0, 245.8520F, 19.5557F, 13.3333F],
+            [0, 255, 0, 11.2846F, 253.2003F, 18.8431F],
+            [0, 0, 255, 22.0624F, 14.2181F, 247.7351F],
+            [128, 64, 32, 64.1165F, 31.8595F, 16.0217F],
+            [51, 102, 153, 28.1711F, 61.2643F, 92.0315F],
+            [200, 180, 20, 157.8191F, 142.2258F, 19.8545F],
+            [10, 20, 30, 7.8924F, 8.8952F, 9.7947F],
+            [240, 15, 200, 223.8282F, 25.7180F, 187.4042F],
+            [128, 128, 128, 65.1482F, 65.1977F, 65.2106F],
+            [1, 2, 3, 1.0849F, 1.2428F, 1.2434F],
+        ]),
+
+        // CMYK in 8-bit code values: 171 171 171 253, 1 0 1 0, 5 236 242 5, 244 1 237 1, 234 241 4 4,
+        // 127 191 223 127, 209 153 102 102, 55 75 231 54, 188 180 172 225, 16 228 55 16,
+        // 127 127 127 125, 171 171 171 252.
+        [(TestImages.Icc.LittleCmsFakeCmykV4, true)] = Rgb(
+        [
+            [0, 0, 0, 0.6527F, 0.7513F, 0.7466F],
+            [255, 255, 255, 254.0303F, 255.0000F, 253.9987F],
+            [255, 0, 0, 245.0613F, 19.4675F, 13.0224F],
+            [0, 255, 0, 11.6222F, 253.0446F, 18.5326F],
+            [0, 0, 255, 21.7797F, 13.9764F, 247.1795F],
+            [128, 64, 32, 64.2435F, 32.1482F, 16.0867F],
+            [51, 102, 153, 27.8951F, 61.3067F, 91.9660F],
+            [200, 180, 20, 157.7121F, 141.9851F, 19.5296F],
+            [10, 20, 30, 7.8847F, 8.9041F, 9.8096F],
+            [240, 15, 200, 224.0522F, 26.0213F, 187.4320F],
+            [128, 128, 128, 65.2596F, 65.2655F, 65.2576F],
+            [1, 2, 3, 0.9935F, 1.1253F, 1.1325F],
+        ]),
+    };
+
     /// <summary>
     /// Gets the reference conversion between two test profiles.
     /// </summary>
@@ -414,6 +457,17 @@ internal static class LittleCmsReferences
         => References.TryGetValue((source, target), out LittleCmsReference reference)
             ? reference
             : throw new ArgumentException($"No Little CMS reference for {source ?? "sRGB"} -> {target ?? "sRGB"}.");
+
+    /// <summary>
+    /// Gets the reference round trip from sRGB to a CMYK test profile and back.
+    /// </summary>
+    /// <param name="profile">The CMYK profile file.</param>
+    /// <param name="eightBit">Whether the CMYK values are rounded to 8 bits between the two conversions.</param>
+    /// <returns>The reference, sRGB in and sRGB out.</returns>
+    public static LittleCmsReference GetRoundTrip(string profile, bool eightBit)
+        => RoundTrips.TryGetValue((profile, eightBit), out LittleCmsReference reference)
+            ? reference
+            : throw new ArgumentException($"No Little CMS round trip for {profile}.");
 
     private static LittleCmsReference Rgb(float[][] rows) => new(3, 3, rows);
 

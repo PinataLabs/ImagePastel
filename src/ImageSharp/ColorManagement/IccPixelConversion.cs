@@ -4,9 +4,11 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.ColorManagement;
@@ -22,7 +24,9 @@ internal static class IccPixelConversion
 
     /// <summary>
     /// Converts every pixel of a buffer in place. Alpha is not changed, and results outside the
-    /// target gamut are clamped to the range of the pixel type.
+    /// target gamut are clamped to the range of the pixel type. A CMYK profile uses all four
+    /// components (see <see cref="IccColorTransform"/>): from one, alpha becomes opaque; to one,
+    /// black replaces alpha.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="configuration">The configuration, for parallelism and pixel conversion.</param>
@@ -69,14 +73,22 @@ internal static class IccPixelConversion
             this.transform.Transform(span);
 
             // Clamp to the scaled range of every pixel type; float pixel types skip it in bulk conversion.
-            for (int i = 0; i < span.Length; i++)
+            // A CMYK target writes black over W, so W is clamped too; otherwise W is alpha and is kept.
+            if (this.transform.TargetColorSpace == IccColorSpaceType.Cmyk)
             {
-                ref Vector4 value = ref span[i];
-                value = new Vector4(
-                    Numerics.Clamp(value.X, 0, 1),
-                    Numerics.Clamp(value.Y, 0, 1),
-                    Numerics.Clamp(value.Z, 0, 1),
-                    value.W);
+                Numerics.Clamp(MemoryMarshal.Cast<Vector4, float>(span), 0, 1);
+            }
+            else
+            {
+                for (int i = 0; i < span.Length; i++)
+                {
+                    ref Vector4 value = ref span[i];
+                    value = new Vector4(
+                        Numerics.Clamp(value.X, 0, 1),
+                        Numerics.Clamp(value.Y, 0, 1),
+                        Numerics.Clamp(value.Z, 0, 1),
+                        value.W);
+                }
             }
 
             PixelOperations<TPixel>.Instance.FromVector4Destructive(this.configuration, span, row, PixelConversionModifiers.Scale);
