@@ -30,7 +30,7 @@ There are 20 templates and 2 `*.ttinclude` files. All are `hostspecific="false"`
 | `Formats/Jpeg/Components/Block8x8F.Generated.tt` | 104 → 154 | Constants |
 | `tests/ImageSharp.Tests/PixelFormats/PixelOperations/Generated/PixelOperationsTests.Specialized.Generated.tt` | 9 → 566 | Its own `_Common.ttinclude`, with different lists |
 
-Supporting setup: `dotnet-t4` 3.0.0 in `.config/dotnet-tools.json`; `ci-t4.ps1`; the `t4` job in `.github/workflows/ci.yml`, which `pack` lists in `needs:`; `TextTemplatingFileGenerator` items in `ImageSharp.csproj` and `ImageSharp.Tests.csproj`; and `.github/CONTRIBUTING.md` lines 37–38.
+Supporting setup: `dotnet-t4` 3.0.0 in `dotnet-tools.json` at the repo root; `ci-t4.ps1`; the `t4` job in `.github/workflows/ci.yml`, which `pack` lists in `needs:`; `TextTemplatingFileGenerator` items in `ImageSharp.csproj` and `ImageSharp.Tests.csproj`; and `.github/CONTRIBUTING.md` lines 37–38.
 
 ### Source and licensing
 
