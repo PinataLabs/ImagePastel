@@ -557,8 +557,16 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
             return;
         }
 
+        // The PNG specification requires a gray iCCP profile for a grayscale image and an RGB one
+        // otherwise; any other profile is ignored, so the other chunks apply.
         bool gray = this.pngColorType is PngColorType.Grayscale or PngColorType.GrayscaleWithAlpha;
-        metadata.IccProfile = this.colorSpaceChunks.GetPixelProfile(metadata.IccProfile, gray);
+        IccProfile embeddedProfile = metadata.IccProfile;
+        if (embeddedProfile is not null && !DecoderColorProfileConversion.CanBePixelProfile(embeddedProfile, gray))
+        {
+            embeddedProfile = null;
+        }
+
+        metadata.IccProfile = this.colorSpaceChunks.GetPixelProfile(embeddedProfile, gray);
     }
 
     /// <summary>

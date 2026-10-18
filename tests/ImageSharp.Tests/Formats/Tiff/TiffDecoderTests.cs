@@ -91,6 +91,7 @@ public class TiffDecoderTests : TiffDecoderBaseTester
     [WithFile(Cmyk8BitContiguous, PixelTypes.Rgba32)]
     [WithFile(Cmyk8BitPlanar, PixelTypes.Rgba32)]
     [WithFile(Cmyk8BitDeflatePredictor, PixelTypes.Rgba32)]
+    [WithFile(Cmyk8BitPlanarDeflatePredictor, PixelTypes.Rgba32)]
     [WithFile(Cmyk8BitWithIccProfile, PixelTypes.Rgba32)]
     public void TiffDecoder_CanDecode_Cmyk_8Bit<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => TestTiffDecoder(provider, MagickReferenceDecoder.CmykToSrgbInstance, useExactComparer: false);
@@ -101,6 +102,7 @@ public class TiffDecoderTests : TiffDecoderBaseTester
     [WithFile(Cmyk16BitPlanarLittleEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
     [WithFile(Cmyk16BitPlanarBigEndian, PixelTypes.Rgba32 | PixelTypes.Rgba64)]
     [WithFile(Cmyk16BitDeflatePredictorBigEndian, PixelTypes.Rgba64)]
+    [WithFile(Cmyk16BitPlanarDeflatePredictorBigEndian, PixelTypes.Rgba64)]
     public void TiffDecoder_CanDecode_Cmyk_16Bit<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => TestTiffDecoder(provider, MagickReferenceDecoder.CmykToSrgbInstance, useExactComparer: false);
 

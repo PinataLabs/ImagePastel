@@ -31,48 +31,32 @@ namespace SixLabors.ImageSharp.ColorManagement;
 /// </remarks>
 public static class IccProfileFactory
 {
-    // ITU-T H.273 code points for the cicp tag.
-    private const byte PrimariesBt709 = 1;
-    private const byte PrimariesBt2020 = 9;
-    private const byte PrimariesP3D65 = 12;
-    private const byte TransferBt709 = 1;
-    private const byte TransferLinear = 8;
-    private const byte TransferSrgb = 13;
-
-    private static readonly (double X, double Y) D65 = (0.3127, 0.3290);
-
-    private static readonly (double X, double Y)[] Rec709Primaries = { (0.64, 0.33), (0.30, 0.60), (0.15, 0.06) };
-
-    private static readonly (double X, double Y)[] P3Primaries = { (0.680, 0.320), (0.265, 0.690), (0.150, 0.060) };
-
-    private static readonly (double X, double Y)[] Rec2020Primaries = { (0.708, 0.292), (0.170, 0.797), (0.131, 0.046) };
-
     private static readonly (double X, double Y)[] AdobeRgbPrimaries = { (0.64, 0.33), (0.21, 0.71), (0.15, 0.06) };
 
     /// <summary>
     /// Creates an sRGB (IEC 61966-2-1) profile: BT.709 primaries, a D65 white and the sRGB curve.
     /// </summary>
     /// <returns>The profile.</returns>
-    public static IccProfile CreateSrgb() => CreateStandardRgb(Rec709Primaries, IccToneCurve.Srgb, "sRGB", (PrimariesBt709, TransferSrgb));
+    public static IccProfile CreateSrgb() => IccStandardRgb.Create(IccStandardRgb.Rec709Primaries, IccToneCurve.Srgb, "sRGB", (IccStandardRgb.PrimariesBt709, IccStandardRgb.TransferSrgb));
 
     /// <summary>
     /// Creates a linear sRGB profile: BT.709 primaries, a D65 white and a linear curve.
     /// </summary>
     /// <returns>The profile.</returns>
-    public static IccProfile CreateLinearSrgb() => CreateStandardRgb(Rec709Primaries, IccToneCurve.Linear, "Linear sRGB", (PrimariesBt709, TransferLinear));
+    public static IccProfile CreateLinearSrgb() => IccStandardRgb.Create(IccStandardRgb.Rec709Primaries, IccToneCurve.Linear, "Linear sRGB", (IccStandardRgb.PrimariesBt709, IccStandardRgb.TransferLinear));
 
     /// <summary>
     /// Creates a Display P3 profile: DCI-P3 primaries, a D65 white and the sRGB curve.
     /// </summary>
     /// <returns>The profile.</returns>
-    public static IccProfile CreateDisplayP3() => CreateStandardRgb(P3Primaries, IccToneCurve.Srgb, "Display P3", (PrimariesP3D65, TransferSrgb));
+    public static IccProfile CreateDisplayP3() => IccStandardRgb.Create(IccStandardRgb.P3Primaries, IccToneCurve.Srgb, "Display P3", (IccStandardRgb.PrimariesP3D65, IccStandardRgb.TransferSrgb));
 
     /// <summary>
     /// Creates an ITU-R BT.2020 profile: BT.2020 primaries, a D65 white and the BT.709 curve
     /// (<see cref="IccToneCurve.Rec709"/>).
     /// </summary>
     /// <returns>The profile.</returns>
-    public static IccProfile CreateRec2020() => CreateStandardRgb(Rec2020Primaries, IccToneCurve.Rec709, "Rec. 2020", (PrimariesBt2020, TransferBt709));
+    public static IccProfile CreateRec2020() => IccStandardRgb.Create(IccStandardRgb.Rec2020Primaries, IccToneCurve.Rec709, "Rec. 2020", (IccStandardRgb.PrimariesBt2020, IccStandardRgb.TransferBt709));
 
     /// <summary>
     /// Creates a profile compatible with Adobe RGB (1998): its primaries, a D65 white and a gamma of
@@ -80,7 +64,7 @@ public static class IccProfileFactory
     /// </summary>
     /// <returns>The profile.</returns>
     public static IccProfile CreateAdobeRgbCompatible()
-        => CreateStandardRgb(AdobeRgbPrimaries, IccToneCurve.Gamma(563 / 256F), "Adobe RGB (1998) compatible", null);
+        => IccStandardRgb.Create(AdobeRgbPrimaries, IccToneCurve.Gamma(563 / 256F), "Adobe RGB (1998) compatible", null);
 
     /// <summary>
     /// Creates a gray profile with a D65 white and the given curve, for example
@@ -92,7 +76,7 @@ public static class IccProfileFactory
     public static IccProfile CreateGray(IccToneCurve toneCurve)
     {
         Guard.NotNull(toneCurve, nameof(toneCurve));
-        return IccProfileBuilder.Build(IccColorSpaceType.Gray, D65, null, new[] { toneCurve.Curve }, IccConnectionSpace.D50, IccRenderingIntent.Perceptual, "Gray", null);
+        return IccProfileBuilder.Build(IccColorSpaceType.Gray, IccStandardRgb.D65, null, new[] { toneCurve.Curve }, IccConnectionSpace.D50, IccRenderingIntent.Perceptual, "Gray", null);
     }
 
     /// <summary>
@@ -181,20 +165,4 @@ public static class IccProfileFactory
             description ?? "RGB",
             null);
     }
-
-    private static IccProfile CreateStandardRgb(
-        (double X, double Y)[] primaries,
-        IccToneCurve curve,
-        string description,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
-        => IccProfileBuilder.Build(
-            IccColorSpaceType.Rgb,
-            D65,
-            primaries,
-            new[] { curve.Curve, curve.Curve, curve.Curve },
-            IccConnectionSpace.D50,
-            IccRenderingIntent.Perceptual,
-            description,
-            null,
-            cicp);
 }

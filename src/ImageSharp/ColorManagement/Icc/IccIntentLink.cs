@@ -48,10 +48,8 @@ internal static class IccIntentLink
     public static List<IccStage> Link(IccProfile sourceProfile, IccProfile targetProfile, IccRenderingIntent intent, bool blackPointCompensation)
     {
         // Reading the models first checks that the profiles are valid, which IccProfileInfo needs.
-        IccProfileModel sourceModel = IccProfileInfo.ReadModel(sourceProfile, "source", asSource: true, intent);
-        IccProfileModel targetModel = IccProfileInfo.ReadModel(targetProfile, "target", asSource: false, intent);
-        IccProfileInfo source = new(sourceProfile, "source");
-        IccProfileInfo target = new(targetProfile, "target");
+        IccProfileInfo source = IccProfileInfo.Read(sourceProfile, "source", asSource: true, intent, out IccProfileModel sourceModel);
+        IccProfileInfo target = IccProfileInfo.Read(targetProfile, "target", asSource: false, intent, out IccProfileModel targetModel);
 
         if (intent == IccRenderingIntent.AbsoluteColorimetric)
         {

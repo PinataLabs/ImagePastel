@@ -266,7 +266,8 @@ internal static class IccCurveEvaluator
 
             case IccParametricCurveType.Type5:
             {
-                // X = ((Y - e) ^ (1 / g) - b) / a above cd + f, X = (Y - f) / c below it
+                // X = ((Y - e) ^ (1 / g) - b) / a above cd + f, X = (Y - f) / c below it. Little CMS
+                // switches at the linear piece's value at d (unlike type 3), so this does too.
                 if (y >= (c * d) + curve.F)
                 {
                     float e = y - curve.E;

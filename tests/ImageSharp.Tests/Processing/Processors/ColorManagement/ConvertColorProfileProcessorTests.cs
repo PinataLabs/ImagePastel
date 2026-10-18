@@ -200,6 +200,52 @@ public class ConvertColorProfileProcessorTests
     }
 
     [Fact]
+    public void ConvertColorProfileToSrgb_FramesWithOwnProfiles_ConvertsEachFrameFromItsProfile()
+    {
+        // As a TIFF decodes: each frame has its own pixel profile, and the image's is the first frame's.
+        LittleCmsReference adobe = LittleCmsReferences.Get(TestImages.Icc.CompactAdobeRgbV2, null);
+        LittleCmsReference displayP3 = LittleCmsReferences.Get(TestImages.Icc.CompactDisplayP3V4, null);
+        using Image<Rgb24> image = new(Math.Max(adobe.Count, displayP3.Count), 1);
+        image.Frames.CreateFrame();
+        image.Frames.CreateFrame();
+        SetInputs(image.Frames[0], adobe);
+        SetInputs(image.Frames[1], displayP3);
+        image.Frames[2][0, 0] = new Rgb24(128, 64, 32);
+        image.Frames[0].Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactAdobeRgbV2);
+        image.Frames[1].Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactDisplayP3V4);
+        image.Metadata.IccProfile = image.Frames[0].Metadata.IccProfile;
+
+        image.Mutate(x => x.ConvertColorProfileToSrgb());
+
+        AssertPixels(image.Frames[0], adobe, EightBitTolerance);
+        AssertPixels(image.Frames[1], displayP3, EightBitTolerance);
+
+        // A frame without a profile already holds sRGB.
+        Assert.Equal(new Rgb24(128, 64, 32), image.Frames[2][0, 0]);
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.All<ImageFrame<Rgb24>>(image.Frames, frame => Assert.Null(frame.Metadata.IccProfile));
+    }
+
+    [Fact]
+    public void ConvertColorProfile_FramesWithOwnProfiles_GivesEveryFrameTheTarget()
+    {
+        LittleCmsReference fromSrgb = LittleCmsReferences.Get(null, TestImages.Icc.CompactDisplayP3V4);
+        IccProfile target = LoadProfile(TestImages.Icc.CompactDisplayP3V4);
+        using Image<Rgb24> image = new(fromSrgb.Count, 1);
+        image.Frames.CreateFrame();
+        SetInputs(image.Frames[1], fromSrgb);
+        image.Frames[0].Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactAdobeRgbV2);
+        image.Metadata.IccProfile = image.Frames[0].Metadata.IccProfile;
+
+        image.Mutate(x => x.ConvertColorProfile(target));
+
+        // The second frame has no profile, so its pixels are sRGB.
+        AssertPixels(image.Frames[1], fromSrgb, EightBitTolerance);
+        Assert.Equal(target.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+        Assert.All<ImageFrame<Rgb24>>(image.Frames, frame => Assert.Equal(target.ToByteArray(), frame.Metadata.IccProfile?.ToByteArray()));
+    }
+
+    [Fact]
     public void ConvertColorProfileToSrgb_RemovesPixelProfile()
     {
         using Image<Rgb24> image = new(2, 2);
@@ -477,6 +523,18 @@ public class ConvertColorProfileProcessorTests
     }
 
     private static void AssertPixels(Image<Rgb24> image, LittleCmsReference reference, float tolerance)
+        => AssertPixels(image.Frames.RootFrame, reference, tolerance);
+
+    private static void SetInputs(ImageFrame<Rgb24> frame, LittleCmsReference reference)
+    {
+        for (int i = 0; i < reference.Count; i++)
+        {
+            (float r, float g, float b) = reference.Input(i);
+            frame[i, 0] = new Rgb24((byte)r, (byte)g, (byte)b);
+        }
+    }
+
+    private static void AssertPixels(ImageFrame<Rgb24> image, LittleCmsReference reference, float tolerance)
     {
         for (int i = 0; i < reference.Count; i++)
         {

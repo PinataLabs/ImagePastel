@@ -32,6 +32,9 @@ public partial class PngMetadataTests
     // D50 white (Little CMS's cmsD50_xyY) and ProPhoto primaries.
     private static readonly byte[] ProPhotoChrm = B.Chromaticities(34570, 35854, 73470, 26530, 15960, 84040, 3660, 10);
 
+    // D65 white and the BT.709 (sRGB) primaries.
+    private static readonly byte[] Rec709Chrm = B.Chromaticities(31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000);
+
     // 1 / 2.2.
     private static readonly byte[] Gama22 = B.Gamma(45455);
 
@@ -51,14 +54,18 @@ public partial class PngMetadataTests
         ["gAMA+cHRM, gAMA first"] = (PngColorType.Rgb, new[] { AdobeRgbGama, AdobeRgbChrm }, () => Lcms(TestImages.Icc.LittleCmsAdobeRgbV4)),
         ["cHRM+gAMA, palette"] = (PngColorType.Palette, new[] { AdobeRgbChrm, AdobeRgbGama }, () => Lcms(TestImages.Icc.LittleCmsAdobeRgbV4)),
         ["cHRM+gAMA, gray"] = (PngColorType.Grayscale, new[] { ProPhotoChrm, Gama22 }, () => Lcms(TestImages.Icc.LittleCmsGray22V4)),
-        ["gAMA, gray"] = (PngColorType.Grayscale, new[] { Gama22 }, () => Lcms(TestImages.Icc.LittleCmsGrayGamma22V4)),
-        ["gAMA"] = (PngColorType.Rgb, new[] { Gama22 }, () => Lcms(TestImages.Icc.LittleCmsRec709Gamma22V4)),
-        ["gAMA 1"] = (PngColorType.Rgb, new[] { B.Gamma(100000) }, () => Lcms(TestImages.Icc.LittleCmsLinearSrgbV4)),
+        ["cHRM+gAMA 1"] = (PngColorType.Rgb, new[] { Rec709Chrm, B.Gamma(100000) }, () => Lcms(TestImages.Icc.LittleCmsLinearSrgbV4)),
+
+        // gAMA without cHRM does not say which primaries, so it builds no profile; PngMetadata.Gamma keeps it.
+        ["gAMA, gray"] = (PngColorType.Grayscale, new[] { Gama22 }, () => null),
+        ["gAMA"] = (PngColorType.Rgb, new[] { Gama22 }, () => null),
+        ["gAMA 1"] = (PngColorType.Rgb, new[] { B.Gamma(100000) }, () => null),
         ["gAMA 0"] = (PngColorType.Rgb, new[] { B.Gamma(0) }, () => null),
         ["gAMA, short"] = (PngColorType.Rgb, new[] { B.Chunk("gAMA", new byte[] { 0, 0, 0xB1 }) }, () => null),
         ["cHRM"] = (PngColorType.Rgb, new[] { AdobeRgbChrm }, () => null),
-        ["cHRM, short"] = (PngColorType.Rgb, new[] { B.Chunk("cHRM", new byte[31]), Gama22 }, () => Lcms(TestImages.Icc.LittleCmsRec709Gamma22V4)),
-        ["cHRM, white y 0"] = (PngColorType.Rgb, new[] { B.Chromaticities(31270, 0, 64000, 33000, 30000, 60000, 15000, 6000), Gama22 }, () => Lcms(TestImages.Icc.LittleCmsRec709Gamma22V4)),
+        ["cHRM, short"] = (PngColorType.Rgb, new[] { B.Chunk("cHRM", new byte[31]), Gama22 }, () => null),
+        ["cHRM, white y 0"] = (PngColorType.Rgb, new[] { B.Chromaticities(31270, 0, 64000, 33000, 30000, 60000, 15000, 6000), Gama22 }, () => null),
+        ["cHRM+gAMA, BT.709"] = (PngColorType.Rgb, new[] { Rec709Chrm, Gama22 }, () => Lcms(TestImages.Icc.LittleCmsRec709Gamma22V4)),
         ["sRGB"] = (PngColorType.Rgb, new[] { B.StandardRgb() }, () => null),
         ["sRGB, gray"] = (PngColorType.Grayscale, new[] { B.StandardRgb() }, () => null),
         ["cICP sRGB"] = (PngColorType.Rgb, new[] { B.Cicp(1, 13) }, () => null),

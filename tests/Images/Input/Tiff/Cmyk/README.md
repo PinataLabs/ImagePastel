@@ -14,6 +14,8 @@ Each image is 48 x 32 pixels in strips of 8 rows. Cyan grows from left to right,
 | `cmyk-planar-16_msb.tiff` | planar, 16-bit, big endian | |
 | `cmyk-contig-08_deflate_predictor.tiff` | chunky, 8-bit, Deflate with the horizontal predictor | |
 | `cmyk-contig-16_msb_deflate_predictor.tiff` | chunky, 16-bit, big endian, Deflate with the horizontal predictor | |
+| `cmyk-planar-08_deflate_predictor.tiff` | planar, 8-bit, little endian, Deflate with the horizontal predictor | The predictor works on each plane separately. |
+| `cmyk-planar-16_msb_deflate_predictor.tiff` | planar, 16-bit, big endian, Deflate with the horizontal predictor | |
 | `cmyk-contig-08_icc.tiff` | chunky, 8-bit, little endian | Embeds `cmyk-test-profile.icc`. |
 | `cmyk-planar-16_msb_icc.tiff` | planar, 16-bit, big endian | Embeds `cmyk-test-profile.icc`. |
 | `inkset-not-cmyk-08.tiff` | chunky, 8-bit | `InkSet = 2` (not CMYK). The decoder must throw `NotSupportedException`. |

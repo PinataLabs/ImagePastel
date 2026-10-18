@@ -22,11 +22,12 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// No pixel profile means sRGB, so an <c>sRGB</c> chunk and a <c>cICP</c> chunk for sRGB give none.
 /// </para>
 /// <para>
-/// A <c>gAMA</c> chunk without a <c>cHRM</c> chunk describes the BT.709 (sRGB) primaries and a D65 white
-/// with its gamma, as the spec suggests in section 13.14 for a missing <c>cHRM</c>. A <c>cHRM</c> chunk
-/// without a <c>gAMA</c> chunk gives no profile: there is no tone curve, and the spec notes that
-/// decoders can do little with it (section 12.2). A <c>gAMA</c> of zero is ignored (section 13.13). An
-/// invalid <c>cHRM</c> chunk is ignored. Grayscale images get a gray profile with the white point only.
+/// Only a <c>cHRM</c> chunk together with a <c>gAMA</c> chunk builds a profile. A <c>gAMA</c> chunk
+/// alone gives none: it does not say which primaries the image has (its value stays in
+/// <see cref="PngMetadata.Gamma"/>). A <c>cHRM</c> chunk without a <c>gAMA</c> chunk gives none either:
+/// there is no tone curve, and the spec notes that decoders can do little with it (section 12.2). A
+/// <c>gAMA</c> of zero is ignored (section 13.13). An invalid <c>cHRM</c> chunk is ignored. Grayscale
+/// images get a gray profile with the white point only.
 /// </para>
 /// <para>
 /// A <c>cICP</c> chunk is used only when this decoder supports its code points (ITU-T H.273): BT.709,
@@ -39,34 +40,6 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// </remarks>
 internal sealed class PngColorSpaceChunks
 {
-    // H.273 code points.
-    private const byte PrimariesBt709 = 1;
-    private const byte PrimariesBt2020 = 9;
-    private const byte PrimariesDisplayP3 = 12;
-    private const byte TransferBt709 = 1;
-    private const byte TransferBt601 = 6;
-    private const byte TransferLinear = 8;
-    private const byte TransferSrgb = 13;
-    private const byte TransferBt2020TenBit = 14;
-    private const byte TransferBt2020TwelveBit = 15;
-
-    private static readonly CieXyChromaticityCoordinates D65 = new(0.3127F, 0.3290F);
-
-    private static readonly RgbPrimariesChromaticityCoordinates Rec709Primaries = new(
-        new CieXyChromaticityCoordinates(0.64F, 0.33F),
-        new CieXyChromaticityCoordinates(0.30F, 0.60F),
-        new CieXyChromaticityCoordinates(0.15F, 0.06F));
-
-    private static readonly RgbPrimariesChromaticityCoordinates Rec2020Primaries = new(
-        new CieXyChromaticityCoordinates(0.708F, 0.292F),
-        new CieXyChromaticityCoordinates(0.170F, 0.797F),
-        new CieXyChromaticityCoordinates(0.131F, 0.046F));
-
-    private static readonly RgbPrimariesChromaticityCoordinates P3Primaries = new(
-        new CieXyChromaticityCoordinates(0.680F, 0.320F),
-        new CieXyChromaticityCoordinates(0.265F, 0.690F),
-        new CieXyChromaticityCoordinates(0.150F, 0.060F));
-
     private byte[] cicp;
     private bool hasSrgb;
     private uint gamma;
@@ -147,7 +120,8 @@ internal sealed class PngColorSpaceChunks
             return embeddedProfile;
         }
 
-        if (this.hasSrgb || this.gamma == 0)
+        // gAMA alone does not say which primaries the image has, so only cHRM with gAMA builds a profile.
+        if (this.hasSrgb || this.gamma == 0 || this.chromaticities is null)
         {
             return null;
         }
@@ -163,49 +137,18 @@ internal sealed class PngColorSpaceChunks
             return null;
         }
 
-        if (this.chromaticities is not null)
+        CieXyChromaticityCoordinates white = this.Chromaticity(0);
+        RgbPrimariesChromaticityCoordinates primaries = new(this.Chromaticity(1), this.Chromaticity(2), this.Chromaticity(3));
+        try
         {
-            CieXyChromaticityCoordinates white = this.Chromaticity(0);
-            RgbPrimariesChromaticityCoordinates primaries = new(this.Chromaticity(1), this.Chromaticity(2), this.Chromaticity(3));
-            try
-            {
-                return gray ? IccProfileFactory.CreateGray(white, curve) : IccProfileFactory.CreateRgb(primaries, white, curve);
-            }
-            catch (ArgumentException)
-            {
-                // An invalid cHRM chunk is ignored.
-            }
+            return gray ? IccProfileFactory.CreateGray(white, curve) : IccProfileFactory.CreateRgb(primaries, white, curve);
         }
-
-        return gray ? IccProfileFactory.CreateGray(curve) : IccProfileFactory.CreateRgb(Rec709Primaries, D65, curve);
-    }
-
-    private static bool TryGetCicpPrimaries(byte code, out RgbPrimariesChromaticityCoordinates primaries)
-    {
-        switch (code)
+        catch (ArgumentException)
         {
-            case PrimariesBt709:
-                primaries = Rec709Primaries;
-                return true;
-            case PrimariesBt2020:
-                primaries = Rec2020Primaries;
-                return true;
-            case PrimariesDisplayP3:
-                primaries = P3Primaries;
-                return true;
-            default:
-                primaries = default;
-                return false;
+            // An invalid cHRM chunk is ignored, which leaves gAMA alone.
+            return null;
         }
     }
-
-    private static IccToneCurve GetCicpToneCurve(byte code) => code switch
-    {
-        TransferBt709 or TransferBt601 or TransferBt2020TenBit or TransferBt2020TwelveBit => IccToneCurve.Rec709,
-        TransferSrgb => IccToneCurve.Srgb,
-        TransferLinear => IccToneCurve.Linear,
-        _ => null,
-    };
 
     private CieXyChromaticityCoordinates Chromaticity(int index)
         => new(this.chromaticities[index * 2] * 1e-5F, this.chromaticities[(index * 2) + 1] * 1e-5F);
@@ -220,10 +163,10 @@ internal sealed class PngColorSpaceChunks
 
         byte primariesCode = this.cicp[0];
         byte transferCode = this.cicp[1];
-        IccToneCurve curve = GetCicpToneCurve(transferCode);
+        IccToneCurve curve = IccStandardRgb.GetToneCurve(transferCode);
 
         // PNG holds RGB samples (matrix coefficients 0); narrow-range samples would need rescaling.
-        if (!TryGetCicpPrimaries(primariesCode, out RgbPrimariesChromaticityCoordinates primaries)
+        if (!IccStandardRgb.TryGetPrimaries(primariesCode, out (double X, double Y)[] primaries)
             || curve is null
             || this.cicp[2] != 0
             || this.cicp[3] != 1)
@@ -231,7 +174,7 @@ internal sealed class PngColorSpaceChunks
             return false;
         }
 
-        if (transferCode == TransferSrgb && (gray || primariesCode == PrimariesBt709))
+        if (transferCode == IccStandardRgb.TransferSrgb && (gray || primariesCode == IccStandardRgb.PrimariesBt709))
         {
             // sRGB: no profile.
             return true;
@@ -246,42 +189,28 @@ internal sealed class PngColorSpaceChunks
 
         profile = (primariesCode, transferCode) switch
         {
-            (PrimariesBt709, TransferLinear) => IccProfileFactory.CreateLinearSrgb(),
-            (PrimariesDisplayP3, TransferSrgb) => IccProfileFactory.CreateDisplayP3(),
-            (PrimariesBt2020, TransferBt709) => IccProfileFactory.CreateRec2020(),
-            _ => CreateCicpRgb(primaries, curve, primariesCode, transferCode),
+            (IccStandardRgb.PrimariesBt709, IccStandardRgb.TransferLinear) => IccProfileFactory.CreateLinearSrgb(),
+            (IccStandardRgb.PrimariesP3D65, IccStandardRgb.TransferSrgb) => IccProfileFactory.CreateDisplayP3(),
+            (IccStandardRgb.PrimariesBt2020, IccStandardRgb.TransferBt709) => IccProfileFactory.CreateRec2020(),
+
+            // The cicp tag holds the chunk's own code points, as the standard factory profiles hold theirs.
+            _ => IccStandardRgb.Create(primaries, curve, $"{PrimariesName(primariesCode)} primaries, {TransferName(transferCode)} transfer", (primariesCode, transferCode)),
         };
 
         return true;
     }
 
-    // A D65 RGB profile whose cicp tag holds the chunk's own code points, as the standard factory
-    // profiles hold theirs.
-    private static IccProfile CreateCicpRgb(RgbPrimariesChromaticityCoordinates primaries, IccToneCurve curve, byte primariesCode, byte transferCode)
+    private static string PrimariesName(byte code) => code switch
     {
-        string primariesName = primariesCode switch
-        {
-            PrimariesBt709 => "BT.709",
-            PrimariesBt2020 => "BT.2020",
-            _ => "Display P3",
-        };
+        IccStandardRgb.PrimariesBt709 => "BT.709",
+        IccStandardRgb.PrimariesBt2020 => "BT.2020",
+        _ => "Display P3",
+    };
 
-        string transferName = transferCode switch
-        {
-            TransferSrgb => "sRGB",
-            TransferLinear => "linear",
-            _ => "BT.709",
-        };
-
-        return IccProfileBuilder.Build(
-            IccColorSpaceType.Rgb,
-            (D65.X, D65.Y),
-            new (double X, double Y)[] { (primaries.R.X, primaries.R.Y), (primaries.G.X, primaries.G.Y), (primaries.B.X, primaries.B.Y) },
-            new[] { curve.Curve, curve.Curve, curve.Curve },
-            IccConnectionSpace.D50,
-            IccRenderingIntent.Perceptual,
-            $"{primariesName} primaries, {transferName} transfer",
-            null,
-            (primariesCode, transferCode));
-    }
+    private static string TransferName(byte code) => code switch
+    {
+        IccStandardRgb.TransferSrgb => "sRGB",
+        IccStandardRgb.TransferLinear => "linear",
+        _ => "BT.709",
+    };
 }

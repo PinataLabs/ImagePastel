@@ -71,6 +71,12 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     private byte[] iccData;
 
     /// <summary>
+    /// The profile parsed from <see cref="iccData"/>, and the array it was parsed from (a later APP2
+    /// segment replaces the array), so the frame header and the metadata share one parse.
+    /// </summary>
+    private (byte[] Data, IccProfile Profile) parsedIcc;
+
+    /// <summary>
     /// Whether the image has a IPTC data.
     /// </summary>
     private bool hasIptc;
@@ -654,9 +660,10 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
 
     /// <summary>
     /// Initializes the ICC profile. A valid embedded profile is always exposed as
-    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>. It is also the pixel profile, unless it is a
-    /// CMYK profile: the decoded pixels are RGB, so a CMYK profile does not describe them. When the
-    /// CMYK samples were converted through it, the pixel profile is the conversion's target.
+    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>. It is also the pixel profile when it matches
+    /// the decoded pixels: a gray profile for a grayscale JPEG, an RGB profile for a color one. A
+    /// CMYK JPEG decodes to RGB through a formula, so no embedded profile describes its pixels. When
+    /// the CMYK samples were converted through the profile, the pixel profile is the conversion's target.
     /// </summary>
     private void InitIccProfile()
     {
@@ -665,7 +672,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             return;
         }
 
-        var profile = new IccProfile(this.iccData);
+        IccProfile profile = this.GetIccProfile();
         if (!profile.CheckIsValid())
         {
             return;
@@ -676,7 +683,8 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         {
             this.Metadata.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
         }
-        else if (profile.DataColorSpace != IccColorSpaceType.Cmyk)
+        else if (this.ColorSpace is JpegColorSpace.Grayscale or JpegColorSpace.RGB or JpegColorSpace.YCbCr
+            && DecoderColorProfileConversion.CanBePixelProfile(profile, this.ColorSpace == JpegColorSpace.Grayscale))
         {
             this.Metadata.IccProfile = profile;
         }
@@ -695,7 +703,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
             return null;
         }
 
-        var profile = new IccProfile(this.iccData);
+        IccProfile profile = this.GetIccProfile();
         if (!profile.CheckIsValid()
             || !DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, profile, out IccColorTransform transform))
         {
@@ -703,6 +711,16 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         }
 
         return transform;
+    }
+
+    private IccProfile GetIccProfile()
+    {
+        if (!ReferenceEquals(this.parsedIcc.Data, this.iccData))
+        {
+            this.parsedIcc = (this.iccData, new IccProfile(this.iccData));
+        }
+
+        return this.parsedIcc.Profile;
     }
 
     /// <summary>

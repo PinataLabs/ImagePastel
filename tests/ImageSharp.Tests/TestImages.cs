@@ -847,6 +847,8 @@ public static class TestImages
         public const string Cmyk16BitPlanarBigEndian = "Tiff/Cmyk/cmyk-planar-16_msb.tiff";
         public const string Cmyk8BitDeflatePredictor = "Tiff/Cmyk/cmyk-contig-08_deflate_predictor.tiff";
         public const string Cmyk16BitDeflatePredictorBigEndian = "Tiff/Cmyk/cmyk-contig-16_msb_deflate_predictor.tiff";
+        public const string Cmyk8BitPlanarDeflatePredictor = "Tiff/Cmyk/cmyk-planar-08_deflate_predictor.tiff";
+        public const string Cmyk16BitPlanarDeflatePredictorBigEndian = "Tiff/Cmyk/cmyk-planar-16_msb_deflate_predictor.tiff";
         public const string Cmyk8BitWithIccProfile = "Tiff/Cmyk/cmyk-contig-08_icc.tiff";
         public const string Cmyk16BitPlanarWithIccProfile = "Tiff/Cmyk/cmyk-planar-16_msb_icc.tiff";
         public const string CmykTestIccProfile = "Tiff/Cmyk/cmyk-test-profile.icc";

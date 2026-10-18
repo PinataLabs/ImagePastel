@@ -13,13 +13,16 @@ namespace SixLabors.ImageSharp.Processing.Processors.ColorManagement;
 /// <remarks>
 /// <para>
 /// The source is the image's pixel profile (<c>Metadata.IccProfile</c>), or sRGB when the image
-/// has none. Every pixel of every frame is converted, whatever source rectangle the processor is
-/// given, because the pixel profile describes the whole image. Alpha is not changed, and results
+/// has none. When frames have their own pixel profiles (<c>ImageFrameMetadata.IccProfile</c>, as a
+/// TIFF decodes them), each frame is converted from its own profile instead, and a frame without
+/// one holds sRGB. Every pixel of every frame is converted, whatever source rectangle the processor
+/// is given, because the pixel profile describes the whole image. Alpha is not changed, and results
 /// outside the target gamut are clamped to the range of the pixel type.
 /// </para>
 /// <para>
-/// Afterwards the image's pixel profile, and the profile of each frame that had one, is a copy of
-/// the target profile, or none when the target is sRGB (<see cref="TargetProfile"/> is <see langword="null"/>).
+/// Afterwards the image's pixel profile, and the profile of each frame when the frames had their
+/// own, is a copy of the target profile, or none when the target is sRGB
+/// (<see cref="TargetProfile"/> is <see langword="null"/>).
 /// </para>
 /// <para>
 /// ImageSharp has no CMYK pixel type. An image whose pixel profile is CMYK holds cyan, magenta,

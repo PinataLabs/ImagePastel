@@ -161,6 +161,7 @@ internal sealed partial class IccDataReader
         else
         {
             // The type is not know, so the values need be read
+            this.CheckElementCount(channelCount, 8, "chrm");
             double[][] values = new double[channelCount][];
             for (int i = 0; i < channelCount; i++)
             {
@@ -178,6 +179,7 @@ internal sealed partial class IccDataReader
     public IccColorantOrderTagDataEntry ReadColorantOrderTagDataEntry()
     {
         uint colorantCount = this.ReadUInt32();
+        this.CheckElementCount(colorantCount, 1, "clro");
         byte[] number = this.ReadBytes((int)colorantCount);
         return new IccColorantOrderTagDataEntry(number);
     }
@@ -189,6 +191,7 @@ internal sealed partial class IccDataReader
     public IccColorantTableTagDataEntry ReadColorantTableTagDataEntry()
     {
         uint colorantCount = this.ReadUInt32();
+        this.CheckElementCount(colorantCount, 38, "clrt"); // 32-byte name and three 16-bit PCS values
         var cdata = new IccColorantTableEntry[colorantCount];
         for (int i = 0; i < colorantCount; i++)
         {
@@ -216,6 +219,7 @@ internal sealed partial class IccDataReader
             return new IccCurveTagDataEntry(this.ReadUFix8());
         }
 
+        this.CheckElementCount(pointCount, 2, "curv");
         float[] cdata = new float[pointCount];
         for (int i = 0; i < pointCount; i++)
         {
@@ -471,6 +475,7 @@ internal sealed partial class IccDataReader
         uint recordCount = this.ReadUInt32();
 
         this.ReadUInt32();  // Record size (always 12)
+        this.CheckElementCount(recordCount, 12, "mluc");
         var text = new IccLocalizedString[recordCount];
 
         var culture = new CultureInfo[recordCount];
@@ -537,6 +542,7 @@ internal sealed partial class IccDataReader
         this.ReadUInt16();
         this.ReadUInt16();
         uint elementCount = this.ReadUInt32();
+        this.CheckElementCount(elementCount, 8, "mpet"); // position table entries
 
         var positionTable = new IccPositionNumber[elementCount];
         for (int i = 0; i < elementCount; i++)
@@ -566,6 +572,8 @@ internal sealed partial class IccDataReader
         string prefix = this.ReadAsciiString(32);
         string suffix = this.ReadAsciiString(32);
 
+        // A 32-byte name, three 16-bit PCS values and the 16-bit device coordinates.
+        this.CheckElementCount(colorCount, 38 + (2 * (ulong)coordCount), "ncl2");
         var colors = new IccNamedColor[colorCount];
         for (int i = 0; i < colorCount; i++)
         {
@@ -591,6 +599,7 @@ internal sealed partial class IccDataReader
     public IccProfileSequenceDescTagDataEntry ReadProfileSequenceDescTagDataEntry()
     {
         uint count = this.ReadUInt32();
+        this.CheckElementCount(count, 20, "pseq"); // signatures, attributes and technology before the texts
         var description = new IccProfileDescription[count];
         for (int i = 0; i < count; i++)
         {
@@ -608,6 +617,7 @@ internal sealed partial class IccDataReader
     {
         int start = this.currentIndex - 8; // 8 is the tag header size
         uint count = this.ReadUInt32();
+        this.CheckElementCount(count, 8, "psid"); // position table entries
         var table = new IccPositionNumber[count];
         for (int i = 0; i < count; i++)
         {
@@ -636,6 +646,7 @@ internal sealed partial class IccDataReader
         int start = this.currentIndex - 8; // 8 is the tag header size
         ushort channelCount = this.ReadUInt16();
         ushort measurementCount = this.ReadUInt16();
+        this.CheckElementCount(measurementCount, 4, "rcs2"); // offsets
 
         uint[] offset = new uint[measurementCount];
         for (int i = 0; i < measurementCount; i++)
@@ -830,7 +841,9 @@ internal sealed partial class IccDataReader
         string unicodeValue, scriptcodeValue;
         string asciiValue = unicodeValue = scriptcodeValue = null;
 
-        int asciiCount = (int)this.ReadUInt32();
+        uint asciiLength = this.ReadUInt32();
+        this.CheckElementCount(asciiLength, 1, "desc");
+        int asciiCount = (int)asciiLength;
         if (asciiCount > 0)
         {
             asciiValue = this.ReadAsciiString(asciiCount - 1);
@@ -838,7 +851,9 @@ internal sealed partial class IccDataReader
         }
 
         uint unicodeLangCode = this.ReadUInt32();
-        int unicodeCount = (int)this.ReadUInt32();
+        uint unicodeLength = this.ReadUInt32();
+        this.CheckElementCount(unicodeLength, 2, "desc");
+        int unicodeCount = (int)unicodeLength;
         if (unicodeCount > 0)
         {
             unicodeValue = this.ReadUnicodeString((unicodeCount * 2) - 2);
@@ -893,6 +908,7 @@ internal sealed partial class IccDataReader
     {
         var flags = (IccScreeningFlag)this.ReadInt32();
         uint channelCount = this.ReadUInt32();
+        this.CheckElementCount(channelCount, 12, "scrn");
         var channels = new IccScreeningChannel[channelCount];
         for (int i = 0; i < channels.Length; i++)
         {
@@ -944,6 +960,24 @@ internal sealed partial class IccDataReader
                 throw new InvalidIccProfileException(
                     $"The ucrbg tag counts {count} curve entries, but only {remaining} bytes remain in the tag.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks that an element count read from a tag's own bytes fits in the profile data after the
+    /// current position, before an array of that many elements is allocated.
+    /// </summary>
+    /// <param name="count">The number of elements</param>
+    /// <param name="minElementLength">The fewest bytes one element takes in the data</param>
+    /// <param name="typeName">The ICC name of the tag type, for the error message</param>
+    /// <exception cref="InvalidIccProfileException">The elements need more bytes than remain in the profile data.</exception>
+    private void CheckElementCount(ulong count, ulong minElementLength, string typeName)
+    {
+        ulong available = (ulong)Math.Max(0, this.data.Length - this.currentIndex);
+        if (count > 0 && count > available / minElementLength)
+        {
+            throw new InvalidIccProfileException(
+                $"The {typeName} tag counts {count} entries of at least {minElementLength} bytes, but only {available} bytes remain in the profile data.");
         }
     }
 
