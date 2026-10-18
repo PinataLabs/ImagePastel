@@ -1034,6 +1034,8 @@ public static class TestImages
         public const string LittleCmsRgbLutAToBV4 = "Icc/LittleCms/RgbLutAToB-v4.icc";
         public const string LittleCmsGrayLutV4 = "Icc/LittleCms/GrayLut-v4.icc";
         public const string LittleCmsFakeCmykV4 = "Icc/LittleCms/FakeCmyk-v4.icc";
+        public const string LittleCmsRec709Gamma22V4 = "Icc/LittleCms/Rec709Gamma22-v4.icc";
+        public const string LittleCmsP3Gamma182224V4 = "Icc/LittleCms/P3Gamma182224-v4.icc";
         public const string TiffCmykTestProfile = "Tiff/Cmyk/cmyk-test-profile.icc";
         public const string QcmsSrgb = "Icc/qcms/sRGB_lcms.icc";
         public const string QcmsRec709 = "Icc/qcms/ITU-709.icc";
