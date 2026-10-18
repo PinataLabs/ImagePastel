@@ -134,6 +134,33 @@ public class DecoderColorProfileConversionTests
         Assert.Equal(LoadProfile(TestImages.Icc.CompactAdobeRgbV2).ToByteArray(), image.Metadata.IccProfile.ToByteArray());
     }
 
+    // A profile equivalent to sRGB (IccProfile.IsSrgb) already describes sRGB pixels, so converting
+    // to sRGB keeps every 16-bit value and only removes the pixel profile.
+    [Theory]
+    [InlineData(TestImages.Icc.LittleCmsSrgbV4)]
+    [InlineData(TestImages.Icc.QcmsSrgb)]
+    public void Decode_SrgbEquivalentProfile_ToSrgb_LeavesPixelsAsTheyAre(string profile)
+    {
+        using Image<Rgba64> source = new(256, 256);
+        for (int y = 0; y < 256; y++)
+        {
+            for (int x = 0; x < 256; x++)
+            {
+                source[x, y] = new Rgba64((ushort)((x * 256) + y), (ushort)((y * 256) + x), (ushort)(65535 - (x * 256) - y), 65535);
+            }
+        }
+
+        source.Metadata.IccProfile = LoadProfile(profile);
+        Assert.True(source.Metadata.IccProfile.IsSrgb());
+        using MemoryStream stream = new();
+        source.Save(stream, new PngEncoder { BitDepth = PngBitDepth.Bit16, ColorType = PngColorType.RgbWithAlpha });
+
+        using Image<Rgba64> image = Decode<Rgba64>("png", stream.ToArray(), ColorProfileConversion.ToSrgb);
+
+        AssertSamePixels(source, image);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
     [Theory]
     [MemberData(nameof(AllFormats))]
     public void Decode_IgnoreMetadata_DisablesConversion(string format)

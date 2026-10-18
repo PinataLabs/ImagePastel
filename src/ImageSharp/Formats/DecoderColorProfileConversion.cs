@@ -19,6 +19,9 @@ namespace SixLabors.ImageSharp.Formats;
 /// </summary>
 internal static class DecoderColorProfileConversion
 {
+    // Marks a frame whose pixels need no change; only its profile is replaced.
+    private static readonly IccColorTransform NoPixelChange = new(null, null);
+
     /// <summary>
     /// Converts a decoded image from its embedded profile, as the options ask, and returns it.
     /// Each frame is converted with its own profile when the frames have them (TIFF), and with the
@@ -28,8 +31,9 @@ internal static class DecoderColorProfileConversion
     /// <remarks>
     /// Nothing changes when the option is <see cref="ColorProfileConversion.None"/>, when metadata
     /// is ignored, when the image has no RGB or gray profile, when a profile is already the target,
-    /// or when the engine cannot use a profile (corrupt or not supported yet). The image is disposed
-    /// when this method throws.
+    /// or when the engine cannot use a profile (corrupt or not supported yet). A profile equivalent
+    /// to sRGB (<see cref="IccProfile.IsSrgb"/>) converted to sRGB keeps the pixels as they are and
+    /// only removes the profile. The image is disposed when this method throws.
     /// </remarks>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="image">The decoded image.</param>
@@ -202,6 +206,26 @@ internal static class DecoderColorProfileConversion
         }
     }
 
+    // The transform for a frame's profile: null when the profile cannot be used, or NoPixelChange
+    // for an sRGB-equivalent profile on the way to sRGB, whose pixels already hold the target's colors.
+    private static IccColorTransform CreateFrameTransform(IColorProfileDecoderOptions options, IccProfile source, IccProfile target)
+    {
+        // Decoded pixels are RGB or gray; a profile of another color space (CMYK) describes
+        // samples that are gone, so a decoder must convert those before they become pixels.
+        if (source.DataColorSpace is not (IccColorSpaceType.Rgb or IccColorSpaceType.Gray))
+        {
+            return null;
+        }
+
+        if (!TryCreateTransform(options, source, out IccColorTransform transform))
+        {
+            return null;
+        }
+
+        // The transform reads the profile first, so a corrupt profile has been rejected before IsSrgb reads its tags.
+        return target is null && source.IsSrgb() ? NoPixelChange : transform;
+    }
+
     private static void Convert<TPixel>(Image<TPixel> image, IColorProfileDecoderOptions options, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -234,12 +258,7 @@ internal static class DecoderColorProfileConversion
                 continue;
             }
 
-            // Decoded pixels are RGB or gray; a profile of another color space (CMYK) describes
-            // samples that are gone, so a decoder must convert those before they become pixels.
-            IccColorTransform transform = built.GetOrCreate(
-                source.ToByteArray(),
-                () => source.DataColorSpace is IccColorSpaceType.Rgb or IccColorSpaceType.Gray
-                    && TryCreateTransform(options, source, out IccColorTransform created) ? created : null);
+            IccColorTransform transform = built.GetOrCreate(source.ToByteArray(), () => CreateFrameTransform(options, source, target));
             if (transform is null)
             {
                 return;
@@ -263,7 +282,11 @@ internal static class DecoderColorProfileConversion
             }
 
             ImageFrame<TPixel> frame = image.Frames[i];
-            IccPixelConversion.Convert(configuration, frame.PixelBuffer, transforms[i], cancellationToken);
+            if (!ReferenceEquals(transforms[i], NoPixelChange))
+            {
+                IccPixelConversion.Convert(configuration, frame.PixelBuffer, transforms[i], cancellationToken);
+            }
+
             if (perFrame)
             {
                 frame.Metadata.IccProfile = GetConvertedProfile(options);
