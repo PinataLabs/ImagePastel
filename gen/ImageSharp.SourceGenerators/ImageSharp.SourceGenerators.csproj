@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tests reuse the generator's constants, such as the gate property name. -->
+    <InternalsVisibleTo Include="SixLabors.ImageSharp.SourceGenerators.Tests" Key="$(PinataLabsPublicKey)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Release tracking for the diagnostic IDs (RS2008). -->
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />

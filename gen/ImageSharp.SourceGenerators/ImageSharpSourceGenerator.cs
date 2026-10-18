@@ -18,7 +18,10 @@ namespace SixLabors.ImageSharp.SourceGenerators;
 [Generator(LanguageNames.CSharp)]
 public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
 {
-    private const string GateProperty = "build_property.ImageSharpGeneratedSources";
+    /// <summary>
+    /// The analyzer config key of the <c>ImageSharpGeneratedSources</c> property.
+    /// </summary>
+    internal const string GateProperty = "build_property.ImageSharpGeneratedSources";
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 

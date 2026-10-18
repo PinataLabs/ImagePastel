@@ -114,5 +114,5 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
     }
 
     private void WriteExpected(string name, string text)
-        => File.WriteAllText(Path.Combine(this.directory, name), text, new System.Text.UTF8Encoding(false));
+        => File.WriteAllText(Path.Combine(this.directory, name), text, GeneratorDriverHarness.Utf8NoBom);
 }

@@ -26,9 +26,10 @@ internal static class GeneratorDriverHarness
     /// </summary>
     public const string UpdateSnapshotsVariable = "IMAGESHARP_UPDATE_SNAPSHOTS";
 
-    private const string GateOption = "build_property.ImageSharpGeneratedSources";
-
-    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+    /// <summary>
+    /// Gets the encoding of the expected files: UTF-8 without a byte order mark.
+    /// </summary>
+    public static UTF8Encoding Utf8NoBom { get; } = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
     /// Gets the directory that holds the expected files of every target, in the source tree.
@@ -61,7 +62,7 @@ internal static class GeneratorDriverHarness
         Dictionary<string, string> options = [];
         if (gateValue is not null)
         {
-            options[GateOption] = gateValue;
+            options[ImageSharpSourceGenerator.GateProperty] = gateValue;
         }
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
