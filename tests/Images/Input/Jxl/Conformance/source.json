@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/libjxl/conformance",
+  "commit": "b1d0f990b03e57bf6d137c365cd5dc8b470b9191",
+  "referenceUrl": "https://storage.googleapis.com/jxl-conformance/objects/{sha256}",
+  "inputUrl": "https://raw.githubusercontent.com/libjxl/conformance/{commit}/testcases/{id}/input.jxl",
+  "fetchedInputs": {
+    "bike": "639efe13b89868688234ebb9ec36a0ed848ba01bde43681d3d37438d2e0c0370",
+    "cafe": "cb4603bd089483fc1d63a039a3b758ec510f0090b74ce245b88b1e8feb54f0eb",
+    "progressive": "bb4722ab780dce609a7b007fe7fe235962b351691f60ffb2cde7b4808c8601e1"
+  }
+}
