@@ -17,6 +17,11 @@ internal static class TiffDecoderOptionsParser
     private const TiffPlanarConfiguration DefaultPlanarConfiguration = TiffPlanarConfiguration.Chunky;
 
     /// <summary>
+    /// The InkSet value for CMYK inks, the default (TIFF 6.0, section 16).
+    /// </summary>
+    private const ushort InkSetCmyk = 1;
+
+    /// <summary>
     /// Determines the TIFF compression and color types, and reads any associated parameters.
     /// </summary>
     /// <param name="options">The options.</param>
@@ -414,12 +419,59 @@ internal static class TiffDecoderOptionsParser
                 break;
             }
 
+            case TiffPhotometricInterpretation.Separated:
+            {
+                options.ParseSeparatedColorType(exifProfile);
+                break;
+            }
+
             default:
             {
                 TiffThrowHelper.ThrowNotSupported($"The specified TIFF photometric interpretation is not supported: {options.PhotometricInterpretation}");
             }
 
             break;
+        }
+    }
+
+    private static void ParseSeparatedColorType(this TiffDecoderCore options, ExifProfile exifProfile)
+    {
+        // Other ink sets name their inks with InkNames, and have no fixed conversion to RGB.
+        ushort inkSet = exifProfile.GetValue(ExifTag.InkSet)?.Value ?? InkSetCmyk;
+        if (inkSet != InkSetCmyk)
+        {
+            TiffThrowHelper.ThrowNotSupported("Only the CMYK InkSet is supported for Separated TIFF images.");
+        }
+
+        TiffBitsPerSample bitsPerSample = options.BitsPerSample;
+        ushort numberOfInks = exifProfile.GetValue(ExifTag.NumberOfInks)?.Value ?? 4;
+        if (bitsPerSample.Channels != 4 || numberOfInks != 4)
+        {
+            TiffThrowHelper.ThrowNotSupported("Separated TIFF images are only supported with four inks and no extra samples.");
+        }
+
+        if (!(bitsPerSample.Channel0 == bitsPerSample.Channel1 && bitsPerSample.Channel1 == bitsPerSample.Channel2 && bitsPerSample.Channel2 == bitsPerSample.Channel3))
+        {
+            TiffThrowHelper.ThrowNotSupported("Only BitsPerSample with equal bits per channel are supported.");
+        }
+
+        if (options.SampleFormat == TiffSampleFormat.Float)
+        {
+            TiffThrowHelper.ThrowNotSupported("Separated TIFF images with float samples are not supported.");
+        }
+
+        bool planar = options.PlanarConfiguration == TiffPlanarConfiguration.Planar;
+        switch (bitsPerSample.Channel0)
+        {
+            case 8:
+                options.ColorType = planar ? TiffColorType.Cmyk8888Planar : TiffColorType.Cmyk8888;
+                break;
+            case 16:
+                options.ColorType = planar ? TiffColorType.Cmyk16161616Planar : TiffColorType.Cmyk16161616;
+                break;
+            default:
+                TiffThrowHelper.ThrowNotSupported("Only 8 and 16 bits per sample are supported for Separated TIFF images.");
+                break;
         }
     }
 
@@ -477,6 +529,11 @@ internal static class TiffDecoderOptionsParser
 
             case TiffCompression.Jpeg:
             {
+                if (options.PhotometricInterpretation is TiffPhotometricInterpretation.Separated)
+                {
+                    TiffThrowHelper.ThrowNotSupported("JPEG compressed Separated TIFF images are not supported.");
+                }
+
                 options.CompressionType = TiffDecoderCompressionType.Jpeg;
 
                 if (options.PhotometricInterpretation is TiffPhotometricInterpretation.YCbCr && options.JpegTables is null)

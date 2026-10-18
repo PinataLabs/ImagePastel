@@ -494,6 +494,8 @@ internal class TiffDecoderCore : IImageDecoderInternals
                 this.byteOrder);
 
             TiffBasePlanarColorDecoder<TPixel> colorDecoder = TiffColorDecoderFactory<TPixel>.CreatePlanar(
+                this.Configuration,
+                this.memoryAllocator,
                 this.ColorType,
                 this.BitsPerSample,
                 this.ExtraSamplesType,
