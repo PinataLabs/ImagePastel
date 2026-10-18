@@ -36,8 +36,6 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
         "Short4",
     ];
 
-    private static readonly string[] AssociatedAlphaPixelTypes = [];
-
     private static readonly string[] CommonPixelTypes =
     [
         "A8",
@@ -96,15 +94,9 @@ internal sealed class PixelOperationsTestsEmitter : IEmitter
         {
             foreach (string pixelType in CommonPixelTypes)
             {
-                string alpha = "PixelAlphaRepresentation.None";
-                if (AssociatedAlphaPixelTypes.Contains(pixelType))
-                {
-                    alpha = "PixelAlphaRepresentation.Associated";
-                }
-                else if (UnassociatedAlphaPixelTypes.Contains(pixelType))
-                {
-                    alpha = "PixelAlphaRepresentation.Unassociated";
-                }
+                string alpha = UnassociatedAlphaPixelTypes.Contains(pixelType)
+                    ? "PixelAlphaRepresentation.Unassociated"
+                    : "PixelAlphaRepresentation.None";
 
                 EmitSpecializedClass(pixelType, alpha, writer);
             }
