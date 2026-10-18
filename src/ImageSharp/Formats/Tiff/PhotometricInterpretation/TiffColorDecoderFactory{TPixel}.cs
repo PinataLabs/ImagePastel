@@ -382,7 +382,7 @@ internal static class TiffColorDecoderFactory<TPixel>
 
             case TiffColorType.PaletteColor:
                 DebugGuard.NotNull(colorMap, "colorMap");
-                return new PaletteTiffColor<TPixel>(bitsPerSample, colorMap);
+                return new PaletteTiffColor<TPixel>(bitsPerSample, colorMap, byteOrder == ByteOrder.BigEndian);
 
             case TiffColorType.YCbCr:
                 return new YCbCrTiffColor<TPixel>(memoryAllocator, referenceBlackAndWhite, ycbcrCoefficients, ycbcrSubSampling);
