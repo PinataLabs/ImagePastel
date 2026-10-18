@@ -22,6 +22,8 @@ public sealed class JpegDecoder : IImageDecoder, IJpegDecoderOptions, IImageInfo
     /// decoded. Defaults to <see cref="ColorProfileConversion.None"/>. Nothing is converted when
     /// <see cref="IgnoreMetadata"/> is set, when the image has no embedded profile, or when the
     /// embedded profile is corrupt or not supported; the image then keeps its embedded profile.
+    /// Adobe CMYK and YCCK images with an embedded CMYK profile are converted from their CMYK samples
+    /// through that profile instead of through the CMYK-to-RGB formula; without one, the formula stays.
     /// </summary>
     public ColorProfileConversion ColorProfileConversion { get; set; }
 

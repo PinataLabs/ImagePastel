@@ -53,7 +53,7 @@
 |Rgb (Planar)               |       |   Y   | General implementation only |
 |PaletteColor               |   Y   |   Y   | General implementation only |
 |TransparencyMask           |       |       |                          |
-|Separated (TIFF Extension) |       |   Y   | CMYK ink set only, 8 and 16-bit, chunky and planar. Converted to RGB with the same CMYK-to-RGB formula as the JPEG decoder; an embedded profile is exposed but not applied. |
+|Separated (TIFF Extension) |       |   Y   | CMYK ink set only, 8 and 16-bit, chunky and planar. Converted to RGB with the same CMYK-to-RGB formula as the JPEG decoder. An embedded CMYK profile is exposed, and is applied to the CMYK samples instead of the formula when `ColorProfileConversion` asks for a conversion. |
 |YCbCr (TIFF Extension)     |       |   Y   |                          |
 |CieLab (TIFF Extension)    |       |       |                          |
 |IccLab (TechNote 1)        |       |       |                          |

@@ -270,6 +270,7 @@ def main():
     with open('cmyk-test-profile.icc', 'wb') as f:
         f.write(profile)
     write_tiff('cmyk-contig-08_icc.tiff', 8, icc=profile)
+    write_tiff('cmyk-planar-16_msb_icc.tiff', 16, '>', planar=True, icc=profile)
 
     write_tiff('inkset-not-cmyk-08.tiff', 8, ink_set=INK_SET_NOT_CMYK, number_of_inks=4)
     write_tiff('cmyk-contig-08_jpeg.tiff', 8, compression=COMPRESSION_JPEG)

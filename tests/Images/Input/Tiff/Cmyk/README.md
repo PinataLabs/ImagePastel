@@ -15,6 +15,7 @@ Each image is 48 x 32 pixels in strips of 8 rows. Cyan grows from left to right,
 | `cmyk-contig-08_deflate_predictor.tiff` | chunky, 8-bit, Deflate with the horizontal predictor | |
 | `cmyk-contig-16_msb_deflate_predictor.tiff` | chunky, 16-bit, big endian, Deflate with the horizontal predictor | |
 | `cmyk-contig-08_icc.tiff` | chunky, 8-bit, little endian | Embeds `cmyk-test-profile.icc`. |
+| `cmyk-planar-16_msb_icc.tiff` | planar, 16-bit, big endian | Embeds `cmyk-test-profile.icc`. |
 | `inkset-not-cmyk-08.tiff` | chunky, 8-bit | `InkSet = 2` (not CMYK). The decoder must throw `NotSupportedException`. |
 | `cmyk-contig-08_jpeg.tiff` | chunky, 8-bit | `Compression = 7` (JPEG) with zero bytes for strips. The decoder must throw `NotSupportedException`. |
 | `cmyk-test-profile.icc` | ICC v2.1 input profile, CMYK to Lab | See below. |

@@ -43,6 +43,29 @@ internal static class IccPixelConversion
     }
 
     /// <summary>
+    /// Converts a row of scaled colors in place, then clamps red, green and blue to [0, 1], the
+    /// scaled range of every pixel type. Alpha (or black, for a CMYK source) is left as the
+    /// transform leaves it.
+    /// </summary>
+    /// <param name="transform">The transform.</param>
+    /// <param name="row">The colors.</param>
+    public static void ConvertRow(IccColorTransform transform, Span<Vector4> row)
+    {
+        transform.Transform(row);
+
+        // Float pixel types skip the clamp in bulk conversion, so it is done here.
+        for (int i = 0; i < row.Length; i++)
+        {
+            ref Vector4 value = ref row[i];
+            value = new Vector4(
+                Numerics.Clamp(value.X, 0, 1),
+                Numerics.Clamp(value.Y, 0, 1),
+                Numerics.Clamp(value.Z, 0, 1),
+                value.W);
+        }
+    }
+
+    /// <summary>
     /// Converts one row of pixels.
     /// </summary>
     private readonly struct RowOperation<TPixel> : IRowOperation<Vector4>
@@ -66,19 +89,7 @@ internal static class IccPixelConversion
             Span<TPixel> row = this.source.DangerousGetRowSpan(y).Slice(0, span.Length);
             PixelOperations<TPixel>.Instance.ToVector4(this.configuration, row, span, PixelConversionModifiers.Scale);
 
-            this.transform.Transform(span);
-
-            // Clamp to the scaled range of every pixel type; float pixel types skip it in bulk conversion.
-            for (int i = 0; i < span.Length; i++)
-            {
-                ref Vector4 value = ref span[i];
-                value = new Vector4(
-                    Numerics.Clamp(value.X, 0, 1),
-                    Numerics.Clamp(value.Y, 0, 1),
-                    Numerics.Clamp(value.Z, 0, 1),
-                    value.W);
-            }
-
+            ConvertRow(this.transform, span);
             PixelOperations<TPixel>.Instance.FromVector4Destructive(this.configuration, span, row, PixelConversionModifiers.Scale);
         }
     }

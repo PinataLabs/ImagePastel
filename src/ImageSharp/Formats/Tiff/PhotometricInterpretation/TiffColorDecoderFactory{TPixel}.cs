@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -19,7 +20,8 @@ internal static class TiffColorDecoderFactory<TPixel>
         Rational[] referenceBlackAndWhite,
         Rational[] ycbcrCoefficients,
         ushort[] ycbcrSubSampling,
-        ByteOrder byteOrder)
+        ByteOrder byteOrder,
+        IccColorTransform cmykTransform)
     {
         switch (colorType)
         {
@@ -391,7 +393,7 @@ internal static class TiffColorDecoderFactory<TPixel>
             case TiffColorType.Cmyk16161616:
                 DebugGuard.IsTrue(bitsPerSample.Channels == 4, "bitsPerSample");
                 DebugGuard.IsTrue(colorMap == null, "colorMap");
-                return new CmykTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian);
+                return new CmykTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian, cmykTransform);
 
             default:
                 throw TiffThrowHelper.InvalidColorType(colorType.ToString());
@@ -408,7 +410,8 @@ internal static class TiffColorDecoderFactory<TPixel>
         Rational[] referenceBlackAndWhite,
         Rational[] ycbcrCoefficients,
         ushort[] ycbcrSubSampling,
-        ByteOrder byteOrder)
+        ByteOrder byteOrder,
+        IccColorTransform cmykTransform)
     {
         switch (colorType)
         {
@@ -427,7 +430,7 @@ internal static class TiffColorDecoderFactory<TPixel>
             case TiffColorType.Cmyk16161616Planar:
                 DebugGuard.IsTrue(bitsPerSample.Channels == 4, "bitsPerSample");
                 DebugGuard.IsTrue(colorMap == null, "colorMap");
-                return new CmykPlanarTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian);
+                return new CmykPlanarTiffColor<TPixel>(configuration, memoryAllocator, bitsPerSample.Channel0, byteOrder == ByteOrder.BigEndian, cmykTransform);
 
             case TiffColorType.Rgb161616Planar:
                 DebugGuard.IsTrue(colorMap == null, "colorMap");
