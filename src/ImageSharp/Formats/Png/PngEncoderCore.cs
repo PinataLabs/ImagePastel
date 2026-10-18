@@ -13,6 +13,7 @@ using SixLabors.ImageSharp.Formats.Png.Chunks;
 using SixLabors.ImageSharp.Formats.Png.Filters;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Png;
@@ -133,7 +134,14 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
         stream.Write(PngConstants.HeaderBytes);
 
         this.WriteHeaderChunk(stream);
-        this.WriteGammaChunk(stream);
+
+        // An embedded profile overrides gAMA, and this encoder cannot check that a gAMA value matches the
+        // profile, so gAMA is only written without one. sRGB is never written, so it cannot conflict either.
+        if (!this.WriteIccProfileChunk(stream, metadata))
+        {
+            this.WriteGammaChunk(stream);
+        }
+
         this.WritePaletteChunk(stream, quantized);
         this.WriteTransparencyChunk(stream, pngMetadata);
         this.WritePhysicalChunk(stream, metadata);
@@ -656,6 +664,61 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
     }
 
     /// <summary>
+    /// Writes the iCCP chunk to the stream, if the metadata has a valid ICC profile for the color type.
+    /// Should be written before PLTE and IDAT chunk.
+    /// See: https://www.w3.org/TR/png/#11iCCP
+    /// </summary>
+    /// <param name="stream">The <see cref="Stream"/> containing image data.</param>
+    /// <param name="meta">The image metadata.</param>
+    /// <returns>True if the chunk was written.</returns>
+    private bool WriteIccProfileChunk(Stream stream, ImageMetadata meta)
+    {
+        // There is no filter flag for the iCCP chunk, so only excluding all ancillary chunks removes it.
+        if ((this.options.ChunkFilter ?? PngChunkFilter.None) == PngChunkFilter.ExcludeAll)
+        {
+            return false;
+        }
+
+        IccProfile profile = meta.IccProfile;
+        if (profile is null || !profile.CheckIsValid())
+        {
+            return false;
+        }
+
+        // The spec requires an RGB profile for color and palette images and a GRAY profile for grayscale images.
+        IccColorSpaceType expectedColorSpace = this.options.ColorType is PngColorType.Grayscale or PngColorType.GrayscaleWithAlpha
+            ? IccColorSpaceType.Gray
+            : IccColorSpaceType.Rgb;
+        if (profile.Header.DataColorSpace != expectedColorSpace)
+        {
+            return false;
+        }
+
+        byte[] profileBytes = profile.ToByteArray();
+        if (profileBytes is null || profileBytes.Length == 0)
+        {
+            return false;
+        }
+
+        // The profile name is 1-79 Latin-1 bytes, followed by a null separator and compression method 0.
+        byte[] nameBytes = PngConstants.Encoding.GetBytes(PngConstants.IccProfileName);
+        byte[] compressedData = this.GetCompressedTextBytes(profileBytes);
+        int payloadLength = nameBytes.Length + 2 + compressedData.Length;
+        using (IMemoryOwner<byte> owner = this.memoryAllocator.Allocate<byte>(payloadLength))
+        {
+            Span<byte> payload = owner.GetSpan().Slice(0, payloadLength);
+            nameBytes.CopyTo(payload);
+            int bytesWritten = nameBytes.Length;
+            payload[bytesWritten++] = 0;
+            payload[bytesWritten++] = 0;
+            compressedData.CopyTo(payload.Slice(bytesWritten));
+            this.WriteChunk(stream, PngChunkType.EmbeddedColorProfile, payload);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Writes an iTXT chunk, containing the XMP metdata to the stream, if such profile is present in the metadata.
     /// </summary>
     /// <param name="stream">The <see cref="Stream"/> containing image data.</param>
@@ -806,10 +869,10 @@ internal sealed class PngEncoderCore : IImageEncoderInternals, IDisposable
     }
 
     /// <summary>
-    /// Compresses a given text using Zlib compression.
+    /// Compresses the given text or profile bytes using Zlib compression.
     /// </summary>
-    /// <param name="textBytes">The text bytes to compress.</param>
-    /// <returns>The compressed text byte array.</returns>
+    /// <param name="textBytes">The bytes to compress.</param>
+    /// <returns>The compressed byte array.</returns>
     private byte[] GetCompressedTextBytes(byte[] textBytes)
     {
         using (var memoryStream = new MemoryStream())

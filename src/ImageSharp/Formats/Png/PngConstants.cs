@@ -65,6 +65,11 @@ internal static class PngConstants
     public const int MinTextKeywordLength = 1;
 
     /// <summary>
+    /// The profile name written in the iCCP chunk.
+    /// </summary>
+    public const string IccProfileName = "ICC Profile";
+
+    /// <summary>
     /// Gets the header bytes identifying a Png.
     /// </summary>
     public static ReadOnlySpan<byte> HeaderBytes => new byte[]

@@ -20,6 +20,7 @@ using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -203,6 +204,14 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                         case PngChunkType.InternationalText:
                             this.ReadInternationalTextChunk(metadata, chunk.Data.GetSpan());
                             break;
+                        case PngChunkType.EmbeddedColorProfile:
+                            // The spec places iCCP before the image data, so a later one is out of place.
+                            if (image is null)
+                            {
+                                this.ReadIccProfileChunk(metadata, chunk.Data.GetSpan());
+                            }
+
+                            break;
                         case PngChunkType.Exif:
                             if (!this.ignoreMetadata)
                             {
@@ -253,6 +262,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         PngMetadata pngMetadata = metadata.GetPngMetadata();
         this.currentStream = stream;
         this.currentStream.Skip(8);
+        bool hasSeenImageData = false;
         try
         {
             while (this.TryReadChunk(out PngChunk chunk))
@@ -290,6 +300,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                                 goto EOF;
                             }
 
+                            hasSeenImageData = true;
                             this.SkipChunkDataAndCrc(chunk);
                             break;
                         case PngChunkType.Transparency:
@@ -330,6 +341,20 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                             }
 
                             this.ReadInternationalTextChunk(metadata, chunk.Data.GetSpan());
+                            break;
+                        case PngChunkType.EmbeddedColorProfile:
+                            if (this.colorMetadataOnly)
+                            {
+                                this.SkipChunkDataAndCrc(chunk);
+                                break;
+                            }
+
+                            // The spec places iCCP before the image data, so a later one is out of place.
+                            if (!hasSeenImageData)
+                            {
+                                this.ReadIccProfileChunk(metadata, chunk.Data.GetSpan());
+                            }
+
                             break;
                         case PngChunkType.Exif:
                             if (this.colorMetadataOnly)
@@ -1379,6 +1404,105 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         {
             string value = PngConstants.TranslatedEncoding.GetString(data.Slice(dataStartIdx));
             pngMetadata.TextData.Add(new PngTextData(keyword, value, language, translatedKeyword));
+        }
+    }
+
+    /// <summary>
+    /// Reads the iCCP chunk, which holds an embedded ICC profile. The chunk contains:
+    /// - A profile name of 1-79 Latin-1 bytes, followed by a null separator.
+    /// - The compression method, which must be 0 (zlib datastream with deflate compression).
+    /// - The compressed profile.
+    /// A malformed chunk is ignored. The spec allows one iCCP chunk, so only the first is read.
+    /// See: https://www.w3.org/TR/png/#11iCCP
+    /// </summary>
+    /// <param name="metadata">The metadata to decode to.</param>
+    /// <param name="data">The <see cref="T:Span"/> containing the data.</param>
+    private void ReadIccProfileChunk(ImageMetadata metadata, ReadOnlySpan<byte> data)
+    {
+        if (this.ignoreMetadata || metadata.IccProfile != null)
+        {
+            return;
+        }
+
+        int zeroIndex = data.IndexOf((byte)0);
+        if (zeroIndex < PngConstants.MinTextKeywordLength || zeroIndex > PngConstants.MaxTextKeywordLength)
+        {
+            return;
+        }
+
+        // The profile name must be followed by the compression method.
+        if (data.Length < zeroIndex + 2 || data[zeroIndex + 1] != 0)
+        {
+            return;
+        }
+
+        if (!this.TryUncompressIccProfile(data.Slice(zeroIndex + 2), out byte[] profileBytes))
+        {
+            return;
+        }
+
+        var profile = new IccProfile(profileBytes);
+        if (profile.CheckIsValid())
+        {
+            metadata.IccProfile = profile;
+        }
+    }
+
+    /// <summary>
+    /// Decompresses the zlib compressed data of an ICC profile.
+    /// </summary>
+    /// <param name="compressedData">The compressed profile bytes.</param>
+    /// <param name="profileBytes">The uncompressed profile bytes.</param>
+    /// <returns>True if the data was decompressed; false if it is corrupt or too large to be a profile.</returns>
+    private bool TryUncompressIccProfile(ReadOnlySpan<byte> compressedData, out byte[] profileBytes)
+    {
+        // The smallest and largest profile sizes IccProfile.CheckIsValid accepts. The upper bound limits
+        // the memory a small, highly compressed chunk can make the decoder allocate.
+        const int MinProfileSize = 128;
+        const int MaxProfileSize = 50_000_000;
+
+        profileBytes = null;
+        using var memoryStream = new MemoryStream(compressedData.ToArray());
+        using var bufferedStream = new BufferedReadStream(this.Configuration, memoryStream);
+        using var inflateStream = new ZlibInflateStream(bufferedStream);
+        if (!inflateStream.AllocateNewBytes(compressedData.Length, false))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var uncompressed = new MemoryStream();
+            byte[] readBuffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inflateStream.CompressedStream.Read(readBuffer, 0, readBuffer.Length)) > 0)
+            {
+                if (uncompressed.Length + bytesRead > MaxProfileSize)
+                {
+                    return false;
+                }
+
+                long previousLength = uncompressed.Length;
+                uncompressed.Write(readBuffer, 0, bytesRead);
+
+                // The profile starts with its size, so stop as soon as that size cannot be valid.
+                if (previousLength < 4 && uncompressed.Length >= 4)
+                {
+                    uint declaredSize = BinaryPrimitives.ReadUInt32BigEndian(uncompressed.GetBuffer());
+                    if (declaredSize is < MinProfileSize or >= MaxProfileSize)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            profileBytes = uncompressed.ToArray();
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            // The deflate stream reports corrupt compressed data with a generic exception.
+            return false;
         }
     }
 
