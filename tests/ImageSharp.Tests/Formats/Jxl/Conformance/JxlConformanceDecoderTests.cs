@@ -27,6 +27,7 @@ public class JxlConformanceDecoderTests
     [InlineData("blendmodes")]
     [InlineData("blendmodes_5")]
     [InlineData("sunset_logo")]
+    [InlineData("animation_newtons_cradle")]
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

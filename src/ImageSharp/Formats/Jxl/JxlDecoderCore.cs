@@ -5,7 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -156,9 +158,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
             bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
-            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.NumColorPlanes, alpha, premultiplied);
+            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M.NumColorPlanes, alpha, premultiplied);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
-            this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+            List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+            for (int i = 0; i < displayed.Count; i++)
+            {
+                JxlFrameMetadata frameMetadata = image.Frames[i].Metadata.GetFormatMetadata(JxlFormat.Instance);
+                frameMetadata.Duration = displayed[i].AnimationFrame.Duration;
+                frameMetadata.Name = Encoding.UTF8.GetString(displayed[i].Name);
+            }
+
             return image;
         }
         catch
@@ -213,18 +222,26 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
     // The frame loop of JxlDecoderProcessCodestream: frame after frame, each from where the previous
     // frame's sections end, until the last one. Frames are coalesced, as djxl does by default, so only
-    // the displayed frame reaches the sink.
-    private void DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
+    // the displayed frames reach the sink. Returns the header of each displayed frame, which libjxl
+    // reports with JXL_DEC_FRAME.
+    private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         using JxlReferenceFrames references = new();
         JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
+        List<JxlFrameHeader> displayed = new();
         JxlFrameHeader frameHeader;
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
             frameHeader = frameDecoder.DecodeFrame(data, offset, sink, cancellationToken, out offset);
+            if (JxlFrameDecoder.IsLastOfStill(frameHeader))
+            {
+                displayed.Add(frameHeader);
+            }
         }
         while (!frameHeader.IsLast);
+
+        return displayed;
     }
 
     private static void CheckPixelCap(ulong xsize, ulong ysize)
@@ -360,6 +377,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
+        if (codecMetadata.M.HaveAnimation)
+        {
+            // As JxlDecoderGetBasicInfo, which leaves the animation fields 0 for a still image. LoopCount
+            // is an int (issue #108); a count past int.MaxValue, which libjxl keeps, is near enough forever.
+            JxlAnimationHeader animation = codecMetadata.M.Animation;
+            jxlMetadata.LoopCount = (int)Math.Min(animation.NumLoops, int.MaxValue);
+            jxlMetadata.TicksPerSecondNumerator = animation.TpsNumerator;
+            jxlMetadata.TicksPerSecondDenominator = animation.TpsDenominator;
+        }
+
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
             this.SetIccProfile(JxlIccReader.Read(reader));

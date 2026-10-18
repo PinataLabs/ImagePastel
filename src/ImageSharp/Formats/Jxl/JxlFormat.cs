@@ -8,7 +8,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// <summary>
 /// Registers the image encoders, decoders and mime type detectors for the JPEG XL format.
 /// </summary>
-internal sealed class JxlFormat : IImageFormat<JxlMetadata>
+internal sealed class JxlFormat : IImageFormat<JxlMetadata, JxlFrameMetadata>
 {
     private JxlFormat()
     {
@@ -33,4 +33,7 @@ internal sealed class JxlFormat : IImageFormat<JxlMetadata>
 
     /// <inheritdoc/>
     public JxlMetadata CreateDefaultFormatMetadata() => new();
+
+    /// <inheritdoc/>
+    public JxlFrameMetadata CreateDefaultFormatFrameMetadata() => new();
 }

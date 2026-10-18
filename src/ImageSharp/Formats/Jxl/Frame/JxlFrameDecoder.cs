@@ -96,9 +96,7 @@ internal sealed class JxlFrameDecoder
 
         frameEnd = offset + (int)pos;
 
-        // decode.cc: the frame is shown if it is the last one, or the last of a still (an animation
-        // frame with a duration). Every other frame only feeds later frames through its slot.
-        bool isLastOfStill = frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
+        bool isLastOfStill = IsLastOfStill(frameHeader);
 
         // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
         int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
@@ -127,6 +125,16 @@ internal sealed class JxlFrameDecoder
         return frameHeader;
     }
 
+    /// <summary>
+    /// Returns whether the frame is displayed, as decode.cc's <c>is_last_of_still</c> with coalescing: it
+    /// is the last frame, or the last of a still (an animation frame with a duration). Every other frame
+    /// only feeds later frames through its reference slot.
+    /// </summary>
+    /// <param name="frameHeader">The frame header.</param>
+    /// <returns><see langword="true"/> if the frame is displayed.</returns>
+    public static bool IsLastOfStill(JxlFrameHeader frameHeader)
+        => frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
+
     // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
     // decoding badly.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
@@ -152,11 +160,6 @@ internal sealed class JxlFrameDecoder
         if (frameHeader.FrameType == JxlFrameType.Dc || frameHeader.Flags != JxlFrameFlags.None)
         {
             JxlThrowHelper.ThrowNotSupportedException("Patches, splines, noise or DC frames");
-        }
-
-        if (!frameHeader.IsLast && frameHeader.AnimationFrame.Duration > 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Animations with more than one displayed frame");
         }
 
         if (frameHeader.Upsampling != 1 || frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))

@@ -23,6 +23,9 @@ internal sealed class JxlMetadata : IDeepCloneable
         this.ColorEncoding = other.ColorEncoding?.Clone();
         this.IsXybEncoded = other.IsXybEncoded;
         this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
+        this.LoopCount = other.LoopCount;
+        this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
+        this.TicksPerSecondDenominator = other.TicksPerSecondDenominator;
     }
 
     /// <summary>
@@ -43,6 +46,23 @@ internal sealed class JxlMetadata : IDeepCloneable
     /// (XYB and CMYK images), so it is not always the pixel profile.
     /// </summary>
     public IccProfile OriginalIccProfile { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many times an animation plays; 0 means forever. It is 0 for a still image.
+    /// </summary>
+    public int LoopCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the numerator of the ticks per second, the unit of <see cref="JxlFrameMetadata.Duration"/>.
+    /// It is 0 for a still image.
+    /// </summary>
+    public uint TicksPerSecondNumerator { get; set; }
+
+    /// <summary>
+    /// Gets or sets the denominator of the ticks per second, the unit of <see cref="JxlFrameMetadata.Duration"/>.
+    /// It is 0 for a still image.
+    /// </summary>
+    public uint TicksPerSecondDenominator { get; set; }
 
     /// <inheritdoc/>
     public IDeepCloneable DeepClone() => new JxlMetadata(this);

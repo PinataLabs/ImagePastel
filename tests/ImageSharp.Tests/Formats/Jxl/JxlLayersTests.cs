@@ -137,15 +137,19 @@ public class JxlLayersTests
     }
 
     [Fact]
-    public void Animation_WithMoreThanOneDisplayedFrame_ThrowsNotSupported()
+    public void Animation_WithTwoDisplayedFrames_GivesBothFrames()
     {
-        // Animations are the next slice (#191).
+        // The second frame is cropped, so it is blended onto the first, which slot 1 holds.
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true)
-            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 10 })
-            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10 })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 10, SaveAsReference = 1 })
+            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10, X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Replace, Source: 1), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) })
             .ToArray();
 
-        Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream).Dispose());
+        using JxlDecodedImage decoded = DecodeToPlanes(codestream);
+
+        Assert.Equal(2, decoded.Frames.Count);
+        AssertEveryPixel(decoded.Frames[0], (x, y) => (200, 100, 50, 128));
+        AssertEveryPixel(decoded.Frames[1], (x, y) => x is >= 4 and < 14 && y is >= 3 and < 9 ? (40, 220, 160, 64) : (200, 100, 50, 128));
     }
 
     public static TheoryData<string> DjxlCases => new(Cases.Keys);
@@ -227,6 +231,11 @@ public class JxlLayersTests
         ["animation_one_displayed_frame"] = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8 })
             .Add(Last(JxlTestLayers.Ramp) with { Duration = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
+        ["animation_three_displayed_frames"] = new JxlTestLayers(Width, Height, animation: true)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 5, SaveAsReference = 1 })
+            .Add(new JxlTestFrame(JxlTestLayers.Ramp) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8, Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1) })
+            .Add(new JxlTestFrame(JxlTestLayers.ColourB) { Duration = 4, X0 = 6, Y0 = 1, XSize = 12, YSize = 9, Color = new(JxlBlendMode.Add), ExtraChannel = new(JxlBlendMode.Add), SaveAsReference = 2 })
+            .Add(Last(JxlTestLayers.Ramp) with { Duration = 9, X0 = -3, Y0 = 5, XSize = 10, YSize = 20, Color = new(JxlBlendMode.Mul, Source: 2), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) }),
 
         // One colour plane: libjxl blends three equal planes.
         ["grey_add"] = GreyLayers(new(JxlBlendMode.Add), new(JxlBlendMode.Replace)),
@@ -269,19 +278,24 @@ public class JxlLayersTests
             Assert.Single(decoded.Frames);
             Assert.Equal(Width, decoded.Width);
             Assert.Equal(Height, decoded.Height);
-            IReadOnlyList<Buffer2D<float>> planes = decoded.Frames[0].Planes;
-            Assert.Equal(4, planes.Count);
-            for (int y = 0; y < Height; y++)
+            AssertEveryPixel(decoded.Frames[0], expected);
+        }
+    }
+
+    private static void AssertEveryPixel(JxlDecodedFrame frame, Func<int, int, (int R, int G, int B, int A)> expected)
+    {
+        IReadOnlyList<Buffer2D<float>> planes = frame.Planes;
+        Assert.Equal(4, planes.Count);
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
             {
-                for (int x = 0; x < Width; x++)
+                (int r, int g, int b, int a) = expected(x, y);
+                int[] want = { r, g, b, a };
+                for (int c = 0; c < 4; c++)
                 {
-                    (int r, int g, int b, int a) = expected(x, y);
-                    int[] want = { r, g, b, a };
-                    for (int c = 0; c < 4; c++)
-                    {
-                        float sample = planes[c].DangerousGetRowSpan(y)[x];
-                        Assert.True(MathF.Abs(sample - (want[c] / 255F)) < 1e-6F, $"({x}, {y}) channel {c}: {sample * 255F}, expected {want[c]}.");
-                    }
+                    float sample = planes[c].DangerousGetRowSpan(y)[x];
+                    Assert.True(MathF.Abs(sample - (want[c] / 255F)) < 1e-6F, $"({x}, {y}) channel {c}: {sample * 255F}, expected {want[c]}.");
                 }
             }
         }

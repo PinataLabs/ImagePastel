@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -67,6 +68,15 @@ internal sealed class JxlTestLayers
     public bool Premultiplied { get; }
 
     public bool Animation { get; }
+
+    /// <summary>Gets the numerator of the animation's ticks per second.</summary>
+    public uint TpsNumerator { get; init; } = 100;
+
+    /// <summary>Gets the denominator of the animation's ticks per second, up to 1024.</summary>
+    public uint TpsDenominator { get; init; } = 1;
+
+    /// <summary>Gets the animation's loop count; 0 is forever.</summary>
+    public uint NumLoops { get; init; }
 
     private int NumExtraChannels => this.numExtraChannels;
 
@@ -142,7 +152,17 @@ internal sealed class JxlTestLayers
         if (this.Animation)
         {
             w.Write(3, 0).Bit(false).Bit(false).Bit(true); // orientation 1, no intrinsic size, no preview, animation
-            w.Write(2, 0).Write(2, 0).Write(2, 0).Bit(false); // 100 / 1 ticks per second, loop forever, no timecodes
+            if (this.TpsNumerator == 100 && this.TpsDenominator == 1 && this.NumLoops == 0)
+            {
+                w.Write(2, 0).Write(2, 0).Write(2, 0); // 100 / 1 ticks per second, loop forever
+            }
+            else
+            {
+                // The widest U32 choice of each field: BitsOffset(30, 1), BitsOffset(10, 1) and Bits(32).
+                w.Write(2, 3).Write(30, this.TpsNumerator - 1).Write(2, 3).Write(10, this.TpsDenominator - 1).Write(2, 3).Write(32, this.NumLoops);
+            }
+
+            w.Bit(false); // no timecodes
         }
 
         w.Bit(false).Write(2, 0).Bit(true); // 8-bit integer samples, 16-bit buffers suffice
@@ -244,6 +264,29 @@ internal sealed class JxlTestLayers
         }
     }
 
+    // VisitNameString: the length as U32(Val(0), Bits(4), BitsOffset(5, 16), BitsOffset(10, 48)), then the bytes.
+    private static void WriteName(JxlTestBitWriter w, string name)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(name ?? string.Empty);
+        if (bytes.Length == 0)
+        {
+            w.Write(2, 0);
+        }
+        else if (bytes.Length < 16)
+        {
+            w.Write(2, 1).Write(4, (ulong)bytes.Length);
+        }
+        else
+        {
+            w.Write(2, 2).Write(5, (ulong)bytes.Length - 16);
+        }
+
+        foreach (byte b in bytes)
+        {
+            w.Write(8, b);
+        }
+    }
+
     // The first frame's only section in a jxl_from_tree file.
     private static byte[] Section(string hex)
     {
@@ -324,7 +367,7 @@ internal sealed class JxlTestLayers
             w.Bit(frame.SaveBeforeColorTransform);
         }
 
-        w.Write(2, 0); // no name
+        WriteName(w, frame.Name);
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
@@ -364,6 +407,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public JxlTestBlending ExtraChannel { get; init; } = new(JxlBlendMode.Replace);
 
     public uint Duration { get; init; }
+
+    /// <summary>Gets the frame name, up to 47 UTF-8 bytes.</summary>
+    public string Name { get; init; }
 
     public bool IsLast { get; init; }
 
