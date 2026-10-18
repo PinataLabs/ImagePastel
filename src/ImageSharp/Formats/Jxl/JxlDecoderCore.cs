@@ -290,6 +290,20 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
+    // The rest of #105's rules: a colour encoding other than sRGB, or grey with the sRGB curve, gets a
+    // built profile. libjxl builds a profile for every colour encoding as it reads the header and
+    // rejects the image when it cannot, so the profile is built, and checked, even when it is not kept.
+    private void SetColorEncodingProfile(JxlColorEncoding c)
+    {
+        IccProfile profile = JxlIccBuilder.Create(c);
+        bool srgbCurve = !c.Tf.HaveGamma && c.Tf.TransferFunction == JxlTransferFunction.Srgb && c.WhitePoint == JxlWhitePoint.D65;
+        bool srgb = srgbCurve && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
+        if (!this.ignoreMetadata && !srgb)
+        {
+            this.imageMetadata.IccProfile = profile;
+        }
+    }
+
     // Reads the signature, size header, image metadata, transform data and ICC profile, and returns
     // the offset of the first frame.
     private int ReadHeaders(byte[] data)
@@ -322,9 +336,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         codecMetadata.TransformData.NonserializedXybEncoded = codecMetadata.M.XybEncoded;
         JxlBundle.Read(reader, codecMetadata.TransformData);
 
+        JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
+        jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
             this.SetIccProfile(JxlIccReader.Read(reader));
+        }
+        else
+        {
+            jxlMetadata.ColorEncoding = codecMetadata.M.ColorEncoding.Clone();
+            this.SetColorEncodingProfile(codecMetadata.M.ColorEncoding);
         }
 
         reader.JumpToByteBoundary();

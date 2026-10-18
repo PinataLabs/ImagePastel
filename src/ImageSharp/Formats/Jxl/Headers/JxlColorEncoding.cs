@@ -17,9 +17,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
 /// The colour encoding of the image: either an enumerated encoding, or a flag that an ICC profile follows.
 /// </summary>
 /// <remarks>
-/// Only the fields are ported. libjxl also builds an ICC profile from the enumerated fields
-/// (<c>CreateICC</c>); that comes with the colour slice, so the "Empty ICC" check that depends on it is
-/// left out here.
+/// libjxl builds an ICC profile from the enumerated fields as it reads them (<c>CreateICC</c>) and
+/// rejects the header when that fails. Here <see cref="Icc.JxlIccBuilder"/> does that once the headers
+/// are read.
 /// </remarks>
 internal sealed class JxlColorEncoding : JxlFields
 {
@@ -60,6 +60,46 @@ internal sealed class JxlColorEncoding : JxlFields
 
     /// <summary>Gets a value indicating whether the encoding has primaries, which grey and XYB do not.</summary>
     public bool HasPrimaries => this.ColorSpace != JxlColorSpace.Gray && this.ColorSpace != JxlColorSpace.Xyb;
+
+    /// <summary>Gets the white point as CIE xy (GetWhitePoint in lib/jxl/cms/color_encoding_cms.h).</summary>
+    public (double X, double Y) WhitePointXy => this.WhitePoint switch
+    {
+        JxlWhitePoint.Custom => this.White.Value,
+        JxlWhitePoint.D65 => (0.3127, 0.3290),
+
+        // From https://ieeexplore.ieee.org/document/7290729 C.2 page 11
+        JxlWhitePoint.Dci => (0.314, 0.351),
+        _ => (1.0 / 3, 1.0 / 3), // E
+    };
+
+    /// <summary>Gets the red, green and blue primaries as CIE xy (GetPrimaries). Only valid if <see cref="HasPrimaries"/>.</summary>
+    public ((double X, double Y) R, (double X, double Y) G, (double X, double Y) B) PrimariesXy => this.Primaries switch
+    {
+        JxlPrimaries.Custom => (this.Red.Value, this.Green.Value, this.Blue.Value),
+        JxlPrimaries.Srgb => ((0.639998686, 0.330010138), (0.300003784, 0.600003357), (0.150002046, 0.059997204)),
+        JxlPrimaries.Bt2100 => ((0.708, 0.292), (0.170, 0.797), (0.131, 0.046)),
+        _ => ((0.680, 0.320), (0.265, 0.690), (0.150, 0.060)), // P3
+    };
+
+    /// <summary>Returns a copy of this encoding.</summary>
+    /// <returns>The copy.</returns>
+    public JxlColorEncoding Clone()
+    {
+        JxlColorEncoding clone = new()
+        {
+            WantIcc = this.WantIcc,
+            ColorSpace = this.ColorSpace,
+            WhitePoint = this.WhitePoint,
+            Primaries = this.Primaries,
+            RenderingIntent = this.RenderingIntent,
+        };
+        clone.White.CopyFrom(this.White);
+        clone.Red.CopyFrom(this.Red);
+        clone.Green.CopyFrom(this.Green);
+        clone.Blue.CopyFrom(this.Blue);
+        clone.Tf.CopyFrom(this.Tf);
+        return clone;
+    }
 
     public override void VisitFields(JxlVisitor visitor)
     {

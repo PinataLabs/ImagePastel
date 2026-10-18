@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -17,7 +18,24 @@ internal sealed class JxlMetadata : IDeepCloneable
     {
     }
 
-    private JxlMetadata(JxlMetadata other) => this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
+    private JxlMetadata(JxlMetadata other)
+    {
+        this.ColorEncoding = other.ColorEncoding?.Clone();
+        this.IsXybEncoded = other.IsXybEncoded;
+        this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
+    }
+
+    /// <summary>
+    /// Gets or sets the enumerated colour encoding of the image, or null when the stream signals an ICC
+    /// profile instead.
+    /// </summary>
+    public JxlColorEncoding ColorEncoding { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the image is coded in the XYB colour space. Such images
+    /// decode to the colour their encoding or profile describes, not to XYB.
+    /// </summary>
+    public bool IsXybEncoded { get; set; }
 
     /// <summary>
     /// Gets or sets the ICC profile embedded in the codestream, or null when the stream describes its

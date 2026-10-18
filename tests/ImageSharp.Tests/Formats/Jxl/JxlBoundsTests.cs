@@ -391,6 +391,44 @@ public class JxlBoundsTests
         Assert.Contains("Too large encoded profile", ex.Message);
     }
 
+    [Theory]
+    [InlineData(329000, false)] // D65's y
+    [InlineData(0, true)]
+    public void ColorEncoding_WhitePointWithNoProfile_Throws(int whiteY, bool throws)
+    {
+        // libjxl builds an ICC profile from every colour encoding it reads (CreateICC), and a white point
+        // with y = 0 has none.
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(true).Write(5, 0).Write(3, 1); // 8 x 8
+        writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
+        writer.Bit(false).Write(2, 0).Bit(true).Write(2, 0); // 8-bit integer samples, no extra channels
+        writer.Bit(false).Bit(false).Bit(false).Write(2, 0); // not XYB; a colour encoding, no ICC; RGB
+        writer.Write(2, 2).Write(4, 0); // custom white point
+        writer.Write(2, 1).Write(19, 625400 - 524288); // x = 0.3127, packed signed
+        if (whiteY == 0)
+        {
+            writer.Write(2, 0).Write(19, 0);
+        }
+        else
+        {
+            writer.Write(2, 1).Write(19, (ulong)((whiteY * 2) - 524288));
+        }
+
+        writer.Write(2, 1); // sRGB primaries
+        writer.Bit(false).Write(2, 2).Write(4, 11); // the sRGB transfer function
+        writer.Write(2, 1); // relative rendering intent
+        writer.Write(2, 0).Bit(true); // no extensions; all-default transform data
+
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => Identify(writer));
+        }
+        else
+        {
+            Assert.Equal(8, Identify(writer).Width);
+        }
+    }
+
     [Fact]
     public void PixelCap_ThrowsInvalidMemoryOperationBeforeAllocating()
     {

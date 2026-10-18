@@ -13,6 +13,16 @@ These files cover features that no conformance vector checks. They were made for
 | `exif_xmp.jxl` | Lossless Modular, 16 x 16 8-bit RGB with the Exif and XMP of libjxl's `1x1_exif_xmp.jpg` in uncompressed `Exif` and `xml ` boxes. `cjxl` splits the codestream into two `jxlp` boxes with the metadata boxes between them. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
 | `exif_xmp_brob.jxl` | The same image and metadata, with both metadata boxes Brotli-compressed in `brob` boxes. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
 | `custom_icc.jxl` | Lossless Modular, 32 x 32 8-bit RGB with an embedded 600-byte ICC profile: made-up primaries and a tabulated tone curve, so no colour encoding describes it. | `External/ReferenceOutput/JxlDecoderTests/custom_icc.png`, whose `iCCP` chunk holds the same profile |
+| `colour_srgb.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `sRGB`: sRGB: the pixel profile is null. | `External/ReferenceOutput/JxlDecoderTests/colour_srgb.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_grey_srgb.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Gra_D65_Rel_SRG`: grey with the sRGB curve: the pixel profile is null. | `External/ReferenceOutput/JxlDecoderTests/colour_grey_srgb.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_rec2020.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_D65_202_Rel_709`: Rec.2020 primaries, BT.709 curve. | `External/ReferenceOutput/JxlDecoderTests/colour_rec2020.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_display_p3.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `DisplayP3`: P3 primaries, sRGB curve. | `External/ReferenceOutput/JxlDecoderTests/colour_display_p3.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_linear_srgb.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_D65_SRG_Rel_Lin`: sRGB primaries, linear. | `External/ReferenceOutput/JxlDecoderTests/colour_linear_srgb.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_gamma22.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_D65_SRG_Per_g0.45455`: sRGB primaries, gamma 2.2, perceptual intent. | `External/ReferenceOutput/JxlDecoderTests/colour_gamma22.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_grey_linear.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Gra_D65_Rel_Lin`: grey, linear. | `External/ReferenceOutput/JxlDecoderTests/colour_grey_linear.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_custom.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_0.3457;0.3585_0.7;0.29;0.18;0.72;0.14;0.05_Abs_SRG`: custom white point and primaries, absolute intent. | `External/ReferenceOutput/JxlDecoderTests/colour_custom.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_dci.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_DCI_DCI_Rel_DCI`: DCI white point, P3 primaries, DCI curve. | `External/ReferenceOutput/JxlDecoderTests/colour_dci.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG: no pixel profile until D11. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
 
 #### How `premultiplied_alpha` was made
 
@@ -68,3 +78,33 @@ djxl custom_icc.jxl ../../../External/ReferenceOutput/JxlDecoderTests/custom_icc
 
 - `make_custom_icc.py` writes the profile to `custom_icc.icc` and `custom_icc_source.png`, which carries it in an `iCCP` chunk. Neither is committed; the script makes them again.
 - `djxl --icc_out` gives back `custom_icc.icc` byte for byte.
+
+#### How the colour-encoding files were made
+
+```sh
+py -3 make_colour_encodings.py
+cjxl colour_source.ppm colour_srgb.jxl -d 0 -x "color_space=sRGB"
+cjxl colour_grey_source.pgm colour_grey_srgb.jxl -d 0 -x "color_space=Gra_D65_Rel_SRG"
+cjxl colour_source.ppm colour_rec2020.jxl -d 0 -x "color_space=RGB_D65_202_Rel_709"
+cjxl colour_source.ppm colour_display_p3.jxl -d 0 -x "color_space=DisplayP3"
+cjxl colour_source.ppm colour_linear_srgb.jxl -d 0 -x "color_space=RGB_D65_SRG_Rel_Lin"
+cjxl colour_source.ppm colour_gamma22.jxl -d 0 -x "color_space=RGB_D65_SRG_Per_g0.45455"
+cjxl colour_grey_source.pgm colour_grey_linear.jxl -d 0 -x "color_space=Gra_D65_Rel_Lin"
+cjxl colour_source.ppm colour_custom.jxl -d 0 -x "color_space=RGB_0.3457;0.3585_0.7;0.29;0.18;0.72;0.14;0.05_Abs_SRG"
+cjxl colour_source.ppm colour_dci.jxl -d 0 -x "color_space=RGB_DCI_DCI_Rel_DCI"
+cjxl colour_source.ppm colour_hlg.jxl -d 0 -x "color_space=Rec2100HLG"
+djxl colour_srgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_srgb.png
+djxl colour_grey_srgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_grey_srgb.png
+djxl colour_rec2020.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_rec2020.png
+djxl colour_display_p3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_display_p3.png
+djxl colour_linear_srgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_linear_srgb.png
+djxl colour_gamma22.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_gamma22.png
+djxl colour_grey_linear.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_grey_linear.png
+djxl colour_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_custom.png
+djxl colour_dci.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_dci.png
+djxl colour_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_hlg.png
+```
+
+- `make_colour_encodings.py` writes `colour_source.ppm` and `colour_grey_source.pgm`. PPM and PGM carry no colour information, so `cjxl` takes the colour encoding from `-x color_space`. They are not committed; the script makes them again.
+- Each file stores its colour encoding as enumerated fields, not as an ICC profile.
+- `djxl` writes the profile it builds from the colour encoding into the PNG's `iCCP` chunk; it equals `djxl --icc_out`. For `colour_srgb` and `colour_grey_srgb` it writes an `sRGB` chunk instead.
