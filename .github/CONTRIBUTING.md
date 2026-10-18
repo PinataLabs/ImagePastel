@@ -60,8 +60,9 @@ To change generated code:
 4. Run the tests again without the variable. They must pass.
 5. Commit the emitter and the expected files together.
 
-To add a generated file, add an emitter and add it to the list for its target in `ImageSharpSourceGenerator`.
-The hint name of the file is its file name, without a directory.
+To add a generated file, add it to the `Files` of an emitter.
+Each item gives the hint name of the file and the method that writes it. The hint name is the file name, without a directory.
+A new emitter must also be added to the emitter list of its target in `GeneratedSourcesTarget`.
 
 The expected test output is in `tests/Images/External`, in Git LFS.
 

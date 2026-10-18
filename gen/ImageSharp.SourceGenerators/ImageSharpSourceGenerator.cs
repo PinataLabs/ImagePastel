@@ -4,8 +4,6 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using SixLabors.ImageSharp.SourceGenerators.Library;
-using SixLabors.ImageSharp.SourceGenerators.Tests;
 
 namespace SixLabors.ImageSharp.SourceGenerators;
 
@@ -23,19 +21,6 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
     private const string GateProperty = "build_property.ImageSharpGeneratedSources";
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
-    private static readonly IEmitter[] LibraryEmitters =
-    [
-        new GuardNumericEmitter(),
-        new ImageExtensionsSaveEmitter(),
-        new PixelOperationsEmitter(),
-        new PixelBlendersEmitter(),
-    ];
-
-    private static readonly IEmitter[] TestsEmitters =
-    [
-        new PixelOperationsTestsEmitter(),
-    ];
 
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -63,8 +48,7 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
             return;
         }
 
-        IEmitter[] emitters = target == GeneratedSourcesTarget.Library ? LibraryEmitters : TestsEmitters;
-        foreach (IEmitter emitter in emitters)
+        foreach (IEmitter emitter in target.Emitters)
         {
             foreach (GeneratedFile file in emitter.Files)
             {

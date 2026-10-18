@@ -2,33 +2,59 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
+using SixLabors.ImageSharp.SourceGenerators.Library;
+using SixLabors.ImageSharp.SourceGenerators.Tests;
 
 namespace SixLabors.ImageSharp.SourceGenerators;
 
 /// <summary>
 /// The project that the generator writes sources for, set by the consuming project's
-/// <c>ImageSharpGeneratedSources</c> MSBuild property.
+/// <c>ImageSharpGeneratedSources</c> MSBuild property, with the emitters of its sources.
 /// </summary>
 internal sealed class GeneratedSourcesTarget
 {
     /// <summary>
     /// The ImageSharp library.
     /// </summary>
-    public static readonly GeneratedSourcesTarget Library = new("Library");
+    public static readonly GeneratedSourcesTarget Library = new(
+        "Library",
+        [
+            new GuardNumericEmitter(),
+            new ImageExtensionsSaveEmitter(),
+            new PixelOperationsEmitter(),
+            new PixelBlendersEmitter(),
+        ]);
 
     /// <summary>
     /// The ImageSharp test project.
     /// </summary>
-    public static readonly GeneratedSourcesTarget Tests = new("Tests");
+    public static readonly GeneratedSourcesTarget Tests = new(
+        "Tests",
+        [
+            new PixelOperationsTestsEmitter(),
+        ]);
 
-    private static readonly GeneratedSourcesTarget[] All = [Library, Tests];
+    private GeneratedSourcesTarget(string name, IEmitter[] emitters)
+    {
+        this.Name = name;
+        this.Emitters = emitters;
+    }
 
-    private GeneratedSourcesTarget(string name) => this.Name = name;
+    /// <summary>
+    /// Gets every target.
+    /// </summary>
+    public static IReadOnlyList<GeneratedSourcesTarget> All { get; } = [Library, Tests];
 
     /// <summary>
     /// Gets the property value that selects this target.
     /// </summary>
     public string Name { get; }
+
+    /// <summary>
+    /// Gets the emitters of the sources for this target.
+    /// </summary>
+    public IReadOnlyList<IEmitter> Emitters { get; }
 
     /// <summary>
     /// Parses a property value. The comparison ignores case and surrounding white space, as
