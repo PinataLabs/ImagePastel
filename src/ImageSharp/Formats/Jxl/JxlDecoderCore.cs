@@ -48,7 +48,82 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         byte[] data = ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
+        return this.Decode<TPixel>(data, frameOffset, cancellationToken);
+    }
 
+    /// <summary>
+    /// Decodes the image into the pixel type that <see cref="ChoosePixelType(JxlImageMetadata)"/> picks
+    /// from its header.
+    /// </summary>
+    /// <param name="stream">The stream.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The image.</returns>
+    public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
+    {
+        byte[] data = ReadCodestream(stream);
+        int frameOffset = this.ReadHeaders(data);
+        Type pixelType = ChoosePixelType(this.metadata.M);
+        return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(L16) ? this.Decode<L16>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(La16) ? this.Decode<La16>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(La32) ? this.Decode<La32>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgb24) ? this.Decode<Rgb24>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgb48) ? this.Decode<Rgb48>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgba32) ? this.Decode<Rgba32>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgba64) ? this.Decode<Rgba64>(data, frameOffset, cancellationToken)
+            : this.Decode<RgbaVector>(data, frameOffset, cancellationToken);
+    }
+
+    /// <summary>
+    /// Picks the pixel type for an image with this header, as decided in issue #111. The bit depth is
+    /// the larger of the colour's and the alpha's. XYB images use the bit depth they signal, and CMYK
+    /// images count as RGB because they are converted.
+    /// </summary>
+    /// <param name="metadata">The image metadata.</param>
+    /// <returns>The pixel type.</returns>
+    public static Type ChoosePixelType(JxlImageMetadata metadata)
+    {
+        uint bits = metadata.BitDepth.BitsPerSample;
+        bool floatingPoint = metadata.BitDepth.FloatingPointSample;
+        int alpha = metadata.Find(JxlExtraChannelType.Alpha);
+        if (alpha >= 0)
+        {
+            JxlBitDepth alphaBitDepth = metadata.ExtraChannelInfo[alpha].BitDepth;
+            bits = Math.Max(bits, alphaBitDepth.BitsPerSample);
+            floatingPoint |= alphaBitDepth.FloatingPointSample;
+        }
+
+        return ChoosePixelType(metadata.ColorEncoding.IsGray, alpha >= 0, bits, floatingPoint);
+    }
+
+    /// <summary>
+    /// Picks the pixel type for an image with these channels and samples. ImageSharp has no float grey
+    /// pixel, so float images are <see cref="RgbaVector"/>.
+    /// </summary>
+    /// <param name="gray">Whether the image is grey.</param>
+    /// <param name="alpha">Whether the image has alpha.</param>
+    /// <param name="bits">The bits per sample.</param>
+    /// <param name="floatingPoint">Whether the samples are floats.</param>
+    /// <returns>The pixel type.</returns>
+    public static Type ChoosePixelType(bool gray, bool alpha, uint bits, bool floatingPoint)
+    {
+        if (floatingPoint || bits > 16)
+        {
+            return typeof(RgbaVector);
+        }
+
+        bool wide = bits > 8;
+        if (gray)
+        {
+            return alpha ? (wide ? typeof(La32) : typeof(La16)) : (wide ? typeof(L16) : typeof(L8));
+        }
+
+        return alpha ? (wide ? typeof(Rgba64) : typeof(Rgba32)) : (wide ? typeof(Rgb48) : typeof(Rgb24));
+    }
+
+    private Image<TPixel> Decode<TPixel>(byte[] data, int frameOffset, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
