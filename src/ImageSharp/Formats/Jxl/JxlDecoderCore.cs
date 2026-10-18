@@ -11,11 +11,13 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -267,6 +269,27 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         return data;
     }
 
+    // The pixel-profile rules of issue #105, with #111's CMYK exception: the embedded ICC is always the
+    // original profile, and it is the pixel profile only where the pixels are the coded samples. XYB
+    // images decode to sRGB, and CMYK images are converted naively to RGB.
+    private void SetIccProfile(byte[] icc)
+    {
+        if (this.ignoreMetadata)
+        {
+            return;
+        }
+
+        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = new IccProfile(icc);
+
+        // The data colour space is bytes 16 to 19 of the ICC header.
+        bool cmyk = icc.Length >= 20 && icc.AsSpan(16, 4).SequenceEqual("CMYK"u8);
+        IccProfile pixelProfile = new(icc);
+        if (!this.metadata.M.XybEncoded && !cmyk && pixelProfile.CheckIsValid())
+        {
+            this.imageMetadata.IccProfile = pixelProfile;
+        }
+    }
+
     // Reads the signature, size header, image metadata, transform data and ICC profile, and returns
     // the offset of the first frame.
     private int ReadHeaders(byte[] data)
@@ -301,8 +324,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
-            // libjxl decodes the entropy-coded ICC profile here.
-            JxlThrowHelper.ThrowNotSupportedException("ICC profiles");
+            this.SetIccProfile(JxlIccReader.Read(reader));
         }
 
         reader.JumpToByteBoundary();

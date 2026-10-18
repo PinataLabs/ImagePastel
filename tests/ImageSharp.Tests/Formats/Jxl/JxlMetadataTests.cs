@@ -5,10 +5,14 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
@@ -19,7 +23,7 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// Checks the metadata a JPEG XL file reports: Exif and XMP from its boxes.
+/// Checks the metadata a JPEG XL file reports: Exif and XMP from its boxes, and its ICC profile.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlMetadataTests
@@ -116,6 +120,138 @@ public class JxlMetadataTests
 
         Assert.Throws<InvalidImageContentException>(() => Identify(WithBoxes(Box("brob", contents))));
     }
+
+    [Fact]
+    public void Identify_PatchesLossless_ReportsItsExifAndXmp()
+    {
+        ImageMetadata metadata = Identify(JxlConformanceVector.Load("patches_lossless").CommittedInputPath);
+
+        Assert.NotNull(metadata.ExifProfile);
+        Assert.NotNull(metadata.XmpProfile);
+    }
+
+    public static TheoryData<string> VectorsWithAnOriginalIcc()
+    {
+        TheoryData<string> data = new();
+        foreach (string id in JxlConformanceVector.AllIds)
+        {
+            JxlConformanceVector vector = JxlConformanceVector.Load(id);
+            if (vector.Sha256Sums.ContainsKey("original.icc") && File.Exists(vector.CommittedInputPath))
+            {
+                data.Add(id);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(VectorsWithAnOriginalIcc))]
+    public void Identify_EmbeddedIcc_IsTheVectorsOriginalIcc(string id)
+    {
+        JxlConformanceVector vector = JxlConformanceVector.Load(id);
+
+        JxlMetadata jxl = Identify(vector.CommittedInputPath).GetFormatMetadata(JxlFormat.Instance);
+
+        if (EmbedsIcc(vector.CommittedInputPath))
+        {
+            Assert.NotNull(jxl.OriginalIccProfile);
+            Assert.Equal(vector.Sha256Sums["original.icc"], Sha256(jxl.OriginalIccProfile.ToByteArray()));
+        }
+        else
+        {
+            Assert.Null(jxl.OriginalIccProfile);
+        }
+    }
+
+    // jxlinfo calls the XYB vectors lossy; cmyk_layers is CMYK.
+    [Theory]
+    [InlineData("bench_oriented_brg", true)]
+    [InlineData("cmyk_layers", false)]
+    [InlineData("grayscale", false)]
+    [InlineData("grayscale_jpeg", true)]
+    [InlineData("patches", false)]
+    [InlineData("patches_lossless", true)]
+    [InlineData("spot", true)]
+    public void Identify_EmbeddedIcc_IsThePixelProfileUnlessXybOrCmyk(string id, bool isPixelProfile)
+    {
+        ImageMetadata metadata = Identify(JxlConformanceVector.Load(id).CommittedInputPath);
+        JxlMetadata jxl = metadata.GetFormatMetadata(JxlFormat.Instance);
+
+        Assert.NotNull(jxl.OriginalIccProfile);
+        if (isPixelProfile)
+        {
+            Assert.Equal(jxl.OriginalIccProfile.ToByteArray(), metadata.IccProfile.ToByteArray());
+        }
+        else
+        {
+            Assert.Null(metadata.IccProfile);
+        }
+    }
+
+    [Fact]
+    public void Load_EmbeddedIcc_GivesThePixelsAndTheProfileDjxlGives()
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "custom_icc.jxl"));
+        using Image<Rgb24> reference = Image.Load<Rgb24>(GeneratedReferencePath("custom_icc"));
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+        Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+        Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.ToByteArray());
+    }
+
+    [Fact]
+    public void Decode_EmbeddedIcc_IgnoreMetadata_LeavesTheProfilesUnsetAndStillDecodes()
+    {
+        using FileStream stream = File.OpenRead(Path.Combine(GeneratedDirectory, "custom_icc.jxl"));
+
+        using Image<Rgb24> image = new JxlDecoder { IgnoreMetadata = true }.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
+        using Image<Rgb24> reference = Image.Load<Rgb24>(GeneratedReferencePath("custom_icc"));
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.Null(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+    }
+
+    [Theory]
+    [InlineData(40)]
+    [InlineData(100)]
+    public void Identify_TruncatedIccStream_ThrowsInvalidImageContent(int length)
+    {
+        byte[] data = File.ReadAllBytes(Path.Combine(GeneratedDirectory, "custom_icc.jxl")).AsSpan(0, length).ToArray();
+
+        Assert.Throws<InvalidImageContentException>(() => Identify(data));
+    }
+
+    [Fact]
+    public void DeepClone_CopiesTheOriginalIccProfile()
+    {
+        JxlMetadata jxl = Identify(Path.Combine(GeneratedDirectory, "custom_icc.jxl")).GetFormatMetadata(JxlFormat.Instance);
+
+        JxlMetadata clone = (JxlMetadata)jxl.DeepClone();
+
+        Assert.NotSame(jxl.OriginalIccProfile, clone.OriginalIccProfile);
+        Assert.Equal(jxl.OriginalIccProfile.ToByteArray(), clone.OriginalIccProfile.ToByteArray());
+    }
+
+    // Whether the codestream header signals an embedded ICC profile.
+    private static bool EmbedsIcc(string path)
+    {
+        byte[] data = File.ReadAllBytes(path);
+        if (data.AsSpan().StartsWith(JxlConstants.ContainerSignature))
+        {
+            data = JxlContainer.Read(data, readMetadata: false).Codestream;
+        }
+
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(data, 2, data.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        reader.Close();
+        return metadata.M.ColorEncoding.WantIcc;
+    }
+
+    private static string Sha256(byte[] data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 
     private static void AssertSameProfiles(ImageMetadata expected, ImageMetadata actual)
     {

@@ -12,6 +12,7 @@ These files cover features that no conformance vector checks. They were made for
 | `greyscale_squeeze_wide.jxl` | Lossless Modular, 8-bit grey with the default squeeze, 2061 x 40. It is wider than one 2048-pixel DC group, so the squeezed channels with a shift of 3 or more are decoded in the DC groups. | `External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze_wide.png` |
 | `exif_xmp.jxl` | Lossless Modular, 16 x 16 8-bit RGB with the Exif and XMP of libjxl's `1x1_exif_xmp.jpg` in uncompressed `Exif` and `xml ` boxes. `cjxl` splits the codestream into two `jxlp` boxes with the metadata boxes between them. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
 | `exif_xmp_brob.jxl` | The same image and metadata, with both metadata boxes Brotli-compressed in `brob` boxes. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
+| `custom_icc.jxl` | Lossless Modular, 32 x 32 8-bit RGB with an embedded 600-byte ICC profile: made-up primaries and a tabulated tone curve, so no colour encoding describes it. | `External/ReferenceOutput/JxlDecoderTests/custom_icc.png`, whose `iCCP` chunk holds the same profile |
 
 #### How `premultiplied_alpha` was made
 
@@ -56,3 +57,14 @@ djxl exif_xmp.jxl ../../../External/ReferenceOutput/JxlDecoderTests/exif_xmp.png
 
 - `make_exif_xmp.py` writes `exif_xmp_source.png`, with the JPEG's Exif in an `eXIf` chunk and its XMP in an `iTXt` chunk. It is not committed; the script makes it again. `cjxl` given the JPEG itself keeps the Exif but drops the XMP, so the PNG carries both.
 - `djxl` gives the same PNG for `exif_xmp_brob.jxl`.
+
+#### How `custom_icc` was made
+
+```sh
+py -3 make_custom_icc.py
+cjxl custom_icc_source.png custom_icc.jxl -d 0
+djxl custom_icc.jxl ../../../External/ReferenceOutput/JxlDecoderTests/custom_icc.png
+```
+
+- `make_custom_icc.py` writes the profile to `custom_icc.icc` and `custom_icc_source.png`, which carries it in an `iCCP` chunk. Neither is committed; the script makes them again.
+- `djxl --icc_out` gives back `custom_icc.icc` byte for byte.

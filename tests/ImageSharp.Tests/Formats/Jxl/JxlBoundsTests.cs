@@ -374,6 +374,24 @@ public class JxlBoundsTests
     }
 
     [Fact]
+    public void Icc_EncodedSizeOver2Pow28_Throws()
+    {
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(true).Write(5, 0).Write(3, 1); // 8 x 8
+        writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
+        writer.Bit(false).Write(2, 0).Bit(true).Write(2, 0); // 8-bit integer samples, no extra channels
+        writer.Bit(false).Bit(false).Bit(true).Write(2, 0); // not XYB; an embedded ICC, RGB
+        writer.Write(2, 0).Bit(true); // no extensions; all-default transform data
+
+        // The encoded ICC size, 2^28 + 1, as a U64: selector 3, then 12 + 8 + 8 + 8 bits.
+        writer.Write(2, 3).Write(12, 1).Bit(true).Write(8, 0).Bit(true).Write(8, 0).Bit(true).Write(8, 1).Bit(false);
+        writer.Bits(64, false);
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Identify(writer));
+        Assert.Contains("Too large encoded profile", ex.Message);
+    }
+
+    [Fact]
     public void PixelCap_ThrowsInvalidMemoryOperationBeforeAllocating()
     {
         // 20000 x 20000 is over the 2^28-pixel cap.
