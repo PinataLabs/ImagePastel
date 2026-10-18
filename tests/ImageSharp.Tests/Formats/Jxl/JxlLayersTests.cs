@@ -227,12 +227,28 @@ public class JxlLayersTests
         ["animation_one_displayed_frame"] = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8 })
             .Add(Last(JxlTestLayers.Ramp) with { Duration = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
+
+        // One colour plane: libjxl blends three equal planes.
+        ["grey_add"] = GreyLayers(new(JxlBlendMode.Add), new(JxlBlendMode.Replace)),
+        ["grey_blend"] = GreyLayers(new(JxlBlendMode.Blend), new(JxlBlendMode.Blend)),
+        ["grey_alpha_weighted_add"] = GreyLayers(new(JxlBlendMode.AlphaWeightedAdd, Clamp: true), new(JxlBlendMode.AlphaWeightedAdd)),
+        ["grey_mul"] = GreyLayers(new(JxlBlendMode.Mul, Clamp: true), new(JxlBlendMode.Mul)),
         ["skip_progressive"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
             .Add(Last(JxlTestLayers.Ramp) with { Type = JxlFrameType.SkipProgressive, Color = new(JxlBlendMode.Blend) }),
     };
 
     private static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
+
+    // Two full-size frames of the generated 64 x 64 16-bit grey and alpha file.
+    private static JxlTestLayers GreyLayers(JxlTestBlending color, JxlTestBlending extraChannel)
+    {
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "greyscale_alpha.jxl");
+        JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(path), out byte[] section);
+        return layers
+            .Add(new JxlTestFrame(section))
+            .Add(Last(section) with { Color = color, ExtraChannel = extraChannel });
+    }
 
     private static JxlTestLayers TwoLayers(JxlTestBlending color, JxlTestBlending extraChannel, bool premultiplied = false, byte[] top = null)
         => new JxlTestLayers(Width, Height, premultiplied: premultiplied)

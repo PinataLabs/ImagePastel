@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -30,6 +31,11 @@ internal sealed class JxlTestLayers
 
     private readonly List<JxlTestFrame> frames = new();
 
+    // The image header of an existing file, used instead of the written one.
+    private byte[] imageHeader;
+    private int numExtraChannels;
+    private uint groupSizeShift = 1;
+
     public JxlTestLayers(int width, int height, bool alpha = true, bool premultiplied = false, bool animation = false)
     {
         this.Width = width;
@@ -37,6 +43,7 @@ internal sealed class JxlTestLayers
         this.Alpha = alpha;
         this.Premultiplied = premultiplied;
         this.Animation = animation;
+        this.numExtraChannels = alpha ? 1 : 0;
     }
 
     /// <summary>Gets an RGBA layer of (200, 100, 50, 128) in 8-bit samples.</summary>
@@ -61,7 +68,45 @@ internal sealed class JxlTestLayers
 
     public bool Animation { get; }
 
-    private int NumExtraChannels => this.Alpha ? 1 : 0;
+    private int NumExtraChannels => this.numExtraChannels;
+
+    /// <summary>
+    /// Returns layers that keep the image header of a single-frame, single-group Modular file, which
+    /// must not be XYB or animated, and gives that frame's section. The section only decodes in a
+    /// full-size frame.
+    /// </summary>
+    /// <param name="file">The file: a bare codestream or a container.</param>
+    /// <param name="section">The section of the file's frame.</param>
+    /// <returns>The layers.</returns>
+    public static JxlTestLayers FromFile(byte[] file, out byte[] section)
+    {
+        byte[] codestream = file[0] == 0xFF ? file : JxlContainer.Read(file, readMetadata: false).Codestream;
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        reader.JumpToByteBoundary();
+        int frameOffset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        JxlFrameHeader frameHeader = new(metadata);
+        JxlBundle.Read(reader, frameHeader);
+        uint[] sizes = JxlToc.ReadToc(1, reader);
+        int start = 2 + (int)(reader.TotalBitsConsumed / 8);
+        reader.Close();
+        if (metadata.M.XybEncoded || metadata.M.HaveAnimation || metadata.M.ColorEncoding.WantIcc || frameHeader.Encoding != JxlFrameEncoding.Modular)
+        {
+            throw new ArgumentException("The file must be a Modular, non-XYB, non-animated image with no ICC profile.", nameof(file));
+        }
+
+        section = codestream.AsSpan(start, (int)sizes[0]).ToArray();
+        return new JxlTestLayers((int)metadata.XSize, (int)metadata.YSize)
+        {
+            imageHeader = codestream.AsSpan(0, frameOffset).ToArray(),
+            numExtraChannels = metadata.M.NumExtraChannels,
+            groupSizeShift = frameHeader.GroupSizeShift,
+        };
+    }
 
     public JxlTestLayers Add(JxlTestFrame frame)
     {
@@ -72,6 +117,21 @@ internal sealed class JxlTestLayers
     public byte[] ToArray()
     {
         JxlTestBitWriter w = new();
+        if (this.imageHeader != null)
+        {
+            foreach (byte b in this.imageHeader)
+            {
+                w.Write(8, b);
+            }
+
+            foreach (JxlTestFrame frame in this.frames)
+            {
+                this.WriteFrame(w, frame);
+            }
+
+            return w.ToArray();
+        }
+
         w.Write(8, 0xFF).Write(8, 0x0A);
 
         // SizeHeader: not small, BitsOffset(9, 1) for each side, no ratio.
@@ -213,7 +273,7 @@ internal sealed class JxlTestLayers
             w.Write(2, 0); // extra channel upsampling 1
         }
 
-        w.Write(2, 1); // group size shift 1: 256 x 256 groups
+        w.Write(2, this.groupSizeShift); // 1 unless taken from a file: 256 x 256 groups
         if (frame.Type != JxlFrameType.ReferenceOnly)
         {
             w.Write(2, 0); // one pass
