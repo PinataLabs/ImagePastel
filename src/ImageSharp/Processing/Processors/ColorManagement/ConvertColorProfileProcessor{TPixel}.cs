@@ -42,7 +42,8 @@ internal sealed class ConvertColorProfileProcessor<TPixel> : ImageProcessor<TPix
             this.perFrame |= frame.Metadata.IccProfile is not null;
         }
 
-        List<(IccProfile Source, IccColorTransform Transform)> built = [];
+        // Frames with equal profiles (separate instances in a TIFF) share one transform.
+        IccTransformCache built = new();
         foreach (ImageFrame<TPixel> frame in source.Frames)
         {
             // When the frames have their own profiles, a frame without one holds sRGB.
@@ -52,14 +53,9 @@ internal sealed class ConvertColorProfileProcessor<TPixel> : ImageProcessor<TPix
                 continue;
             }
 
-            IccColorTransform transform = built.Find(b => ReferenceEquals(b.Source, sourceProfile)).Transform;
-            if (transform is null)
-            {
-                transform = CreateTransform(sourceProfile, this.targetProfile, definition.Options);
-                built.Add((sourceProfile, transform));
-            }
-
-            this.transforms[frame] = transform;
+            this.transforms[frame] = built.GetOrCreate(
+                sourceProfile?.ToByteArray(),
+                () => CreateTransform(sourceProfile, this.targetProfile, definition.Options));
         }
     }
 

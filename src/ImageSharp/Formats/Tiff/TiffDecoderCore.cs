@@ -50,6 +50,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
     private readonly IColorProfileDecoderOptions colorProfileOptions;
 
     /// <summary>
+    /// The CMYK transforms built so far in this decode, by profile bytes.
+    /// </summary>
+    private readonly IccTransformCache cmykTransforms = new();
+
+    /// <summary>
     /// The stream to decode from.
     /// </summary>
     private BufferedReadStream inputStream;
@@ -341,13 +346,15 @@ internal class TiffDecoderCore : IImageDecoderInternals
         }
 
         byte[] profileBytes = tags.GetValue(ExifTag.IccProfile)?.Value;
-        if (profileBytes is null
-            || !DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, new IccProfile(profileBytes), out IccColorTransform transform))
+        if (profileBytes is null)
         {
             return null;
         }
 
-        return transform;
+        // Frames usually repeat the same profile, so they share its transform.
+        return this.cmykTransforms.GetOrCreate(
+            profileBytes,
+            () => DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, new IccProfile(profileBytes), out IccColorTransform transform) ? transform : null);
     }
 
     private IMemoryOwner<ulong> ConvertNumbers(Array array, out Span<ulong> span)

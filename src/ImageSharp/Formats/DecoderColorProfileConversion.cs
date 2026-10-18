@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.ColorManagement;
@@ -223,7 +222,9 @@ internal static class DecoderColorProfileConversion
         IccProfile target = GetTarget(options);
         int count = image.Frames.Count;
         IccColorTransform[] transforms = new IccColorTransform[count];
-        List<(IccProfile Source, IccColorTransform Transform)> built = [];
+
+        // TIFF frames hold separate but usually equal profiles, so transforms are shared by profile bytes.
+        IccTransformCache built = new();
         bool any = false;
         for (int i = 0; i < count; i++)
         {
@@ -233,18 +234,15 @@ internal static class DecoderColorProfileConversion
                 continue;
             }
 
-            IccColorTransform transform = built.Find(b => ReferenceEquals(b.Source, source)).Transform;
+            // Decoded pixels are RGB or gray; a profile of another color space (CMYK) describes
+            // samples that are gone, so a decoder must convert those before they become pixels.
+            IccColorTransform transform = built.GetOrCreate(
+                source.ToByteArray(),
+                () => source.DataColorSpace is IccColorSpaceType.Rgb or IccColorSpaceType.Gray
+                    && TryCreateTransform(options, source, out IccColorTransform created) ? created : null);
             if (transform is null)
             {
-                // Decoded pixels are RGB or gray; a profile of another color space (CMYK) describes
-                // samples that are gone, so a decoder must convert those before they become pixels.
-                if (!TryCreateTransform(options, source, out transform)
-                    || source.DataColorSpace is not (IccColorSpaceType.Rgb or IccColorSpaceType.Gray))
-                {
-                    return;
-                }
-
-                built.Add((source, transform));
+                return;
             }
 
             transforms[i] = transform;
