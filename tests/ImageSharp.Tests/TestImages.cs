@@ -1020,6 +1020,12 @@ public static class TestImages
         public const string LittleCmsSrgbV2 = "Icc/LittleCms/sRGB-v2.icc";
         public const string LittleCmsGray22V4 = "Icc/LittleCms/Gray22-v4.icc";
         public const string LittleCmsGrayLab18V4 = "Icc/LittleCms/GrayLab18-v4.icc";
+        public const string LittleCmsRgbLut8V2 = "Icc/LittleCms/RgbLut8-v2.icc";
+        public const string LittleCmsRgbLut16V2 = "Icc/LittleCms/RgbLut16-v2.icc";
+        public const string LittleCmsRgbLutAToBV4 = "Icc/LittleCms/RgbLutAToB-v4.icc";
+        public const string LittleCmsGrayLutV4 = "Icc/LittleCms/GrayLut-v4.icc";
+        public const string LittleCmsFakeCmykV4 = "Icc/LittleCms/FakeCmyk-v4.icc";
+        public const string TiffCmykTestProfile = "Tiff/Cmyk/cmyk-test-profile.icc";
         public const string QcmsSrgb = "Icc/qcms/sRGB_lcms.icc";
         public const string QcmsRec709 = "Icc/qcms/ITU-709.icc";
         public const string QcmsRec2020 = "Icc/qcms/ITU-2020.icc";
