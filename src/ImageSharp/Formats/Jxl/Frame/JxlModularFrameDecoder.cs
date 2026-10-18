@@ -313,22 +313,24 @@ internal sealed class JxlModularFrameDecoder : IDisposable
         int c = 0;
         if (this.doColor)
         {
+            // libjxl copies a grey channel into all three colour channels (rgb_from_gray); this port
+            // renders grey as one plane (JxlImageMetadata.NumColorPlanes), so it is converted once.
             bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
+            int numColor = rgbFromGray ? 1 : 3;
             bool fp = metadata.BitDepth.FloatingPointSample && frameHeader.ColorTransform != JxlColorTransform.Xyb;
             int bits = (int)metadata.BitDepth.BitsPerSample;
             int expBits = (int)metadata.BitDepth.ExponentBitsPerSample;
-            for (; c < 3; c++)
+            for (; c < numColor; c++)
             {
                 // libjxl's XYB conversion comes with a later slice; the frame decoder rejects XYB
                 // images, so it is not reached.
                 double factor = this.fullImage.BitDepth < 32 ? 1.0 / ((1u << this.fullImage.BitDepth) - 1) : 0;
-                int cIn = rgbFromGray ? 0 : c;
-                if (cIn >= gi.Channel.Count)
+                if (c >= gi.Channel.Count)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException("Missing colour channel");
                 }
 
-                JxlModularChannel chIn = gi.Channel[cIn];
+                JxlModularChannel chIn = gi.Channel[c];
                 if (chIn.W == 0 || chIn.H == 0)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException("Empty image");
@@ -343,28 +345,8 @@ internal sealed class JxlModularFrameDecoder : IDisposable
                 for (int y = 0; y < r.YSize; y++)
                 {
                     ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                    if (rgbFromGray)
-                    {
-                        for (int cc = 0; cc < 3; cc++)
-                        {
-                            ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, cc, r, y));
-                        }
-                    }
-                    else
-                    {
-                        ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, c, r, y));
-                    }
+                    ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, c, r, y));
                 }
-
-                if (rgbFromGray)
-                {
-                    break;
-                }
-            }
-
-            if (rgbFromGray)
-            {
-                c = 1;
             }
         }
 
@@ -399,7 +381,7 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             for (int y = 0; y < r.YSize; y++)
             {
                 ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, 3 + ec, r, y));
+                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, metadata.NumColorPlanes + ec, r, y));
             }
         }
     }

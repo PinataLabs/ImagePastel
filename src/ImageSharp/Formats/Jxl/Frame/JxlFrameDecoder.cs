@@ -89,7 +89,7 @@ internal sealed class JxlFrameDecoder
         }
 
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim);
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, 3 + this.metadata.M.NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels);
 
         ProcessSections(frameHeader, frameDim, sections, modularFrameDecoder, pipeline, cancellationToken);
 

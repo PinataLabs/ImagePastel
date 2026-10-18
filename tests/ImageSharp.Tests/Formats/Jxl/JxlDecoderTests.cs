@@ -143,6 +143,66 @@ public class JxlDecoderTests
     }
 
     [Theory]
+    [InlineData("greyscale", 1)] // 8-bit grey
+    [InlineData("greyscale_alpha", 2)] // 16-bit grey and alpha
+    public void DecodeToPlanes_Greyscale_GivesOneGreyPlane(string name, int planeCount)
+    {
+        using FileStream stream = File.OpenRead(Path.Combine(GeneratedDirectory, name + ".jxl"));
+        using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using Image<La32> reference = Image.Load<La32>(GeneratedReferencePath(name));
+
+        Assert.Equal(planeCount, planes.Frames[0].Planes.Count);
+        for (int y = 0; y < reference.Height; y++)
+        {
+            for (int x = 0; x < reference.Width; x++)
+            {
+                La32 expected = reference[x, y];
+                Assert.Equal(expected.L, Quantize16(planes.Frames[0].Planes[0].DangerousGetRowSpan(y)[x]));
+                if (planeCount == 2)
+                {
+                    Assert.Equal(expected.A, Quantize16(planes.Frames[0].Planes[1].DangerousGetRowSpan(y)[x]));
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_Greyscale_GivesL8MatchingDjxl()
+    {
+        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, "greyscale.jxl"));
+        using Image<L8> reference = Image.Load<L8>(GeneratedReferencePath("greyscale"));
+
+        Image<L8> grey = Assert.IsType<Image<L8>>(image);
+        ImageComparer.Exact.VerifySimilarity(reference, grey);
+    }
+
+    [Fact]
+    public void Load_GreyscaleAlpha_GivesLa32MatchingDjxl()
+    {
+        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, "greyscale_alpha.jxl"));
+        using Image<La32> reference = Image.Load<La32>(GeneratedReferencePath("greyscale_alpha"));
+
+        Image<La32> grey = Assert.IsType<Image<La32>>(image);
+        ImageComparer.Exact.VerifySimilarity(reference, grey);
+    }
+
+    [Fact]
+    public void Load_Greyscale_AsRgb24_GivesTheGreyInEveryComponent()
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "greyscale.jxl"));
+        using Image<L8> reference = Image.Load<L8>(GeneratedReferencePath("greyscale"));
+
+        for (int y = 0; y < reference.Height; y++)
+        {
+            for (int x = 0; x < reference.Width; x++)
+            {
+                byte expected = reference[x, y].PackedValue;
+                Assert.Equal(new Rgb24(expected, expected, expected), image[x, y]);
+            }
+        }
+    }
+
+    [Theory]
     [InlineData("alpha_nonpremultiplied", 48)] // 12-bit RGB and alpha
     [InlineData("alpha_triangles", 36)] // 9-bit RGB and alpha
     public void Identify_CountsTheAlphaBits(string id, int bitsPerPixel)
@@ -273,6 +333,9 @@ public class JxlDecoderTests
     }
 
     private static ushort Quantize16(float value) => (ushort)Math.Round(Math.Clamp(value, 0F, 1F) * 65535F);
+
+    // The djxl output for a generated file: see the README next to the generated files.
+    private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
 
     // The first byte of the frame in a bare codestream with no ICC profile and no preview.
     private static int FrameOffset(byte[] codestream)

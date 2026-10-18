@@ -15,7 +15,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// <summary>
 /// Writes the rendered planes into an <see cref="ImageFrame{TPixel}"/>, clamped to [0, 1]. The
 /// first alpha channel becomes the pixel alpha, un-premultiplied if it is premultiplied; other extra
-/// channels are dropped (issue #111).
+/// channels are dropped (issue #111). A grey plane goes into every colour component.
 /// </summary>
 /// <typeparam name="TPixel">The pixel type.</typeparam>
 internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
@@ -26,6 +26,7 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     private readonly Configuration configuration;
     private readonly ImageFrame<TPixel> frame;
+    private readonly int colorPlanes;
     private readonly int alphaPlane;
     private readonly bool unpremultiply;
 
@@ -34,13 +35,15 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     /// </summary>
     /// <param name="configuration">The configuration.</param>
     /// <param name="frame">The frame to write.</param>
+    /// <param name="colorPlanes">The number of colour planes: 1 for grey, 3 for RGB.</param>
     /// <param name="alphaChannel">The extra channel that holds alpha, or -1 for an opaque image.</param>
     /// <param name="alphaPremultiplied">Whether the colours are premultiplied by that alpha.</param>
-    public JxlImageFrameSink(Configuration configuration, ImageFrame<TPixel> frame, int alphaChannel, bool alphaPremultiplied)
+    public JxlImageFrameSink(Configuration configuration, ImageFrame<TPixel> frame, int colorPlanes, int alphaChannel, bool alphaPremultiplied)
     {
         this.configuration = configuration;
         this.frame = frame;
-        this.alphaPlane = alphaChannel < 0 ? -1 : 3 + alphaChannel;
+        this.colorPlanes = colorPlanes;
+        this.alphaPlane = alphaChannel < 0 ? -1 : colorPlanes + alphaChannel;
         this.unpremultiply = alphaChannel >= 0 && alphaPremultiplied;
     }
 
@@ -53,8 +56,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         for (int y = 0; y < height; y++)
         {
             Span<float> r = planes[0].DangerousGetRowSpan(y);
-            Span<float> g = planes[1].DangerousGetRowSpan(y);
-            Span<float> b = planes[2].DangerousGetRowSpan(y);
+            Span<float> g = planes[this.colorPlanes == 1 ? 0 : 1].DangerousGetRowSpan(y);
+            Span<float> b = planes[this.colorPlanes == 1 ? 0 : 2].DangerousGetRowSpan(y);
             if (this.alphaPlane < 0)
             {
                 for (int x = 0; x < width; x++)
