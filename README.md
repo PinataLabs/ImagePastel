@@ -94,7 +94,7 @@ For more information, read the [.NET Foundation Code of Conduct](https://dotnetf
 
 ## License
 
-PinataLabs.ImageSharp is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
+PinataLabs.ImagePastel is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
 The [NOTICE](https://github.com/PinataLabs/ImageSharp/blob/main/NOTICE) file gives the origin of the code and the changes that Pinata Labs made.
 Third-party code is listed in [THIRD-PARTY-NOTICES.TXT](https://github.com/PinataLabs/ImageSharp/blob/main/THIRD-PARTY-NOTICES.TXT).
 
