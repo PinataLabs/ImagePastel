@@ -245,6 +245,45 @@ public class JxlBoundsTests
     }
 
     [Fact]
+    public void Lz77_DistanceBeyondTheWindow_IsClamped()
+    {
+        // Symbols 5, 6, 8 (a copy of length 3) and 32, with 2-bit codes. After 2^20 sixes and then a 5,
+        // which overwrites window slot 0, a copy with distance token 32 asks for distance 2^21. That is
+        // clamped to the 2^20 + 1 values decoded so far and then to the window of 2^20, so the copy
+        // starts at slot 1, a 6. Without the window clamp it would start at slot 0, the 5.
+        JxlTestBitWriter writer = new();
+        WriteLz77Params(writer, minSymbol: 8);
+        writer.Write(4, 0); // length uint config: split exponent 0
+        writer.Bit(true).Write(2, 0); // simple context map, 0 bits per entry
+        writer.Bit(true); // prefix codes
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, 32); // alphabet size 33
+        writer.Write(2, 1).Write(2, 3).Write(6, 5).Write(6, 6).Write(6, 8).Write(6, 32).Bit(false); // simple prefix code, four 2-bit codes
+        for (int i = 0; i < 1 << 20; i++)
+        {
+            writer.Write(2, 2); // 6
+        }
+
+        writer.Write(2, 0); // 5
+
+        writer.Write(2, 1); // copy
+        writer.Write(2, 3).Bits(20, true); // distance token 32 and its 20 bits
+        writer.Bits(64, false);
+
+        JxlBitReader br = writer.ToReader();
+        JxlAnsCode code = new();
+        byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, 1, code);
+        JxlAnsSymbolReader reader = new(code, br);
+        for (int i = 0; i < (1 << 20) + 1; i++)
+        {
+            reader.ReadHybridUint(0, br, contextMap);
+        }
+
+        Assert.Equal(6u, reader.ReadHybridUint(0, br, contextMap));
+        br.EnsureAllReadsWithinBounds("LZ77 copy");
+    }
+
+    [Fact]
     public void Lz77_WhereDisallowed_Throws()
     {
         JxlTestBitWriter writer = new();
@@ -252,6 +291,37 @@ public class JxlBoundsTests
         writer.Write(4, 0).Bits(64, false);
 
         Assert.Throws<InvalidImageContentException>(() => JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode(), disallowLz77: true));
+    }
+
+    [Theory]
+    [InlineData(31, false)]
+    [InlineData(32, true)]
+    public void BitDepth_IntegerOver31Bits_Throws(int bits, bool throws)
+    {
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).Write(2, 3).Write(6, (ulong)(bits - 1)); // integer samples
+        writer.Bits(64, false);
+
+        AssertBitDepth(writer, throws);
+    }
+
+    [Theory]
+    [InlineData(16, 1, true)] // too few exponent bits
+    [InlineData(16, 2, false)]
+    [InlineData(16, 8, false)]
+    [InlineData(16, 9, true)] // too many exponent bits
+    [InlineData(32, 8, false)]
+    [InlineData(32, 7, true)] // 24 mantissa bits
+    [InlineData(11, 8, false)] // 2 mantissa bits, the least
+    [InlineData(10, 8, true)] // 1 mantissa bit
+    public void BitDepth_FloatOutsideTheExponentAndMantissaRanges_Throws(int bits, int expBits, bool throws)
+    {
+        JxlTestBitWriter writer = new();
+        writer.Bit(true).Write(2, 3).Write(6, (ulong)(bits - 1)); // floating-point samples
+        writer.Write(4, (ulong)(expBits - 1));
+        writer.Bits(64, false);
+
+        AssertBitDepth(writer, throws);
     }
 
     [Fact]
@@ -326,6 +396,18 @@ public class JxlBoundsTests
 
         Assert.Equal(20000, info.Width);
         Assert.Equal(20000, info.Height);
+    }
+
+    private static void AssertBitDepth(JxlTestBitWriter writer, bool throws)
+    {
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlBundle.Read(writer.ToReader(), new JxlBitDepth()));
+        }
+        else
+        {
+            JxlBundle.Read(writer.ToReader(), new JxlBitDepth());
+        }
     }
 
     private static JxlTestBitWriter Codestream() => new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);

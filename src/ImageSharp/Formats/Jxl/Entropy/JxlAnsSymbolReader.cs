@@ -14,7 +14,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
 /// Reads hybrid-uint values from an entropy-coded stream, with ANS or prefix codes.
 /// </summary>
 /// <remarks>
-/// libjxl picks the LZ77 path with a template flag. This reader checks for a window instead.
+/// libjxl picks the LZ77 path with a template flag, which C# generics cannot express without a
+/// type per path. This reader checks for a window instead; streams without LZ77 pay one null check.
 /// </remarks>
 internal sealed class JxlAnsSymbolReader
 {

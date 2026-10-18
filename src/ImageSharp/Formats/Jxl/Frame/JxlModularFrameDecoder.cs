@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_modular.h and lib/jxl/dec_modular.cc (ModularStreamId, ModularFrameDecoder: DecodeGlobalInfo,
-// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding).
+// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding, int_to_float).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -375,6 +375,9 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             int bits = (int)bitDepth.BitsPerSample;
             int expBits = (int)bitDepth.ExponentBitsPerSample;
             bool fp = bitDepth.FloatingPointSample;
+
+            // This and the next two checks are libjxl's JXL_ENSURE checks. They are unreachable from a
+            // file: the header rejects integers over 31 bits, and the channels are made from the header.
             if (!fp && bits >= 32)
             {
                 JxlThrowHelper.ThrowInvalidImageContentException("Integer extra channels have fewer than 32 bits");
@@ -428,8 +431,20 @@ internal sealed class JxlModularFrameDecoder : IDisposable
         }
     }
 
-    // Reassembles floats of `bits` bits with `expBits` exponent bits, stored as integers, into binary32.
-    private static void IntToFloat(ReadOnlySpan<int> rowIn, Span<float> rowOut, int bits, int expBits)
+    /// <summary>
+    /// Reassembles floats of <paramref name="bits"/> bits with <paramref name="expBits"/> exponent bits,
+    /// stored as integers, into binary32.
+    /// </summary>
+    /// <remarks>
+    /// Both of its errors are libjxl's <c>JXL_ENSURE</c> checks. The bit depth bounds of the header make
+    /// them unreachable from a file: a 32-bit float has at most 23 mantissa bits, so 8 exponent bits, and
+    /// with 2 to 8 exponent bits the binary32 exponent cannot go below 0.
+    /// </remarks>
+    /// <param name="rowIn">The stored samples.</param>
+    /// <param name="rowOut">The floats.</param>
+    /// <param name="bits">The bits per sample.</param>
+    /// <param name="expBits">The exponent bits per sample.</param>
+    internal static void IntToFloat(ReadOnlySpan<int> rowIn, Span<float> rowOut, int bits, int expBits)
     {
         if (bits == 32)
         {
