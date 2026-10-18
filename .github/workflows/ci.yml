@@ -191,7 +191,7 @@ jobs:
         if: ${{ steps.jxl-tools-cache.outputs.cache-hit != 'true' }}
         run: |
           sudo apt-get install -y --no-install-recommends lzip
-          curl -sSfL -o "$RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" \
+          curl -sSfL --proto '=https' --proto-redir '=https' -o "$RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" \
             "https://github.com/libjxl/libjxl/releases/download/$JXL_TOOLS_VERSION/$JXL_TOOLS_ARCHIVE"
           echo "$JXL_TOOLS_SHA256  $RUNNER_TEMP/$JXL_TOOLS_ARCHIVE" | sha256sum --check
           mkdir -p ~/jxl-tools

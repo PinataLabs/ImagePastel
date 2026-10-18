@@ -37,7 +37,8 @@ internal static class JxlConformanceImages
             ImageFrame<TPixel> frame = image.Frames[f];
             for (int y = 0; y < height; y++)
             {
-                PixelOperations<TPixel>.Instance.ToVector4(Configuration.Default, frame.PixelBuffer.DangerousGetRowSpan(y), row);
+                // Scale: some pixel types (Byte4, Short4, ...) report unscaled values from ToVector4.
+                PixelOperations<TPixel>.Instance.ToVector4(Configuration.Default, frame.PixelBuffer.DangerousGetRowSpan(y), row, PixelConversionModifiers.Scale);
                 foreach (Vector4 v in row)
                 {
                     switch (channels)

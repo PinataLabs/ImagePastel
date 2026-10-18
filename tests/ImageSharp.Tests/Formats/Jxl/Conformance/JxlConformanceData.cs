@@ -16,6 +16,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 /// with restrictive licences. Files are cached in the gitignored <c>tests/Images/External/Jxl/.cache</c>.
 /// A test that needs a missing file is skipped, unless <c>JXL_CONFORMANCE=1</c> is set: then the file
 /// is downloaded, and a failed download fails the test.
+/// <para>
+/// Cached files are named by their sha256, and a download is checked before it lands in the cache.
+/// So a cached file is never re-hashed: a re-pinned file gets a new name rather than reusing stale bytes.
+/// </para>
 /// </summary>
 internal static class JxlConformanceData
 {
@@ -37,9 +41,12 @@ internal static class JxlConformanceData
 
         JxlConformanceSource source = JxlConformanceVector.Source;
         string url = source.InputUrl.Replace("{commit}", source.Commit).Replace("{id}", vector.InputId);
-        string path = Path.Combine(CacheDirectory, "inputs", vector.InputId + ".jxl");
-        return GetOrDownloadAsync(path, url, source.FetchedInputs[vector.InputId], cancellationToken);
+        return GetOrDownloadAsync(GetFetchedInputCachePath(vector), url, source.FetchedInputs[vector.InputId], cancellationToken);
     }
+
+    /// <summary>Gets where a fetched input is cached: under its pinned sha256, never under its id.</summary>
+    public static string GetFetchedInputCachePath(JxlConformanceVector vector)
+        => Path.Combine(CacheDirectory, "inputs", JxlConformanceVector.Source.FetchedInputs[vector.InputId] + ".jxl");
 
     /// <summary>Gets the path of a reference file named in the vector's <c>test.json</c>, such as <c>reference_image.npy</c>.</summary>
     public static Task<string> GetReferencePathAsync(JxlConformanceVector vector, string fileName, CancellationToken cancellationToken)
@@ -106,7 +113,7 @@ internal static class JxlConformanceData
         }
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
+    public static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
         await using FileStream stream = File.OpenRead(path);
         byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken);

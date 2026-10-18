@@ -45,10 +45,10 @@ public class JxlConformanceHarnessTests
     [InlineData("progressive")]
     public async Task FetchedInput_MatchesPinnedHash(string id)
     {
-        // The download checks the hash, so resolving the path is the test.
         string path = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
 
-        Assert.True(File.Exists(path));
+        // Hash the cached bytes too, not only the download, in case the cache was altered.
+        Assert.Equal(JxlConformanceVector.Source.FetchedInputs[id], await JxlConformanceData.ComputeSha256Async(path, CancellationToken));
     }
 
     [Fact]

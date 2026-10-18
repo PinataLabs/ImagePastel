@@ -70,6 +70,19 @@ public class JxlConformanceVectorTests
         Assert.True(JxlConformanceVector.Load("cafe_5").IsInputFetched);
     }
 
+    [Theory]
+    [InlineData("bike")]
+    [InlineData("cafe_5")]
+    public void FetchedInputCachePath_IsNamedByPinnedHash(string id)
+    {
+        // A cached input from an earlier pin has a different name, so it can never be reused.
+        JxlConformanceVector vector = JxlConformanceVector.Load(id);
+
+        string path = JxlConformanceData.GetFetchedInputCachePath(vector);
+
+        Assert.Equal(JxlConformanceVector.Source.FetchedInputs[vector.InputId] + ".jxl", Path.GetFileName(path));
+    }
+
     [Fact]
     public void AnimationThresholds_ArePerFrame()
     {
