@@ -124,6 +124,30 @@ public class JxlLayersTests
         Assert.Equal(new Rgba32(157, 39, 10, 64), image[4, 3]);
     }
 
+    [Fact]
+    public void Animation_WithOneDisplayedFrame_GivesThatFrame()
+    {
+        // A zero-duration frame is not shown; it is blended into the next one.
+        byte[] codestream = new JxlTestLayers(Width, Height, animation: true)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10, Color = new(JxlBlendMode.Add) })
+            .ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
+    }
+
+    [Fact]
+    public void Animation_WithMoreThanOneDisplayedFrame_ThrowsNotSupported()
+    {
+        // Animations are the next slice (#191).
+        byte[] codestream = new JxlTestLayers(Width, Height, animation: true)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 10 })
+            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10 })
+            .ToArray();
+
+        Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream).Dispose());
+    }
+
     public static TheoryData<string> DjxlCases => new(Cases.Keys);
 
     // Every blend mode on the colour and on the alpha extra channel, with its clamp flag, and the
@@ -177,6 +201,9 @@ public class JxlLayersTests
         ["crop_past_the_far_edges"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
             .Add(Last(JxlTestLayers.Ramp) with { X0 = 20, Y0 = 10, XSize = 12, YSize = 9, Color = new(JxlBlendMode.Add) }),
+        ["crop_wholly_outside"] = new JxlTestLayers(Width, Height)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA))
+            .Add(Last(JxlTestLayers.Ramp) with { X0 = 30, Y0 = -20, XSize = 6, YSize = 6, Color = new(JxlBlendMode.Add) }),
         ["crop_onto_empty_slot"] = new JxlTestLayers(Width, Height)
             .Add(Last(JxlTestLayers.Ramp) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6 }),
         ["cropped_layers_saved_and_reused"] = new JxlTestLayers(Width, Height)
@@ -197,6 +224,9 @@ public class JxlLayersTests
         ["saved_before_colour_transform_as_alpha_background"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 1, SaveBeforeColorTransform = true })
             .Add(Last(JxlTestLayers.ColourB) with { ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
+        ["animation_one_displayed_frame"] = new JxlTestLayers(Width, Height, animation: true)
+            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8 })
+            .Add(Last(JxlTestLayers.Ramp) with { Duration = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
         ["skip_progressive"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
             .Add(Last(JxlTestLayers.Ramp) with { Type = JxlFrameType.SkipProgressive, Color = new(JxlBlendMode.Blend) }),
