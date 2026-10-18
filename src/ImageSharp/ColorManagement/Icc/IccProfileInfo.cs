@@ -5,6 +5,7 @@
 // Little CMS (https://github.com/mm2/Little-CMS) at commit a57322d8 (Little CMS 2.20).
 // Copyright (c) Marti Maria Saguer. MIT License; see THIRD-PARTY-NOTICES.TXT.
 
+using System.Collections.Generic;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.ColorManagement.Icc;
@@ -20,12 +21,16 @@ internal sealed class IccProfileInfo
     private readonly IccProfile profile;
     private readonly string role;
 
+    // The models read so far. Black-point detection asks for the same ones several times, and
+    // reading a LUT model copies its tables.
+    private readonly Dictionary<(bool AsSource, IccRenderingIntent Intent), IccProfileModel> models = [];
+
     /// <summary>
     /// Initializes a new instance of the <see cref="IccProfileInfo"/> class.
     /// </summary>
     /// <param name="profile">The profile, or <see langword="null"/> for sRGB. It must have passed <see cref="IccProfileModel.Read"/>.</param>
     /// <param name="role">"source" or "target", for error messages.</param>
-    public IccProfileInfo(IccProfile profile, string role)
+    private IccProfileInfo(IccProfile profile, string role)
     {
         this.profile = profile;
         this.role = role;
@@ -118,25 +123,45 @@ internal sealed class IccProfileInfo
         => this.IsClut(intent, asSource) || this.IsMatrixShaper;
 
     /// <summary>
-    /// Reads the profile's model for an intent and a direction.
-    /// </summary>
-    /// <param name="asSource">The direction: device to PCS when <see langword="true"/>.</param>
-    /// <param name="intent">The rendering intent.</param>
-    /// <returns>The model.</returns>
-    public IccProfileModel ReadModel(bool asSource, IccRenderingIntent intent)
-        => ReadModel(this.profile, this.role, asSource, intent);
-
-    /// <summary>
-    /// Reads a profile's model for an intent and a direction.
+    /// Reads a profile's model for an intent and a direction, which also checks the profile, and
+    /// then what else a conversion needs to know about it.
     /// </summary>
     /// <param name="profile">The profile, or <see langword="null"/> for sRGB.</param>
     /// <param name="role">"source" or "target", for error messages.</param>
     /// <param name="asSource">The direction: device to PCS when <see langword="true"/>.</param>
     /// <param name="intent">The rendering intent.</param>
+    /// <param name="model">The model.</param>
+    /// <returns>The profile information, which keeps the model.</returns>
+    /// <exception cref="InvalidImageContentException">The profile is corrupt.</exception>
+    /// <exception cref="System.NotSupportedException">The engine does not support the profile.</exception>
+    public static IccProfileInfo Read(IccProfile profile, string role, bool asSource, IccRenderingIntent intent, out IccProfileModel model)
+    {
+        model = ReadModel(profile, role, asSource, intent);
+        IccProfileInfo info = new(profile, role);
+        info.models[(asSource, intent)] = model;
+        return info;
+    }
+
+    /// <summary>
+    /// Gets the profile's model for an intent and a direction. Each one is read once.
+    /// </summary>
+    /// <param name="asSource">The direction: device to PCS when <see langword="true"/>.</param>
+    /// <param name="intent">The rendering intent.</param>
     /// <returns>The model.</returns>
     /// <exception cref="InvalidImageContentException">The profile is corrupt.</exception>
     /// <exception cref="System.NotSupportedException">The engine does not support the profile.</exception>
-    public static IccProfileModel ReadModel(IccProfile profile, string role, bool asSource, IccRenderingIntent intent)
+    public IccProfileModel ReadModel(bool asSource, IccRenderingIntent intent)
+    {
+        if (!this.models.TryGetValue((asSource, intent), out IccProfileModel model))
+        {
+            model = ReadModel(this.profile, this.role, asSource, intent);
+            this.models[(asSource, intent)] = model;
+        }
+
+        return model;
+    }
+
+    private static IccProfileModel ReadModel(IccProfile profile, string role, bool asSource, IccRenderingIntent intent)
         => profile is null ? IccSrgb.Create(role) : IccProfileModel.Read(profile, asSource, intent);
 
     private bool HasTag(IccProfileTag tag)
