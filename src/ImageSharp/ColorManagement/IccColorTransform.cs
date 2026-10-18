@@ -23,9 +23,11 @@ namespace SixLabors.ImageSharp.ColorManagement;
 /// <para>
 /// Supported so far: RGB, gray and CMYK profiles with an XYZ or Lab PCS, ICC v2 or v4, either
 /// matrix/TRC (<c>rXYZ</c>, <c>gXYZ</c>, <c>bXYZ</c>, <c>rTRC</c>, <c>gTRC</c>, <c>bTRC</c>),
-/// gray (<c>kTRC</c>), or LUT-based (<c>A2B0</c> for a source and <c>B2A0</c> for a target, of
+/// gray (<c>kTRC</c>), or LUT-based (<c>A2Bn</c> for a source and <c>B2An</c> for a target, of
 /// type <c>lut8Type</c>, <c>lut16Type</c>, <c>lutAToBType</c> or <c>lutBToAType</c>). A profile
-/// with a LUT-based tag is used through it; Little CMS does the same. Tone curves may be
+/// with a LUT-based tag for the rendering intent (or for perceptual) is used through it; Little CMS
+/// does the same. <see cref="IccColorTransformOptions"/> describes the intents and black-point
+/// compensation. Tone curves may be
 /// <c>curveType</c> (identity, gamma or table) or <c>parametricCurveType</c> (function types 0 to 4).
 /// Tables are interpolated as Little CMS interpolates them: tetrahedrally for three inputs, except
 /// trilinearly for the Lab side of a target's table.
@@ -62,36 +64,25 @@ public sealed class IccColorTransform
     /// <param name="target">The profile to convert to, or <see langword="null"/> for sRGB.</param>
     /// <param name="options">The options. Their values are copied.</param>
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The rendering intent of <paramref name="options"/> is not one of the four ICC intents.
+    /// </exception>
     /// <exception cref="InvalidImageContentException">A profile is corrupt.</exception>
     /// <exception cref="NotSupportedException">
-    /// The engine does not support a profile or an option yet (for example a device link profile,
-    /// a rendering intent other than perceptual, or black-point compensation).
+    /// The engine does not support a profile (for example a device link profile, a profile of another
+    /// color space, or one with a <c>D2Bn</c> or <c>B2Dn</c> multi-process element table for the intent).
     /// </exception>
     public IccColorTransform(IccProfile source, IccProfile target, IccColorTransformOptions options)
     {
         Guard.NotNull(options, nameof(options));
 
-        if (options.RenderingIntent != IccRenderingIntent.Perceptual)
+        IccRenderingIntent intent = options.RenderingIntent;
+        if (intent is not (IccRenderingIntent.Perceptual or IccRenderingIntent.MediaRelativeColorimetric or IccRenderingIntent.Saturation or IccRenderingIntent.AbsoluteColorimetric))
         {
-            throw new NotSupportedException($"The {options.RenderingIntent} rendering intent is not supported yet.");
+            throw new ArgumentOutOfRangeException(nameof(options), intent, "The rendering intent is not one the ICC specification defines.");
         }
 
-        if (options.BlackPointCompensation)
-        {
-            throw new NotSupportedException("Black-point compensation is not supported yet.");
-        }
-
-        IccProfileModel sourceModel = source is null ? IccSrgb.Create("source") : IccProfileModel.Read(source, asSource: true);
-        IccProfileModel targetModel = target is null ? IccSrgb.Create("target") : IccProfileModel.Read(target, asSource: false);
-
-        List<IccStage> stages = [];
-        sourceModel.AddDeviceToPcs(stages);
-        if (sourceModel.ConnectionSpace != targetModel.ConnectionSpace)
-        {
-            stages.Add(sourceModel.ConnectionSpace == IccColorSpaceType.CieLab ? IccLabToXyzStage.Instance : IccXyzToLabStage.Instance);
-        }
-
-        targetModel.AddPcsToDevice(stages);
+        List<IccStage> stages = IccIntentLink.Link(source, target, intent, options.BlackPointCompensation);
         this.pipeline = new IccPipeline(stages);
         this.SourceColorSpace = source?.Header.DataColorSpace ?? IccColorSpaceType.Rgb;
         this.TargetColorSpace = target?.Header.DataColorSpace ?? IccColorSpaceType.Rgb;

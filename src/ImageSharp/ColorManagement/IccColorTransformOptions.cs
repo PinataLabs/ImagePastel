@@ -9,11 +9,22 @@ namespace SixLabors.ImageSharp.ColorManagement;
 /// Options for an <see cref="IccColorTransform"/>.
 /// </summary>
 /// <remarks>
-/// The engine supports only the defaults so far: the perceptual rendering intent, without
-/// black-point compensation. It uses a profile's perceptual tables where the profile has them and
-/// the relative colorimetric result otherwise, which for matrix/TRC and gray profiles is the only
-/// result they define. Any other value makes <see cref="IccColorTransform"/> throw
-/// <see cref="System.NotSupportedException"/>.
+/// <para>
+/// The rendering intent chooses each profile's table: <c>A2B0</c>/<c>B2A0</c> for perceptual,
+/// <c>A2B1</c>/<c>B2A1</c> for relative and absolute colorimetric, <c>A2B2</c>/<c>B2A2</c> for
+/// saturation. A profile without the intent's table is used through its perceptual table, and a
+/// profile with neither through its matrix/TRC tags (or gray curve), as Little CMS does.
+/// Absolute colorimetric scales the relative colorimetric result by the ratio of the two media
+/// white points (<c>wtpt</c>); a version 2 display profile's media white counts as D50.
+/// </para>
+/// <para>
+/// Black-point compensation follows Adobe's published algorithm as Little CMS implements it: it
+/// maps the source black point to the target black point in the profile connection space, so a
+/// target with a lighter black doesn't crush the shadows. As in Little CMS, it never applies to
+/// absolute colorimetric, and it always applies to perceptual and saturation when the target
+/// profile is version 4 (or sRGB, which the engine treats as version 4), whatever
+/// <see cref="BlackPointCompensation"/> says.
+/// </para>
 /// </remarks>
 public sealed class IccColorTransformOptions
 {

@@ -85,8 +85,8 @@ License notice for Little CMS
 
 Parts of the ICC colour engine under src/ImageSharp/ColorManagement and
 src/ImageSharp/Metadata/Profiles/ICC follow Little CMS (commit 5176347, as
-vendored in libjxl third_party/lcms). Each such file names its Little CMS
-source files. Some test profiles under tests/Images/Input/Icc were written
+vendored in libjxl third_party/lcms, and commit a57322d8, Little CMS 2.20).
+Each such file names its Little CMS commit and source files. Some test profiles under tests/Images/Input/Icc were written
 by Little CMS.
 https://github.com/mm2/Little-CMS
 
