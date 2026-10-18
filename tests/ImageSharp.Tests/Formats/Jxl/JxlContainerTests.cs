@@ -56,18 +56,116 @@ public class JxlContainerTests
         Assert.Equal(751, info.Height);
     }
 
-    [Theory]
-    [InlineData("jxlp")]
-    [InlineData("brob")]
-    public void Decode_UnsupportedBox_ThrowsNotSupported(string type)
+    [Fact]
+    public void Load_JxlpBoxes_DecodesLikeTheBareCodestream()
     {
-        byte[] container = Container(Box(type, new byte[8]), Box("jxlc", Codestream));
+        byte[][] parts = Split(Codestream, 3);
+        byte[] container = Container(Jxlp(0, parts[0]), Box("Exif", new byte[12]), Jxlp(1, parts[1]), Jxlp(2, parts[2], last: true));
 
-        Assert.Throws<NotSupportedException>(() => Decode(container));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), container);
+        using Image<Rgb24> expected = Image.Load<Rgb24>(CreateConfiguration(), Codestream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, image);
     }
 
     [Fact]
-    public void Decode_64BitBoxSize_ThrowsNotSupported()
+    public void Load_JxlpBoxesOutOfOrder_InFileFormatVersion1_DecodesLikeTheBareCodestream()
+    {
+        byte[][] parts = Split(Codestream, 3);
+        byte[] container = Container(1, Jxlp(2, parts[2], last: true), Jxlp(0, parts[0]), Jxlp(1, parts[1]));
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), container);
+        using Image<Rgb24> expected = Image.Load<Rgb24>(CreateConfiguration(), Codestream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, image);
+    }
+
+    [Fact]
+    public void Load_JxlcAfterJxlpThatIsNotLast_JoinsThem()
+    {
+        // libjxl accepts this: a jxlc box only has to be the only jxlc box and come before the last jxlp.
+        byte[][] parts = Split(Codestream, 2);
+        byte[] container = Container(Jxlp(0, parts[0]), Box("jxlc", parts[1]));
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), container);
+
+        Assert.Equal(555, image.Width);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0, 0, 0, 0 })] // too short for a box header
+    [InlineData(new byte[] { 0, 0, 1, 0, (byte)'E', (byte)'x', (byte)'i', (byte)'f', 0 })] // a box cut off
+    public void Load_BrokenBytesAfterTheLastCodestreamBox_DecodesTheImage(byte[] trailer)
+    {
+        // libjxl stops reading once the codestream is done, so it never sees them.
+        List<byte> data = new(Container(Box("jxlc", Codestream)));
+        data.AddRange(trailer);
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), data.ToArray());
+
+        Assert.Equal(555, image.Width);
+    }
+
+    [Fact]
+    public void Decode_JxlpOutOfOrder_InFileFormatVersion0_ThrowsInvalidImageContent()
+    {
+        byte[][] parts = Split(Codestream, 2);
+
+        Assert.Throws<InvalidImageContentException>(() => Decode(Container(Jxlp(1, parts[1], last: true), Jxlp(0, parts[0]))));
+    }
+
+    [Theory]
+    [InlineData(0)] // the same index twice, in order
+    [InlineData(1)] // the same index twice, both buffered out of order
+    public void Decode_DuplicateJxlpIndex_ThrowsInvalidImageContent(int version)
+    {
+        byte[][] parts = Split(Codestream, 2);
+        byte[] container = version == 0
+            ? Container(Jxlp(0, parts[0]), Jxlp(0, parts[0]), Jxlp(1, parts[1], last: true))
+            : Container(1, Jxlp(1, parts[1], last: true), Jxlp(1, parts[1], last: true), Jxlp(0, parts[0]));
+
+        Assert.Throws<InvalidImageContentException>(() => Decode(container));
+    }
+
+    [Theory]
+    [InlineData("jxlp")] // after the last jxlp
+    [InlineData("jxlc")] // a second codestream box
+    public void Decode_CodestreamBoxAfterTheLast_ThrowsInvalidImageContent(string type)
+    {
+        byte[] extra = type == "jxlp" ? Jxlp(1, new byte[4]) : Box("jxlc", new byte[4]);
+
+        Assert.Throws<InvalidImageContentException>(() => Decode(Container(Jxlp(0, Codestream, last: true), extra)));
+    }
+
+    [Fact]
+    public void Decode_JxlpTooSmallForItsIndex_ThrowsInvalidImageContent()
+        => Assert.Throws<InvalidImageContentException>(() => Decode(Container(Box("jxlp", new byte[3]), Box("jxlc", Codestream))));
+
+    [Fact]
+    public void Decode_CodestreamOnlyInABrobBox_ThrowsInvalidImageContent()
+    {
+        // libjxl skips brob boxes when it looks for the codestream, so this file has none.
+        byte[] contents = new byte[4 + Codestream.Length];
+        Encoding.ASCII.GetBytes("jxlc").CopyTo(contents, 0);
+        Codestream.CopyTo(contents, 4);
+
+        Assert.Throws<InvalidImageContentException>(() => Decode(Container(Box("brob", contents))));
+    }
+
+    [Fact]
+    public void Identify_64BitBoxSize_ReadsTheCodestream()
+    {
+        // libjxl's test file: an 8x8 lossy image in a jxlc box with a 64-bit size.
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", "boxes", "square-extended-size-container.jxl");
+
+        IImageInfo info = Image.Identify(CreateConfiguration(), path, out _);
+
+        Assert.Equal(8, info.Width);
+        Assert.Equal(8, info.Height);
+    }
+
+    [Fact]
+    public void Load_64BitBoxSize_DecodesLikeTheBareCodestream()
     {
         byte[] box = new byte[16 + Codestream.Length];
         BinaryPrimitives.WriteUInt32BigEndian(box, 1);
@@ -75,7 +173,21 @@ public class JxlContainerTests
         BinaryPrimitives.WriteUInt64BigEndian(box.AsSpan(8), (ulong)box.Length);
         Codestream.CopyTo(box, 16);
 
-        Assert.Throws<NotSupportedException>(() => Decode(Container(box)));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), Container(box));
+        using Image<Rgb24> expected = Image.Load<Rgb24>(CreateConfiguration(), Codestream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, image);
+    }
+
+    [Fact]
+    public void Decode_64BitBoxSizePastTheEnd_ThrowsInvalidImageContent()
+    {
+        byte[] box = new byte[16 + 4];
+        BinaryPrimitives.WriteUInt32BigEndian(box, 1);
+        Encoding.ASCII.GetBytes("Exif").CopyTo(box, 4);
+        BinaryPrimitives.WriteUInt64BigEndian(box.AsSpan(8), ulong.MaxValue);
+
+        Assert.Throws<InvalidImageContentException>(() => Decode(Container(box, Box("jxlc", Codestream))));
     }
 
     [Theory]
@@ -125,10 +237,12 @@ public class JxlContainerTests
     }
 
     // The signature box, the file type box, then the boxes.
-    private static byte[] Container(params byte[][] boxes)
+    private static byte[] Container(params byte[][] boxes) => Container(0, boxes);
+
+    private static byte[] Container(uint version, params byte[][] boxes)
     {
         List<byte> data = new(JxlConstants.ContainerSignature);
-        data.AddRange(Ftyp("jxl ", 0));
+        data.AddRange(Ftyp("jxl ", version));
         foreach (byte[] box in boxes)
         {
             data.AddRange(box);
@@ -154,6 +268,29 @@ public class JxlContainerTests
         Encoding.ASCII.GetBytes(type).CopyTo(box, 4);
         contents.CopyTo(box, 8);
         return box;
+    }
+
+    // A partial codestream box: its index, with the top bit set on the last box, then the bytes.
+    private static byte[] Jxlp(uint index, byte[] part, bool last = false)
+    {
+        byte[] contents = new byte[4 + part.Length];
+        BinaryPrimitives.WriteUInt32BigEndian(contents, index | (last ? 0x80000000u : 0u));
+        part.CopyTo(contents, 4);
+        return Box("jxlp", contents);
+    }
+
+    private static byte[][] Split(byte[] data, int count)
+    {
+        byte[][] parts = new byte[count][];
+        int start = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int end = (int)((long)data.Length * (i + 1) / count);
+            parts[i] = data.AsSpan(start, end - start).ToArray();
+            start = end;
+        }
+
+        return parts;
     }
 
     private static Configuration CreateConfiguration()

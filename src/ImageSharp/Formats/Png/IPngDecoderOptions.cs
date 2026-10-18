@@ -6,10 +6,6 @@ namespace SixLabors.ImageSharp.Formats.Png;
 /// <summary>
 /// The options for decoding png images
 /// </summary>
-internal interface IPngDecoderOptions
+internal interface IPngDecoderOptions : IColorProfileDecoderOptions
 {
-    /// <summary>
-    /// Gets a value indicating whether the metadata should be ignored when the image is being decoded.
-    /// </summary>
-    bool IgnoreMetadata { get; }
 }

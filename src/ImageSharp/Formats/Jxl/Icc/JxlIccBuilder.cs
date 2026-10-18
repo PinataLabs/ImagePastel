@@ -1,0 +1,233 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+// Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// MaybeCreateProfileImpl (the parts specific to a JPEG XL colour encoding) and
+// ColorEncodingDescriptionImpl in lib/jxl/cms/jxl_cms_internal.h.
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
+
+using System;
+using System.Globalization;
+using SixLabors.ImageSharp.ColorManagement;
+using SixLabors.ImageSharp.ColorManagement.Icc;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+
+namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
+
+/// <summary>
+/// Builds the ICC profile that describes an enumerated colour encoding, with the tags libjxl's
+/// <c>MaybeCreateProfile</c> writes, through <see cref="IccProfileBuilder"/>, the builder behind the public
+/// <see cref="IccProfileFactory"/>.
+/// </summary>
+/// <remarks>
+/// Where the built profile differs from libjxl's:
+/// <list type="bullet">
+/// <item>It has no <c>cicp</c> tag, which the ICC object model has no type for. The tag is optional and
+/// only repeats the colour encoding.</item>
+/// <item>PQ and HLG need curve tables (<c>CreateTableCurve</c>), which come with slice D11; until then
+/// those encodings are validated but get no profile.</item>
+/// </list>
+/// Unlike the public factory, it keeps libjxl's header signatures (<c>jxl </c>) and adapts to libjxl's
+/// CIE D50 (<see cref="IccProfileBuilder.LibjxlD50"/>), so its profiles match <c>djxl</c>'s.
+/// </remarks>
+internal static class JxlIccBuilder
+{
+    /// <summary>
+    /// Builds the profile for <paramref name="c"/>, checking it as libjxl's <c>CreateICC</c> does when it
+    /// reads the header. Throws <see cref="InvalidImageContentException"/> for an encoding libjxl cannot
+    /// build a profile for.
+    /// </summary>
+    /// <param name="c">The colour encoding, which does not signal an ICC profile.</param>
+    /// <returns>The profile, or null where none is built: the XYB colour space, PQ and HLG.</returns>
+    public static IccProfile Create(JxlColorEncoding c)
+    {
+        if (c.ColorSpace == JxlColorSpace.Xyb && c.RenderingIntent != JxlRenderingIntent.Perceptual)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Only perceptual rendering intent implemented for XYB ICC profile.");
+        }
+
+        // The builder rejects what libjxl rejects (an invalid white point, degenerate primaries, values an
+        // s15Fixed16Number cannot hold) with an ArgumentException; in a decoder that is bad image content.
+        try
+        {
+            return Build(c);
+        }
+        catch (ArgumentException e)
+        {
+            throw new InvalidImageContentException(e.Message, e);
+        }
+    }
+
+    private static IccProfile Build(JxlColorEncoding c)
+    {
+        IccColorSpaceType dataColorSpace = c.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
+        (double X, double Y)[] primaries = null;
+        if (c.ColorSpace == JxlColorSpace.Rgb)
+        {
+            ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
+            primaries = new[] { (rx, ry), (gx, gy), (bx, by) };
+        }
+
+        // XYB gets a LUT-based profile, and PQ and HLG table curves; none of them is built here, but the
+        // white point and primaries are still checked.
+        IccParametricCurve[] curves = null;
+        if (c.ColorSpace != JxlColorSpace.Xyb && (c.Tf.HaveGamma || c.Tf.TransferFunction is not (JxlTransferFunction.Pq or JxlTransferFunction.Hlg)))
+        {
+            IccParametricCurve curve = Curve(c.Tf).Curve;
+            curves = c.ColorSpace == JxlColorSpace.Gray ? new[] { curve } : new[] { curve, curve, curve };
+        }
+
+        return IccProfileBuilder.Build(
+            dataColorSpace,
+            c.WhitePointXy,
+            primaries,
+            curves,
+            IccProfileBuilder.LibjxlD50,
+            (IccRenderingIntent)(uint)c.RenderingIntent,
+            Description(c),
+            "jxl ");
+    }
+
+    // The parametric curve of a gamma or one of the transfer functions a parametric curve can express.
+    private static IccToneCurve Curve(JxlCustomTransferFunction tf)
+    {
+        if (tf.HaveGamma)
+        {
+            return IccToneCurve.Gamma((float)(1.0 / (tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul))));
+        }
+
+        return tf.TransferFunction switch
+        {
+            JxlTransferFunction.Srgb => IccToneCurve.Srgb,
+            JxlTransferFunction.Bt709 => IccToneCurve.Rec709,
+            JxlTransferFunction.Linear => IccToneCurve.Linear,
+            JxlTransferFunction.Dci => IccToneCurve.Parametric(2.6F, 1, 0, 1, 0),
+            _ => throw new InvalidOperationException($"unknown TF {tf.TransferFunction}"),
+        };
+    }
+
+    // ColorEncodingDescriptionImpl(c, uniquename: false): a short name for the common spaces, otherwise
+    // the fields, as in "RGB_D65_SRG_Rel_Lin". libjxl formats the custom values with its own ToString;
+    // this uses the shortest round-trip form.
+    private static string Description(JxlColorEncoding c)
+    {
+        // Return short names for the most common color spaces. These names are returned regardless of
+        // rendering intent, and also there is some tolerance regarding primaries and transfer function,
+        // so different ColorEncodings can return the same short name.
+        JxlTransferFunction tf = c.Tf.TransferFunction;
+        double gamma = c.Tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul);
+        if (c.ColorSpace == JxlColorSpace.Rgb)
+        {
+            ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
+            bool custom = c.Primaries == JxlPrimaries.Custom;
+            if (c.WhitePoint == JxlWhitePoint.D65)
+            {
+                if (!c.Tf.HaveGamma && tf == JxlTransferFunction.Srgb)
+                {
+                    if (c.Primaries == JxlPrimaries.Srgb)
+                    {
+                        return "sRGB";
+                    }
+
+                    if (c.Primaries == JxlPrimaries.P3)
+                    {
+                        return "DisplayP3";
+                    }
+                }
+
+                if (c.Primaries == JxlPrimaries.Bt2100 && !c.Tf.HaveGamma)
+                {
+                    if (tf == JxlTransferFunction.Pq)
+                    {
+                        return "Rec2100PQ";
+                    }
+
+                    if (tf == JxlTransferFunction.Hlg)
+                    {
+                        return "Rec2100HLG";
+                    }
+                }
+
+                if (custom && CloseEnough(rx, 0.6400) && CloseEnough(ry, 0.3300) && CloseEnough(gx, 0.2100) && CloseEnough(gy, 0.7100)
+                    && CloseEnough(bx, 0.1500) && CloseEnough(by, 0.0600) && c.Tf.HaveGamma && CloseEnough(gamma, 256.0 / 563.0))
+                {
+                    return "Adobe98";
+                }
+            }
+
+            // Apple's ROMM, Adobe's ProPhoto and the CSS prophoto-rgb differ slightly; this matches the
+            // CSS definition. Adobe's ProPhoto profile uses a simple gamma curve (g0.555315); others
+            // have a small linear segment near black.
+            (double wx, double wy) = c.WhitePointXy;
+            if (c.WhitePoint == JxlWhitePoint.Custom && CloseEnough(wx, 0.345669) && CloseEnough(wy, 0.358496) && custom
+                && CloseEnough(rx, 0.734699) && CloseEnough(ry, 0.265301) && CloseEnough(gx, 0.159597) && CloseEnough(gy, 0.840403)
+                && CloseEnough(bx, 0.036598) && CloseEnough(by, 0.000105) && c.Tf.HaveGamma && CloseEnough(gamma, 1.0 / 1.8))
+            {
+                return "ProPhoto";
+            }
+        }
+
+        static string Number(double v) => v.ToString("R", CultureInfo.InvariantCulture);
+
+        string d = c.ColorSpace switch
+        {
+            JxlColorSpace.Rgb => "RGB",
+            JxlColorSpace.Gray => "Gra",
+            JxlColorSpace.Xyb => "XYB",
+            _ => "CS?",
+        };
+
+        bool explicitWpTf = c.ColorSpace != JxlColorSpace.Xyb;
+        if (explicitWpTf)
+        {
+            (double wx, double wy) = c.WhitePointXy;
+            d += '_' + c.WhitePoint switch
+            {
+                JxlWhitePoint.Custom => Number(wx) + ';' + Number(wy),
+                JxlWhitePoint.D65 => "D65",
+                JxlWhitePoint.E => "EER",
+                _ => "DCI",
+            };
+        }
+
+        if (c.HasPrimaries)
+        {
+            ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
+            d += '_' + c.Primaries switch
+            {
+                JxlPrimaries.Custom => string.Join(";", Number(rx), Number(ry), Number(gx), Number(gy), Number(bx), Number(by)),
+                JxlPrimaries.Srgb => "SRG",
+                JxlPrimaries.Bt2100 => "202",
+                _ => "DCI",
+            };
+        }
+
+        d += '_' + c.RenderingIntent switch
+        {
+            JxlRenderingIntent.Perceptual => "Per",
+            JxlRenderingIntent.Relative => "Rel",
+            JxlRenderingIntent.Saturation => "Sat",
+            _ => "Abs",
+        };
+
+        if (explicitWpTf)
+        {
+            d += '_' + (c.Tf.HaveGamma
+                ? "g" + Number(gamma)
+                : tf switch
+                {
+                    JxlTransferFunction.Srgb => "SRG",
+                    JxlTransferFunction.Linear => "Lin",
+                    JxlTransferFunction.Bt709 => "709",
+                    JxlTransferFunction.Pq => "PeQ",
+                    JxlTransferFunction.Hlg => "HLG",
+                    JxlTransferFunction.Dci => "DCI",
+                    _ => "TF?",
+                });
+        }
+
+        return d;
+    }
+
+    private static bool CloseEnough(double a, double b) => Math.Abs(a - b) < 3e-5;
+}
