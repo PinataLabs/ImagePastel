@@ -31,6 +31,8 @@ internal sealed partial class IccDataReader
         {
             case IccTypeSignature.Chromaticity:
                 return this.ReadChromaticityTagDataEntry();
+            case IccTypeSignature.Cicp:
+                return this.ReadCicpTagDataEntry(info.DataSize);
             case IccTypeSignature.ColorantOrder:
                 return this.ReadColorantOrderTagDataEntry();
             case IccTypeSignature.ColorantTable:
@@ -667,6 +669,19 @@ internal sealed partial class IccDataReader
         }
 
         return new IccFix16ArrayTagDataEntry(arrayData);
+    }
+
+    /// <summary>
+    /// Reads a <see cref="IccCicpTagDataEntry"/>
+    /// </summary>
+    /// <param name="size">The size of the entry in bytes</param>
+    /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the four code points or runs past the end of the data.</exception>
+    public IccCicpTagDataEntry ReadCicpTagDataEntry(uint size)
+    {
+        this.CheckTagContentLength(size, 4, "cicp");
+        byte[] codePoints = this.ReadBytes(4);
+        return new IccCicpTagDataEntry(codePoints[0], codePoints[1], codePoints[2], codePoints[3]);
     }
 
     /// <summary>

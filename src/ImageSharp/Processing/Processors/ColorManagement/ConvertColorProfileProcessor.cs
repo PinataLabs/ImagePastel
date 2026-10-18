@@ -21,6 +21,23 @@ namespace SixLabors.ImageSharp.Processing.Processors.ColorManagement;
 /// Afterwards the image's pixel profile, and the profile of each frame that had one, is a copy of
 /// the target profile, or none when the target is sRGB (<see cref="TargetProfile"/> is <see langword="null"/>).
 /// </para>
+/// <para>
+/// ImageSharp has no CMYK pixel type. An image whose pixel profile is CMYK holds cyan, magenta,
+/// yellow and black in the first, second, third and fourth components (R, G, B and A) of an
+/// <see cref="Rgba32"/>, <see cref="Rgba64"/> or <see cref="RgbaVector"/> pixel, each from 0 (no ink)
+/// to the component's maximum (full ink). Converting to a CMYK profile writes that layout and drops
+/// alpha; converting from one reads it and gives opaque pixels, so CMYK to RGB reverses RGB to CMYK.
+/// The pixel profile is what marks the components as CMYK, so an image must only carry a CMYK
+/// pixel profile when its pixels hold CMYK in this layout. Any other pixel type throws
+/// <see cref="System.NotSupportedException"/> when either profile is CMYK.
+/// </para>
+/// <para>
+/// A CMYK JPEG or TIFF decoded without a color profile conversion has RGB pixels from a simple
+/// CMYK formula, but keeps the file's CMYK profile as its pixel profile. Before converting such an
+/// image, decode it with the decoder's <c>ColorProfileConversion</c> option instead, or remove the
+/// profile; otherwise <see cref="Rgba32"/>, <see cref="Rgba64"/> and <see cref="RgbaVector"/> pixels
+/// would be read as CMYK.
+/// </para>
 /// </remarks>
 public sealed class ConvertColorProfileProcessor : IImageProcessor
 {
@@ -58,8 +75,8 @@ public sealed class ConvertColorProfileProcessor : IImageProcessor
     /// <inheritdoc />
     /// <exception cref="InvalidImageContentException">The image's pixel profile or the target profile is corrupt.</exception>
     /// <exception cref="System.NotSupportedException">
-    /// The engine does not support a profile or an option yet, or a profile is CMYK (no pixel type
-    /// holds CMYK yet).
+    /// The engine does not support a profile or an option yet, or a profile is CMYK and
+    /// <typeparamref name="TPixel"/> is not <see cref="Rgba32"/>, <see cref="Rgba64"/> or <see cref="RgbaVector"/>.
     /// </exception>
     public IImageProcessor<TPixel> CreatePixelSpecificProcessor<TPixel>(Configuration configuration, Image<TPixel> source, Rectangle sourceRectangle)
         where TPixel : unmanaged, IPixel<TPixel>

@@ -24,6 +24,9 @@ internal sealed partial class IccDataWriter
             case IccTypeSignature.Chromaticity:
                 count += this.WriteChromaticityTagDataEntry((IccChromaticityTagDataEntry)entry);
                 break;
+            case IccTypeSignature.Cicp:
+                count += this.WriteCicpTagDataEntry((IccCicpTagDataEntry)entry);
+                break;
             case IccTypeSignature.ColorantOrder:
                 count += this.WriteColorantOrderTagDataEntry((IccColorantOrderTagDataEntry)entry);
                 break;
@@ -764,6 +767,17 @@ internal sealed partial class IccDataWriter
 
         return count;
     }
+
+    /// <summary>
+    /// Writes a <see cref="IccCicpTagDataEntry"/>
+    /// </summary>
+    /// <param name="value">The entry to write</param>
+    /// <returns>The number of bytes written</returns>
+    public int WriteCicpTagDataEntry(IccCicpTagDataEntry value)
+        => this.WriteByte(value.ColorPrimaries)
+         + this.WriteByte(value.TransferCharacteristics)
+         + this.WriteByte(value.MatrixCoefficients)
+         + this.WriteByte(value.VideoFullRangeFlag);
 
     /// <summary>
     /// Writes a <see cref="IccSignatureTagDataEntry"/>

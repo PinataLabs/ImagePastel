@@ -4,9 +4,11 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.ColorManagement;
@@ -22,7 +24,9 @@ internal static class IccPixelConversion
 
     /// <summary>
     /// Converts every pixel of a buffer in place. Alpha is not changed, and results outside the
-    /// target gamut are clamped to the range of the pixel type.
+    /// target gamut are clamped to the range of the pixel type. A CMYK profile uses all four
+    /// components (see <see cref="IccColorTransform"/>): from one, alpha becomes opaque; to one,
+    /// black replaces alpha.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
     /// <param name="configuration">The configuration, for parallelism and pixel conversion.</param>
@@ -43,9 +47,9 @@ internal static class IccPixelConversion
     }
 
     /// <summary>
-    /// Converts a row of scaled colors in place, then clamps red, green and blue to [0, 1], the
-    /// scaled range of every pixel type. Alpha (or black, for a CMYK source) is left as the
-    /// transform leaves it.
+    /// Converts a row of scaled colors in place, then clamps the results to [0, 1], the scaled range
+    /// of every pixel type. W is clamped too when the target is a CMYK profile (W is black);
+    /// otherwise W (alpha) is left as the transform leaves it.
     /// </summary>
     /// <param name="transform">The transform.</param>
     /// <param name="row">The colors.</param>
@@ -54,6 +58,12 @@ internal static class IccPixelConversion
         transform.Transform(row);
 
         // Float pixel types skip the clamp in bulk conversion, so it is done here.
+        if (transform.TargetColorSpace == IccColorSpaceType.Cmyk)
+        {
+            Numerics.Clamp(MemoryMarshal.Cast<Vector4, float>(row), 0, 1);
+            return;
+        }
+
         for (int i = 0; i < row.Length; i++)
         {
             ref Vector4 value = ref row[i];

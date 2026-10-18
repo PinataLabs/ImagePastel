@@ -12,6 +12,7 @@ using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using SixLabors.ImageSharp.Tests.Formats.Png;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
@@ -32,6 +33,7 @@ public class JxlColorEncodingTests
     {
         IccProfileTag.MediaWhitePoint,
         IccProfileTag.ChromaticAdaptation,
+        IccProfileTag.Cicp,
         IccProfileTag.RedMatrixColumn,
         IccProfileTag.GreenMatrixColumn,
         IccProfileTag.BlueMatrixColumn,
@@ -105,10 +107,11 @@ public class JxlColorEncodingTests
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
         Assert.NotNull(image.Metadata.IccProfile);
-        AssertSameColour(reference.Metadata.IccProfile, image.Metadata.IccProfile);
+        IccProfile djxlProfile = DjxlProfile(name);
+        AssertSameColour(djxlProfile, image.Metadata.IccProfile);
 
         // The built profile survives being written and read back.
-        AssertSameColour(reference.Metadata.IccProfile, new IccProfile(image.Metadata.IccProfile.ToByteArray()));
+        AssertSameColour(djxlProfile, new IccProfile(image.Metadata.IccProfile.ToByteArray()));
     }
 
     [Fact]
@@ -165,7 +168,7 @@ public class JxlColorEncodingTests
     }
 
     // The header fields and tags that describe the colour, within the tolerance of the fixed-point
-    // encoding. The description, copyright and cicp tags are left out.
+    // encoding; the cicp code points exactly. The description and copyright tags are left out.
     private static void AssertSameColour(IccProfile expected, IccProfile actual)
     {
         Assert.Equal(expected.Header.DataColorSpace, actual.Header.DataColorSpace);
@@ -192,6 +195,9 @@ public class JxlColorEncodingTests
                 case IccFix16ArrayTagDataEntry matrix:
                     AssertClose(tag, matrix.Data, Assert.IsType<IccFix16ArrayTagDataEntry>(a).Data);
                     break;
+                case IccCicpTagDataEntry cicp:
+                    Assert.Equal(cicp, Assert.IsType<IccCicpTagDataEntry>(a));
+                    break;
                 case IccParametricCurveTagDataEntry curve:
                     IccParametricCurve c = curve.Curve;
                     IccParametricCurve d = Assert.IsType<IccParametricCurveTagDataEntry>(a).Curve;
@@ -217,6 +223,20 @@ public class JxlColorEncodingTests
     {
         using FileStream stream = File.OpenRead(path);
         return new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None).Metadata;
+    }
+
+    // The profile libjxl built, from the iCCP chunk of djxl's PNG. For spaces that ITU-T H.273 names, djxl
+    // also writes a cICP chunk, which takes precedence over iCCP when the PNG decodes, so it is dropped here.
+    private static IccProfile DjxlProfile(string name)
+    {
+        byte[][] chunks = PngTestFileBuilder.ReadChunks(File.ReadAllBytes(ReferencePath(name)))
+            .Where(c => c.Type != "cICP")
+            .Select(c => PngTestFileBuilder.Chunk(c.Type, c.Data))
+            .ToArray();
+
+        IccProfile profile = Image.Identify(PngTestFileBuilder.Build(chunks)).Metadata.IccProfile;
+        Assert.NotNull(profile);
+        return profile;
     }
 
     private static string ReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "colour_" + name + ".png");

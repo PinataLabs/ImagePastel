@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// MaybeCreateProfileImpl (the parts specific to a JPEG XL colour encoding) and
+// MaybeCreateProfileImpl (the parts specific to a JPEG XL colour encoding), MaybeCreateICCCICPTag and
 // ColorEncodingDescriptionImpl in lib/jxl/cms/jxl_cms_internal.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -20,13 +20,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
 /// <see cref="IccProfileFactory"/>.
 /// </summary>
 /// <remarks>
-/// Where the built profile differs from libjxl's:
-/// <list type="bullet">
-/// <item>It has no <c>cicp</c> tag, which the ICC object model has no type for. The tag is optional and
-/// only repeats the colour encoding.</item>
-/// <item>PQ and HLG need curve tables (<c>CreateTableCurve</c>), which come with slice D11; until then
-/// those encodings are validated but get no profile.</item>
-/// </list>
+/// Where the built profile differs from libjxl's: PQ and HLG need curve tables (<c>CreateTableCurve</c>),
+/// which come with slice D11; until then those encodings are validated but get no profile.
 /// Unlike the public factory, it keeps libjxl's header signatures (<c>jxl </c>) and adapts to libjxl's
 /// CIE D50 (<see cref="IccProfileBuilder.LibjxlD50"/>), so its profiles match <c>djxl</c>'s.
 /// </remarks>
@@ -85,7 +80,51 @@ internal static class JxlIccBuilder
             IccProfileBuilder.LibjxlD50,
             (IccRenderingIntent)(uint)c.RenderingIntent,
             Description(c),
-            "jxl ");
+            "jxl ",
+            Cicp(c));
+    }
+
+    // MaybeCreateICCCICPTag: the H.273 code points of an RGB encoding with enumerated primaries and white
+    // point and an enumerated transfer function. The JPEG XL enums use the H.273 values, except that P3
+    // primaries are 12 with a D65 white and 11 with the DCI white.
+    private static (byte ColorPrimaries, byte TransferCharacteristics)? Cicp(JxlColorEncoding c)
+    {
+        if (c.ColorSpace != JxlColorSpace.Rgb)
+        {
+            return null;
+        }
+
+        byte primaries;
+        if (c.Primaries == JxlPrimaries.P3)
+        {
+            if (c.WhitePoint == JxlWhitePoint.D65)
+            {
+                primaries = 12;
+            }
+            else if (c.WhitePoint == JxlWhitePoint.Dci)
+            {
+                primaries = 11;
+            }
+            else
+            {
+                return null;
+            }
+        }
+        else if (c.Primaries != JxlPrimaries.Custom && c.WhitePoint == JxlWhitePoint.D65)
+        {
+            primaries = (byte)c.Primaries;
+        }
+        else
+        {
+            return null;
+        }
+
+        if (c.Tf.HaveGamma || c.Tf.TransferFunction == JxlTransferFunction.Unknown)
+        {
+            return null;
+        }
+
+        return (primaries, (byte)c.Tf.TransferFunction);
     }
 
     // The parametric curve of a gamma or one of the transfer functions a parametric curve can express.

@@ -18,6 +18,7 @@ using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using SixLabors.ImageSharp.Tests.Formats.Png;
 using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
@@ -55,6 +56,34 @@ public class DecoderColorProfileConversionTests
         byte[] file = Encode(format, CreateRgb24(reference), LoadProfile(embeddedProfile));
 
         using Image<Rgb24> image = Decode<Rgb24>(format, file, ColorProfileConversion.ToSrgb);
+
+        AssertPixels(image, reference);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    // PNG cICP, cHRM and gAMA chunks give a built pixel profile, which converts like an embedded one. The
+    // reference is Little CMS converting from a profile file for the same space.
+    [Theory]
+    [InlineData("cICP Display P3", TestImages.Icc.CompactDisplayP3V4)]
+    [InlineData("cHRM+gAMA Adobe RGB", TestImages.Icc.CompactAdobeRgbV2)]
+    [InlineData("gAMA 1", TestImages.Icc.CompactLinearSrgbV2)]
+    public void Decode_Png_ColorSpaceChunks_ToSrgb_MatchesLittleCms(string chunks, string sameSpaceProfile)
+    {
+        LittleCmsReference reference = LittleCmsReferences.Get(sameSpaceProfile, null);
+        byte[][] colorChunks = chunks switch
+        {
+            "cICP Display P3" => new[] { PngTestFileBuilder.Cicp(12, 13) },
+            "cHRM+gAMA Adobe RGB" => new[] { PngTestFileBuilder.Chromaticities(31270, 32900, 64000, 33000, 21000, 71000, 15000, 6000), PngTestFileBuilder.Gamma(45471) },
+            _ => new[] { PngTestFileBuilder.Gamma(100000) },
+        };
+        byte[] file = PngTestFileBuilder.InsertAfterHeader(Encode("png", CreateRgb24(reference), null), colorChunks);
+
+        using (Image<Rgb24> unconverted = Decode<Rgb24>("png", file))
+        {
+            Assert.NotNull(unconverted.Metadata.IccProfile);
+        }
+
+        using Image<Rgb24> image = Decode<Rgb24>("png", file, ColorProfileConversion.ToSrgb);
 
         AssertPixels(image, reference);
         Assert.Null(image.Metadata.IccProfile);
