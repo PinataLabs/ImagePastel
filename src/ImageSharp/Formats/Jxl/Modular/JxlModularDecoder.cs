@@ -154,6 +154,7 @@ internal static class JxlModularDecoder
         int nbChannels = image.Channel.Count;
 
         int numChans = 0;
+        int distanceMultiplier = 0;
         for (int i = 0; i < nbChannels; i++)
         {
             JxlModularChannel channel = image.Channel[i];
@@ -167,7 +168,11 @@ internal static class JxlModularDecoder
                 continue; // skip empty channels
             }
 
-            // libjxl also takes the widest channel here, as the LZ77 distance multiplier.
+            if (channel.W > distanceMultiplier)
+            {
+                distanceMultiplier = channel.W;
+            }
+
             numChans++;
         }
 
@@ -213,7 +218,7 @@ internal static class JxlModularDecoder
         }
 
         // Read channels.
-        JxlAnsSymbolReader reader = new(code, br);
+        JxlAnsSymbolReader reader = new(code, br, distanceMultiplier);
         for (int nextChannel = 0; nextChannel < nbChannels; nextChannel++)
         {
             JxlModularChannel channel = image.Channel[nextChannel];

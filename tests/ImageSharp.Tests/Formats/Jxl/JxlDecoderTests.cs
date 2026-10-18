@@ -8,6 +8,9 @@ using System.Threading;
 using ImageMagick;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -20,6 +23,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 public class JxlDecoderTests
 {
     private static string DeltaPalettePath => JxlConformanceVector.Load("delta_palette").CommittedInputPath;
+
+    private static string GeneratedDirectory => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated");
+
+    private static string PremultipliedAlphaPath => Path.Combine(GeneratedDirectory, "premultiplied_alpha.jxl");
 
     [Fact]
     public void Identify_ReportsSizeAndBitDepth()
@@ -44,16 +51,146 @@ public class JxlDecoderTests
         Assert.Equal(751, info.Height);
     }
 
-    [Fact]
-    public void Load_Rgb24_MatchesMagickExactly()
+    [Theory]
+    [InlineData("delta_palette")]
+    [InlineData("lz77_flower")]
+    public void Load_Rgb24_MatchesMagickExactly(string id)
     {
         Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
 
-        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), DeltaPalettePath);
-        using FileStream stream = File.OpenRead(DeltaPalettePath);
+        string path = JxlConformanceVector.Load(id).CommittedInputPath;
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
         using Image<Rgb24> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
+    }
+
+    [Theory]
+    [InlineData("alpha_nonpremultiplied")]
+    [InlineData("alpha_triangles")]
+    public void Load_Rgba64_MatchesMagickExactly(string id)
+    {
+        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
+        string path = JxlConformanceVector.Load(id).CommittedInputPath;
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
+        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+    }
+
+    [Fact]
+    public void Load_Float32_MatchesMagickAt16Bits()
+    {
+        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
+        // Magick returns 16-bit samples, so both sides are clamped to [0, 1] and compared at 16 bits.
+        string path = JxlConformanceVector.Load("lossless_pfm").CommittedInputPath;
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
+        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        // Samples on a rounding boundary may land one 16-bit step apart, in each colour channel.
+        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 3).VerifySimilarity(reference, image);
+    }
+
+    [Fact]
+    public void Load_PremultipliedAlpha_GivesStraightAlpha()
+    {
+        // The straight PNG holds the pixels before they were premultiplied and rounded to 16 bits.
+        // Dividing by alpha again is off by at most 2.5 16-bit steps per channel where alpha >= 1/4.
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), PremultipliedAlphaPath);
+        using Image<Rgba64> expected = Image.Load<Rgba64>(Path.Combine(GeneratedDirectory, "premultiplied_alpha_straight.png"));
+
+        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 9).VerifySimilarity(expected, image);
+    }
+
+    [Fact]
+    public void Load_PremultipliedAlpha_WhereAlphaIsZero_GivesBlack()
+    {
+        // Alpha is 0 in the first 8 columns.
+        using Image<RgbaVector> image = Image.Load<RgbaVector>(CreateConfiguration(), PremultipliedAlphaPath);
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < 8; x++)
+            {
+                Assert.Equal(new RgbaVector(0, 0, 0, 0), image[x, y]);
+            }
+        }
+    }
+
+    [Fact]
+    public void DecodeToPlanes_PremultipliedAlpha_KeepsTheColoursAsCoded()
+    {
+        using FileStream stream = File.OpenRead(PremultipliedAlphaPath);
+        using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using Image<Rgba64> reference = Image.Load<Rgba64>(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "premultiplied_alpha.png"));
+
+        for (int y = 0; y < reference.Height; y++)
+        {
+            for (int x = 0; x < reference.Width; x++)
+            {
+                Rgba64 expected = reference[x, y];
+                Assert.Equal(expected.R, Quantize16(planes.Frames[0].Planes[0].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.G, Quantize16(planes.Frames[0].Planes[1].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.B, Quantize16(planes.Frames[0].Planes[2].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.A, Quantize16(planes.Frames[0].Planes[3].DangerousGetRowSpan(y)[x]));
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("alpha_nonpremultiplied", 48)] // 12-bit RGB and alpha
+    [InlineData("alpha_triangles", 36)] // 9-bit RGB and alpha
+    public void Identify_CountsTheAlphaBits(string id, int bitsPerPixel)
+    {
+        using FileStream stream = File.OpenRead(JxlConformanceVector.Load(id).CommittedInputPath);
+
+        IImageInfo info = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None);
+
+        Assert.Equal(1024, info.Width);
+        Assert.Equal(1024, info.Height);
+        Assert.Equal(bitsPerPixel, info.PixelType.BitsPerPixel);
+    }
+
+    [Theory]
+    [InlineData(0, false)] // alpha
+    [InlineData(1, true)] // depth
+    public void Decode_ExtraChannelThatIsNotAlpha_ThrowsNotSupported(int type, bool throws)
+    {
+        // alpha_triangles' frame, behind a header that gives its extra channel the type.
+        byte[] original = File.ReadAllBytes(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        JxlTestBitWriter writer = new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);
+        writer.Bit(false).Write(2, 1).Write(13, 1023).Write(3, 1); // 1024 x 1024
+        writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
+        writer.Bit(false).Write(2, 3).Write(6, 8).Bit(true); // 9-bit integer samples, 16-bit buffers suffice
+        writer.Write(2, 1); // one extra channel
+        writer.Bit(false).Write(2, (ulong)type); // not all default, the type
+        writer.Bit(false).Write(2, 3).Write(6, 8); // 9-bit integer samples
+        writer.Write(2, 0).Write(2, 0); // no dim shift, no name
+        if (type == 0)
+        {
+            writer.Bit(false); // straight alpha
+        }
+
+        writer.Bit(false).Bit(true).Write(2, 0); // not XYB, default colour encoding, no extensions
+        writer.Bit(true); // all-default transform data
+        writer.ZeroPadToByte();
+        byte[] data = writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
+        using MemoryStream stream = new(data);
+
+        if (throws)
+        {
+            Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+        }
+        else
+        {
+            using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+            Assert.Equal(1024, image.Width);
+        }
     }
 
     [Fact]
@@ -105,10 +242,11 @@ public class JxlDecoderTests
     [InlineData(new byte[] { 0xFF, 0x0B }, false)]
     [InlineData(new byte[] { 0x0A, 0xFF }, false)]
     [InlineData(new byte[] { 0xFF }, false)]
-
-    // The container is not detected yet.
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A }, true)]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A, 0x00, 0x00 }, true)]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0B }, false)]
     [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20 }, false)]
-    public void Detector_RecognisesTheBareCodestream(byte[] header, bool expected)
+    public void Detector_RecognisesTheCodestreamAndTheContainer(byte[] header, bool expected)
     {
         IImageFormat format = new JxlImageFormatDetector().DetectFormat(header);
 
@@ -135,6 +273,21 @@ public class JxlDecoderTests
     }
 
     private static ushort Quantize16(float value) => (ushort)Math.Round(Math.Clamp(value, 0F, 1F) * 65535F);
+
+    // The first byte of the frame in a bare codestream with no ICC profile and no preview.
+    private static int FrameOffset(byte[] codestream)
+    {
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        reader.JumpToByteBoundary();
+        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        reader.Close();
+        return offset;
+    }
 
     private static Configuration CreateConfiguration()
     {

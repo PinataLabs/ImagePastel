@@ -3,6 +3,7 @@
 
 using System.IO;
 using System.Threading;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -40,9 +41,25 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector
     }
 
     /// <inheritdoc />
-    /// <remarks>The pixel type is <see cref="Rgba32"/> until a later slice picks it from the bit depth and channels.</remarks>
+    /// <remarks>The pixel type follows the bit depth and channels of the image; see <see cref="JxlDecoderCore.ChoosePixelType(JxlImageMetadata)"/>.</remarks>
     public Image Decode(Configuration configuration, Stream stream, CancellationToken cancellationToken)
-        => this.Decode<Rgba32>(configuration, stream, cancellationToken);
+    {
+        Guard.NotNull(stream, nameof(stream));
+
+        JxlDecoderCore decoder = new(configuration);
+        BufferedReadStream bufferedReadStream = stream as BufferedReadStream ?? new BufferedReadStream(configuration, stream);
+        try
+        {
+            return decoder.Decode(bufferedReadStream, cancellationToken);
+        }
+        finally
+        {
+            if (bufferedReadStream != stream)
+            {
+                bufferedReadStream.Dispose();
+            }
+        }
+    }
 
     /// <inheritdoc/>
     public IImageInfo Identify(Configuration configuration, Stream stream, CancellationToken cancellationToken)

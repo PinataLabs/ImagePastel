@@ -117,14 +117,12 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform");
         }
 
-        if (metadata.M.BitDepth.FloatingPointSample)
+        foreach (JxlExtraChannelInfo eci in metadata.M.ExtraChannelInfo)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Floating-point samples");
-        }
-
-        if (metadata.M.NumExtraChannels != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Extra channels");
+            if (eci.Type != JxlExtraChannelType.Alpha)
+            {
+                JxlThrowHelper.ThrowNotSupportedException($"The {eci.Type} extra channel");
+            }
         }
 
         if (frameHeader.FrameType != JxlFrameType.Regular || !frameHeader.IsLast)
@@ -137,7 +135,7 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("Patches, splines, noise or DC frames");
         }
 
-        if (frameHeader.Upsampling != 1)
+        if (frameHeader.Upsampling != 1 || frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))
         {
             JxlThrowHelper.ThrowNotSupportedException("Upsampling");
         }

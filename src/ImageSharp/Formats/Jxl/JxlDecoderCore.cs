@@ -46,16 +46,93 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = ReadAll(stream);
+        byte[] data = ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
+        return this.Decode<TPixel>(data, frameOffset, cancellationToken);
+    }
 
+    /// <summary>
+    /// Decodes the image into the pixel type that <see cref="ChoosePixelType(JxlImageMetadata)"/> picks
+    /// from its header.
+    /// </summary>
+    /// <param name="stream">The stream.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The image.</returns>
+    public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
+    {
+        byte[] data = ReadCodestream(stream);
+        int frameOffset = this.ReadHeaders(data);
+        Type pixelType = ChoosePixelType(this.metadata.M);
+        return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(L16) ? this.Decode<L16>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(La16) ? this.Decode<La16>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(La32) ? this.Decode<La32>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgb24) ? this.Decode<Rgb24>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgb48) ? this.Decode<Rgb48>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgba32) ? this.Decode<Rgba32>(data, frameOffset, cancellationToken)
+            : pixelType == typeof(Rgba64) ? this.Decode<Rgba64>(data, frameOffset, cancellationToken)
+            : this.Decode<RgbaVector>(data, frameOffset, cancellationToken);
+    }
+
+    /// <summary>
+    /// Picks the pixel type for an image with this header, as decided in issue #111. The bit depth is
+    /// the larger of the colour's and the alpha's. XYB images use the bit depth they signal, and CMYK
+    /// images count as RGB because they are converted.
+    /// </summary>
+    /// <param name="metadata">The image metadata.</param>
+    /// <returns>The pixel type.</returns>
+    public static Type ChoosePixelType(JxlImageMetadata metadata)
+    {
+        uint bits = metadata.BitDepth.BitsPerSample;
+        bool floatingPoint = metadata.BitDepth.FloatingPointSample;
+        int alpha = metadata.Find(JxlExtraChannelType.Alpha);
+        if (alpha >= 0)
+        {
+            JxlBitDepth alphaBitDepth = metadata.ExtraChannelInfo[alpha].BitDepth;
+            bits = Math.Max(bits, alphaBitDepth.BitsPerSample);
+            floatingPoint |= alphaBitDepth.FloatingPointSample;
+        }
+
+        return ChoosePixelType(metadata.ColorEncoding.IsGray, alpha >= 0, bits, floatingPoint);
+    }
+
+    /// <summary>
+    /// Picks the pixel type for an image with these channels and samples. ImageSharp has no float grey
+    /// pixel, so float images are <see cref="RgbaVector"/>.
+    /// </summary>
+    /// <param name="gray">Whether the image is grey.</param>
+    /// <param name="alpha">Whether the image has alpha.</param>
+    /// <param name="bits">The bits per sample.</param>
+    /// <param name="floatingPoint">Whether the samples are floats.</param>
+    /// <returns>The pixel type.</returns>
+    public static Type ChoosePixelType(bool gray, bool alpha, uint bits, bool floatingPoint)
+    {
+        if (floatingPoint || bits > 16)
+        {
+            return typeof(RgbaVector);
+        }
+
+        bool wide = bits > 8;
+        if (gray)
+        {
+            return alpha ? (wide ? typeof(La32) : typeof(La16)) : (wide ? typeof(L16) : typeof(L8));
+        }
+
+        return alpha ? (wide ? typeof(Rgba64) : typeof(Rgba32)) : (wide ? typeof(Rgb48) : typeof(Rgb24));
+    }
+
+    private Image<TPixel> Decode<TPixel>(byte[] data, int frameOffset, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
         Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
         try
         {
-            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame);
+            int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
+            bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
+            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame, alpha, premultiplied);
             new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
             return image;
         }
@@ -69,7 +146,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(ReadAll(stream));
+        this.ReadHeaders(ReadCodestream(stream));
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -89,7 +166,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = ReadAll(bufferedStream);
+        byte[] data = ReadCodestream(bufferedStream);
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
@@ -112,6 +189,13 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             throw new InvalidMemoryOperationException($"The JPEG XL image is {xsize}x{ysize} pixels, more than the limit of {JxlFrameDecoder.MaxPixelsPerFrame}.");
         }
+    }
+
+    // Reads the whole file, and takes the codestream out of a container.
+    private static byte[] ReadCodestream(BufferedReadStream stream)
+    {
+        byte[] data = ReadAll(stream);
+        return data.AsSpan().StartsWith(JxlConstants.ContainerSignature) ? JxlContainer.ExtractCodestream(data) : data;
     }
 
     // libjxl reads the codestream incrementally. This decoder decodes from memory, so it reads the
@@ -151,11 +235,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         if (data.Length < 2 || data[0] != JxlConstants.CodestreamSignature[0] || data[1] != JxlConstants.CodestreamSignature[1])
         {
-            if (data.Length >= JxlConstants.ContainerSignature.Length && data.AsSpan(0, JxlConstants.ContainerSignature.Length).SequenceEqual(JxlConstants.ContainerSignature))
-            {
-                JxlThrowHelper.ThrowNotSupportedException("The JPEG XL container");
-            }
-
             JxlThrowHelper.ThrowInvalidImageContentException("invalid signature");
         }
 
