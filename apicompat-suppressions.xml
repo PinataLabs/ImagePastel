@@ -7,4 +7,25 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.get_TimeZoneOffset</Target>
   </Suppression>
+  <!-- Additions: IccProfile convenience API (description, colour space, class, typed tag lookup, sRGB check), #172. -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile.get_Class</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile.get_DataColorSpace</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile.get_Description</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile.IsSrgb</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile.TryGetTag``1(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfileTag,``0@)</Target>
+  </Suppression>
 </Suppressions>
