@@ -4,8 +4,10 @@
 // ReSharper disable InconsistentNaming
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
@@ -18,6 +20,11 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
 public class TiffDecoderTests : TiffDecoderBaseTester
 {
     public static readonly string[] MultiframeTestImages = Multiframes;
+
+    /// <summary>
+    /// Data in the stream before the TIFF. The odd length keeps the TIFF off a word boundary.
+    /// </summary>
+    private static readonly byte[] StreamPrefix = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
 
     [Theory]
     [WithFile(RgbUncompressedTiled, PixelTypes.Rgba32)]
@@ -689,5 +696,133 @@ public class TiffDecoderTests : TiffDecoderBaseTester
 
         image.DebugSaveMultiFrame(provider);
         image.CompareToOriginalMultiFrame(provider, ImageComparer.Exact, ReferenceDecoder);
+    }
+
+    [Theory(Timeout = 30000)]
+    [InlineData(SampleMetadata)]
+    [InlineData(MultiframeLzwPredictor)]
+    [InlineData(MultiframeDeflateWithPreview)]
+    [InlineData(Flower4BitPalette)]
+    [InlineData(FlowerRgb888Planar6Strips)]
+    [InlineData(RgbJpegCompressed)]
+    [InlineData(CcittFax3AllTermCodes)]
+    [InlineData(TestImages.BigTiff.BigTIFF)]
+    [InlineData(TestImages.BigTiff.BigTIFFMotorola)]
+    [InlineData(TestImages.BigTiff.BigTIFFSubIFD8)]
+    [InlineData(TestImages.BigTiff.Indexed8_LZW)]
+    public async Task TiffDecoder_AtNonZeroStreamPosition_MatchesDecodingAtPositionZero(string imagePath)
+    {
+        byte[] tiff = TestFile.Create(imagePath).Bytes;
+        using Image<Rgba32> expected = Image.Load<Rgba32>(tiff);
+
+        using (MemoryStream stream = CreatePrefixedStream(tiff))
+        {
+            using Image<Rgba32> actual = Image.Load<Rgba32>(stream);
+            AssertSameImage(expected, actual);
+        }
+
+        using (MemoryStream stream = CreatePrefixedStream(tiff))
+        {
+            using Image<Rgba32> actual = await Image.LoadAsync<Rgba32>(stream, TestContext.Current.CancellationToken);
+            AssertSameImage(expected, actual);
+        }
+
+        using (MemoryStream stream = CreatePrefixedStream(tiff))
+        {
+            IImageInfo info = Image.Identify(stream);
+            AssertSameInfo(expected, info);
+        }
+
+        using (MemoryStream stream = CreatePrefixedStream(tiff))
+        {
+            IImageInfo info = await Image.IdentifyAsync(stream, TestContext.Current.CancellationToken);
+            AssertSameInfo(expected, info);
+        }
+    }
+
+    [Theory(Timeout = 30000)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TiffDecoder_LoadsTiffSavedAfterOtherDataInSameStream(bool async)
+    {
+        using Image<Rgba32> expected = Image.Load<Rgba32>(TestFile.Create(MultiframeLzwPredictor).Bytes);
+        using var stream = new MemoryStream();
+        stream.Write(StreamPrefix);
+        expected.Save(stream, new TiffEncoder());
+        stream.Position = StreamPrefix.Length;
+
+        using Image<Rgba32> actual = async
+            ? await Image.LoadAsync<Rgba32>(stream, TestContext.Current.CancellationToken)
+            : Image.Load<Rgba32>(stream);
+
+        Assert.True(actual.Frames.Count > 1);
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    /// <summary>
+    /// Creates a stream holding other data before the TIFF, positioned at the start of the TIFF.
+    /// </summary>
+    private static MemoryStream CreatePrefixedStream(byte[] tiff)
+    {
+        var stream = new MemoryStream();
+        stream.Write(StreamPrefix);
+        stream.Write(tiff);
+        stream.Position = StreamPrefix.Length;
+        return stream;
+    }
+
+    private static void AssertSameImage(Image<Rgba32> expected, Image<Rgba32> actual)
+    {
+        ImageComparer.Exact.VerifySimilarity(expected, actual);
+        AssertSameMetadata(expected.Metadata, actual.Metadata);
+        for (int i = 0; i < expected.Frames.Count; i++)
+        {
+            ImageFrameMetadata expectedFrame = expected.Frames[i].Metadata;
+            ImageFrameMetadata actualFrame = actual.Frames[i].Metadata;
+            AssertSameExif(expectedFrame.ExifProfile, actualFrame.ExifProfile);
+            Assert.Equal(expectedFrame.XmpProfile?.ToByteArray(), actualFrame.XmpProfile?.ToByteArray());
+            Assert.Equal(expectedFrame.IptcProfile?.Data, actualFrame.IptcProfile?.Data);
+            Assert.Equal(expectedFrame.IccProfile?.ToByteArray(), actualFrame.IccProfile?.ToByteArray());
+        }
+    }
+
+    private static void AssertSameInfo(Image<Rgba32> expected, IImageInfo actual)
+    {
+        Assert.Equal(expected.Width, actual.Width);
+        Assert.Equal(expected.Height, actual.Height);
+        AssertSameMetadata(expected.Metadata, actual.Metadata);
+    }
+
+    private static void AssertSameMetadata(ImageMetadata expected, ImageMetadata actual)
+    {
+        Assert.Equal(expected.HorizontalResolution, actual.HorizontalResolution);
+        Assert.Equal(expected.VerticalResolution, actual.VerticalResolution);
+        Assert.Equal(expected.ResolutionUnits, actual.ResolutionUnits);
+        Assert.Equal(expected.GetTiffMetadata().ByteOrder, actual.GetTiffMetadata().ByteOrder);
+        Assert.Equal(expected.GetTiffMetadata().FormatType, actual.GetTiffMetadata().FormatType);
+        AssertSameExif(expected.ExifProfile, actual.ExifProfile);
+        Assert.Equal(expected.XmpProfile?.ToByteArray(), actual.XmpProfile?.ToByteArray());
+        Assert.Equal(expected.IptcProfile?.Data, actual.IptcProfile?.Data);
+        Assert.Equal(expected.IccProfile?.ToByteArray(), actual.IccProfile?.ToByteArray());
+    }
+
+    // Compares the values one by one: ExifProfile.ToByteArray cannot write the 64-bit values of a BigTIFF.
+    private static void AssertSameExif(ExifProfile expected, ExifProfile actual)
+    {
+        Assert.Equal(expected is null, actual is null);
+        if (expected is null)
+        {
+            return;
+        }
+
+        Assert.Equal(expected.Values.Count, actual.Values.Count);
+        for (int i = 0; i < expected.Values.Count; i++)
+        {
+            IExifValue expectedValue = expected.Values[i];
+            IExifValue actualValue = actual.Values[i];
+            Assert.Equal(expectedValue.Tag, actualValue.Tag);
+            Assert.Equal(expectedValue.DataType, actualValue.DataType);
+            Assert.Equal(expectedValue.GetValue(), actualValue.GetValue());
+        }
     }
 }
