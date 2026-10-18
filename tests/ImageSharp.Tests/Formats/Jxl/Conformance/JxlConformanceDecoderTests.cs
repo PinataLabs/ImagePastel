@@ -22,6 +22,7 @@ public class JxlConformanceDecoderTests
     [InlineData("lz77_flower")]
     [InlineData("alpha_nonpremultiplied")]
     [InlineData("alpha_triangles")]
+    [InlineData("lossless_pfm")]
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

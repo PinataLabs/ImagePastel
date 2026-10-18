@@ -117,11 +117,6 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform");
         }
 
-        if (metadata.M.BitDepth.FloatingPointSample)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Floating-point samples");
-        }
-
         foreach (JxlExtraChannelInfo eci in metadata.M.ExtraChannelInfo)
         {
             if (eci.Type != JxlExtraChannelType.Alpha)
@@ -132,11 +127,6 @@ internal sealed class JxlFrameDecoder
             if (eci.AlphaAssociated)
             {
                 JxlThrowHelper.ThrowNotSupportedException("Premultiplied alpha");
-            }
-
-            if (eci.BitDepth.FloatingPointSample)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("Floating-point samples");
             }
         }
 

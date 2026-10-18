@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
@@ -313,11 +314,14 @@ internal sealed class JxlModularFrameDecoder : IDisposable
         if (this.doColor)
         {
             bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
+            bool fp = metadata.BitDepth.FloatingPointSample && frameHeader.ColorTransform != JxlColorTransform.Xyb;
+            int bits = (int)metadata.BitDepth.BitsPerSample;
+            int expBits = (int)metadata.BitDepth.ExponentBitsPerSample;
             for (; c < 3; c++)
             {
-                // libjxl's float and XYB conversions come with later slices; the frame decoder
-                // rejects those images, so only this path is reached.
-                double factor = 1.0 / ((1u << this.fullImage.BitDepth) - 1);
+                // libjxl's XYB conversion comes with a later slice; the frame decoder rejects XYB
+                // images, so it is not reached.
+                double factor = this.fullImage.BitDepth < 32 ? 1.0 / ((1u << this.fullImage.BitDepth) - 1) : 0;
                 int cIn = rgbFromGray ? 0 : c;
                 if (cIn >= gi.Channel.Count)
                 {
@@ -343,12 +347,12 @@ internal sealed class JxlModularFrameDecoder : IDisposable
                     {
                         for (int cc = 0; cc < 3; cc++)
                         {
-                            SingleFromSingle(rowIn, factor, accurate, OutRow(pipeline, cc, r, y));
+                            ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, cc, r, y));
                         }
                     }
                     else
                     {
-                        SingleFromSingle(rowIn, factor, accurate, OutRow(pipeline, c, r, y));
+                        ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, c, r, y));
                     }
                 }
 
@@ -364,17 +368,19 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             }
         }
 
-        // The frame decoder rejects floating-point extra channels, so only the integer path is reached.
         int numExtraChannels = metadata.NumExtraChannels;
         for (int ec = 0; ec < numExtraChannels; ec++, c++)
         {
-            int bits = (int)metadata.ExtraChannelInfo[ec].BitDepth.BitsPerSample;
-            if (bits >= 32)
+            JxlBitDepth bitDepth = metadata.ExtraChannelInfo[ec].BitDepth;
+            int bits = (int)bitDepth.BitsPerSample;
+            int expBits = (int)bitDepth.ExponentBitsPerSample;
+            bool fp = bitDepth.FloatingPointSample;
+            if (!fp && bits >= 32)
             {
                 JxlThrowHelper.ThrowInvalidImageContentException("Integer extra channels have fewer than 32 bits");
             }
 
-            double factor = 1.0 / ((1u << bits) - 1);
+            double factor = fp ? 0 : 1.0 / ((1u << bits) - 1);
             if (c >= gi.Channel.Count)
             {
                 JxlThrowHelper.ThrowInvalidImageContentException("Missing extra channel");
@@ -390,7 +396,7 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             for (int y = 0; y < r.YSize; y++)
             {
                 ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                SingleFromSingle(rowIn, factor, accurate, OutRow(pipeline, 3 + ec, r, y));
+                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, 3 + ec, r, y));
             }
         }
     }
@@ -409,6 +415,93 @@ internal sealed class JxlModularFrameDecoder : IDisposable
 
     private static Span<float> OutRow(JxlRenderPipeline pipeline, int c, JxlRect r, int y)
         => pipeline.GetPlane(c).DangerousGetRowSpan((int)(r.Y0 + y)).Slice((int)r.X0, (int)r.XSize);
+
+    private static void ConvertRow(ReadOnlySpan<int> rowIn, bool fp, int bits, int expBits, double factor, bool accurate, Span<float> rowOut)
+    {
+        if (fp)
+        {
+            IntToFloat(rowIn, rowOut, bits, expBits);
+        }
+        else
+        {
+            SingleFromSingle(rowIn, factor, accurate, rowOut);
+        }
+    }
+
+    // Reassembles floats of `bits` bits with `expBits` exponent bits, stored as integers, into binary32.
+    private static void IntToFloat(ReadOnlySpan<int> rowIn, Span<float> rowOut, int bits, int expBits)
+    {
+        if (bits == 32)
+        {
+            if (expBits != 8)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException("32-bit floats have 8 exponent bits");
+            }
+
+            MemoryMarshal.Cast<int, float>(rowIn).Slice(0, rowOut.Length).CopyTo(rowOut);
+            return;
+        }
+
+        int expBias = (1 << (expBits - 1)) - 1;
+        int signShift = bits - 1;
+        int mantBits = bits - expBits - 1;
+        int mantShift = 23 - mantBits;
+        for (int x = 0; x < rowOut.Length; ++x)
+        {
+            uint f = unchecked((uint)rowIn[x]);
+            int signbit = (int)(f >> signShift);
+            f &= (1u << signShift) - 1;
+            if (f == 0)
+            {
+                rowOut[x] = signbit != 0 ? -0F : 0F;
+                continue;
+            }
+
+            int exp = (int)(f >> mantBits);
+            int mantissa = (int)(f & ((1u << mantBits) - 1));
+            if (exp == (1 << expBits) - 1)
+            {
+                // NaN or infinity
+                f = signbit != 0 ? 0x80000000 : 0;
+                f |= 0b11111111u << 23;
+                f |= (uint)mantissa << mantShift;
+                rowOut[x] = BitConverter.Int32BitsToSingle(unchecked((int)f));
+                continue;
+            }
+
+            mantissa <<= mantShift;
+
+            // Try to normalize only if there is space for maneuver.
+            if (exp == 0 && expBits < 8)
+            {
+                // subnormal number
+                while ((mantissa & 0x800000) == 0)
+                {
+                    mantissa <<= 1;
+                    exp--;
+                }
+
+                exp++;
+
+                // remove leading 1 because it is implicit now
+                mantissa &= 0x7fffff;
+            }
+
+            exp -= expBias;
+
+            // broke up the arbitrary float into its parts, now reassemble into binary32
+            exp += 127;
+            if (exp < 0)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException("Float exponent out of range");
+            }
+
+            f = signbit != 0 ? 0x80000000 : 0;
+            f |= (uint)exp << 23;
+            f |= (uint)mantissa;
+            rowOut[x] = BitConverter.Int32BitsToSingle(unchecked((int)f));
+        }
+    }
 
     // Below 23 bits libjxl converts with Highway in float (SingleFromSingle), which converting each
     // sample to float and multiplying in float matches; from 23 bits it multiplies in double

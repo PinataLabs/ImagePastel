@@ -77,6 +77,21 @@ public class JxlDecoderTests
         ImageComparer.Exact.VerifySimilarity(reference, image);
     }
 
+    [Fact]
+    public void Load_Float32_MatchesMagickAt16Bits()
+    {
+        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
+        // Magick returns 16-bit samples, so both sides are clamped to [0, 1] and compared at 16 bits.
+        string path = JxlConformanceVector.Load("lossless_pfm").CommittedInputPath;
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
+        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        // Samples on a rounding boundary may land one 16-bit step apart, in each colour channel.
+        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 3).VerifySimilarity(reference, image);
+    }
+
     [Theory]
     [InlineData("alpha_nonpremultiplied", 48)] // 12-bit RGB and alpha
     [InlineData("alpha_triangles", 36)] // 9-bit RGB and alpha
@@ -177,10 +192,11 @@ public class JxlDecoderTests
     [InlineData(new byte[] { 0xFF, 0x0B }, false)]
     [InlineData(new byte[] { 0x0A, 0xFF }, false)]
     [InlineData(new byte[] { 0xFF }, false)]
-
-    // The container is not detected yet.
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A }, true)]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A, 0x00, 0x00 }, true)]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0B }, false)]
     [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20 }, false)]
-    public void Detector_RecognisesTheBareCodestream(byte[] header, bool expected)
+    public void Detector_RecognisesTheCodestreamAndTheContainer(byte[] header, bool expected)
     {
         IImageFormat format = new JxlImageFormatDetector().DetectFormat(header);
 

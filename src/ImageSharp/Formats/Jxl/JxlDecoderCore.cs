@@ -46,7 +46,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = ReadAll(stream);
+        byte[] data = ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
 
         // The pixel cap is checked from the header, before the image is allocated.
@@ -69,7 +69,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(ReadAll(stream));
+        this.ReadHeaders(ReadCodestream(stream));
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -89,7 +89,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = ReadAll(bufferedStream);
+        byte[] data = ReadCodestream(bufferedStream);
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
@@ -112,6 +112,13 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             throw new InvalidMemoryOperationException($"The JPEG XL image is {xsize}x{ysize} pixels, more than the limit of {JxlFrameDecoder.MaxPixelsPerFrame}.");
         }
+    }
+
+    // Reads the whole file, and takes the codestream out of a container.
+    private static byte[] ReadCodestream(BufferedReadStream stream)
+    {
+        byte[] data = ReadAll(stream);
+        return data.AsSpan().StartsWith(JxlConstants.ContainerSignature) ? JxlContainer.ExtractCodestream(data) : data;
     }
 
     // libjxl reads the codestream incrementally. This decoder decodes from memory, so it reads the
@@ -151,11 +158,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         if (data.Length < 2 || data[0] != JxlConstants.CodestreamSignature[0] || data[1] != JxlConstants.CodestreamSignature[1])
         {
-            if (data.Length >= JxlConstants.ContainerSignature.Length && data.AsSpan(0, JxlConstants.ContainerSignature.Length).SequenceEqual(JxlConstants.ContainerSignature))
-            {
-                JxlThrowHelper.ThrowNotSupportedException("The JPEG XL container");
-            }
-
             JxlThrowHelper.ThrowInvalidImageContentException("invalid signature");
         }
 

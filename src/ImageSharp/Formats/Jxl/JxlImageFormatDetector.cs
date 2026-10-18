@@ -6,14 +6,15 @@ using System;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Detects JPEG XL codestreams by their <c>FF 0A</c> signature. The container comes with a later slice.
+/// Detects JPEG XL images: a bare codestream by its <c>FF 0A</c> signature, and the container by its
+/// 12-byte signature box.
 /// </summary>
 internal sealed class JxlImageFormatDetector : IImageFormatDetector
 {
     /// <inheritdoc />
-    public int HeaderSize => 2;
+    public int HeaderSize => JxlConstants.ContainerSignature.Length;
 
     /// <inheritdoc />
     public IImageFormat DetectFormat(ReadOnlySpan<byte> header)
-        => header.Length >= this.HeaderSize && header.Slice(0, 2).SequenceEqual(JxlConstants.CodestreamSignature) ? JxlFormat.Instance : null;
+        => header.StartsWith(JxlConstants.CodestreamSignature) || header.StartsWith(JxlConstants.ContainerSignature) ? JxlFormat.Instance : null;
 }
