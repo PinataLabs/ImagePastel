@@ -1,12 +1,16 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Un-premultiplying follows libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// UnpremultiplyAlpha in lib/jxl/alpha.cc and kSmallAlpha in lib/jxl/alpha.h.
+// UnpremultiplyAlpha in lib/jxl/alpha.cc and kSmallAlpha in lib/jxl/alpha.h. Spot colours are
+// rendered as SpotColorStage in lib/jxl/render_pipeline/stage_spot.cc, which the decoder adds for every
+// spot colour channel in PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -15,8 +19,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// <summary>
 /// Writes each rendered frame into a frame of an <see cref="Image{TPixel}"/>, clamped to [0, 1]: the
 /// first into the root frame, each later one into a new frame. The first alpha channel becomes the
-/// pixel alpha, un-premultiplied if it is premultiplied; other extra channels are dropped (issue #111).
-/// A grey plane goes into every colour component.
+/// pixel alpha, un-premultiplied if it is premultiplied, and spot colours are rendered over the colour;
+/// other extra channels are dropped (issue #111). A grey plane goes into every colour component.
 /// </summary>
 /// <typeparam name="TPixel">The pixel type.</typeparam>
 internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
@@ -27,10 +31,15 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     private readonly Configuration configuration;
     private readonly Image<TPixel> image;
+    private readonly bool gray;
     private readonly int greenPlane;
     private readonly int bluePlane;
     private readonly int alphaPlane;
     private readonly bool unpremultiply;
+
+    // The plane of each spot colour channel, in stream order, and its RGB and solidity.
+    private readonly int[] spotPlanes;
+    private readonly float[][] spotColors;
     private int framesWritten;
 
     /// <summary>
@@ -38,62 +47,121 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     /// </summary>
     /// <param name="configuration">The configuration.</param>
     /// <param name="image">The image whose frames are written.</param>
-    /// <param name="colorPlanes">The number of colour planes: 1 for grey, 3 for RGB.</param>
-    /// <param name="alphaChannel">The extra channel that holds alpha, or -1 for an opaque image.</param>
-    /// <param name="alphaPremultiplied">Whether the colours are premultiplied by that alpha.</param>
-    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, int colorPlanes, int alphaChannel, bool alphaPremultiplied)
+    /// <param name="metadata">The image metadata, which gives the colour planes and the extra channels.</param>
+    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, JxlImageMetadata metadata)
     {
         this.configuration = configuration;
         this.image = image;
-        this.greenPlane = colorPlanes == 1 ? 0 : 1;
-        this.bluePlane = colorPlanes == 1 ? 0 : 2;
+        int colorPlanes = metadata.NumColorPlanes;
+        this.gray = colorPlanes == 1;
+        this.greenPlane = this.gray ? 0 : 1;
+        this.bluePlane = this.gray ? 0 : 2;
+
+        int alphaChannel = metadata.Find(JxlExtraChannelType.Alpha);
         this.alphaPlane = alphaChannel < 0 ? -1 : colorPlanes + alphaChannel;
-        this.unpremultiply = alphaChannel >= 0 && alphaPremultiplied;
+        this.unpremultiply = alphaChannel >= 0 && metadata.ExtraChannelInfo[alphaChannel].AlphaAssociated;
+
+        // As PreparePipeline, which does not use Find because there may be several spot colour channels.
+        List<int> spotPlanes = new();
+        List<float[]> spotColors = new();
+        for (int i = 0; i < metadata.NumExtraChannels; i++)
+        {
+            JxlExtraChannelInfo eci = metadata.ExtraChannelInfo[i];
+            if (eci.Type == JxlExtraChannelType.SpotColor)
+            {
+                spotPlanes.Add(colorPlanes + i);
+                spotColors.Add(eci.SpotColor);
+            }
+        }
+
+        this.spotPlanes = spotPlanes.ToArray();
+        this.spotColors = spotColors.ToArray();
     }
 
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
-        // Spot colours, CMYK and the sRGB transfer for XYB arrive with later slices.
+        // Issue #111's order: un-premultiply, render the spot colours, clamp, then quantise. The sRGB
+        // transfer for XYB arrives with a later slice.
         ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
         this.framesWritten++;
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
         using IMemoryOwner<Vector4> rowOwner = this.configuration.MemoryAllocator.Allocate<Vector4>(width);
-        Span<Vector4> row = rowOwner.GetSpan();
+        Span<Vector4> row = rowOwner.GetSpan().Slice(0, width);
         for (int y = 0; y < height; y++)
         {
-            Span<float> r = planes[0].DangerousGetRowSpan(y);
-            Span<float> g = planes[this.greenPlane].DangerousGetRowSpan(y);
-            Span<float> b = planes[this.bluePlane].DangerousGetRowSpan(y);
-            if (this.alphaPlane < 0)
+            this.ReadColor(planes, y, row);
+            for (int i = 0; i < this.spotPlanes.Length; i++)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    row[x] = Vector4.Clamp(new Vector4(r[x], g[x], b[x], 1F), Vector4.Zero, Vector4.One);
-                }
+                this.RenderSpotColor(planes[this.spotPlanes[i]].DangerousGetRowSpan(y), this.spotColors[i], row);
             }
-            else if (!this.unpremultiply)
+
+            for (int x = 0; x < row.Length; x++)
             {
-                Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
-                for (int x = 0; x < width; x++)
-                {
-                    row[x] = Vector4.Clamp(new Vector4(r[x], g[x], b[x], a[x]), Vector4.Zero, Vector4.One);
-                }
-            }
-            else
-            {
-                // As libjxl's UnpremultiplyAlpha (lib/jxl/alpha.cc), before the clamp.
-                Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
-                for (int x = 0; x < width; x++)
-                {
-                    float multiplier = 1F / MathF.Max(SmallAlpha, a[x]);
-                    Vector4 v = new(r[x] * multiplier, g[x] * multiplier, b[x] * multiplier, a[x]);
-                    row[x] = Vector4.Clamp(v, Vector4.Zero, Vector4.One);
-                }
+                row[x] = Vector4.Clamp(row[x], Vector4.Zero, Vector4.One);
             }
 
             PixelOperations<TPixel>.Instance.FromVector4Destructive(this.configuration, row, pixels.DangerousGetRowSpan(y), PixelConversionModifiers.Scale);
         }
 
         return false;
+    }
+
+    // The colour and alpha of row y, unclamped, with the colour un-premultiplied if it is premultiplied.
+    private void ReadColor(Buffer2D<float>[] planes, int y, Span<Vector4> row)
+    {
+        Span<float> r = planes[0].DangerousGetRowSpan(y);
+        Span<float> g = planes[this.greenPlane].DangerousGetRowSpan(y);
+        Span<float> b = planes[this.bluePlane].DangerousGetRowSpan(y);
+        if (this.alphaPlane < 0)
+        {
+            for (int x = 0; x < row.Length; x++)
+            {
+                row[x] = new Vector4(r[x], g[x], b[x], 1F);
+            }
+        }
+        else if (!this.unpremultiply)
+        {
+            Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
+            for (int x = 0; x < row.Length; x++)
+            {
+                row[x] = new Vector4(r[x], g[x], b[x], a[x]);
+            }
+        }
+        else
+        {
+            // As libjxl's UnpremultiplyAlpha (lib/jxl/alpha.cc). A departure: libjxl un-premultiplies as it
+            // writes the output, after it renders the spot colours, so it divides them by alpha too. Issue
+            // #111 un-premultiplies first, so a spot colour keeps its own RGB.
+            Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
+            for (int x = 0; x < row.Length; x++)
+            {
+                float multiplier = 1F / MathF.Max(SmallAlpha, a[x]);
+                row[x] = new Vector4(r[x] * multiplier, g[x] * multiplier, b[x] * multiplier, a[x]);
+            }
+        }
+    }
+
+    // SpotColorStage::ProcessRow: each colour channel moves towards the spot colour by the spot sample
+    // times its solidity. libjxl's pipeline always has three colour channels, and the grey output takes
+    // the first, so a grey image is rendered with the spot colour's red.
+    private void RenderSpotColor(Span<float> s, float[] spotColor, Span<Vector4> row)
+    {
+        float scale = spotColor[3];
+        for (int x = 0; x < row.Length; x++)
+        {
+            float mix = scale * s[x];
+            ref Vector4 p = ref row[x];
+            p.X = (mix * spotColor[0]) + ((1.0f - mix) * p.X);
+            if (this.gray)
+            {
+                p.Y = p.X;
+                p.Z = p.X;
+            }
+            else
+            {
+                p.Y = (mix * spotColor[1]) + ((1.0f - mix) * p.Y);
+                p.Z = (mix * spotColor[2]) + ((1.0f - mix) * p.Z);
+            }
+        }
     }
 }

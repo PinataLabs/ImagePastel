@@ -165,15 +165,13 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
         try
         {
-            // Rendering them arrives with the rest of slice D6.
-            if (this.isCmyk || this.metadata.M.Find(JxlExtraChannelType.SpotColor) >= 0)
+            // Converting it arrives with slice D6c.
+            if (this.isCmyk)
             {
-                JxlThrowHelper.ThrowNotSupportedException(this.isCmyk ? "CMYK" : "Spot colours");
+                JxlThrowHelper.ThrowNotSupportedException("CMYK");
             }
 
-            int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
-            bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
-            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M.NumColorPlanes, alpha, premultiplied);
+            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
             List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
 

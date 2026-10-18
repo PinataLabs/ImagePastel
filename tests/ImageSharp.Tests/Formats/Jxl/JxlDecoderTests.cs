@@ -11,6 +11,7 @@ using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -268,26 +269,42 @@ public class JxlDecoderTests
     {
         using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(type));
         using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-        using FileStream original = File.OpenRead(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
-        using Image<Rgb48> colour = new JxlDecoder().Decode<Rgb48>(Configuration.Default, original, CancellationToken.None);
 
-        Assert.Equal(colour.Size(), image.Size());
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++)
-            {
-                Rgb48 expected = colour[x, y];
-                Assert.Equal(new Rgba64(expected.R, expected.G, expected.B, ushort.MaxValue), image[x, y]);
-            }
-        }
+        AssertAlphaTrianglesColourWithOpaqueAlpha(image);
     }
 
     [Fact]
-    public void Decode_SpotColourChannel_ThrowsNotSupported()
+    public void Decode_SpotColourWithSolidityZero_LeavesTheColourUnchanged()
     {
-        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(2));
+        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(2, spotSolidity: 0));
+        using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
 
-        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+        AssertAlphaTrianglesColourWithOpaqueAlpha(image);
+    }
+
+    [Fact]
+    public void Load_Spot_ChoosesA16BitPixelType()
+    {
+        using Image image = Image.Load(CreateConfiguration(), JxlConformanceVector.Load("spot").CommittedInputPath);
+
+        Assert.IsType<Image<Rgba64>>(image);
+    }
+
+    [Fact]
+    public void Load_Spot_RendersBothInksAsDjxlDoes()
+    {
+        // The two spot channels overlap, so the comparison also checks they are rendered in stream order.
+        string path = JxlConformanceVector.Load("spot").CommittedInputPath;
+        using (FileStream stream = File.OpenRead(path))
+        {
+            using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+            Assert.True(CountOverlap(planes.Frames[0].Planes[4], planes.Frames[0].Planes[5]) > 0);
+        }
+
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using Image<Rgba64> reference = Image.Load<Rgba64>(GeneratedReferencePath("spot"));
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
     }
 
     [Fact]
@@ -314,8 +331,9 @@ public class JxlDecoderTests
     /// <param name="type">The extra channel type, as libjxl's ExtraChannel enum.</param>
     /// <param name="name">The extra channel name, up to 15 bytes of UTF-8.</param>
     /// <param name="dimShift">The dim_shift, 0 or 3.</param>
+    /// <param name="spotSolidity">The solidity of a red spot colour, as an F16.</param>
     /// <returns>The codestream.</returns>
-    internal static byte[] AlphaTrianglesWithExtraChannel(uint type, string name = "", uint dimShift = 0)
+    internal static byte[] AlphaTrianglesWithExtraChannel(uint type, string name = "", uint dimShift = 0, ushort spotSolidity = 0x3C00)
     {
         byte[] original = File.ReadAllBytes(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
         byte[] nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
@@ -355,7 +373,7 @@ public class JxlDecoderTests
         }
         else if (type == 2)
         {
-            writer.Write(16, 0x3C00).Write(16, 0).Write(16, 0).Write(16, 0x3C00); // red spot colour, solidity 1, as F16
+            writer.Write(16, 0x3C00).Write(16, 0).Write(16, 0).Write(16, spotSolidity); // red, as F16
         }
         else if (type == 5)
         {
@@ -453,6 +471,40 @@ public class JxlDecoderTests
     private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
 
     // The first byte of the frame in a bare codestream with no ICC profile and no preview.
+    // Checks the image has alpha_triangles' colour, and is opaque.
+    private static void AssertAlphaTrianglesColourWithOpaqueAlpha(Image<Rgba64> image)
+    {
+        using FileStream original = File.OpenRead(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        using Image<Rgb48> colour = new JxlDecoder().Decode<Rgb48>(Configuration.Default, original, CancellationToken.None);
+
+        Assert.Equal(colour.Size(), image.Size());
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                Rgb48 expected = colour[x, y];
+                Assert.Equal(new Rgba64(expected.R, expected.G, expected.B, ushort.MaxValue), image[x, y]);
+            }
+        }
+    }
+
+    // The number of pixels where both planes are above 0.
+    private static int CountOverlap(Buffer2D<float> a, Buffer2D<float> b)
+    {
+        int count = 0;
+        for (int y = 0; y < a.Height; y++)
+        {
+            Span<float> rowA = a.DangerousGetRowSpan(y);
+            Span<float> rowB = b.DangerousGetRowSpan(y);
+            for (int x = 0; x < a.Width; x++)
+            {
+                count += rowA[x] > 0 && rowB[x] > 0 ? 1 : 0;
+            }
+        }
+
+        return count;
+    }
+
     private static int FrameOffset(byte[] codestream)
     {
         JxlCodecMetadata metadata = new();
