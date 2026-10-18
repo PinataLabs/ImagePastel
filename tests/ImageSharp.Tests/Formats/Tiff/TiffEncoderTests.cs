@@ -5,6 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -19,6 +20,11 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
 [Trait("Format", "Tiff")]
 public class TiffEncoderTests : TiffEncoderBaseTester
 {
+    /// <summary>
+    /// Data already in the stream before the TIFF is written. The odd length keeps the TIFF off a word boundary.
+    /// </summary>
+    private static readonly byte[] StreamPrefix = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
+
     /// <summary>
     /// The field types TIFF 6.0 allows for the baseline and extension tags the encoder can write.
     /// </summary>
@@ -532,6 +538,83 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         Assert.Equal(seekableStream.ToArray(), memStream.ToArray());
     }
 
+    [Theory]
+    [InlineData(TiffCompression.None, 1)]
+    [InlineData(TiffCompression.None, 3)]
+    [InlineData(TiffCompression.Deflate, 1)]
+    [InlineData(TiffCompression.Deflate, 3)]
+    [InlineData(TiffCompression.Lzw, 1)]
+    [InlineData(TiffCompression.Lzw, 3)]
+    [InlineData(TiffCompression.PackBits, 1)]
+    [InlineData(TiffCompression.PackBits, 3)]
+    [InlineData(TiffCompression.Jpeg, 1)]
+    [InlineData(TiffCompression.Jpeg, 3)]
+    [InlineData(TiffCompression.Ccitt1D, 1)]
+    [InlineData(TiffCompression.Ccitt1D, 3)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 1)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 3)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 1)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 3)]
+    public void TiffEncoder_AtNonZeroStreamPosition_MatchesEncodingAtPositionZero(TiffCompression compression, int frameCount)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, frameCount);
+        var encoder = new TiffEncoder { Compression = compression };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+
+        // act
+        input.Save(memStream, encoder);
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), frameCount);
+    }
+
+    [Fact]
+    public async Task TiffEncoder_AtNonZeroStreamPosition_Async_MatchesEncodingAtPositionZero()
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, 3);
+        var encoder = new TiffEncoder { Compression = TiffCompression.Lzw };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+
+        // act
+        await input.SaveAsync(memStream, encoder, TestContext.Current.CancellationToken);
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), 3);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TiffEncoder_ToNonSeekableStreamWithData_MatchesEncodingAtPositionZero(bool async)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, 3);
+        var encoder = new TiffEncoder { Compression = TiffCompression.Deflate };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+        var nonSeekableStream = new NonSeekableStream(memStream);
+
+        // act
+        if (async)
+        {
+            await input.SaveAsync(nonSeekableStream, encoder, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            input.Save(nonSeekableStream, encoder);
+        }
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), 3);
+    }
+
     // This makes sure, that when decoding a planar tiff, the planar configuration is not carried over to the encoded image.
     [Theory]
     [WithFile(FlowerRgb444Planar, PixelTypes.Rgba32)]
@@ -821,6 +904,35 @@ public class TiffEncoderTests : TiffEncoderBaseTester
                 Assert.True(expected == image[x, y], $"Pixel ({x},{y}) is {image[x, y]}, expected {expected}.");
             }
         }
+    }
+
+    private static byte[] EncodeAtPositionZero(Image<Rgba32> image, TiffEncoder encoder)
+    {
+        using var memStream = new MemoryStream();
+        image.Save(memStream, encoder);
+        return memStream.ToArray();
+    }
+
+    private static void AssertPrefixedTiff(byte[] expected, byte[] actual, int expectedFrameCount)
+    {
+        Assert.Equal(StreamPrefix, actual.AsSpan(0, StreamPrefix.Length).ToArray());
+        byte[] tiff = actual.AsSpan(StreamPrefix.Length).ToArray();
+        Assert.Equal(expected, tiff);
+
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(tiff);
+        Assert.Equal(expectedFrameCount, decoded.Frames.Count);
+    }
+
+    private static Image<Rgba32> CreateRandomColorImage(int width, int height, int frameCount)
+    {
+        Image<Rgba32> image = CreateRandomColorImage(width, height);
+        for (int i = 1; i < frameCount; i++)
+        {
+            using Image<Rgba32> frame = CreateRandomColorImage(width, height);
+            image.Frames.AddFrame(frame.Frames.RootFrame);
+        }
+
+        return image;
     }
 
     private static Image<Rgba32> CreateRandomColorImage(int width, int height)

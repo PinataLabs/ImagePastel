@@ -3,6 +3,7 @@
 
 using System.IO;
 using System.Threading;
+using SixLabors.ImageSharp.Formats.Tiff.Utils;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -30,7 +31,7 @@ public class TiffDecoder : IImageDecoder, ITiffDecoderOptions, IImageInfoDetecto
         Guard.NotNull(stream, nameof(stream));
 
         var decoder = new TiffDecoderCore(configuration, this);
-        return decoder.Decode<TPixel>(configuration, stream, cancellationToken);
+        return decoder.Decode<TPixel>(configuration, OffsetStream.FromCurrentPosition(stream), cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -43,6 +44,6 @@ public class TiffDecoder : IImageDecoder, ITiffDecoderOptions, IImageInfoDetecto
         Guard.NotNull(stream, nameof(stream));
 
         var decoder = new TiffDecoderCore(configuration, this);
-        return decoder.Identify(configuration, stream, cancellationToken);
+        return decoder.Identify(configuration, OffsetStream.FromCurrentPosition(stream), cancellationToken);
     }
 }
