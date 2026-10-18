@@ -8,6 +8,9 @@ using System.Threading;
 using ImageMagick;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -57,6 +60,72 @@ public class JxlDecoderTests
         using Image<Rgb24> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
+    }
+
+    [Theory]
+    [InlineData("alpha_nonpremultiplied")]
+    [InlineData("alpha_triangles")]
+    public void Load_Rgba64_MatchesMagickExactly(string id)
+    {
+        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
+        string path = JxlConformanceVector.Load(id).CommittedInputPath;
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
+        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+    }
+
+    [Theory]
+    [InlineData("alpha_nonpremultiplied", 48)] // 12-bit RGB and alpha
+    [InlineData("alpha_triangles", 36)] // 9-bit RGB and alpha
+    public void Identify_CountsTheAlphaBits(string id, int bitsPerPixel)
+    {
+        using FileStream stream = File.OpenRead(JxlConformanceVector.Load(id).CommittedInputPath);
+
+        IImageInfo info = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None);
+
+        Assert.Equal(1024, info.Width);
+        Assert.Equal(1024, info.Height);
+        Assert.Equal(bitsPerPixel, info.PixelType.BitsPerPixel);
+    }
+
+    [Theory]
+    [InlineData(0, false)] // alpha
+    [InlineData(1, true)] // depth
+    public void Decode_ExtraChannelThatIsNotAlpha_ThrowsNotSupported(int type, bool throws)
+    {
+        // alpha_triangles' frame, behind a header that gives its extra channel the type.
+        byte[] original = File.ReadAllBytes(JxlConformanceVector.Load("alpha_triangles").CommittedInputPath);
+        JxlTestBitWriter writer = new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);
+        writer.Bit(false).Write(2, 1).Write(13, 1023).Write(3, 1); // 1024 x 1024
+        writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
+        writer.Bit(false).Write(2, 3).Write(6, 8).Bit(true); // 9-bit integer samples, 16-bit buffers suffice
+        writer.Write(2, 1); // one extra channel
+        writer.Bit(false).Write(2, (ulong)type); // not all default, the type
+        writer.Bit(false).Write(2, 3).Write(6, 8); // 9-bit integer samples
+        writer.Write(2, 0).Write(2, 0); // no dim shift, no name
+        if (type == 0)
+        {
+            writer.Bit(false); // straight alpha
+        }
+
+        writer.Bit(false).Bit(true).Write(2, 0); // not XYB, default colour encoding, no extensions
+        writer.Bit(true); // all-default transform data
+        writer.ZeroPadToByte();
+        byte[] data = writer.ToArray().Concat(original.AsSpan(FrameOffset(original)).ToArray()).ToArray();
+        using MemoryStream stream = new(data);
+
+        if (throws)
+        {
+            Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+        }
+        else
+        {
+            using Image<Rgba64> image = new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
+            Assert.Equal(1024, image.Width);
+        }
     }
 
     [Fact]
@@ -138,6 +207,21 @@ public class JxlDecoderTests
     }
 
     private static ushort Quantize16(float value) => (ushort)Math.Round(Math.Clamp(value, 0F, 1F) * 65535F);
+
+    // The first byte of the frame in a bare codestream with no ICC profile and no preview.
+    private static int FrameOffset(byte[] codestream)
+    {
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        reader.JumpToByteBoundary();
+        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        reader.Close();
+        return offset;
+    }
 
     private static Configuration CreateConfiguration()
     {

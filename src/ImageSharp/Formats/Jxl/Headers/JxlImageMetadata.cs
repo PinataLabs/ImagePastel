@@ -66,6 +66,14 @@ internal sealed class JxlImageMetadata : JxlFields
     /// <summary>Gets the number of extra channels.</summary>
     public int NumExtraChannels => this.ExtraChannelInfo.Count;
 
+    /// <summary>
+    /// Returns the index of the first extra channel of type <paramref name="type"/>, or -1. libjxl's
+    /// <c>Find</c> returns the channel itself; the index also gives its render plane.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>The index, or -1.</returns>
+    public int Find(JxlExtraChannelType type) => this.ExtraChannelInfo.FindIndex(eci => eci.Type == type);
+
     public override void VisitFields(JxlVisitor visitor)
     {
         if (visitor.AllDefault(this))

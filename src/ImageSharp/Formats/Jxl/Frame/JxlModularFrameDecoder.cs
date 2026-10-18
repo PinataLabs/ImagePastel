@@ -308,11 +308,12 @@ internal sealed class JxlModularFrameDecoder : IDisposable
         }
 
         JxlRect r = pipeline.GetGroupRect(groupId);
+        bool accurate = this.fullImage.BitDepth >= 23;
+        int c = 0;
         if (this.doColor)
         {
             bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
-            bool accurate = this.fullImage.BitDepth >= 23;
-            for (int c = 0; c < 3; c++)
+            for (; c < 3; c++)
             {
                 // libjxl's float and XYB conversions come with later slices; the frame decoder
                 // rejects those images, so only this path is reached.
@@ -356,9 +357,42 @@ internal sealed class JxlModularFrameDecoder : IDisposable
                     break;
                 }
             }
+
+            if (rgbFromGray)
+            {
+                c = 1;
+            }
         }
 
-        // Extra channels arrive with a later slice; the frame decoder rejects images that have any.
+        // The frame decoder rejects floating-point extra channels, so only the integer path is reached.
+        int numExtraChannels = metadata.NumExtraChannels;
+        for (int ec = 0; ec < numExtraChannels; ec++, c++)
+        {
+            int bits = (int)metadata.ExtraChannelInfo[ec].BitDepth.BitsPerSample;
+            if (bits >= 32)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException("Integer extra channels have fewer than 32 bits");
+            }
+
+            double factor = 1.0 / ((1u << bits) - 1);
+            if (c >= gi.Channel.Count)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException("Missing extra channel");
+            }
+
+            JxlModularChannel chIn = gi.Channel[c];
+            JxlRect mr = CropRect(modularRect, chIn);
+            if (r.YSize != mr.YSize || r.XSize != mr.XSize)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException($"Dimension mismatch: trying to fit a {mr.XSize}x{mr.YSize} modular channel into a {r.XSize}x{r.YSize} rect");
+            }
+
+            for (int y = 0; y < r.YSize; y++)
+            {
+                ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
+                SingleFromSingle(rowIn, factor, accurate, OutRow(pipeline, 3 + ec, r, y));
+            }
+        }
     }
 
     private static JxlRect CropRect(JxlRect modularRect, JxlModularChannel chIn)
