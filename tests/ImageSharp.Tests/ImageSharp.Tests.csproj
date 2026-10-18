@@ -25,18 +25,9 @@
   -->
   <PropertyGroup>
     <ImageSharpGeneratedSources>Tests</ImageSharpGeneratedSources>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
-  <!-- ci-apicompat.ps1 renames the library with a global AssemblyName; the generator keeps its own. -->
-  <ItemGroup>
-    <CompilerVisibleProperty Include="ImageSharpGeneratedSources" />
-    <ProjectReference Include="..\..\gen\ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false"
-                      PrivateAssets="all"
-                      GlobalPropertiesToRemove="AssemblyName" />
-  </ItemGroup>
+  <Import Project="..\..\gen\ImageSharp.SourceGenerators.props" />
 
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />
