@@ -2,25 +2,32 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using ImageMagick;
 using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats;
 
 /// <summary>
-/// Decodes JPEG, PNG, TIFF and WebP files with the <c>ColorProfileConversion</c> decoder option.
-/// Expected colours come from Little CMS: the <c>transicc</c> tables in <see cref="LittleCmsReferences"/>
-/// for files encoded losslessly here, and Little CMS inside Magick.NET for the lossy JPEG.
+/// Decodes JPEG, PNG, TIFF, WebP, GIF, BMP and JPEG XL files with the <c>ColorProfileConversion</c>
+/// decoder option. Expected colours come from Little CMS: the <c>transicc</c> tables in
+/// <see cref="LittleCmsReferences"/> for files encoded losslessly here, and Little CMS inside Magick.NET
+/// for the lossy JPEG and for the JPEG XL files (converting the pixels and profile that <c>djxl</c> gives).
 /// </summary>
 [Trait("Profile", "Icc")]
 public class DecoderColorProfileConversionTests
@@ -28,15 +35,17 @@ public class DecoderColorProfileConversionTests
     // About one code value at 8 bits: the conversion runs in float and rounds once at the end.
     private const float EightBitTolerance = 1F;
 
-    public static TheoryData<string> LosslessFormats { get; } = new() { "png", "tiff", "webp" };
+    public static TheoryData<string> LosslessFormats { get; } = new() { "png", "tiff", "webp", "gif", "bmp" };
 
-    public static TheoryData<string> AllFormats { get; } = new() { "jpeg", "png", "tiff", "webp" };
+    public static TheoryData<string> AllFormats { get; } = new() { "jpeg", "png", "tiff", "webp", "gif", "bmp" };
 
     [Theory]
     [InlineData("png", TestImages.Icc.CompactAdobeRgbV2)]
     [InlineData("tiff", TestImages.Icc.CompactProPhotoV4)]
     [InlineData("webp", TestImages.Icc.CompactDisplayP3V4)]
     [InlineData("png", TestImages.Icc.QcmsRec2020)]
+    [InlineData("gif", TestImages.Icc.CompactAdobeRgbV2)]
+    [InlineData("bmp", TestImages.Icc.QcmsRec2020)]
     public void Decode_ToSrgb_MatchesLittleCms(string format, string embeddedProfile)
     {
         LittleCmsReference reference = LittleCmsReferences.Get(embeddedProfile, null);
@@ -77,20 +86,7 @@ public class DecoderColorProfileConversionTests
         using Image<Rgb24> image = Decode<Rgb24>("jpeg", file, ColorProfileConversion.ToSrgb);
 
         Assert.Null(image.Metadata.IccProfile);
-        float worst = 0;
-        int i = 0;
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++, i += 3)
-            {
-                Rgb24 actual = image[x, y];
-                worst = MathF.Max(worst, MathF.Abs(actual.R - expected[i]));
-                worst = MathF.Max(worst, MathF.Abs(actual.G - expected[i + 1]));
-                worst = MathF.Max(worst, MathF.Abs(actual.B - expected[i + 2]));
-            }
-        }
-
-        Assert.True(worst <= EightBitTolerance, $"Largest difference from Little CMS: {worst} code values.");
+        AssertPixels(image, expected);
     }
 
     [Theory]
@@ -244,6 +240,104 @@ public class DecoderColorProfileConversionTests
         Assert.Throws<NotSupportedException>(() => Decode<Rgb24>(format, file, ColorProfileConversion.ToTargetProfile, cmyk));
     }
 
+    [Fact]
+    public void Decode_Gif_ConvertsEveryFrameWithTheImageProfile()
+    {
+        // transicc: Adobe RGB (128, 64, 32) -> sRGB 146.1484 61.7724 23.4316; (51, 102, 153) -> 0.0000 102.1591 156.2031.
+        using Image<Rgb24> source = new(2, 2, new Rgb24(128, 64, 32));
+        using (Image<Rgb24> second = new(2, 2, new Rgb24(51, 102, 153)))
+        {
+            source.Frames.AddFrame(second.Frames.RootFrame);
+        }
+
+        source.Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactAdobeRgbV2);
+        using MemoryStream stream = new();
+        source.Save(stream, new GifEncoder { Quantizer = new PaletteQuantizer(new[] { new Color(new Rgb24(128, 64, 32)), new Color(new Rgb24(51, 102, 153)) }, new QuantizerOptions { Dither = null }) });
+
+        using Image<Rgb24> image = Decode<Rgb24>("gif", stream.ToArray(), ColorProfileConversion.ToSrgb);
+
+        Assert.Equal(2, image.Frames.Count);
+        Assert.Equal(new Rgb24(146, 62, 23), image.Frames[0][1, 1]);
+        Assert.Equal(new Rgb24(0, 102, 156), image.Frames[1][1, 1]);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    // colour_display_p3 has a profile built from its colour encoding; custom_icc embeds one (made-up
+    // primaries, tabulated curve). The non-generic Decode picks the pixel type itself (Rgb24 here).
+    [Theory]
+    [InlineData("colour_display_p3", true)]
+    [InlineData("colour_display_p3", false)]
+    [InlineData("custom_icc", true)]
+    [InlineData("custom_icc", false)]
+    public void Decode_Jxl_ToSrgb_MatchesLittleCmsInMagick(string name, bool generic)
+    {
+        float[] expected = ConvertJxlReferenceWithMagick(name, TestImages.Icc.LittleCmsSrgbV4);
+
+        using Image<Rgb24> image = DecodeJxl(name, new JxlDecoder { ColorProfileConversion = ColorProfileConversion.ToSrgb }, generic);
+
+        AssertPixels(image, expected);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Decode_Jxl_ToTargetProfile_MatchesLittleCmsInMagickAndSetsTargetAsPixelProfile(bool generic)
+    {
+        IccProfile target = LoadProfile(TestImages.Icc.CompactDisplayP3V4);
+        float[] expected = ConvertJxlReferenceWithMagick("custom_icc", TestImages.Icc.CompactDisplayP3V4);
+
+        using Image<Rgb24> image = DecodeJxl("custom_icc", new JxlDecoder { ColorProfileConversion = ColorProfileConversion.ToTargetProfile, ColorProfileConversionTarget = target }, generic);
+
+        AssertPixels(image, expected);
+        Assert.Equal(target.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Decode_Jxl_DefaultOption_LeavesPixelsAndProfileAsTheyAre(bool generic)
+    {
+        using Image<Rgb24> reference = Image.Load<Rgb24>(JxlReferencePath("custom_icc"));
+
+        using Image<Rgb24> image = DecodeJxl("custom_icc", new JxlDecoder { ColorProfileConversionTarget = LoadProfile(TestImages.Icc.CompactDisplayP3V4) }, generic);
+
+        AssertSamePixels(reference, image);
+        Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Decode_Jxl_IgnoreMetadata_DisablesConversion(bool generic)
+    {
+        using Image<Rgb24> reference = Image.Load<Rgb24>(JxlReferencePath("custom_icc"));
+
+        using Image<Rgb24> image = DecodeJxl("custom_icc", new JxlDecoder { ColorProfileConversion = ColorProfileConversion.ToSrgb, IgnoreMetadata = true }, generic);
+
+        AssertSamePixels(reference, image);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    private static string JxlReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
+
+    // The JPEG XL decoder is internal, so it is called directly rather than through Image.Load.
+    private static Image<Rgb24> DecodeJxl(string name, JxlDecoder decoder, bool generic)
+    {
+        using FileStream stream = File.OpenRead(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", name + ".jxl"));
+        return generic
+            ? decoder.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None)
+            : Assert.IsType<Image<Rgb24>>(decoder.Decode(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    // The pixels and profile djxl gives for a generated JPEG XL file, converted by Little CMS in Magick.NET.
+    private static float[] ConvertJxlReferenceWithMagick(string name, string targetProfile)
+    {
+        using Image<Rgb24> reference = Image.Load<Rgb24>(JxlReferencePath(name));
+        Assert.NotNull(reference.Metadata.IccProfile);
+        return ConvertWithMagick(reference, reference.Metadata.IccProfile.ToByteArray(), File.ReadAllBytes(TestFile.GetInputFileFullPath(targetProfile)));
+    }
+
     private static IccProfile LoadProfile(string file) => ConvertColorProfileProcessorTests.LoadProfile(file);
 
     private static IImageDecoder CreateDecoder(string format, ColorProfileConversion conversion, IccProfile target, bool ignoreMetadata)
@@ -253,6 +347,8 @@ public class DecoderColorProfileConversionTests
             "png" => new PngDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata },
             "tiff" => new TiffDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata },
             "webp" => new WebpDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata },
+            "gif" => new GifDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata },
+            "bmp" => new BmpDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata },
             _ => throw new ArgumentOutOfRangeException(nameof(format)),
         };
 
@@ -260,15 +356,40 @@ public class DecoderColorProfileConversionTests
         where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
         => Image.Load<TPixel>(file, CreateDecoder(format, conversion, target, ignoreMetadata));
 
-    private static IImageEncoder CreateEncoder(string format)
+    private static IImageEncoder CreateEncoder(string format, Image<Rgb24> image)
         => format switch
         {
             "jpeg" => new JpegEncoder { Quality = 90 },
             "png" => new PngEncoder(),
             "tiff" => new TiffEncoder(),
             "webp" => new WebpEncoder { FileFormat = WebpFileFormatType.Lossless },
+            "gif" => new GifEncoder { Quantizer = new PaletteQuantizer(DistinctColors(image), new QuantizerOptions { Dither = null }) },
+            "bmp" => new BmpEncoder { BitsPerPixel = BmpBitsPerPixel.Pixel24 },
             _ => throw new ArgumentOutOfRangeException(nameof(format)),
         };
+
+    // The test images have at most 256 colours, so a GIF palette of exactly those colours keeps them all.
+    private static Color[] DistinctColors(Image<Rgb24> image)
+    {
+        HashSet<Rgb24> colors = [];
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                colors.Add(image[x, y]);
+            }
+        }
+
+        Assert.True(colors.Count <= 256, "A GIF palette holds at most 256 colours.");
+        Color[] palette = new Color[colors.Count];
+        int i = 0;
+        foreach (Rgb24 color in colors)
+        {
+            palette[i++] = new Color(color);
+        }
+
+        return palette;
+    }
 
     private static byte[] Encode(string format, Image<Rgb24> image, IccProfile profile)
     {
@@ -276,7 +397,7 @@ public class DecoderColorProfileConversionTests
         {
             image.Metadata.IccProfile = profile;
             using MemoryStream stream = new();
-            image.Save(stream, CreateEncoder(format));
+            image.Save(stream, CreateEncoder(format, image));
             return stream.ToArray();
         }
     }
@@ -319,6 +440,25 @@ public class DecoderColorProfileConversionTests
                 MathF.Abs(actual.R - r) <= EightBitTolerance && MathF.Abs(actual.G - g) <= EightBitTolerance && MathF.Abs(actual.B - b) <= EightBitTolerance,
                 $"Pixel {i} {reference.Input(i)}: expected {(r, g, b)}, got {(actual.R, actual.G, actual.B)}.");
         }
+    }
+
+    // Expected R, G, B per pixel, row by row, in 8-bit code values.
+    private static void AssertPixels(Image<Rgb24> image, float[] expected)
+    {
+        float worst = 0;
+        int i = 0;
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++, i += 3)
+            {
+                Rgb24 actual = image[x, y];
+                worst = MathF.Max(worst, MathF.Abs(actual.R - expected[i]));
+                worst = MathF.Max(worst, MathF.Abs(actual.G - expected[i + 1]));
+                worst = MathF.Max(worst, MathF.Abs(actual.B - expected[i + 2]));
+            }
+        }
+
+        Assert.True(worst <= EightBitTolerance, $"Largest difference from Little CMS: {worst} code values.");
     }
 
     private static void AssertSamePixels<TPixel>(Image<TPixel> expected, Image<TPixel> actual)
