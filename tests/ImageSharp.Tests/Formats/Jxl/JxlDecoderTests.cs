@@ -275,6 +275,19 @@ public class JxlDecoderTests
         AssertAlphaTrianglesColourWithOpaqueAlpha(image);
     }
 
+    // The generated files are one colour each: see make_extra_channels.py.
+    [Theory]
+    [InlineData("depth", 255)] // (200, 100, 50) with depth 7: the depth is dropped
+    [InlineData("two_alpha_a", 128)] // (200, 100, 50) with alphas 128 and 255: the second alpha is dropped
+    public void Load_ExtraChannelsAfterTheFirstAlpha_AreDropped(string name, byte alpha)
+    {
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, name + ".jxl"));
+
+        Assert.Equal(16, image.Width);
+        Assert.Equal(16, image.Height);
+        Assert.All(Pixels(image), p => Assert.Equal(new Rgba32(200, 100, 50, alpha), p));
+    }
+
     [Fact]
     public void Decode_SpotColourWithSolidityZero_LeavesTheColourUnchanged()
     {
@@ -508,6 +521,13 @@ public class JxlDecoderTests
 
     // The djxl output for a generated file: see the README next to the generated files.
     private static string GeneratedReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
+
+    private static Rgba32[] Pixels(Image<Rgba32> image)
+    {
+        Rgba32[] pixels = new Rgba32[image.Width * image.Height];
+        image.CopyPixelDataTo(pixels);
+        return pixels;
+    }
 
     // Checks the image has alpha_triangles' colour, and is opaque.
     private static void AssertAlphaTrianglesColourWithOpaqueAlpha(Image<Rgba64> image)
