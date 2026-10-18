@@ -2,11 +2,16 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.Formats.Webp.Lossless;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Memory;
 using SixLabors.ImageSharp.Tests.TestUtilities;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
@@ -481,6 +486,110 @@ public class WebpEncoderTests
         Assert.Equal(File.ReadAllBytes(withAvx2), File.ReadAllBytes(withoutAvx2));
     }
 
+    [Fact]
+    [ValidateDisposedMemoryAllocations]
+    public void Vp8LEncoder_DisposeBeforeEncoding_ReturnsBuffers()
+    {
+        Configuration configuration = Configuration.Default;
+        var encoder = new Vp8LEncoder(configuration.MemoryAllocator, configuration, 16, 16, 75, WebpEncodingMethod.Default, WebpTransparentColorMode.Clear, false, 100);
+
+        encoder.Dispose();
+        encoder.Dispose();
+    }
+
+    [Fact]
+    public void Vp8LEncoder_OutOfMemoryBeforeTransformBuffers_ThrowsOutOfMemoryException()
+    {
+        using Image<Rgba32> image = CreateNoisyImage(32, 24);
+        var allocator = new FailingAllocator();
+        allocator.EnableNonThreadSafeLogging();
+        using var memStream = new MemoryStream();
+
+        Assert.Throws<OutOfMemoryException>(() =>
+        {
+            using var encoder = new Vp8LEncoder(allocator, Configuration.Default, image.Width, image.Height, 75, WebpEncodingMethod.Default, WebpTransparentColorMode.Clear, false, 100);
+
+            // The image has too many colors for a palette, so the first allocation after the constructor is
+            // the entropy histogram made while the image is analyzed, before the transform buffers.
+            allocator.AllocationsBeforeFailure = 0;
+            encoder.Encode(image, memStream);
+        });
+
+        Assert.NotEmpty(allocator.AllocationLog);
+        AssertEachBufferReturnedOnce(allocator);
+    }
+
+    [Fact]
+    public void Vp8LEncoder_OutOfMemoryAtAnyAllocation_ReturnsEachBufferOnce()
+    {
+        // Best quality at quality 100 tries every crunch config, so later failures also hit
+        // the transform buffers that replace the ones of an earlier config.
+        using Image<Rgba32> image = CreateNoisyImage(32, 24);
+        bool completed = false;
+        for (int allowed = 0; !completed; allowed++)
+        {
+            var allocator = new FailingAllocator();
+            allocator.EnableNonThreadSafeLogging();
+            using var memStream = new MemoryStream();
+            try
+            {
+                using var encoder = new Vp8LEncoder(allocator, Configuration.Default, image.Width, image.Height, 100, WebpEncodingMethod.BestQuality, WebpTransparentColorMode.Clear, false, 100);
+                allocator.AllocationsBeforeFailure = allowed;
+                encoder.Encode(image, memStream);
+                completed = true;
+            }
+            catch (OutOfMemoryException)
+            {
+            }
+
+            AssertEachBufferReturnedOnce(allocator);
+        }
+    }
+
+    [Theory]
+    [ValidateDisposedMemoryAllocations]
+    [InlineData(WebpFileFormatType.Lossless, WebpEncodingMethod.Default, 75, false)]
+    [InlineData(WebpFileFormatType.Lossless, WebpEncodingMethod.BestQuality, 100, false)]
+    [InlineData(WebpFileFormatType.Lossless, WebpEncodingMethod.Default, 75, true)]
+    [InlineData(WebpFileFormatType.Lossy, WebpEncodingMethod.Default, 75, false)]
+    public void Encode_WithNoisyImage_ReturnsBuffers(WebpFileFormatType fileFormat, WebpEncodingMethod method, int quality, bool nearLossless)
+    {
+        using Image<Rgba32> image = CreateNoisyImage(32, 24);
+        var encoder = new WebpEncoder()
+        {
+            FileFormat = fileFormat,
+            Method = method,
+            Quality = quality,
+            NearLossless = nearLossless,
+            NearLosslessQuality = 60
+        };
+        using var memStream = new MemoryStream();
+
+        image.SaveAsWebp(memStream, encoder);
+    }
+
+    private static Image<Rgba32> CreateNoisyImage(int width, int height)
+    {
+        var image = new Image<Rgba32>(width, height);
+        var random = new Random(42);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                random.NextBytes(MemoryMarshal.AsBytes(accessor.GetRowSpan(y)));
+            }
+        });
+
+        return image;
+    }
+
+    private static void AssertEachBufferReturnedOnce(TestMemoryAllocator allocator)
+    {
+        int[] allocated = allocator.AllocationLog.Select(a => a.HashCodeOfBuffer).OrderBy(h => h).ToArray();
+        int[] returned = allocator.ReturnLog.Select(r => r.HashCodeOfBuffer).OrderBy(h => h).ToArray();
+        Assert.Equal(allocated, returned);
+    }
+
     private static ImageComparer GetComparer(int quality)
     {
         float tolerance = 0.01f; // ~1.0%
@@ -491,5 +600,26 @@ public class WebpEncoderTests
         }
 
         return ImageComparer.Tolerant(tolerance);
+    }
+
+    // Throws OutOfMemoryException once AllocationsBeforeFailure more allocations have been made.
+    private sealed class FailingAllocator : TestMemoryAllocator
+    {
+        public int AllocationsBeforeFailure { get; set; } = -1;
+
+        public override IMemoryOwner<T> Allocate<T>(int length, AllocationOptions options = AllocationOptions.None)
+        {
+            if (this.AllocationsBeforeFailure == 0)
+            {
+                throw new OutOfMemoryException();
+            }
+
+            if (this.AllocationsBeforeFailure > 0)
+            {
+                this.AllocationsBeforeFailure--;
+            }
+
+            return base.Allocate<T>(length, options);
+        }
     }
 }

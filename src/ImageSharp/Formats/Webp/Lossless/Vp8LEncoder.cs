@@ -1819,6 +1819,12 @@ internal class Vp8LEncoder : IDisposable
         int bgraScratchSize = this.UsePredictorTransform ? ((width + 1) * 2) + (((width * 2) + 4 - 1) / 4) : 0;
         int transformDataSize = this.UsePredictorTransform || this.UseCrossColorTransform ? LosslessUtils.SubSampleSize(width, this.TransformBits) * LosslessUtils.SubSampleSize(height, this.TransformBits) : 0;
 
+        // Each crunch config allocates new buffers, so return the previous ones first.
+        // Clear the fields so that Dispose does not return them again if an allocation below throws.
+        this.BgraScratch?.Dispose();
+        this.BgraScratch = null;
+        this.TransformData?.Dispose();
+        this.TransformData = null;
         this.BgraScratch = this.memoryAllocator.Allocate<uint>(bgraScratchSize);
         this.TransformData = this.memoryAllocator.Allocate<uint>(transformDataSize);
         this.CurrentWidth = width;
@@ -1840,9 +1846,9 @@ internal class Vp8LEncoder : IDisposable
     {
         this.Bgra.Dispose();
         this.EncodedData.Dispose();
-        this.BgraScratch.Dispose();
+        this.BgraScratch?.Dispose();
         this.Palette.Dispose();
-        this.TransformData.Dispose();
+        this.TransformData?.Dispose();
         this.HashChain.Dispose();
     }
 }
