@@ -249,7 +249,7 @@ public class BmpMetadataTests
     {
         // DCI-P3 primaries with a different gamma per channel. The reference is the profile Little CMS
         // builds from the same primaries, the D65 white and the same gammas (Icc/README.md).
-        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), P3Gammas);
         IccProfile expected = IccProfileFactoryTests.Load(TestImages.Icc.LittleCmsP3Gamma182224V4);
 
         using (Image<Rgba32> image = Image.Load<Rgba32>(bmp))
@@ -266,7 +266,7 @@ public class BmpMetadataTests
     public void Decode_V4CalibratedRgb_BuildsProfileFromEndpointsAndGamma()
     {
         // A V4 header carries the same color space fields as a V5 one.
-        byte[] bmp = CreateCalibratedBitmap(V4HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+        byte[] bmp = CreateCalibratedBitmap(V4HeaderSize, P3Endpoints(), P3Gammas);
 
         using Image<Rgba32> image = Image.Load<Rgba32>(bmp);
         IccProfileFactoryTests.AssertSameColour(
@@ -359,7 +359,7 @@ public class BmpMetadataTests
     [InlineData(0, IccRenderingIntent.Perceptual)] // Not set.
     public void Decode_V5CalibratedRgb_ProfileHasHeaderIntent(int bmpIntent, IccRenderingIntent expected)
     {
-        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 }, bmpIntent);
+        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), P3Gammas, bmpIntent);
 
         using Image<Rgba32> image = Image.Load<Rgba32>(bmp);
         Assert.Equal(expected, image.Metadata.IccProfile?.Header.RenderingIntent);
@@ -370,7 +370,7 @@ public class BmpMetadataTests
     [InlineData(V5HeaderSize)]
     public void Decode_CalibratedRgb_IgnoreMetadata_BuildsNoProfile(int headerSize)
     {
-        byte[] bmp = CreateCalibratedBitmap(headerSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+        byte[] bmp = CreateCalibratedBitmap(headerSize, P3Endpoints(), P3Gammas);
         var decoder = new BmpDecoder { IgnoreMetadata = true };
 
         using Image<Rgba32> image = Image.Load<Rgba32>(bmp, decoder);
@@ -426,6 +426,8 @@ public class BmpMetadataTests
     /// The CIEXYZ endpoints of the DCI-P3 primaries (0.680, 0.320), (0.265, 0.690), (0.150, 0.060), each
     /// scaled to its share of the D65 white's luminance, as an encoder that writes real XYZ values would.
     /// </summary>
+    private static readonly double[] P3Gammas = { 1.8, 2.2, 2.4 };
+
     private static double[] P3Endpoints()
     {
         (double X, double Y, double Lum)[] primaries = { (0.680, 0.320, 0.2290), (0.265, 0.690, 0.6917), (0.150, 0.060, 0.0793) };

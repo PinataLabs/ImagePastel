@@ -21,7 +21,8 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// Bradford adaptation to D50 and the colorants computed in single precision with double intermediates.
 /// </summary>
 /// <remarks>
-/// Invalid input throws <see cref="ArgumentException"/> with libjxl's message. The public
+/// Invalid input throws <see cref="ArgumentException"/> with libjxl's message and no parameter name, because
+/// the helpers that check it are not the methods the caller passed the white point or primaries to. The public
 /// <see cref="IccProfileFactory"/> lets it through; the JPEG XL decoder turns it into
 /// <see cref="InvalidImageContentException"/>.
 /// <para>
@@ -50,6 +51,9 @@ internal static class IccProfileBuilder
     /// (<see cref="IccConnectionSpace.D50"/>), so the colorants of a libjxl profile add up to a white
     /// about 4e-4 bluer than the one the PCS defines.
     /// </summary>
+    // The media white point libjxl writes for RGB profiles: the ICC D50.
+    private static readonly double[] IccD50MediaWhite = { 0.964203, 1.0, 0.824905 };
+
     public static readonly Vector3 LibjxlD50 = new(0.96422f, 1.0f, 0.82521f);
 
     // libjxl writes its text tags in en-US. Under invariant globalization that culture can be missing,
@@ -109,7 +113,7 @@ internal static class IccProfileBuilder
         }
         else
         {
-            tags.Add(Xyz(new[] { 0.964203, 1.0, 0.824905 }, IccProfileTag.MediaWhitePoint));
+            tags.Add(Xyz(IccD50MediaWhite, IccProfileTag.MediaWhitePoint));
 
             // Chromatic adaptation matrix (CreateICCChadMatrix).
             if (wy == 0)
@@ -235,7 +239,7 @@ internal static class IccProfileBuilder
         // Target Y = 1.
         if (Math.Abs(wy) < 1e-12)
         {
-            throw new ArgumentException("Y value is too small", "white");
+            throw new ArgumentException("Y value is too small");
         }
 
         float factor = (float)(1 / wy);
@@ -262,7 +266,7 @@ internal static class IccProfileBuilder
         // 1 / tiny float can still overflow
         if (!float.IsFinite(w[0]) || !float.IsFinite(w[2]))
         {
-            throw new ArgumentException("Invalid white point", "white");
+            throw new ArgumentException("Invalid white point");
         }
 
         float[] xyz = Mul3x3Vector(primariesInv, w);
@@ -287,7 +291,7 @@ internal static class IccProfileBuilder
         // 1 / tiny float can still overflow
         if (!float.IsFinite(w[0]) || !float.IsFinite(w[2]))
         {
-            throw new ArgumentException("Invalid white point", "white");
+            throw new ArgumentException("Invalid white point");
         }
 
         float[] w50 = { d50.X, d50.Y, d50.Z };
@@ -295,7 +299,7 @@ internal static class IccProfileBuilder
         float[] lms50 = Mul3x3Vector(Bradford, w50);
         if (lms[0] == 0 || lms[1] == 0 || lms[2] == 0)
         {
-            throw new ArgumentException("Invalid white point", "white");
+            throw new ArgumentException("Invalid white point");
         }
 
         float[,] a =
@@ -306,7 +310,7 @@ internal static class IccProfileBuilder
         };
         if (!float.IsFinite(a[0, 0]) || !float.IsFinite(a[1, 1]) || !float.IsFinite(a[2, 2]))
         {
-            throw new ArgumentException("Invalid white point", "white");
+            throw new ArgumentException("Invalid white point");
         }
 
         float[,] b = Mul3x3Matrix(a, Bradford);
@@ -325,7 +329,7 @@ internal static class IccProfileBuilder
         bool ok = wx >= 0 && wx <= 1 && wy > 0 && wy <= 1;
         if (!ok)
         {
-            throw new ArgumentException("Invalid white point", "white");
+            throw new ArgumentException("Invalid white point");
         }
     }
 
@@ -381,7 +385,7 @@ internal static class IccProfileBuilder
         double det = (m[0, 0] * temp[0, 0]) + (m[0, 1] * temp[1, 0]) + (m[0, 2] * temp[2, 0]);
         if (Math.Abs(det) < 1e-10)
         {
-            throw new ArgumentException("Matrix determinant is too close to 0", "primaries");
+            throw new ArgumentException("Matrix determinant is too close to 0");
         }
 
         double idet = 1.0 / det;

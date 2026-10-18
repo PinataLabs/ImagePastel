@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Numerics;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using Xunit;
 
 namespace SixLabors.ImageSharp.Tests;
 
@@ -101,18 +102,18 @@ internal static class IccTestDataTagDataEntry
     public static readonly IccCicpTagDataEntry Cicp_ValRec2100PqNarrow = new IccCicpTagDataEntry(9, 16, 9, 0);
     public static readonly byte[] Cicp_ArrRec2100PqNarrow = { 0x09, 0x10, 0x09, 0x00 };
 
-    public static readonly object[][] CicpTagDataEntryTestData =
+    public static readonly TheoryData<byte[], IccCicpTagDataEntry, uint> CicpTagDataEntryTestData = new()
     {
-        new object[] { Cicp_ArrSrgb, Cicp_ValSrgb, 12u },
-        new object[] { Cicp_ArrRec2100PqNarrow, Cicp_ValRec2100PqNarrow, 12u },
+        { Cicp_ArrSrgb, Cicp_ValSrgb, 12u },
+        { Cicp_ArrRec2100PqNarrow, Cicp_ValRec2100PqNarrow, 12u },
     };
 
     public static readonly IccColorantOrderTagDataEntry ColorantOrder_Val = new IccColorantOrderTagDataEntry(new byte[] { 0x00, 0x01, 0x02 });
     public static readonly byte[] ColorantOrder_Arr = ArrayHelper.Concat(IccTestDataPrimitives.UInt32_3, new byte[] { 0x00, 0x01, 0x02 });
 
-    public static readonly object[][] ColorantOrderTagDataEntryTestData =
+    public static readonly TheoryData<byte[], IccColorantOrderTagDataEntry> ColorantOrderTagDataEntryTestData = new()
     {
-        new object[] { ColorantOrder_Arr, ColorantOrder_Val },
+        { ColorantOrder_Arr, ColorantOrder_Val },
     };
 
     public static readonly IccColorantTableTagDataEntry ColorantTable_Val = new IccColorantTableTagDataEntry(

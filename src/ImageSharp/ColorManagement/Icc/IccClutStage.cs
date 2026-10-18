@@ -131,7 +131,7 @@ internal sealed class IccClutStage : IccStage
     {
         float v = Clamp(input);
         float[] t = this.table;
-        if (v == 1 || this.domain[0] == 0)
+        if (v >= 1 || this.domain[0] == 0)
         {
             int start = this.domain[0] * this.strides[0];
             for (int o = 0; o < this.outputs; o++)

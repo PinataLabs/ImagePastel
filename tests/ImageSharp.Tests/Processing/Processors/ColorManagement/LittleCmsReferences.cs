@@ -975,15 +975,15 @@ internal sealed class LittleCmsReference
     /// and W is <paramref name="alpha"/> when the input has fewer than four channels.
     /// </summary>
     public Vector4 ScaledInput(int row, float alpha)
-        => this.Scale(this.rows[row].AsSpan(0, this.InputChannels), alpha);
+        => Scale(this.rows[row].AsSpan(0, this.InputChannels), alpha);
 
     /// <summary>
     /// Gets the output of a row scaled to [0, 1], as <see cref="ScaledInput(int, float)"/> does.
     /// </summary>
     public Vector4 ScaledOutput(int row, float alpha)
-        => this.Scale(this.rows[row].AsSpan(this.InputChannels), alpha);
+        => Scale(this.rows[row].AsSpan(this.InputChannels), alpha);
 
-    private Vector4 Scale(ReadOnlySpan<float> values, float alpha)
+    private static Vector4 Scale(ReadOnlySpan<float> values, float alpha)
     {
         if (values.Length == 4)
         {

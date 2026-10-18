@@ -475,7 +475,7 @@ internal struct BmpInfoHeader
     {
         if (data.Length < SizeV5)
         {
-            throw new ArgumentException(nameof(data), $"Must be {SizeV5} bytes. Was {data.Length} bytes.");
+            throw new ArgumentException($"Must be {SizeV5} bytes. Was {data.Length} bytes.", nameof(data));
         }
 
         return MemoryMarshal.Cast<byte, BmpInfoHeader>(data)[0];
