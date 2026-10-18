@@ -202,6 +202,43 @@ public class JxlDecoderTests
         }
     }
 
+    [Fact]
+    public void Load_GreyscaleSqueeze_MatchesDjxl()
+    {
+        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, "greyscale_squeeze.jxl"));
+        using Image<L8> reference = Image.Load<L8>(GeneratedReferencePath("greyscale_squeeze"));
+
+        Image<L8> grey = Assert.IsType<Image<L8>>(image);
+        ImageComparer.Exact.VerifySimilarity(reference, grey);
+    }
+
+    [Fact]
+    public void Load_RgbaSqueeze_MatchesDjxl()
+    {
+        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, "rgba_squeeze.jxl"));
+        using Image<Rgba32> reference = Image.Load<Rgba32>(GeneratedReferencePath("rgba_squeeze"));
+
+        Image<Rgba32> rgba = Assert.IsType<Image<Rgba32>>(image);
+        ImageComparer.Exact.VerifySimilarity(reference, rgba);
+    }
+
+    [Fact]
+    public void DecodeToPlanes_GreyscaleSqueeze_MatchesDjxl()
+    {
+        using FileStream stream = File.OpenRead(Path.Combine(GeneratedDirectory, "greyscale_squeeze.jxl"));
+        using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using Image<L16> reference = Image.Load<L16>(GeneratedReferencePath("greyscale_squeeze"));
+
+        Assert.Equal(1, planes.Frames[0].Planes.Count);
+        for (int y = 0; y < reference.Height; y++)
+        {
+            for (int x = 0; x < reference.Width; x++)
+            {
+                Assert.Equal(reference[x, y].PackedValue, Quantize16(planes.Frames[0].Planes[0].DangerousGetRowSpan(y)[x]));
+            }
+        }
+    }
+
     [Theory]
     [InlineData("alpha_nonpremultiplied", 48)] // 12-bit RGB and alpha
     [InlineData("alpha_triangles", 36)] // 9-bit RGB and alpha
