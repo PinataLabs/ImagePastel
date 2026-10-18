@@ -41,6 +41,25 @@
     <None Include="..\..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
   </ItemGroup>
 
+  <!--
+    Code that used to come from T4 templates is written by gen/ImageSharp.SourceGenerators.
+    The generated files are under artifacts/obj/src/ImageSharp/<configuration>/<tfm>/generated/.
+  -->
+  <PropertyGroup>
+    <ImageSharpGeneratedSources>Library</ImageSharpGeneratedSources>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <!-- ci-apicompat.ps1 renames the library with a global AssemblyName; the generator keeps its own. -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="ImageSharpGeneratedSources" />
+    <ProjectReference Include="..\..\gen\ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      GlobalPropertiesToRemove="AssemblyName" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
     <PackageReference Include="System.Text.Encoding.CodePages" />
@@ -132,16 +151,6 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>PorterDuffFunctions.Generated.tt</DependentUpon>
     </Compile>
-    <Compile Update="Formats\ImageExtensions.Save.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ImageExtensions.Save.tt</DependentUpon>
-    </Compile>
-    <Compile Update="Common\SharedInfrastructure\Guard.Numeric.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Guard.Numeric.tt</DependentUpon>
-    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -212,14 +221,6 @@
     <None Update="PixelFormats\PixelBlenders\DefaultPixelBlenders.Generated.tt">
       <LastGenOutput>DefaultPixelBlenders.Generated.cs</LastGenOutput>
       <Generator>TextTemplatingFileGenerator</Generator>
-    </None>
-    <None Update="Formats\ImageExtensions.Save.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>ImageExtensions.Save.cs</LastGenOutput>
-    </None>
-    <None Update="Common\SharedInfrastructure\Guard.Numeric.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Guard.Numeric.cs</LastGenOutput>
     </None>
   </ItemGroup>
 

@@ -4,6 +4,7 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using SixLabors.ImageSharp.SourceGenerators.Library;
 
 namespace SixLabors.ImageSharp.SourceGenerators;
 
@@ -22,7 +23,11 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
-    private static readonly IEmitter[] LibraryEmitters = [];
+    private static readonly IEmitter[] LibraryEmitters =
+    [
+        new GuardNumericEmitter(),
+        new ImageExtensionsSaveEmitter(),
+    ];
 
     private static readonly IEmitter[] TestsEmitters = [];
 
