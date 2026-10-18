@@ -1010,4 +1010,21 @@ public static class TestImages
         public const string RgbPlainNormalized = "Pbm/rgb_plain_normalized.ppm";
         public const string RgbPlainMagick = "Pbm/rgb_plain_magick.ppm";
     }
+
+    /// <summary>
+    /// ICC profiles. Sources and licences are listed in Icc/README.md.
+    /// </summary>
+    public static class Icc
+    {
+        public const string LittleCmsSrgbV4 = "Icc/LittleCms/sRGB-v4.icc";
+        public const string LittleCmsSrgbV2 = "Icc/LittleCms/sRGB-v2.icc";
+        public const string LittleCmsGray22V4 = "Icc/LittleCms/Gray22-v4.icc";
+        public const string QcmsSrgb = "Icc/qcms/sRGB_lcms.icc";
+        public const string QcmsRec709 = "Icc/qcms/ITU-709.icc";
+        public const string QcmsRec2020 = "Icc/qcms/ITU-2020.icc";
+        public const string CompactDisplayP3V4 = "Icc/CompactIcc/DisplayP3-v4.icc";
+        public const string CompactAdobeRgbV2 = "Icc/CompactIcc/AdobeCompat-v2.icc";
+        public const string CompactGrayV4 = "Icc/CompactIcc/sGrey-v4.icc";
+        public const string CompactSrgbV2Micro = "Icc/CompactIcc/sRGB-v2-micro.icc";
+    }
 }
