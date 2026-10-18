@@ -258,6 +258,62 @@ public class PaletteQuantizerTests
         Assert.True(managedBytes < 64 * 1024, $"Lookups allocated {managedBytes} managed bytes.");
     }
 
+    [Fact]
+    public void PixelMapRejectsEmptyPalette()
+    {
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new EuclideanPixelMap<Rgba32>(Configuration.Default, ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void PixelMapClearRejectsEmptyPalette()
+    {
+        Rgba32[] palette = { Color.Red.ToPixel<Rgba32>(), Color.Blue.ToPixel<Rgba32>() };
+        using var map = new EuclideanPixelMap<Rgba32>(Configuration.Default, palette);
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => map.Clear(ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+
+        // The map keeps its previous palette.
+        Assert.Equal(1, map.GetClosestColor(Color.Navy.ToPixel<Rgba32>(), out Rgba32 match));
+        Assert.Equal(palette[1], match);
+    }
+
+    [Fact]
+    public void PixelSpecificPaletteQuantizerRejectsEmptyPalette()
+    {
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new PaletteQuantizer<Rgba32>(Configuration.Default, new QuantizerOptions(), ReadOnlyMemory<Rgba32>.Empty));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void QuantizeRejectsEmptyPalette()
+    {
+        using var image = new Image<Rgba32>(4, 4, Color.Red.ToPixel<Rgba32>());
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => image.Mutate(x => x.Quantize(new PaletteQuantizer(ReadOnlyMemory<Color>.Empty))));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
+    [Fact]
+    public void DitherRejectsEmptyPalette()
+    {
+        using var image = new Image<Rgba32>(4, 4, Color.Red.ToPixel<Rgba32>());
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => image.Mutate(x => x.Dither(KnownDitherings.FloydSteinberg, ReadOnlyMemory<Color>.Empty)));
+
+        Assert.Equal("palette", ex.ParamName);
+    }
+
     [Theory]
     [InlineData(nameof(KnownDitherings.FloydSteinberg))]
     [InlineData(nameof(KnownDitherings.Atkinson))]
