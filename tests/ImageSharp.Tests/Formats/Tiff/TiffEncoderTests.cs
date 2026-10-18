@@ -664,6 +664,152 @@ public class TiffEncoderTests : TiffEncoderBaseTester
     }
 
     [Theory]
+    [WithFile(CcittFax3LowerOrderBitsFirst, PixelTypes.Rgba32)]
+    [WithFile(Fax4CompressedLowerOrderBitsFirst, PixelTypes.Rgba32)]
+    [WithFile(HuffmanRleLowerOrderBitsFirst, PixelTypes.Rgba32)]
+    public void TiffEncoder_WithMetadataFromDecodedTiff_DoesNotCopyFillOrder<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        // arrange
+        using Image<TPixel> input = provider.GetImage(new TiffDecoder());
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder());
+
+        // assert
+        Dictionary<ExifTagValue, ExifDataType> fieldTypes = ReadFirstIfdFieldTypes(memStream.ToArray());
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.FillOrder), "The strips are written most significant bit first, but FillOrder is copied from the source.");
+        AssertBaselineFieldTypes(fieldTypes);
+        memStream.Position = 0;
+        using var output = Image.Load<TPixel>(memStream);
+        ImageComparer.Exact.VerifySimilarity(input, output);
+    }
+
+    [Theory]
+    [WithFile(FlowerYCbCr888Contiguoush2v2, PixelTypes.Rgba32)]
+    [WithFile(YCbCrJpegCompressed, PixelTypes.Rgba32)]
+    public void TiffEncoder_WithMetadataFromDecodedYCbCrTiff_DoesNotCopyYCbCrOrJpegTags<TPixel>(TestImageProvider<TPixel> provider)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        // arrange
+        using Image<TPixel> input = provider.GetImage(new TiffDecoder());
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder());
+
+        // assert
+        Dictionary<ExifTagValue, ExifDataType> fieldTypes = ReadFirstIfdFieldTypes(memStream.ToArray());
+        Assert.Equal((int)TiffPhotometricInterpretation.Rgb, ReadFirstIfdValue(memStream.ToArray(), ExifTagValue.PhotometricInterpretation));
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.YCbCrSubsampling), "YCbCrSubsampling is copied to RGB data.");
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.YCbCrCoefficients), "YCbCrCoefficients is copied to RGB data.");
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.YCbCrPositioning), "YCbCrPositioning is copied to RGB data.");
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.ReferenceBlackWhite), "ReferenceBlackWhite is copied to full-range data.");
+        Assert.False(fieldTypes.ContainsKey(ExifTagValue.JPEGTables), "JPEGTables is copied from the source.");
+    }
+
+    [Fact]
+    public void TiffEncoder_WithImageDataTagsInExifProfile_WritesOnlyTheTagsOfTheWrittenData()
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRoundTripInput(TiffBitsPerPixel.Bit24, TiffPhotometricInterpretation.Rgb);
+        var exifProfile = new ExifProfile();
+        exifProfile.SetValue(ExifTag.FillOrder, (ushort)2);
+        exifProfile.SetValue(ExifTag.T4Options, 1u);
+        exifProfile.SetValue(ExifTag.TileWidth, 16);
+        exifProfile.SetValue(ExifTag.TileLength, 16);
+        exifProfile.SetValue(ExifTag.TileOffsets, new uint[] { 8, 16 });
+        exifProfile.SetValue(ExifTag.TileByteCounts, new Number[] { 8, 8 });
+        exifProfile.SetValue(ExifTag.StripRowCounts, new uint[] { 16 });
+        exifProfile.SetValue(ExifTag.ExtraSamples, new ushort[] { 2 });
+        exifProfile.SetValue(ExifTag.SampleFormat, new ushort[] { 3, 3, 3 });
+        exifProfile.SetValue(ExifTag.SMinSampleValue, new uint[] { 0, 0, 0 });
+        exifProfile.SetValue(ExifTag.ColorMap, new ushort[6]);
+        exifProfile.SetValue(ExifTag.TransferFunction, new ushort[6]);
+        exifProfile.SetValue(ExifTag.YCbCrSubsampling, new ushort[] { 2, 2 });
+        exifProfile.SetValue(ExifTag.ReferenceBlackWhite, new Rational[] { new(0), new(255), new(128), new(255), new(128), new(255) });
+        exifProfile.SetValue(ExifTag.JPEGTables, new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 });
+        exifProfile.SetValue(ExifTag.FreeOffsets, new uint[] { 8 });
+        exifProfile.SetValue(ExifTag.InkNames, "Cyan");
+        exifProfile.SetValue(ExifTag.CFARepeatPatternDim, new ushort[] { 2, 2 });
+        exifProfile.SetValue(ExifTag.CodingMethods, 2u);
+        exifProfile.SetValue(ExifTag.DefaultImageColor, new ushort[] { 255, 255, 255 });
+        exifProfile.SetValue(ExifTag.Predictor, (ushort)TiffPredictor.Horizontal);
+        exifProfile.SetValue(ExifTag.Compression, (ushort)TiffCompression.Lzw);
+        exifProfile.SetValue(ExifTag.PlanarConfiguration, (ushort)TiffPlanarConfiguration.Planar);
+        exifProfile.SetValue(ExifTag.SamplesPerPixel, (ushort)4);
+        exifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+        exifProfile.SetValue(ExifTag.ImageDescription, "Image description");
+        input.Frames.RootFrame.Metadata.ExifProfile = exifProfile;
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder());
+
+        // assert
+        byte[] tiff = memStream.ToArray();
+        Dictionary<ExifTagValue, ExifDataType> fieldTypes = ReadFirstIfdFieldTypes(tiff);
+        ExifTagValue[] imageDataTags =
+        {
+            ExifTagValue.FillOrder, ExifTagValue.T4Options, ExifTagValue.TileWidth, ExifTagValue.TileLength, ExifTagValue.TileOffsets,
+            ExifTagValue.TileByteCounts, ExifTagValue.StripRowCounts, ExifTagValue.ExtraSamples, ExifTagValue.SampleFormat,
+            ExifTagValue.SMinSampleValue, ExifTagValue.ColorMap, ExifTagValue.TransferFunction, ExifTagValue.YCbCrSubsampling,
+            ExifTagValue.ReferenceBlackWhite, ExifTagValue.JPEGTables, ExifTagValue.FreeOffsets, ExifTagValue.InkNames,
+            ExifTagValue.CFARepeatPatternDim, ExifTagValue.CodingMethods, ExifTagValue.DefaultImageColor, ExifTagValue.Predictor
+        };
+        foreach (ExifTagValue tag in imageDataTags)
+        {
+            Assert.False(fieldTypes.ContainsKey(tag), $"Tag {tag} is copied from the source profile.");
+        }
+
+        Assert.Equal((int)TiffCompression.None, ReadFirstIfdValue(tiff, ExifTagValue.Compression));
+        Assert.Equal((int)TiffPlanarConfiguration.Chunky, ReadFirstIfdValue(tiff, ExifTagValue.PlanarConfiguration));
+        Assert.Equal(3, ReadFirstIfdValue(tiff, ExifTagValue.SamplesPerPixel));
+        Assert.Equal(6, ReadFirstIfdValue(tiff, ExifTagValue.Orientation));
+        Assert.True(fieldTypes.ContainsKey(ExifTagValue.ImageDescription));
+        AssertBaselineFieldTypes(fieldTypes);
+
+        memStream.Position = 0;
+        using var output = Image.Load<Rgba32>(memStream);
+        ImageComparer.Exact.VerifySimilarity(input, output);
+    }
+
+    [Fact]
+    public void TiffEncoder_WithBigTiffFieldTypesInExifProfile_WritesOnlyClassicTiffFieldTypes()
+    {
+        // arrange
+        using var input = new Image<Rgba32>(4, 4);
+        var values = new List<IExifValue>();
+        foreach ((ExifTagValue tag, ExifDataType dataType, object value) in new (ExifTagValue, ExifDataType, object)[]
+        {
+            ((ExifTagValue)0xdd01, ExifDataType.Long8, 1UL),
+            ((ExifTagValue)0xdd02, ExifDataType.SignedLong8, -1L),
+            ((ExifTagValue)0xdd03, ExifDataType.Long, 1U),
+        })
+        {
+            ExifValue exifValue = ExifValues.Create(tag, dataType, false);
+            Assert.True(exifValue.TrySetValue(value));
+            values.Add(exifValue);
+        }
+
+        input.Frames.RootFrame.Metadata.ExifProfile = new ExifProfile(values, Array.Empty<ExifTag>());
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder());
+
+        // assert
+        Dictionary<ExifTagValue, ExifDataType> fieldTypes = ReadFirstIfdFieldTypes(memStream.ToArray());
+        foreach (KeyValuePair<ExifTagValue, ExifDataType> entry in fieldTypes)
+        {
+            Assert.True(entry.Value <= ExifDataType.Ifd, $"Tag {entry.Key} has field type {entry.Value}, which only BigTIFF defines.");
+        }
+
+        Assert.Equal(ExifDataType.Long, fieldTypes[(ExifTagValue)0xdd03]);
+    }
+
+    [Theory]
     [WithFile(SampleMetadata, PixelTypes.Rgba32)]
     public void TiffEncoder_WithMetadataFromDecodedTiff_WritesEachTagOnceWithSpecFieldTypes<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel>
