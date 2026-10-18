@@ -34,7 +34,10 @@ public class IccDataWriterTagDataEntryTests
     }
 
     [Theory]
-    [MemberData(nameof(IccTestDataTagDataEntry.CicpTagDataEntryTestData), MemberType = typeof(IccTestDataTagDataEntry))]
+    [MemberData(
+        nameof(IccTestDataTagDataEntry.CicpTagDataEntryTestData),
+        MemberType = typeof(IccTestDataTagDataEntry),
+        DisableDiscoveryEnumeration = true)]
     internal void WriteCicpTagDataEntry(byte[] expected, IccCicpTagDataEntry data, uint size)
     {
         using IccDataWriter writer = CreateWriter();
@@ -59,7 +62,10 @@ public class IccDataWriterTagDataEntryTests
     }
 
     [Theory]
-    [MemberData(nameof(IccTestDataTagDataEntry.ColorantOrderTagDataEntryTestData), MemberType = typeof(IccTestDataTagDataEntry))]
+    [MemberData(
+        nameof(IccTestDataTagDataEntry.ColorantOrderTagDataEntryTestData),
+        MemberType = typeof(IccTestDataTagDataEntry),
+        DisableDiscoveryEnumeration = true)]
     internal void WriteColorantOrderTagDataEntry(byte[] expected, IccColorantOrderTagDataEntry data)
     {
         using IccDataWriter writer = CreateWriter();

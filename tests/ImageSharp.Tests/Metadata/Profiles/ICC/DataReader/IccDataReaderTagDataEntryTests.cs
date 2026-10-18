@@ -38,7 +38,8 @@ public class IccDataReaderTagDataEntryTests
     [Theory]
     [MemberData(
         nameof(IccTestDataTagDataEntry.CicpTagDataEntryTestData),
-        MemberType = typeof(IccTestDataTagDataEntry))]
+        MemberType = typeof(IccTestDataTagDataEntry),
+        DisableDiscoveryEnumeration = true)]
     internal void ReadCicpTagDataEntry(byte[] data, IccCicpTagDataEntry expected, uint size)
     {
         IccDataReader reader = CreateReader(data);
@@ -68,7 +69,8 @@ public class IccDataReaderTagDataEntryTests
     [Theory]
     [MemberData(
         nameof(IccTestDataTagDataEntry.ColorantOrderTagDataEntryTestData),
-        MemberType = typeof(IccTestDataTagDataEntry))]
+        MemberType = typeof(IccTestDataTagDataEntry),
+        DisableDiscoveryEnumeration = true)]
     internal void ReadColorantOrderTagDataEntry(byte[] data, IccColorantOrderTagDataEntry expected)
     {
         IccDataReader reader = CreateReader(data);
