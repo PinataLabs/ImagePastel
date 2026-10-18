@@ -1,10 +1,10 @@
-# PinataLabs.ImageSharp
+# PinataLabs.ImagePastel
 
 [![CI](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImageSharp.svg)](https://www.nuget.org/packages/PinataLabs.ImageSharp/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE)
 
-PinataLabs.ImageSharp is a fully managed, cross-platform 2D graphics library for .NET.
+PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
 
 > [!IMPORTANT]
@@ -53,7 +53,7 @@ The package does not support .NET Framework.
 
 ## Differences from SixLabors.ImageSharp 2.1.13
 
-- The package ID and the assembly name are `PinataLabs.ImageSharp`.
+- The package ID and the assembly name are `PinataLabs.ImagePastel`.
 - The strong-name key is different. The public key token is `4ebeb91ace1f6a56`.
 - The package targets `net10.0` and `netstandard2.1` only.
 - The dependencies are current versions.
