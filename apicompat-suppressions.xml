@@ -54,4 +54,13 @@
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:SixLabors.ImageSharp.Processing.Processors.ColorManagement.ConvertColorProfileProcessor</Target>
   </Suppression>
+  <!-- Additions: built standard ICC profiles (factory and tone curves), #180. -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.ColorManagement.IccProfileFactory</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.ColorManagement.IccToneCurve</Target>
+  </Suppression>
 </Suppressions>
