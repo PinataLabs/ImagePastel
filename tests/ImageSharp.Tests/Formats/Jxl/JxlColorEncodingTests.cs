@@ -173,31 +173,15 @@ public class JxlColorEncodingTests
         Assert.Equal(expected.Header.Class, actual.Header.Class);
         Assert.Equal(expected.Header.RenderingIntent, actual.Header.RenderingIntent);
 
-        // IccReader gives tags that share their data one entry, with the signature of the last of them,
-        // so the tone curves are compared as curves rather than by tag.
-        IccParametricCurve expectedCurve = Assert.Single(expected.Entries.OfType<IccParametricCurveTagDataEntry>().Distinct()).Curve;
-        foreach (IccParametricCurveTagDataEntry entry in actual.Entries.OfType<IccParametricCurveTagDataEntry>())
+        foreach (IccProfileTag tag in ColourTags)
         {
-            Assert.Equal(expectedCurve.Type, entry.Curve.Type);
-            AssertClose(entry.TagSignature, new[] { expectedCurve.G, expectedCurve.A, expectedCurve.B, expectedCurve.C, expectedCurve.D }, new[] { entry.Curve.G, entry.Curve.A, entry.Curve.B, entry.Curve.C, entry.Curve.D });
-        }
-
-        IccProfileTag[] channelCurves = expected.Header.DataColorSpace == IccColorSpaceType.Gray
-            ? new[] { IccProfileTag.GrayTrc }
-            : new[] { IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc };
-        Assert.All(actual.Entries.OfType<IccParametricCurveTagDataEntry>(), e => Assert.Contains(e.TagSignature, channelCurves));
-
-        foreach (IccProfileTag tag in ColourTags.Except(new[] { IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc, IccProfileTag.GrayTrc }))
-        {
-            IccTagDataEntry e = expected.Entries.FirstOrDefault(t => t.TagSignature == tag);
-            IccTagDataEntry a = actual.Entries.FirstOrDefault(t => t.TagSignature == tag);
-            if (e == null)
+            if (!expected.TryGetTag(tag, out IccTagDataEntry e))
             {
-                Assert.Null(a);
+                Assert.False(actual.TryGetTag(tag, out IccTagDataEntry _), $"The built profile has an unexpected {tag} tag.");
                 continue;
             }
 
-            Assert.True(a != null, $"The built profile has no {tag} tag.");
+            Assert.True(actual.TryGetTag(tag, out IccTagDataEntry a), $"The built profile has no {tag} tag.");
             switch (e)
             {
                 case IccXyzTagDataEntry xyz:
