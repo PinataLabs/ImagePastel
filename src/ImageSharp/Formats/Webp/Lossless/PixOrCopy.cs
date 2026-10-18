@@ -6,7 +6,7 @@ using System.Diagnostics;
 namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
 
 [DebuggerDisplay("Mode: {Mode}, Len: {Len}, BgraOrDistance: {BgraOrDistance}")]
-internal sealed class PixOrCopy
+internal struct PixOrCopy
 {
     public PixOrCopyMode Mode { get; set; }
 

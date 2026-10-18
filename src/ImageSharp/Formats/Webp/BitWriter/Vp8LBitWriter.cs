@@ -243,8 +243,13 @@ internal class Vp8LBitWriter : BitWriterBase
     /// <param name="extraSize">The extra size in bytes needed.</param>
     public override void BitWriterResize(int extraSize)
     {
-        int maxBytes = this.Buffer.Length + this.Buffer.Length;
         int sizeRequired = this.cur + extraSize;
+        if (sizeRequired <= this.Buffer.Length)
+        {
+            return;
+        }
+
+        int maxBytes = this.Buffer.Length + this.Buffer.Length;
         this.ResizeBuffer(maxBytes, sizeRequired);
     }
 }

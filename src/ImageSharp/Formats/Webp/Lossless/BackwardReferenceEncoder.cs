@@ -3,7 +3,6 @@
 
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
@@ -146,9 +145,8 @@ internal static class BackwardReferenceEncoder
         }
 
         // Find the cacheBits giving the lowest entropy.
-        for (int idx = 0; idx < refs.Refs.Count; idx++)
+        foreach (PixOrCopy v in refs.Refs)
         {
-            PixOrCopy v = refs.Refs[idx];
             if (v.IsLiteral())
             {
                 uint pix = bgra[pos++];
@@ -384,7 +382,7 @@ internal static class BackwardReferenceEncoder
             colorCache.Init(cacheBits);
         }
 
-        backwardRefs.Refs.Clear();
+        backwardRefs.Clear();
         for (int ix = 0; ix < chosenPathSize; ix++)
         {
             int len = chosenPath[ix];
@@ -476,7 +474,7 @@ internal static class BackwardReferenceEncoder
             colorCache.Init(cacheBits);
         }
 
-        refs.Refs.Clear();
+        refs.Clear();
         for (int i = 0; i < pixCount;)
         {
             // Alternative #1: Code the pixels starting at 'i' using backward reference.
@@ -733,7 +731,7 @@ internal static class BackwardReferenceEncoder
             colorCache.Init(cacheBits);
         }
 
-        refs.Refs.Clear();
+        refs.Clear();
 
         // Add first pixel as literal.
         AddSingleLiteral(bgra[0], useColorCache, colorCache, refs);
@@ -780,9 +778,8 @@ internal static class BackwardReferenceEncoder
         int pixelIndex = 0;
         var colorCache = new ColorCache();
         colorCache.Init(cacheBits);
-        for (int idx = 0; idx < refs.Refs.Count; idx++)
+        foreach (ref PixOrCopy v in refs.Refs)
         {
-            PixOrCopy v = refs.Refs[idx];
             if (v.IsLiteral())
             {
                 uint bgraLiteral = v.BgraOrDistance;
@@ -814,14 +811,13 @@ internal static class BackwardReferenceEncoder
 
     private static void BackwardReferences2DLocality(int xSize, Vp8LBackwardRefs refs)
     {
-        using List<PixOrCopy>.Enumerator c = refs.Refs.GetEnumerator();
-        while (c.MoveNext())
+        foreach (ref PixOrCopy v in refs.Refs)
         {
-            if (c.Current.IsCopy())
+            if (v.IsCopy())
             {
-                int dist = (int)c.Current.BgraOrDistance;
+                int dist = (int)v.BgraOrDistance;
                 int transformedDist = DistanceToPlaneCode(xSize, dist);
-                c.Current.BgraOrDistance = (uint)transformedDist;
+                v.BgraOrDistance = (uint)transformedDist;
             }
         }
     }

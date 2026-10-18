@@ -67,7 +67,7 @@ public class Vp8LHistogramTests
         // All remaining values are expected to be zero.
         literals.AsSpan().CopyTo(expectedLiterals);
 
-        var backwardRefs = new Vp8LBackwardRefs(pixelData.Length);
+        using var backwardRefs = new Vp8LBackwardRefs(Configuration.Default.MemoryAllocator, pixelData.Length);
         for (int i = 0; i < pixelData.Length; i++)
         {
             backwardRefs.Add(new PixOrCopy()

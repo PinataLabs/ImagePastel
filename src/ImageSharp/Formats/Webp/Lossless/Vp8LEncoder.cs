@@ -135,7 +135,7 @@ internal class Vp8LEncoder : IDisposable
         int refsBlockSize = ((pixelCount - 1) / MaxRefsBlockPerImage) + 1;
         for (int i = 0; i < this.Refs.Length; i++)
         {
-            this.Refs[i] = new Vp8LBackwardRefs(pixelCount)
+            this.Refs[i] = new Vp8LBackwardRefs(memoryAllocator, pixelCount)
             {
                 BlockSize = refsBlockSize < MinBlockSize ? MinBlockSize : refsBlockSize
             };
@@ -1015,10 +1015,8 @@ internal class Vp8LEncoder : IDisposable
         int tileY = y & tileMask;
         int histogramIx = histogramSymbols[0];
         Span<HuffmanTreeCode> codes = huffmanCodes.AsSpan(5 * histogramIx);
-        using List<PixOrCopy>.Enumerator c = backwardRefs.Refs.GetEnumerator();
-        while (c.MoveNext())
+        foreach (PixOrCopy v in backwardRefs.Refs)
         {
-            PixOrCopy v = c.Current;
             if (tileX != (x & tileMask) || tileY != (y & tileMask))
             {
                 tileX = x & tileMask;
@@ -1831,7 +1829,7 @@ internal class Vp8LEncoder : IDisposable
     {
         for (int i = 0; i < this.Refs.Length; i++)
         {
-            this.Refs[i].Refs.Clear();
+            this.Refs[i].Clear();
         }
     }
 
@@ -1844,5 +1842,10 @@ internal class Vp8LEncoder : IDisposable
         this.Palette.Dispose();
         this.TransformData.Dispose();
         this.HashChain.Dispose();
+
+        foreach (Vp8LBackwardRefs refs in this.Refs)
+        {
+            refs.Dispose();
+        }
     }
 }

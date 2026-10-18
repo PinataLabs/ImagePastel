@@ -35,12 +35,11 @@ internal class CostModel
     public void Build(int xSize, int cacheBits, Vp8LBackwardRefs backwardRefs)
     {
         var histogram = new Vp8LHistogram(cacheBits);
-        using System.Collections.Generic.List<PixOrCopy>.Enumerator refsEnumerator = backwardRefs.Refs.GetEnumerator();
 
         // The following code is similar to HistogramCreate but converts the distance to plane code.
-        while (refsEnumerator.MoveNext())
+        foreach (PixOrCopy v in backwardRefs.Refs)
         {
-            histogram.AddSinglePixOrCopy(refsEnumerator.Current, true, xSize);
+            histogram.AddSinglePixOrCopy(v, true, xSize);
         }
 
         ConvertPopulationCountTableToBitEstimates(histogram.NumCodes(), histogram.Literal, this.Literal);

@@ -102,10 +102,8 @@ internal class HistogramEncoder
     {
         int x = 0, y = 0;
         int histoXSize = LosslessUtils.SubSampleSize(xSize, histoBits);
-        using List<PixOrCopy>.Enumerator backwardRefsEnumerator = backwardRefs.Refs.GetEnumerator();
-        while (backwardRefsEnumerator.MoveNext())
+        foreach (PixOrCopy v in backwardRefs.Refs)
         {
-            PixOrCopy v = backwardRefsEnumerator.Current;
             int ix = ((y >> histoBits) * histoXSize) + (x >> histoBits);
             histograms[ix].AddSinglePixOrCopy(v, false);
             x += v.Len;
@@ -168,7 +166,8 @@ internal class HistogramEncoder
             }
             else
             {
-                histograms[i] = (Vp8LHistogram)origHistogram.DeepClone();
+                // The caller allocates a histogram for every tile, so copy into it.
+                origHistogram.CopyTo(histograms[i]);
                 histogramSymbols[i] = (ushort)clusterId++;
             }
         }
