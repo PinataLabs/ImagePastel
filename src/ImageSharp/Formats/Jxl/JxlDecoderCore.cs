@@ -35,6 +35,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     private const int MaxExtraChannels = 256;
 
     private readonly bool ignoreMetadata;
+    private readonly uint maxFrames;
 
     private JxlCodecMetadata metadata;
 
@@ -59,6 +60,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         this.Configuration = configuration;
         this.ignoreMetadata = options.IgnoreMetadata;
+        this.maxFrames = options.MaxFrames;
     }
 
     /// <inheritdoc/>
@@ -224,11 +226,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // frame's sections end, until the last one. Frames are coalesced, as djxl does by default, so only
     // the displayed frames reach the sink. Returns the header of each displayed frame, which libjxl
     // reports with JXL_DEC_FRAME.
+    //
+    // MaxFrames has no libjxl counterpart. As in the GIF decoder, the loop stops once that many frames
+    // are displayed, so a value of 0 never matches and every frame is decoded. The frames after the
+    // last one decoded are not read at all.
     private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         using JxlReferenceFrames references = new();
         JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
         List<JxlFrameHeader> displayed = new();
+        uint frameCount = 0;
         JxlFrameHeader frameHeader;
         do
         {
@@ -237,6 +244,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             if (JxlFrameDecoder.IsLastOfStill(frameHeader))
             {
                 displayed.Add(frameHeader);
+                if (++frameCount == this.maxFrames)
+                {
+                    break;
+                }
             }
         }
         while (!frameHeader.IsLast);

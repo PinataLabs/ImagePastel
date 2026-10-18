@@ -20,6 +20,12 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
     /// </summary>
     public bool IgnoreMetadata { get; set; }
 
+    /// <summary>
+    /// Gets or sets the maximum number of displayed frames to decode. Decoding stops once that many
+    /// frames are out; the default decodes them all.
+    /// </summary>
+    public uint MaxFrames { get; set; } = uint.MaxValue;
+
     /// <inheritdoc/>
     /// <remarks>
     /// A frame over the 2^28-pixel cap throws <see cref="InvalidMemoryOperationException"/>. This bypasses

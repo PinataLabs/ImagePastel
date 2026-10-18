@@ -118,6 +118,41 @@ public class JxlAnimationTests
         Assert.Equal(new uint[] { 0 }, Durations(image));
     }
 
+    [Fact]
+    public void Decoder_MaxFrames_DefaultsToAllFrames() => Assert.Equal(uint.MaxValue, new JxlDecoder().MaxFrames);
+
+    [Theory]
+    [InlineData(1u, new uint[] { 300 })]
+    [InlineData(2u, new uint[] { 300, 100 })]
+    [InlineData(4u, new uint[] { 300, 100, 300, 100 })]
+    [InlineData(5u, new uint[] { 300, 100, 300, 100 })]
+    [InlineData(uint.MaxValue, new uint[] { 300, 100, 300, 100 })]
+    public void Load_MaxFrames_StopsAfterThatManyDisplayedFrames(uint maxFrames, uint[] durations)
+    {
+        string path = Path.Combine(BlendingDirectory, "cropped_traffic_light.jxl");
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), path, new JxlDecoder { MaxFrames = maxFrames });
+
+        Assert.Equal(durations, Durations(image));
+        for (int i = 0; i < image.Frames.Count; i++)
+        {
+            using Image<Rgba32> expected = Image.Load<Rgba32>(Path.Combine(BlendingDirectory, $"cropped_traffic_light_frame-{i}.png"));
+            using Image<Rgba32> frame = image.Frames.CloneFrame(i);
+            ImageComparer.Exact.VerifySimilarity(expected, frame);
+        }
+    }
+
+    [Fact]
+    public async Task DecodeToPlanes_MaxFrames_StopsAfterThatManyDisplayedFrames()
+    {
+        JxlConformanceVector vector = JxlConformanceVector.Load("animation_newtons_cradle");
+        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
+
+        await using FileStream stream = File.OpenRead(input);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default, new JxlDecoder { MaxFrames = 2 }).DecodeToPlanes(stream, CancellationToken);
+
+        Assert.Equal(2, decoded.Frames.Count);
+    }
+
     private static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
 
     private static uint[] Durations(Image image)
