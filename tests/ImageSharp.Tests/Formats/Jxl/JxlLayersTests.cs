@@ -30,7 +30,7 @@ public class JxlLayersTests
     [Fact]
     public void SingleFrame_DecodesTheLayer()
     {
-        byte[] codestream = new JxlTestLayers(Width, Height).Add(Last(JxlTestLayers.ColourA)).ToArray();
+        byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA)).ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
@@ -40,7 +40,7 @@ public class JxlLayersTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
@@ -51,7 +51,7 @@ public class JxlLayersTests
     {
         // libjxl blends a frame whose slot is empty against zeros (stage_blending.cc), and does not reject it.
         byte[] codestream = new JxlTestLayers(Width, Height)
-            .Add(Last(JxlTestLayers.ColourA) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6 })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6 })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => x is >= 4 and < 14 && y is >= 3 and < 9 ? (200, 100, 50, 128) : (0, 0, 0, 0));
@@ -62,7 +62,7 @@ public class JxlLayersTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 3), ExtraChannel = new(JxlBlendMode.Add, Source: 3) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 3), ExtraChannel = new(JxlBlendMode.Add, Source: 3) })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (40, 220, 160, 64));
@@ -73,7 +73,7 @@ public class JxlLayersTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = -5, Y0 = -7, XSize = 40, YSize = 30 })
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = -5, Y0 = -7, XSize = 40, YSize = 30 })
             .ToArray();
 
         // Image pixel (x, y) is frame pixel (x + 5, y + 7).
@@ -87,7 +87,7 @@ public class JxlLayersTests
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 2 })
             .Add(new JxlTestFrame(JxlTestLayers.ColourB) { SaveAsReference = 1 })
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 128));
@@ -99,7 +99,7 @@ public class JxlLayersTests
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourB))
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 1 })
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 1) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 1) })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
@@ -110,7 +110,7 @@ public class JxlLayersTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourA) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Mul), ExtraChannel = new(JxlBlendMode.Mul) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Mul), ExtraChannel = new(JxlBlendMode.Mul) })
             .ToArray();
 
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), codestream);
@@ -130,7 +130,7 @@ public class JxlLayersTests
         // A zero-duration frame is not shown; it is blended into the next one.
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10, Color = new(JxlBlendMode.Add) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Duration = 10, Color = new(JxlBlendMode.Add) })
             .ToArray();
 
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
@@ -142,7 +142,7 @@ public class JxlLayersTests
         // The second frame is cropped, so it is blended onto the first, which slot 1 holds.
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 10, SaveAsReference = 1 })
-            .Add(Last(JxlTestLayers.ColourB) with { Duration = 10, X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Replace, Source: 1), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Duration = 10, X0 = 4, Y0 = 3, XSize = 10, YSize = 6, Color = new(JxlBlendMode.Replace, Source: 1), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) })
             .ToArray();
 
         using JxlDecodedImage decoded = DecodeToPlanes(codestream);
@@ -171,11 +171,7 @@ public class JxlLayersTests
         NpyArray expected = NpyArray.Load(output);
         using JxlDecodedImage decoded = DecodeToPlanes(codestream);
         NpyArray actual = JxlConformanceImages.ToNpy(decoded);
-        Assert.Equal(expected.Shape, actual.Shape);
-        for (int i = 0; i < expected.Data.Length; i++)
-        {
-            Assert.True(MathF.Abs(expected.Data[i] - actual.Data[i]) <= 1e-6F, $"Sample {i}: djxl {expected.Data[i]}, ImageSharp {actual.Data[i]}.");
-        }
+        JxlConformanceComparer.AssertMatchesDjxl(expected, actual);
     }
 
     private static Dictionary<string, JxlTestLayers> Cases => new()
@@ -198,44 +194,44 @@ public class JxlLayersTests
         ["blend_both"] = TwoLayers(new(JxlBlendMode.Blend), new(JxlBlendMode.Blend), top: JxlTestLayers.Ramp),
         ["crop_inside"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = 3, Y0 = 2, XSize = 9, YSize = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = 3, Y0 = 2, XSize = 9, YSize = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
         ["crop_negative_origin_oversized"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = -5, Y0 = -7, XSize = 40, YSize = 30, Color = new(JxlBlendMode.Blend) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = -5, Y0 = -7, XSize = 40, YSize = 30, Color = new(JxlBlendMode.Blend) }),
         ["crop_past_the_far_edges"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = 20, Y0 = 10, XSize = 12, YSize = 9, Color = new(JxlBlendMode.Add) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = 20, Y0 = 10, XSize = 12, YSize = 9, Color = new(JxlBlendMode.Add) }),
         ["crop_wholly_outside"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = 30, Y0 = -20, XSize = 6, YSize = 6, Color = new(JxlBlendMode.Add) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = 30, Y0 = -20, XSize = 6, YSize = 6, Color = new(JxlBlendMode.Add) }),
         ["crop_onto_empty_slot"] = new JxlTestLayers(Width, Height)
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6 }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = 4, Y0 = 3, XSize = 10, YSize = 6 }),
         ["cropped_layers_saved_and_reused"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { X0 = -2, Y0 = 1, XSize = 12, YSize = 9, SaveAsReference = 1 })
             .Add(new JxlTestFrame(JxlTestLayers.ColourB) { X0 = 6, Y0 = -3, XSize = 20, YSize = 8, Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1), SaveAsReference = 2 })
-            .Add(Last(JxlTestLayers.Ramp) with { X0 = 1, Y0 = 1, XSize = 5, YSize = 5, Color = new(JxlBlendMode.AlphaWeightedAdd, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { X0 = 1, Y0 = 1, XSize = 5, YSize = 5, Color = new(JxlBlendMode.AlphaWeightedAdd, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
         ["slot_per_channel"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 2 })
             .Add(new JxlTestFrame(JxlTestLayers.ColourB) { SaveAsReference = 1 })
-            .Add(Last(JxlTestLayers.Ramp) with { Color = new(JxlBlendMode.Mul, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Color = new(JxlBlendMode.Mul, Source: 2), ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
         ["empty_slot_source"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 3), ExtraChannel = new(JxlBlendMode.Blend, Source: 3) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add, Source: 3), ExtraChannel = new(JxlBlendMode.Blend, Source: 3) }),
         ["reference_only"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourB))
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 1 })
-            .Add(Last(JxlTestLayers.Ramp) with { Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1) }),
         ["saved_before_colour_transform_as_alpha_background"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 1, SaveBeforeColorTransform = true })
-            .Add(Last(JxlTestLayers.ColourB) with { ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { ExtraChannel = new(JxlBlendMode.Add, Source: 1) }),
         ["animation_one_displayed_frame"] = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8 })
-            .Add(Last(JxlTestLayers.Ramp) with { Duration = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Duration = 7, Color = new(JxlBlendMode.Blend), ExtraChannel = new(JxlBlendMode.Blend) }),
         ["animation_three_displayed_frames"] = new JxlTestLayers(Width, Height, animation: true)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 5, SaveAsReference = 1 })
             .Add(new JxlTestFrame(JxlTestLayers.Ramp) { X0 = 2, Y0 = 3, XSize = 8, YSize = 8, Color = new(JxlBlendMode.Blend, Source: 1), ExtraChannel = new(JxlBlendMode.Blend, Source: 1) })
             .Add(new JxlTestFrame(JxlTestLayers.ColourB) { Duration = 4, X0 = 6, Y0 = 1, XSize = 12, YSize = 9, Color = new(JxlBlendMode.Add), ExtraChannel = new(JxlBlendMode.Add), SaveAsReference = 2 })
-            .Add(Last(JxlTestLayers.Ramp) with { Duration = 9, X0 = -3, Y0 = 5, XSize = 10, YSize = 20, Color = new(JxlBlendMode.Mul, Source: 2), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Duration = 9, X0 = -3, Y0 = 5, XSize = 10, YSize = 20, Color = new(JxlBlendMode.Mul, Source: 2), ExtraChannel = new(JxlBlendMode.Replace, Source: 1) }),
 
         // One colour plane: libjxl blends three equal planes.
         ["grey_add"] = GreyLayers(new(JxlBlendMode.Add), new(JxlBlendMode.Replace)),
@@ -244,10 +240,8 @@ public class JxlLayersTests
         ["grey_mul"] = GreyLayers(new(JxlBlendMode.Mul, Clamp: true), new(JxlBlendMode.Mul)),
         ["skip_progressive"] = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.Ramp) with { Type = JxlFrameType.SkipProgressive, Color = new(JxlBlendMode.Blend) }),
+            .Add(JxlTestFrame.Last(JxlTestLayers.Ramp) with { Type = JxlFrameType.SkipProgressive, Color = new(JxlBlendMode.Blend) }),
     };
-
-    private static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
 
     // Two full-size frames of the generated 64 x 64 16-bit grey and alpha file.
     private static JxlTestLayers GreyLayers(JxlTestBlending color, JxlTestBlending extraChannel)
@@ -256,13 +250,13 @@ public class JxlLayersTests
         JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(path), out byte[] section);
         return layers
             .Add(new JxlTestFrame(section))
-            .Add(Last(section) with { Color = color, ExtraChannel = extraChannel });
+            .Add(JxlTestFrame.Last(section) with { Color = color, ExtraChannel = extraChannel });
     }
 
     private static JxlTestLayers TwoLayers(JxlTestBlending color, JxlTestBlending extraChannel, bool premultiplied = false, byte[] top = null)
         => new JxlTestLayers(Width, Height, premultiplied: premultiplied)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(top ?? JxlTestLayers.ColourB) with { Color = color, ExtraChannel = extraChannel });
+            .Add(JxlTestFrame.Last(top ?? JxlTestLayers.ColourB) with { Color = color, ExtraChannel = extraChannel });
 
     private static JxlDecodedImage DecodeToPlanes(byte[] codestream)
     {

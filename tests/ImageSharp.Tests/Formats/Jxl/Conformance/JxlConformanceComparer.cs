@@ -105,6 +105,19 @@ internal static class JxlConformanceComparer
         IReadOnlyList<string> failures = FindFailures(vector, expected, actual, comparison);
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
+
+    /// <summary>
+    /// Asserts that every sample is within 1e-6 of djxl's: the check for the generated files, whose
+    /// djxl references are made from float output.
+    /// </summary>
+    public static void AssertMatchesDjxl(NpyArray expected, NpyArray actual)
+    {
+        Assert.Equal(expected.Shape, actual.Shape);
+        for (int i = 0; i < expected.Data.Length; i++)
+        {
+            Assert.True(MathF.Abs(expected.Data[i] - actual.Data[i]) <= 1e-6F, $"Sample {i}: djxl {expected.Data[i]}, ImageSharp {actual.Data[i]}.");
+        }
+    }
 }
 
 /// <summary>The measured error of one frame.</summary>

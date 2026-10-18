@@ -82,11 +82,7 @@ public class JxlAnimationTests
         NpyArray actual = JxlConformanceImages.ToNpy(decoded);
 
         Assert.Equal(apngFrames - 1, decoded.Frames.Count);
-        Assert.Equal(expected.Shape, actual.Shape);
-        for (int i = 0; i < expected.Data.Length; i++)
-        {
-            Assert.True(MathF.Abs(expected.Data[i] - actual.Data[i]) <= 1e-6F, $"Sample {i}: djxl {expected.Data[i]}, ImageSharp {actual.Data[i]}.");
-        }
+        JxlConformanceComparer.AssertMatchesDjxl(expected, actual);
     }
 
     [Fact]
@@ -106,7 +102,7 @@ public class JxlAnimationTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true) { TpsNumerator = 30000, TpsDenominator = 1001, NumLoops = 3 }
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 7, Name = "first" })
-            .Add(Last(JxlTestLayers.ColourB) with { Duration = 300, Name = "zweites Bild é" })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Duration = 300, Name = "zweites Bild é" })
             .ToArray();
 
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), codestream);
@@ -123,7 +119,7 @@ public class JxlAnimationTests
     public void Identify_Animation_ReadsTheAnimationHeader()
     {
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true) { TpsNumerator = 1000, TpsDenominator = 1, NumLoops = 70000 }
-            .Add(Last(JxlTestLayers.ColourA) with { Duration = 7 })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Duration = 7 })
             .ToArray();
 
         using MemoryStream stream = new(codestream);
@@ -140,7 +136,7 @@ public class JxlAnimationTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height)
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
-            .Add(Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
             .ToArray();
 
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), codestream);
@@ -210,7 +206,7 @@ public class JxlAnimationTests
     {
         byte[] codestream = new JxlTestLayers(Width, Height, animation: true) { NumLoops = 2 }
             .Add(new JxlTestFrame(JxlTestLayers.ColourA) { Duration = 7, Name = "a" })
-            .Add(Last(JxlTestLayers.ColourB) with { Duration = 9, Name = "b" })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Duration = 9, Name = "b" })
             .ToArray();
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), codestream);
 
@@ -220,8 +216,6 @@ public class JxlAnimationTests
         Assert.Equal(new[] { "a", "b" }, Names(clone));
         Assert.Equal(2, clone.Metadata.GetFormatMetadata(JxlFormat.Instance).LoopCount);
     }
-
-    private static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
 
     private static uint[] Durations(Image image)
     {

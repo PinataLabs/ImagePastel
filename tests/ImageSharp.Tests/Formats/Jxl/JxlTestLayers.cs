@@ -78,8 +78,6 @@ internal sealed class JxlTestLayers
     /// <summary>Gets the animation's loop count; 0 is forever.</summary>
     public uint NumLoops { get; init; }
 
-    private int NumExtraChannels => this.numExtraChannels;
-
     /// <summary>
     /// Returns layers that keep the image header of a single-frame, single-group Modular file, which
     /// must not be XYB or animated, and gives that frame's section. The section only decodes in a
@@ -91,25 +89,12 @@ internal sealed class JxlTestLayers
     public static JxlTestLayers FromFile(byte[] file, out byte[] section)
     {
         byte[] codestream = file[0] == 0xFF ? file : JxlContainer.Read(file, readMetadata: false).Codestream;
-        JxlCodecMetadata metadata = new();
-        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
-        JxlBundle.Read(reader, metadata.Size);
-        JxlBundle.Read(reader, metadata.M);
-        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
-        JxlBundle.Read(reader, metadata.TransformData);
-        reader.JumpToByteBoundary();
-        int frameOffset = 2 + (int)(reader.TotalBitsConsumed / 8);
-        JxlFrameHeader frameHeader = new(metadata);
-        JxlBundle.Read(reader, frameHeader);
-        uint[] sizes = JxlToc.ReadToc(1, reader);
-        int start = 2 + (int)(reader.TotalBitsConsumed / 8);
-        reader.Close();
+        section = FirstSection(codestream, out JxlCodecMetadata metadata, out JxlFrameHeader frameHeader, out int frameOffset);
         if (metadata.M.XybEncoded || metadata.M.HaveAnimation || metadata.M.ColorEncoding.WantIcc || frameHeader.Encoding != JxlFrameEncoding.Modular)
         {
             throw new ArgumentException("The file must be a Modular, non-XYB, non-animated image with no ICC profile.", nameof(file));
         }
 
-        section = codestream.AsSpan(start, (int)sizes[0]).ToArray();
         return new JxlTestLayers((int)metadata.XSize, (int)metadata.YSize)
         {
             imageHeader = codestream.AsSpan(0, frameOffset).ToArray(),
@@ -288,21 +273,26 @@ internal sealed class JxlTestLayers
     }
 
     // The first frame's only section in a jxl_from_tree file.
-    private static byte[] Section(string hex)
+    private static byte[] Section(string hex) => FirstSection(Convert.FromHexString(hex), out _, out _, out _);
+
+    // Reads the image header and the first frame's header and TOC, and returns that frame's first
+    // section. frameOffset is where the frame header starts.
+    private static byte[] FirstSection(byte[] codestream, out JxlCodecMetadata metadata, out JxlFrameHeader frameHeader, out int frameOffset)
     {
-        byte[] file = Convert.FromHexString(hex);
-        JxlCodecMetadata metadata = new();
-        JxlBitReader reader = new(file, 2, file.Length - 2);
+        metadata = new JxlCodecMetadata();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
         JxlBundle.Read(reader, metadata.Size);
         JxlBundle.Read(reader, metadata.M);
         metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
         JxlBundle.Read(reader, metadata.TransformData);
         reader.JumpToByteBoundary();
-        JxlBundle.Read(reader, new JxlFrameHeader(metadata));
+        frameOffset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        frameHeader = new JxlFrameHeader(metadata);
+        JxlBundle.Read(reader, frameHeader);
         uint[] sizes = JxlToc.ReadToc(1, reader);
         int start = 2 + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
-        return file.AsSpan(start, (int)sizes[0]).ToArray();
+        return codestream.AsSpan(start, (int)sizes[0]).ToArray();
     }
 
     private void WriteFrame(JxlTestBitWriter w, JxlTestFrame frame)
@@ -311,7 +301,7 @@ internal sealed class JxlTestLayers
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(true).Write(2, 0).Bit(false); // Modular, no flags, no YCbCr
         w.Write(2, 0); // upsampling 1
-        for (int i = 0; i < this.NumExtraChannels; i++)
+        for (int i = 0; i < this.numExtraChannels; i++)
         {
             w.Write(2, 0); // extra channel upsampling 1
         }
@@ -341,10 +331,10 @@ internal sealed class JxlTestLayers
         bool isLast = false;
         if (regular)
         {
-            WriteBlending(w, frame.Color, this.NumExtraChannels, isPartialFrame);
-            for (int i = 0; i < this.NumExtraChannels; i++)
+            WriteBlending(w, frame.Color, this.numExtraChannels, isPartialFrame);
+            for (int i = 0; i < this.numExtraChannels; i++)
             {
-                WriteBlending(w, frame.ExtraChannel, this.NumExtraChannels, isPartialFrame);
+                WriteBlending(w, frame.ExtraChannel, this.numExtraChannels, isPartialFrame);
             }
 
             if (this.Animation)
@@ -416,4 +406,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public uint SaveAsReference { get; init; }
 
     public bool SaveBeforeColorTransform { get; init; }
+
+    /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
+    /// <param name="section">The frame's section.</param>
+    /// <returns>The frame.</returns>
+    public static JxlTestFrame Last(byte[] section) => new(section) { IsLast = true };
 }
