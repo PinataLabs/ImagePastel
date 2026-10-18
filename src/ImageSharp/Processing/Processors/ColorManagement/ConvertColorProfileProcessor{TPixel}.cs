@@ -38,13 +38,20 @@ internal sealed class ConvertColorProfileProcessor<TPixel> : ImageProcessor<TPix
         {
             this.transform = new IccColorTransform(sourceProfile, this.targetProfile, definition.Options);
 
-            // The converter carries CMYK in all four channels; no pixel type maps to that yet.
-            if (this.transform.SourceColorSpace == IccColorSpaceType.Cmyk || this.transform.TargetColorSpace == IccColorSpaceType.Cmyk)
+            // CMYK fills all four components, so it needs a pixel type whose four components can hold any value.
+            if ((this.transform.SourceColorSpace == IccColorSpaceType.Cmyk || this.transform.TargetColorSpace == IccColorSpaceType.Cmyk)
+                && !CanHoldCmyk())
             {
-                throw new NotSupportedException("Converting images from or to a CMYK profile is not supported yet.");
+                throw new NotSupportedException(
+                    $"CMYK pixels are stored as C, M, Y and K in the R, G, B and A components of {nameof(Rgba32)}, {nameof(Rgba64)} or {nameof(RgbaVector)}; "
+                    + $"{typeof(TPixel).Name} cannot hold them. Convert the image to one of those pixel types first.");
             }
         }
     }
+
+    // One RGBA pixel type per precision (8-bit, 16-bit, float), so CMYK sits in a fixed component order.
+    private static bool CanHoldCmyk()
+        => typeof(TPixel) == typeof(Rgba32) || typeof(TPixel) == typeof(Rgba64) || typeof(TPixel) == typeof(RgbaVector);
 
     /// <inheritdoc/>
     protected override void OnFrameApply(ImageFrame<TPixel> source)

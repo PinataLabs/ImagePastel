@@ -8,7 +8,7 @@ using ImageMagick;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
-
+using SixLabors.ImageSharp.Tests.ColorManagement;
 using Xunit;
 using static SixLabors.ImageSharp.Tests.TestImages.Bmp;
 
@@ -23,9 +23,11 @@ public class BmpMetadataTests
     private const int ProfileLinked = 0x4C494E4B; // 'LINK'
     private const int LcsSrgb = 0x73524742; // 'sRGB'
     private const int LcsWindowsColorSpace = 0x57696E20; // 'Win '
+    private const int LcsCalibratedRgb = 0;
 
-    // Sizes of the BITMAPFILEHEADER and BITMAPV5HEADER structures, from the Microsoft documentation.
+    // Sizes of the BITMAPFILEHEADER, BITMAPV4HEADER and BITMAPV5HEADER structures, from the Microsoft documentation.
     private const int FileHeaderSize = 14;
+    private const int V4HeaderSize = 108;
     private const int V5HeaderSize = 124;
     private const int PixelRowSize = 4;
 
@@ -242,6 +244,139 @@ public class BmpMetadataTests
         Assert.Equal(bmp.Length, BinaryPrimitives.ReadInt32LittleEndian(bmp.AsSpan(2))); // bfSize
     }
 
+    [Fact]
+    public void Decode_V5CalibratedRgb_BuildsProfileFromEndpointsAndGamma()
+    {
+        // DCI-P3 primaries with a different gamma per channel. The reference is the profile Little CMS
+        // builds from the same primaries, the D65 white and the same gammas (Icc/README.md).
+        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+        IccProfile expected = IccProfileFactoryTests.Load(TestImages.Icc.LittleCmsP3Gamma182224V4);
+
+        using (Image<Rgba32> image = Image.Load<Rgba32>(bmp))
+        {
+            Assert.NotNull(image.Metadata.IccProfile);
+            IccProfileFactoryTests.AssertSameColour(expected, image.Metadata.IccProfile);
+            Assert.Equal(new Rgba32(0x30, 0x20, 0x10), image[0, 0]);
+        }
+
+        IccProfileFactoryTests.AssertSameColour(expected, Image.Identify(bmp).Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Decode_V4CalibratedRgb_BuildsProfileFromEndpointsAndGamma()
+    {
+        // A V4 header carries the same color space fields as a V5 one.
+        byte[] bmp = CreateCalibratedBitmap(V4HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(bmp);
+        IccProfileFactoryTests.AssertSameColour(
+            IccProfileFactoryTests.Load(TestImages.Icc.LittleCmsP3Gamma182224V4),
+            image.Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Decode_BmpSuiteCalibratedRgb_BuildsProfile()
+    {
+        // bmpsuite's pal8v4.bmp stores the BT.709 chromaticities as its endpoints and a gamma of 2.2 for
+        // each channel.
+        using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.Create(WinBmpv4).Bytes);
+        IccProfileFactoryTests.AssertSameColour(
+            IccProfileFactoryTests.Load(TestImages.Icc.LittleCmsRec709Gamma22V4),
+            image.Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Decode_V4CalibratedRgbWithZeroEndpoints_HasNoPixelProfile()
+    {
+        // rgba32v4.bmp, like the V4 headers this encoder writes, says LCS_CALIBRATED_RGB with all-zero values.
+        using Image<Rgba32> image = Image.Load<Rgba32>(TestFile.Create(Rgba32v4).Bytes);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
+    [Theory]
+    [InlineData("AllZero")]
+    [InlineData("ZeroRed")]
+    [InlineData("NegativeGreenY")]
+    [InlineData("NegativeBlueZ")]
+    [InlineData("SamePrimaries")]
+    [InlineData("CollinearPrimaries")]
+    [InlineData("ZeroGamma")]
+    [InlineData("HugeGamma")]
+    public void Decode_V5CalibratedRgbDegenerate_DecodesWithoutProfile(string degenerate)
+    {
+        double[] endpoints = P3Endpoints();
+        double[] gammas = { 1.8, 2.2, 2.4 };
+        switch (degenerate)
+        {
+            case "AllZero":
+                endpoints = new double[9];
+                break;
+            case "ZeroRed":
+                Array.Clear(endpoints, 0, 3);
+                break;
+            case "NegativeGreenY":
+                endpoints[4] = -endpoints[4];
+                break;
+            case "NegativeBlueZ":
+                endpoints[8] = -endpoints[8];
+                break;
+            case "SamePrimaries":
+                Array.Copy(endpoints, 0, endpoints, 3, 3);
+                Array.Copy(endpoints, 0, endpoints, 6, 3);
+                break;
+            case "CollinearPrimaries":
+                // Green is the mean of red and blue, so all three lie on one line in xy.
+                for (int i = 0; i < 3; i++)
+                {
+                    endpoints[3 + i] = (endpoints[i] + endpoints[6 + i]) / 2;
+                }
+
+                break;
+            case "ZeroGamma":
+                gammas[1] = 0;
+                break;
+            case "HugeGamma":
+                gammas[2] = 65535; // Larger than an ICC s15Fixed16Number can hold.
+                break;
+        }
+
+        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, endpoints, gammas);
+
+        using (Image<Rgba32> image = Image.Load<Rgba32>(bmp))
+        {
+            Assert.Null(image.Metadata.IccProfile);
+            Assert.Equal(new Rgba32(0x30, 0x20, 0x10), image[0, 0]);
+        }
+
+        Assert.Null(Image.Identify(bmp).Metadata.IccProfile);
+    }
+
+    [Theory]
+    [InlineData(4, IccRenderingIntent.Perceptual)] // LCS_GM_IMAGES
+    [InlineData(2, IccRenderingIntent.MediaRelativeColorimetric)] // LCS_GM_GRAPHICS
+    [InlineData(1, IccRenderingIntent.Saturation)] // LCS_GM_BUSINESS
+    [InlineData(8, IccRenderingIntent.AbsoluteColorimetric)] // LCS_GM_ABS_COLORIMETRIC
+    [InlineData(0, IccRenderingIntent.Perceptual)] // Not set.
+    public void Decode_V5CalibratedRgb_ProfileHasHeaderIntent(int bmpIntent, IccRenderingIntent expected)
+    {
+        byte[] bmp = CreateCalibratedBitmap(V5HeaderSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 }, bmpIntent);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(bmp);
+        Assert.Equal(expected, image.Metadata.IccProfile?.Header.RenderingIntent);
+    }
+
+    [Theory]
+    [InlineData(V4HeaderSize)]
+    [InlineData(V5HeaderSize)]
+    public void Decode_CalibratedRgb_IgnoreMetadata_BuildsNoProfile(int headerSize)
+    {
+        byte[] bmp = CreateCalibratedBitmap(headerSize, P3Endpoints(), new[] { 1.8, 2.2, 2.4 });
+        var decoder = new BmpDecoder { IgnoreMetadata = true };
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(bmp, decoder);
+        Assert.Null(image.Metadata.IccProfile);
+    }
+
     private static byte[] SnakeProfileBytes()
     {
         using Image jpeg = Image.Load(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes);
@@ -284,6 +419,79 @@ public class BmpMetadataTests
         span[pixelOffset + 2] = 0x30;
 
         profile.CopyTo(span.Slice(pixelOffset + PixelRowSize));
+        return data;
+    }
+
+    /// <summary>
+    /// The CIEXYZ endpoints of the DCI-P3 primaries (0.680, 0.320), (0.265, 0.690), (0.150, 0.060), each
+    /// scaled to its share of the D65 white's luminance, as an encoder that writes real XYZ values would.
+    /// </summary>
+    private static double[] P3Endpoints()
+    {
+        (double X, double Y, double Lum)[] primaries = { (0.680, 0.320, 0.2290), (0.265, 0.690, 0.6917), (0.150, 0.060, 0.0793) };
+        double[] endpoints = new double[9];
+        for (int i = 0; i < 3; i++)
+        {
+            (double x, double y, double lum) = primaries[i];
+            endpoints[i * 3] = x / y * lum;
+            endpoints[(i * 3) + 1] = lum;
+            endpoints[(i * 3) + 2] = (1 - x - y) / y * lum;
+        }
+
+        return endpoints;
+    }
+
+    /// <summary>
+    /// Builds a 1x1, 24-bit BMP with a BITMAPV4HEADER (108 bytes) or BITMAPV5HEADER (124 bytes) whose
+    /// bV5CSType is LCS_CALIBRATED_RGB, laid out as the Microsoft documentation describes.
+    /// </summary>
+    /// <param name="headerSize">108 or 124.</param>
+    /// <param name="endpoints">The red, green and blue CIEXYZ endpoints (X, Y, Z each), written as FXPT2DOT30.</param>
+    /// <param name="gammas">The red, green and blue gammas, written as unsigned 16.16.</param>
+    /// <param name="intent">The bV5Intent value (V5 only).</param>
+    private static byte[] CreateCalibratedBitmap(int headerSize, double[] endpoints, double[] gammas, int intent = 4)
+    {
+        int pixelOffset = FileHeaderSize + headerSize;
+        byte[] data = new byte[pixelOffset + PixelRowSize];
+        Span<byte> span = data;
+
+        // BITMAPFILEHEADER
+        span[0] = (byte)'B';
+        span[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(2), data.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(10), pixelOffset);
+
+        // BITMAPV4HEADER / BITMAPV5HEADER
+        Span<byte> header = span.Slice(FileHeaderSize, headerSize);
+        BinaryPrimitives.WriteInt32LittleEndian(header, headerSize); // bV5Size
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(4), 1); // bV5Width
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(8), 1); // bV5Height
+        BinaryPrimitives.WriteInt16LittleEndian(header.Slice(12), 1); // bV5Planes
+        BinaryPrimitives.WriteInt16LittleEndian(header.Slice(14), 24); // bV5BitCount
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(16), 0); // bV5Compression = BI_RGB
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(20), PixelRowSize); // bV5SizeImage
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(56), LcsCalibratedRgb); // bV5CSType
+        for (int i = 0; i < 9; i++)
+        {
+            // bV5Endpoints: CIEXYZTRIPLE of FXPT2DOT30 values.
+            BinaryPrimitives.WriteInt32LittleEndian(header.Slice(60 + (i * 4)), (int)Math.Round(endpoints[i] * (1 << 30)));
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            // bV5GammaRed, bV5GammaGreen, bV5GammaBlue: unsigned 16.16.
+            BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(96 + (i * 4)), (uint)Math.Round(gammas[i] * 65536));
+        }
+
+        if (headerSize == V5HeaderSize)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(header.Slice(108), intent); // bV5Intent
+        }
+
+        // One BGR pixel, padded to 4 bytes.
+        span[pixelOffset] = 0x10;
+        span[pixelOffset + 1] = 0x20;
+        span[pixelOffset + 2] = 0x30;
         return data;
     }
 }

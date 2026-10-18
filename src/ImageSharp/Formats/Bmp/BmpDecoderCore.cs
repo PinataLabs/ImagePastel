@@ -1443,9 +1443,18 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         this.bmpMetadata.InfoHeaderType = infoHeaderType;
         this.bmpMetadata.BitsPerPixel = (BmpBitsPerPixel)bitsPerPixel;
 
-        if (headerSize == BmpInfoHeader.SizeV5 && !this.options.IgnoreMetadata)
+        // V4 and V5 headers carry a color space. A V4 header has no profile fields, and other
+        // header sizes of 108 bytes or more are read as V4.
+        if (headerSize >= BmpInfoHeader.SizeV4 && !this.options.IgnoreMetadata)
         {
-            this.ReadEmbeddedIccProfile(infoHeaderStart);
+            if (this.infoHeader.CsType == BmpColorSpaceType.CalibratedRgb)
+            {
+                this.metadata.IccProfile = BmpCalibratedRgbProfile.Create(this.infoHeader);
+            }
+            else if (headerSize == BmpInfoHeader.SizeV5)
+            {
+                this.ReadEmbeddedIccProfile(infoHeaderStart);
+            }
         }
     }
 

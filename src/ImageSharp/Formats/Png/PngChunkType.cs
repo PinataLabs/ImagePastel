@@ -122,6 +122,12 @@ internal enum PngChunkType : uint
     Chroma = 0x6348524d,
 
     /// <summary>
+    /// The cICP chunk identifies the colour space of the image by the ITU-T H.273 code points for its
+    /// colour primaries, transfer function, matrix coefficients and video full range flag.
+    /// </summary>
+    CodingIndependentCodePoints = 0x63494350,
+
+    /// <summary>
     /// Malformed chunk named CgBI produced by apple, which is not conform to the specification.
     /// Related issue is here https://github.com/SixLabors/ImageSharp/issues/410
     /// </summary>

@@ -136,6 +136,74 @@ public class IccProfileFactoryTests
         AssertSameColour(profile, saved.Metadata.IccProfile);
     }
 
+    // ITU-T H.273 code points: ColourPrimaries 1 = BT.709 (sRGB), 9 = BT.2020, 12 = SMPTE EG 432-1 (P3 with a
+    // D65 white); TransferCharacteristics 1 = BT.709, 8 = linear, 13 = IEC 61966-2-1 (sRGB).
+    public static TheoryData<string, int, int> SpacesWithCodePoints { get; } = new()
+    {
+        { nameof(IccProfileFactory.CreateSrgb), 1, 13 },
+        { nameof(IccProfileFactory.CreateLinearSrgb), 1, 8 },
+        { nameof(IccProfileFactory.CreateDisplayP3), 12, 13 },
+        { nameof(IccProfileFactory.CreateRec2020), 9, 1 },
+    };
+
+    // Adobe RGB and a pure gamma curve have no H.273 code points; libjxl writes cicp only for RGB.
+    public static TheoryData<string> SpacesWithoutCodePoints { get; } = new()
+    {
+        nameof(IccProfileFactory.CreateAdobeRgbCompatible),
+        "CreateGray(Srgb)",
+        "CreateGray(Linear)",
+        "CreateGray(Gamma(2.2))",
+    };
+
+    // The profiles djxl (libjxl v0.12.0) builds for the same spaces, in the iCCP chunks of the JPEG XL
+    // reference PNGs (tests/Images/Input/Jxl/Generated/README.md).
+    public static TheoryData<string, string> DjxlProfiles { get; } = new()
+    {
+        { nameof(IccProfileFactory.CreateLinearSrgb), "colour_linear_srgb.png" },
+        { nameof(IccProfileFactory.CreateDisplayP3), "colour_display_p3.png" },
+        { nameof(IccProfileFactory.CreateRec2020), "colour_rec2020.png" },
+    };
+
+    [Theory]
+    [MemberData(nameof(SpacesWithCodePoints))]
+    public void StandardProfile_WithCodePoints_HasCicpTag(string factory, int primaries, int transfer)
+    {
+        IccProfile profile = Create(factory);
+
+        Assert.True(profile.TryGetTag(IccProfileTag.Cicp, out IccCicpTagDataEntry cicp), "The profile has no cicp tag.");
+        Assert.Equal(primaries, cicp.ColorPrimaries);
+        Assert.Equal(transfer, cicp.TransferCharacteristics);
+        Assert.Equal(0, cicp.MatrixCoefficients);
+        Assert.Equal(1, cicp.VideoFullRangeFlag);
+    }
+
+    [Theory]
+    [MemberData(nameof(SpacesWithoutCodePoints))]
+    public void StandardProfile_WithoutCodePoints_HasNoCicpTag(string factory)
+        => Assert.False(Create(factory).TryGetTag(IccProfileTag.Cicp, out IccTagDataEntry _));
+
+    [Fact]
+    public void CreateRgb_HasNoCicpTag()
+    {
+        // Even with the sRGB values: a custom space is not identified by code points.
+        RgbPrimariesChromaticityCoordinates rec709 = new(new(0.64F, 0.33F), new(0.30F, 0.60F), new(0.15F, 0.06F));
+        IccProfile profile = IccProfileFactory.CreateRgb(rec709, new CieXyChromaticityCoordinates(0.3127F, 0.3290F), IccToneCurve.Srgb);
+
+        Assert.False(profile.TryGetTag(IccProfileTag.Cicp, out IccTagDataEntry _));
+    }
+
+    [Theory]
+    [MemberData(nameof(DjxlProfiles))]
+    public void StandardProfile_CicpTag_MatchesDjxl(string factory, string referencePng)
+    {
+        using Image<Rgba32> reference = Image.Load<Rgba32>(
+            Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", referencePng));
+        Assert.True(reference.Metadata.IccProfile.TryGetTag(IccProfileTag.Cicp, out IccCicpTagDataEntry expected));
+
+        Assert.True(Create(factory).TryGetTag(IccProfileTag.Cicp, out IccCicpTagDataEntry actual));
+        Assert.Equal(expected, actual);
+    }
+
     [Fact]
     public void TwoCalls_ReturnIndependentProfiles()
     {

@@ -9,7 +9,8 @@ namespace SixLabors.ImageSharp.Processing;
 
 /// <summary>
 /// Defines extensions that convert an <see cref="Image"/> between ICC profiles using Mutate/Clone.
-/// See <see cref="ConvertColorProfileProcessor"/> for what the conversion does to pixels and metadata.
+/// See <see cref="ConvertColorProfileProcessor"/> for what the conversion does to pixels and metadata,
+/// and for how CMYK is stored in <c>Rgba32</c>, <c>Rgba64</c> and <c>RgbaVector</c> pixels.
 /// </summary>
 public static class ColorProfileExtensions
 {

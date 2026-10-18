@@ -91,6 +91,22 @@ internal static class IccTestDataTagDataEntry
         new object[] { Chromaticity_Arr2, Chromaticity_Val2 },
     };
 
+    // cicpType (ICC.1:2022, clause 10.3): colour primaries, transfer characteristics, matrix coefficients
+    // and video full range flag, one byte each, with the H.273 code points. sRGB is primaries 1 (BT.709),
+    // transfer 13 (IEC 61966-2-1), matrix 0 (identity), full range.
+    public static readonly IccCicpTagDataEntry Cicp_ValSrgb = new IccCicpTagDataEntry(1, 13, 0, 1);
+    public static readonly byte[] Cicp_ArrSrgb = { 0x01, 0x0D, 0x00, 0x01 };
+
+    // Rec. 2100 PQ, narrow range, BT.2020 non-constant luminance matrix: primaries 9, transfer 16, matrix 9.
+    public static readonly IccCicpTagDataEntry Cicp_ValRec2100PqNarrow = new IccCicpTagDataEntry(9, 16, 9, 0);
+    public static readonly byte[] Cicp_ArrRec2100PqNarrow = { 0x09, 0x10, 0x09, 0x00 };
+
+    public static readonly object[][] CicpTagDataEntryTestData =
+    {
+        new object[] { Cicp_ArrSrgb, Cicp_ValSrgb, 12u },
+        new object[] { Cicp_ArrRec2100PqNarrow, Cicp_ValRec2100PqNarrow, 12u },
+    };
+
     public static readonly IccColorantOrderTagDataEntry ColorantOrder_Val = new IccColorantOrderTagDataEntry(new byte[] { 0x00, 0x01, 0x02 });
     public static readonly byte[] ColorantOrder_Arr = ArrayHelper.Concat(IccTestDataPrimitives.UInt32_3, new byte[] { 0x00, 0x01, 0x02 });
 

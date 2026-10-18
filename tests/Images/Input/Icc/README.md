@@ -17,6 +17,7 @@ Profiles for the ICC profile tests (`tests/ImageSharp.Tests/Metadata/Profiles/IC
 | `LittleCms/RgbIntents-v2.icc` | A synthetic RGB output profile, version 2.1, Lab PCS, with different `lut16Type` tables for each intent (`A2B0`/`B2A0` perceptual, `A2B1`/`B2A1` relative colorimetric, `A2B2`/`B2A2` saturation: each its own tone curve, lifted black and chroma scale of an Adobe RGB (1998)-like space) and a paper media white point (X 0.90, Y 0.93, Z 0.73). Written by Little CMS 2.20 with `LittleCms/intentprofiles.c` (below). Used by the rendering intent and black-point compensation tests. | Little CMS is MIT; the program is Apache-2.0 like this repository. The profile's `cprt` tag says "No copyright, use freely". |
 | `LittleCms/RgbIntents-v4.icc` | The same perceptual and relative colorimetric tables as `lutAToBType`/`lutBToAType`, version 4.3, without saturation tables (so saturation falls back to the perceptual ones). Written by `LittleCms/intentprofiles.c`. | As above. |
 | `LittleCms/RgbIntentsMatrix-v2.icc` | A synthetic RGB display profile, version 2.1: matrix/TRC tags whose curves lift black (`Y = (aX + b)^2.2`, black Y = 0.01), plus only `A2B1`/`B2A1` tables, and a `wtpt` tag that Little CMS ignores for version 2 display profiles. Written by `LittleCms/intentprofiles.c`. | As above. |
+| `LittleCms/Rec709Gamma22-v4.icc`, `LittleCms/P3Gamma182224-v4.icc` | Written by Little CMS 2.20 with `cmsCreateRGBProfile` (version 4.4), with the fourth program below. They are the references for the profiles the BMP decoder builds from `LCS_CALIBRATED_RGB` headers (`tests/ImageSharp.Tests/Formats/Bmp/BmpMetadataTests.cs`). | As above. |
 | `qcms/sRGB_lcms.icc`, `qcms/ITU-709.icc`, `qcms/ITU-2020.icc` | [qcms](https://github.com/FirefoxGraphics/qcms) at `2ee13006ac1d17d10a53fb5b89ecd6513211c1c3`, from the repository root. | MIT, see `qcms/COPYING`. |
 | `CompactIcc/DisplayP3-v4.icc`, `CompactIcc/AdobeCompat-v2.icc`, `CompactIcc/sGrey-v4.icc`, `CompactIcc/sRGB-v2-micro.icc`, `CompactIcc/ProPhoto-v4.icc`, `CompactIcc/scRGB-v2.icc` (linear sRGB) | [Compact-ICC-Profiles](https://github.com/saucecontrol/Compact-ICC-Profiles) at `bdd8466`, as vendored in libjxl `testdata/external`. | CC0 1.0, see `CompactIcc/LICENSE`. |
 
@@ -142,6 +143,43 @@ int main(void)
     cmsFreeToneCurve(adobeGamma);
     cmsFreeToneCurve(gamma18);
     cmsFreeToneCurve(gamma22);
+    return 0;
+}
+```
+
+The BMP calibrated RGB references were written with this program, against the same sources:
+
+```c
+#include "lcms2.h"
+
+static void save(cmsHPROFILE h, const char* description, const char* path)
+{
+    cmsMLU* mlu = cmsMLUalloc(NULL, 1);
+    cmsMLUsetASCII(mlu, "en", "US", description);
+    cmsWriteTag(h, cmsSigProfileDescriptionTag, mlu);
+    cmsMLUfree(mlu);
+    cmsSaveProfileToFile(h, path);
+    cmsCloseProfile(h);
+}
+
+int main(void)
+{
+    cmsCIExyY d65 = { 0.3127, 0.3290, 1.0 };
+    cmsCIExyYTRIPLE rec709 = { { 0.64, 0.33, 1.0 }, { 0.30, 0.60, 1.0 }, { 0.15, 0.06, 1.0 } };
+    cmsCIExyYTRIPLE p3 = { { 0.680, 0.320, 1.0 }, { 0.265, 0.690, 1.0 }, { 0.150, 0.060, 1.0 } };
+    cmsToneCurve* gamma18 = cmsBuildGamma(NULL, 1.8);
+    cmsToneCurve* gamma22 = cmsBuildGamma(NULL, 2.2);
+    cmsToneCurve* gamma24 = cmsBuildGamma(NULL, 2.4);
+
+    cmsToneCurve* rec709Curves[3] = { gamma22, gamma22, gamma22 };
+    save(cmsCreateRGBProfile(&d65, &rec709, rec709Curves), "BT.709 primaries, gamma 2.2", "Rec709Gamma22-v4.icc");
+
+    cmsToneCurve* p3Curves[3] = { gamma18, gamma22, gamma24 };
+    save(cmsCreateRGBProfile(&d65, &p3, p3Curves), "P3 primaries, gamma 1.8/2.2/2.4", "P3Gamma182224-v4.icc");
+
+    cmsFreeToneCurve(gamma18);
+    cmsFreeToneCurve(gamma22);
+    cmsFreeToneCurve(gamma24);
     return 0;
 }
 ```

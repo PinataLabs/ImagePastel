@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // MaybeCreateProfileImpl and its helpers (PrimariesToXYZ, AdaptToXYZD50, CIEXYZFromWhiteCIExy,
-// WriteICCS15Fixed16, CreateICCHeader) in lib/jxl/cms/jxl_cms_internal.h,
+// WriteICCS15Fixed16, CreateICCHeader, MaybeCreateICCCICPTag) in lib/jxl/cms/jxl_cms_internal.h,
 // and Mul3x3Matrix, Mul3x3Vector and Inv3x3Matrix in lib/jxl/base/matrix_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -17,16 +17,15 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// <summary>
 /// Builds a matrix/TRC display profile from a white point, primaries and tone curves, with the tags and
 /// the math of libjxl's <c>MaybeCreateProfile</c>: <c>desc</c>, <c>cprt</c>, <c>wtpt</c>, <c>chad</c>,
-/// <c>rXYZ</c>/<c>gXYZ</c>/<c>bXYZ</c> and the TRCs, with Bradford adaptation to D50 and the colorants
-/// computed in single precision with double intermediates.
+/// <c>cicp</c> (when the caller gives code points), <c>rXYZ</c>/<c>gXYZ</c>/<c>bXYZ</c> and the TRCs, with
+/// Bradford adaptation to D50 and the colorants computed in single precision with double intermediates.
 /// </summary>
 /// <remarks>
 /// Invalid input throws <see cref="ArgumentException"/> with libjxl's message. The public
 /// <see cref="IccProfileFactory"/> lets it through; the JPEG XL decoder turns it into
 /// <see cref="InvalidImageContentException"/>.
 /// <para>
-/// Where the built profile differs from libjxl's: it has no <c>cicp</c> tag, which the ICC object model
-/// has no type for yet, and table curves (PQ, HLG) are not built.
+/// Where the built profile differs from libjxl's: table curves (PQ, HLG) are not built.
 /// </para>
 /// </remarks>
 internal static class IccProfileBuilder
@@ -77,6 +76,11 @@ internal static class IccProfileBuilder
     /// <param name="renderingIntent">The rendering intent of the header.</param>
     /// <param name="description">The text of the <c>desc</c> tag.</param>
     /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
+    /// <param name="cicp">
+    /// The H.273 colour primaries and transfer characteristics that identify an RGB space, written to a
+    /// <c>cicp</c> tag with matrix coefficients 0 and full range, as libjxl's <c>MaybeCreateICCCICPTag</c>
+    /// does; null for no tag. Ignored for gray.
+    /// </param>
     /// <returns>The profile, written and read back; null when <paramref name="curves"/> is null.</returns>
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
     public static IccProfile Build(
@@ -87,7 +91,8 @@ internal static class IccProfileBuilder
         Vector3 adaptedWhite,
         IccRenderingIntent renderingIntent,
         string description,
-        string signature)
+        string signature,
+        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
     {
         bool gray = dataColorSpace == IccColorSpaceType.Gray;
         (double wx, double wy) = white;
@@ -123,6 +128,12 @@ internal static class IccProfileBuilder
             }
 
             tags.Add(new IccFix16ArrayTagDataEntry(values, IccProfileTag.ChromaticAdaptation));
+
+            // MaybeCreateICCCICPTag: matrix coefficients 0 (identity, RGB) and full range.
+            if (cicp is (byte colorPrimaries, byte transferCharacteristics))
+            {
+                tags.Add(new IccCicpTagDataEntry(colorPrimaries, transferCharacteristics, 0, 1, IccProfileTag.Cicp));
+            }
 
             if (primaries is not null)
             {
