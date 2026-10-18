@@ -285,32 +285,36 @@ public class PaletteQuantizerTests
         double ditheredError = BlockMeanAlphaError(source, dithered);
 
         Assert.True(ditheredError <= unditheredError, $"Dithered block error {ditheredError:F2} vs undithered {unditheredError:F2}.");
+    }
 
-        static double BlockMeanAlphaError(Image<Rgba32> expected, Image<Rgba32> actual)
+    /// <summary>
+    /// Gets the mean, over 8x8 blocks, of the absolute difference in average alpha. Error diffusion
+    /// spreads the error across neighbours, so this measures alpha the way a viewer sees it.
+    /// </summary>
+    internal static double BlockMeanAlphaError(Image<Rgba32> expected, Image<Rgba32> actual)
+    {
+        const int size = 8;
+        double total = 0;
+        int blocks = 0;
+        for (int by = 0; by < expected.Height; by += size)
         {
-            const int size = 8;
-            double total = 0;
-            int blocks = 0;
-            for (int by = 0; by < expected.Height; by += size)
+            for (int bx = 0; bx < expected.Width; bx += size)
             {
-                for (int bx = 0; bx < expected.Width; bx += size)
+                int difference = 0;
+                for (int y = by; y < by + size; y++)
                 {
-                    int difference = 0;
-                    for (int y = by; y < by + size; y++)
+                    for (int x = bx; x < bx + size; x++)
                     {
-                        for (int x = bx; x < bx + size; x++)
-                        {
-                            difference += actual[x, y].A - expected[x, y].A;
-                        }
+                        difference += actual[x, y].A - expected[x, y].A;
                     }
-
-                    total += Math.Abs(difference / (double)(size * size));
-                    blocks++;
                 }
-            }
 
-            return total / blocks;
+                total += Math.Abs(difference / (double)(size * size));
+                blocks++;
+            }
         }
+
+        return total / blocks;
     }
 
     private static Rgba32[] GetColorWalk(ColorWalk walk)
