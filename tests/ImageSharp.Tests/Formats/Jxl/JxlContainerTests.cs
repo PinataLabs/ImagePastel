@@ -92,6 +92,20 @@ public class JxlContainerTests
         Assert.Equal(555, image.Width);
     }
 
+    [Theory]
+    [InlineData(new byte[] { 0, 0, 0, 0 })] // too short for a box header
+    [InlineData(new byte[] { 0, 0, 1, 0, (byte)'E', (byte)'x', (byte)'i', (byte)'f', 0 })] // a box cut off
+    public void Load_BrokenBytesAfterTheLastCodestreamBox_DecodesTheImage(byte[] trailer)
+    {
+        // libjxl stops reading once the codestream is done, so it never sees them.
+        List<byte> data = new(Container(Box("jxlc", Codestream)));
+        data.AddRange(trailer);
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), data.ToArray());
+
+        Assert.Equal(555, image.Width);
+    }
+
     [Fact]
     public void Decode_JxlpOutOfOrder_InFileFormatVersion0_ThrowsInvalidImageContent()
     {

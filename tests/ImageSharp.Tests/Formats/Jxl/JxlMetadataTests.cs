@@ -111,14 +111,19 @@ public class JxlMetadataTests
         Assert.Equal("last", metadata.ExifProfile.GetValue(ExifTag.Software).Value);
     }
 
-    [Fact]
-    public void Identify_CorruptBrotliBox_ThrowsInvalidImageContent()
+    [Theory]
+    [InlineData(0xFF, 16)] // not a Brotli stream
+    [InlineData(0x0B, 1)] // a Brotli stream cut off
+    public void Identify_UnreadableBrotliBox_GivesNoProfileAndStillIdentifies(byte fill, int length)
     {
-        byte[] contents = new byte[4 + 16];
+        // As on netstandard2.1, where no Brotli decoder reads it at all, the box is dropped.
+        byte[] contents = new byte[4 + length];
         Encoding.ASCII.GetBytes("Exif").CopyTo(contents, 0);
-        contents.AsSpan(4).Fill(0xFF);
+        contents.AsSpan(4).Fill(fill);
 
-        Assert.Throws<InvalidImageContentException>(() => Identify(WithBoxes(Box("brob", contents))));
+        ImageMetadata metadata = Identify(WithBoxes(Box("brob", contents)));
+
+        Assert.Null(metadata.ExifProfile);
     }
 
     [Fact]

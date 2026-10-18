@@ -279,19 +279,17 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             return;
         }
 
-        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = new IccProfile(icc);
-
-        // The data colour space is bytes 16 to 19 of the ICC header.
-        bool cmyk = icc.Length >= 20 && icc.AsSpan(16, 4).SequenceEqual("CMYK"u8);
-        IccProfile pixelProfile = new(icc);
-        if (!this.metadata.M.XybEncoded && !cmyk && pixelProfile.CheckIsValid())
+        IccProfile original = new(icc);
+        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = original;
+        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && original.Header.DataColorSpace != IccColorSpaceType.Cmyk)
         {
-            this.imageMetadata.IccProfile = pixelProfile;
+            // Its own copy, so the two profiles share no bytes.
+            this.imageMetadata.IccProfile = original.DeepClone();
         }
     }
 
-    // The rest of #105's rules: a colour encoding other than sRGB, or grey with the sRGB curve, gets a
-    // built profile. libjxl builds a profile for every colour encoding as it reads the header and
+    // The rest of #105's rules: sRGB, and grey with the sRGB curve, get no pixel profile; every other
+    // colour encoding gets a built one. libjxl builds a profile for every colour encoding as it reads the header and
     // rejects the image when it cannot, so the profile is built, and checked, even when it is not kept.
     private void SetColorEncodingProfile(JxlColorEncoding c)
     {

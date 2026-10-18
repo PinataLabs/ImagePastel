@@ -38,8 +38,8 @@ internal static class JxlContainer
     public static JxlContainerContents Read(byte[] data, bool readMetadata)
     {
         // djxl keeps the last box of each kind: each Exif or xml box overwrites the one before.
-        byte[] exifBox = null;
-        byte[] xmlBox = null;
+        ReadOnlyMemory<byte>? exifBox = null;
+        ReadOnlyMemory<byte>? xmlBox = null;
         List<ReadOnlyMemory<byte>> codestream = new();
         Dictionary<uint, (ReadOnlyMemory<byte> Part, bool IsLast)> outOfOrder = new();
         bool lastCodestreamSeen = false;
@@ -58,7 +58,19 @@ internal static class JxlContainer
                 break;
             }
 
-            ReadOnlySpan<byte> type = ParseBoxHeader(data, pos, out long boxSize, out int headerSize);
+            string error = ParseBoxHeader(data, pos, out ReadOnlySpan<byte> type, out long boxSize, out int headerSize);
+            if (error != null)
+            {
+                // libjxl stops once the codestream is done, so it never reads what follows the last
+                // codestream box. Broken bytes there only end the walk.
+                if (lastCodestreamSeen)
+                {
+                    break;
+                }
+
+                JxlThrowHelper.ThrowInvalidImageContentException(error);
+            }
+
             boxCount++;
             if (lastCodestreamSeen && type.SequenceEqual("JXL "u8))
             {
@@ -150,11 +162,11 @@ internal static class JxlContainer
             }
             else if (readMetadata && type.SequenceEqual("Exif"u8))
             {
-                exifBox = contents.ToArray();
+                exifBox = contents;
             }
             else if (readMetadata && type.SequenceEqual("xml "u8))
             {
-                xmlBox = contents.ToArray();
+                xmlBox = contents;
             }
             else if (readMetadata && type.SequenceEqual("brob"u8) && contents.Length >= 4)
             {
@@ -183,15 +195,15 @@ internal static class JxlContainer
         return new JxlContainerContents
         {
             Codestream = Join(codestream),
-            Exif = exifBox == null ? null : ExifFromBox(exifBox),
-            Xmp = xmlBox,
+            Exif = exifBox == null ? null : ExifFromBox(exifBox.Value.Span),
+            Xmp = xmlBox?.ToArray(),
         };
     }
 
     // The Exif box starts with the offset of the TIFF header. djxl drops the bytes before it, and
     // warns and keeps the box as it is when there is no TIFF header there (lib/extras/dec/jxl.cc);
     // ImageSharp has no profile for bytes that are not Exif, so this gives none.
-    private static byte[] ExifFromBox(byte[] box)
+    private static byte[] ExifFromBox(ReadOnlySpan<byte> box)
     {
         // 16 = 4 + 12 = offset + min EXIF payload.
         if (box.Length < 16)
@@ -206,13 +218,14 @@ internal static class JxlContainer
         }
 
         // IsExif in lib/jxl/base/exif.h: a little- or big-endian TIFF header.
-        byte[] exif = box.AsSpan(4 + (int)offset).ToArray();
+        ReadOnlySpan<byte> exif = box.Slice(4 + (int)offset);
         uint header = BinaryPrimitives.ReadUInt32LittleEndian(exif);
-        return header is 0x2A004D4D or 0x002A4949 ? exif : null;
+        return header is 0x2A004D4D or 0x002A4949 ? exif.ToArray() : null;
     }
 
     // Decompresses the contents of a brob box after its type, as JxlBoxContentDecoder does. Returns
-    // null where there is no Brotli decoder.
+    // null where there is no Brotli decoder, and for a stream that cannot be read: libjxl fails the
+    // decode there, but ImageSharp drops unreadable metadata, as it has to on netstandard2.1 anyway.
     private static byte[] Decompress(ReadOnlyMemory<byte> compressed)
     {
 #if NETCOREAPP3_0_OR_GREATER
@@ -250,25 +263,23 @@ internal static class JxlContainer
                     // The Brotli stream has to end with the box.
                     if (!input.IsEmpty)
                     {
-                        JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box ends before the box");
+                        return null;
                     }
 
                     Array.Resize(ref output, written);
                     return output;
                 case System.Buffers.OperationStatus.DestinationTooSmall:
+                    // "EXIF/XMP box is too large"
                     if (output.Length >= BlockSizeLimit)
                     {
-                        JxlThrowHelper.ThrowInvalidImageContentException("EXIF/XMP box is too large");
+                        return null;
                     }
 
                     Array.Resize(ref output, Math.Min(output.Length * 2, BlockSizeLimit));
                     break;
-                case System.Buffers.OperationStatus.NeedMoreData:
-                    JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box is truncated");
-                    break;
                 default:
-                    JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box is invalid");
-                    break;
+                    // Truncated (NeedMoreData) or invalid.
+                    return null;
             }
         }
     }
@@ -316,23 +327,26 @@ internal static class JxlContainer
     }
 
     // Reads the box header at pos: the type, the total box size including the header (0 for a box
-    // that runs to the end of the file), and the header size.
-    private static ReadOnlySpan<byte> ParseBoxHeader(byte[] data, int pos, out long boxSize, out int headerSize)
+    // that runs to the end of the file), and the header size. Returns the error for an invalid header,
+    // or null.
+    private static string ParseBoxHeader(byte[] data, int pos, out ReadOnlySpan<byte> type, out long boxSize, out int headerSize)
     {
+        type = default;
+        boxSize = 0;
+        headerSize = 8;
         if (data.Length - pos < 8)
         {
-            JxlThrowHelper.ThrowInvalidImageContentException("The JPEG XL box header is truncated");
+            return "The JPEG XL box header is truncated";
         }
 
         ulong size = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(pos));
-        ReadOnlySpan<byte> type = data.AsSpan(pos + 4, 4);
-        headerSize = 8;
+        type = data.AsSpan(pos + 4, 4);
         if (size == 1)
         {
             headerSize = 16;
             if (data.Length - pos < 16)
             {
-                JxlThrowHelper.ThrowInvalidImageContentException("The JPEG XL box header is truncated");
+                return "The JPEG XL box header is truncated";
             }
 
             size = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(pos + 8));
@@ -340,17 +354,17 @@ internal static class JxlContainer
 
         if (size > 0 && size < (ulong)headerSize)
         {
-            JxlThrowHelper.ThrowInvalidImageContentException("invalid box size");
+            return "invalid box size";
         }
 
         // libjxl's "Box size overflow" checks guard size_t; a box past the end of this in-memory
         // file is truncated.
         if (size > (ulong)(data.Length - pos))
         {
-            JxlThrowHelper.ThrowInvalidImageContentException("The JPEG XL box is truncated");
+            return "The JPEG XL box is truncated";
         }
 
         boxSize = (long)size;
-        return type;
+        return null;
     }
 }

@@ -25,7 +25,6 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
 /// <list type="bullet">
 /// <item>It has no <c>cicp</c> tag, which the ICC object model has no type for. The tag is optional and
 /// only repeats the colour encoding.</item>
-/// <item>Its profile ID is zero (not computed), which ICC allows, where libjxl writes an MD5.</item>
 /// <item>PQ and HLG need curve tables (<c>CreateTableCurve</c>), which come with slice D11; until then
 /// those encodings are validated but get no profile.</item>
 /// </list>
@@ -130,7 +129,9 @@ internal static class JxlIccBuilder
             tags.Add(new IccParametricCurveTagDataEntry(curve, IccProfileTag.BlueTrc));
         }
 
-        return new IccProfile(Header(c), tags.ToArray());
+        // Written and read back, so the header carries its size and the profile passes CheckIsValid,
+        // which the encoders check before they write a profile.
+        return new IccProfile(new IccProfile(Header(c), tags.ToArray()).ToByteArray());
     }
 
     private static CultureInfo GetEnUs()
@@ -379,17 +380,59 @@ internal static class JxlIccBuilder
     // this uses the shortest round-trip form.
     private static string Description(JxlColorEncoding c)
     {
+        // Return short names for the most common color spaces. These names are returned regardless of
+        // rendering intent, and also there is some tolerance regarding primaries and transfer function,
+        // so different ColorEncodings can return the same short name.
         JxlTransferFunction tf = c.Tf.TransferFunction;
-        if (c.ColorSpace == JxlColorSpace.Rgb && c.WhitePoint == JxlWhitePoint.D65 && !c.Tf.HaveGamma)
+        double gamma = c.Tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul);
+        if (c.ColorSpace == JxlColorSpace.Rgb)
         {
-            if (tf == JxlTransferFunction.Srgb && c.Primaries == JxlPrimaries.Srgb)
+            ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
+            bool custom = c.Primaries == JxlPrimaries.Custom;
+            if (c.WhitePoint == JxlWhitePoint.D65)
             {
-                return "sRGB";
+                if (!c.Tf.HaveGamma && tf == JxlTransferFunction.Srgb)
+                {
+                    if (c.Primaries == JxlPrimaries.Srgb)
+                    {
+                        return "sRGB";
+                    }
+
+                    if (c.Primaries == JxlPrimaries.P3)
+                    {
+                        return "DisplayP3";
+                    }
+                }
+
+                if (c.Primaries == JxlPrimaries.Bt2100 && !c.Tf.HaveGamma)
+                {
+                    if (tf == JxlTransferFunction.Pq)
+                    {
+                        return "Rec2100PQ";
+                    }
+
+                    if (tf == JxlTransferFunction.Hlg)
+                    {
+                        return "Rec2100HLG";
+                    }
+                }
+
+                if (custom && CloseEnough(rx, 0.6400) && CloseEnough(ry, 0.3300) && CloseEnough(gx, 0.2100) && CloseEnough(gy, 0.7100)
+                    && CloseEnough(bx, 0.1500) && CloseEnough(by, 0.0600) && c.Tf.HaveGamma && CloseEnough(gamma, 256.0 / 563.0))
+                {
+                    return "Adobe98";
+                }
             }
 
-            if (tf == JxlTransferFunction.Srgb && c.Primaries == JxlPrimaries.P3)
+            // Apple's ROMM, Adobe's ProPhoto and the CSS prophoto-rgb differ slightly; this matches the
+            // CSS definition. Adobe's ProPhoto profile uses a simple gamma curve (g0.555315); others
+            // have a small linear segment near black.
+            (double wx, double wy) = c.WhitePointXy;
+            if (c.WhitePoint == JxlWhitePoint.Custom && CloseEnough(wx, 0.345669) && CloseEnough(wy, 0.358496) && custom
+                && CloseEnough(rx, 0.734699) && CloseEnough(ry, 0.265301) && CloseEnough(gx, 0.159597) && CloseEnough(gy, 0.840403)
+                && CloseEnough(bx, 0.036598) && CloseEnough(by, 0.000105) && c.Tf.HaveGamma && CloseEnough(gamma, 1.0 / 1.8))
             {
-                return "DisplayP3";
+                return "ProPhoto";
             }
         }
 
@@ -439,7 +482,7 @@ internal static class JxlIccBuilder
         if (explicitWpTf)
         {
             d += '_' + (c.Tf.HaveGamma
-                ? "g" + Number(c.Tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul))
+                ? "g" + Number(gamma)
                 : tf switch
                 {
                     JxlTransferFunction.Srgb => "SRG",
@@ -454,4 +497,6 @@ internal static class JxlIccBuilder
 
         return d;
     }
+
+    private static bool CloseEnough(double a, double b) => Math.Abs(a - b) < 3e-5;
 }

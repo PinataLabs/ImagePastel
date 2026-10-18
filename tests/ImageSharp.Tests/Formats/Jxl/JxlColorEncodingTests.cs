@@ -112,6 +112,22 @@ public class JxlColorEncodingTests
     }
 
     [Fact]
+    public void SaveAsPng_BuiltProfile_IsWrittenToThePng()
+    {
+        // The PNG encoder writes only a profile that passes CheckIsValid.
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_display_p3.jxl"));
+        Assert.True(image.Metadata.IccProfile.CheckIsValid());
+
+        using MemoryStream png = new();
+        image.SaveAsPng(png);
+        png.Position = 0;
+        using Image<Rgba32> saved = Image.Load<Rgba32>(png);
+
+        Assert.NotNull(saved.Metadata.IccProfile);
+        AssertSameColour(image.Metadata.IccProfile, saved.Metadata.IccProfile);
+    }
+
+    [Fact]
     public void Load_Hlg_DecodesWithNoPixelProfileUntilD11()
     {
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_hlg.jxl"));
