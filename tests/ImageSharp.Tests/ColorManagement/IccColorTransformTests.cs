@@ -157,7 +157,45 @@ public class IccColorTransformTests
     public void Constructor_CorruptTarget_ThrowsInvalidImageContentException()
         => Assert.Throws<InvalidImageContentException>(() => new IccColorTransform(null, new IccProfile(new byte[16])));
 
+    // Little CMS inverts parametric type 4 by comparing the output with the linear piece at d (c * d + f),
+    // so outputs between that and e have no solution on the power piece and give 0. References:
+    // transicc 2.20 (a57322d8) -n -c0 -t0 -i*sRGB -o<CreateDiscontinuousType4Profile()>.
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(2, 2.0001F)]
+    [InlineData(10, 10.0007F)]
+    [InlineData(15, 0)]
+    [InlineData(30, 0)]
+    [InlineData(45, 0)]
+    [InlineData(63, 0)]
+    [InlineData(70, 27.4349F)]
+    [InlineData(128, 113.2300F)]
+    [InlineData(255, 249.3093F)]
+    public void Transform_ToDiscontinuousParametricType4_MatchesLittleCms(int gray, float expectedRed)
+    {
+        IccColorTransform transform = new(null, CreateDiscontinuousType4Profile());
+        Vector4[] colors = [new(gray / 255F, gray / 255F, gray / 255F, 1)];
+
+        transform.Transform(colors);
+
+        Assert.True(MathF.Abs((colors[0].X * 255) - expectedRed) <= Tolerance, $"Expected {expectedRed}, got {colors[0].X * 255}.");
+    }
+
     private static IccProfile Load(string file) => file is null ? null : ConvertColorProfileProcessorTests.LoadProfile(file);
+
+    // The sRGB primaries with ICC parametric curve type 4 (Y = (aX + b)^g + e at and above d, cX + f below)
+    // whose two pieces do not meet: at d the power piece gives about 0.053 and the linear piece about 0.003.
+    private static IccProfile CreateDiscontinuousType4Profile()
+    {
+        IccProfile srgb = IccProfileFactory.CreateSrgb();
+        IccParametricCurve curve = new(2.4F, 1 / 1.055F, 0.055F / 1.055F, 1 / 12.92F, 0.04045F, 0.05F, 0);
+        IccTagDataEntry[] entries = Array.ConvertAll(
+            Array.FindAll(srgb.Entries, e => e.TagSignature != IccProfileTag.Cicp),
+            e => e.TagSignature is IccProfileTag.RedTrc or IccProfileTag.GreenTrc or IccProfileTag.BlueTrc
+                ? new IccParametricCurveTagDataEntry(curve, e.TagSignature)
+                : e);
+        return new IccProfile(new IccProfile(srgb.Header, entries).ToByteArray());
+    }
 
     // transicc -s clips the color channels to the gamut.
     private static Vector4 Clamp(Vector4 v) => new(Math.Clamp(v.X, 0, 1), Math.Clamp(v.Y, 0, 1), Math.Clamp(v.Z, 0, 1), v.W);
