@@ -62,6 +62,102 @@ public class TiffDecoderCorrectnessTests
     }
 
     [Theory]
+    [InlineData(1, 5)]
+    [InlineData(2, 11)]
+    [InlineData(3, 23)]
+    [InlineData(4, 47)]
+    [InlineData(5, 95)]
+    [InlineData(6, 191)]
+    [InlineData(7, 383)]
+    [InlineData(8, 767)]
+    [InlineData(8, 3)]
+    [InlineData(16, 196607)]
+    public void Decode_PaletteWithShortColorMap_ThrowsImageFormatException(ushort bitsPerSample, int colorMapLength)
+    {
+        // TIFF 6.0 requires 3 * 2^BitsPerSample ColorMap entries.
+        byte[] tiff = CreatePaletteTiff(bitsPerSample, new ushort[colorMapLength]);
+
+        ImageFormatException ex = Assert.Throws<ImageFormatException>(() => Image.Load<Rgb24>(tiff).Dispose());
+        Assert.Contains("ColorMap", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(16)]
+    public void Decode_PaletteWithFullColorMap_ReadsRedGreenAndBlueTables(ushort bitsPerSample)
+    {
+        int colorCount = 1 << bitsPerSample;
+        ushort[] colorMap = new ushort[colorCount * 3];
+        SetLastPaletteEntry(colorMap, colorCount, 10, 20, 30);
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreatePaletteTiff(bitsPerSample, colorMap, LastIndexStrip(bitsPerSample)));
+
+        Assert.Equal(new Rgb24(10, 20, 30), image[0, 0]);
+    }
+
+    [Fact]
+    public void Decode_SixteenBitPaletteInLittleEndianFile_ReadsIndexInFileByteOrder()
+    {
+        // The builder writes an "II" file, so the 16-bit index 1 is stored as the bytes 01 00.
+        const int colorCount = 1 << 16;
+        ushort[] colorMap = new ushort[colorCount * 3];
+        colorMap[1] = 10;
+        colorMap[colorCount + 1] = 20;
+        colorMap[(colorCount * 2) + 1] = 30;
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreatePaletteTiff(16, colorMap, new byte[] { 0x01, 0x00 }));
+
+        Assert.Equal(new Rgb24(10, 20, 30), image[0, 0]);
+    }
+
+    [Theory]
+    [InlineData(4, 3)]
+    [InlineData(4, (256 * 3) - (16 * 3))]
+    [InlineData(8, 1)]
+    public void Decode_PaletteWithLongColorMap_IgnoresExtraEntries(ushort bitsPerSample, int extraEntries)
+    {
+        // Only the first 3 * 2^BitsPerSample entries form the palette. The extra entries above 255 must not
+        // switch the 8-bit colormap to 16-bit scaling.
+        int colorCount = 1 << bitsPerSample;
+        ushort[] colorMap = new ushort[(colorCount * 3) + extraEntries];
+        SetLastPaletteEntry(colorMap, colorCount, 10, 20, 30);
+        colorMap.AsSpan(colorCount * 3).Fill(ushort.MaxValue);
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreatePaletteTiff(bitsPerSample, colorMap, LastIndexStrip(bitsPerSample)));
+
+        Assert.Equal(new Rgb24(10, 20, 30), image[0, 0]);
+    }
+
+    [Theory]
+    [InlineData(17, 3)]
+    [InlineData(31, 3)]
+    [InlineData(32, 3)]
+    [InlineData(33, 6)]
+    public void Decode_PaletteWithBitsPerSampleAbove16_ThrowsNotSupportedException(ushort bitsPerSample, int colorMapLength)
+    {
+        // 1 << 31 overflows and 1 << 32 wraps to 1, so without a limit a 3-entry ColorMap would pass the length check.
+        byte[] tiff = CreatePaletteTiff(bitsPerSample, new ushort[colorMapLength]);
+
+        Assert.Throws<NotSupportedException>(() => Image.Load<Rgb24>(tiff).Dispose());
+    }
+
+    [Fact]
+    public void Decode_PaletteWithoutColorMap_ThrowsImageFormatException()
+    {
+        byte[] tiff = CreatePaletteTiff(8, null);
+
+        ImageFormatException ex = Assert.Throws<ImageFormatException>(() => Image.Load<Rgb24>(tiff).Dispose());
+        Assert.Contains("ColorMap", ex.Message);
+    }
+
+    [Theory]
     [InlineData(TiffCompression.None)]
     [InlineData(TiffCompression.CcittGroup4Fax)]
     public void Decode_BilevelWithoutBitsPerSample_UsesDefaultOfOneBit(TiffCompression compression)
@@ -250,6 +346,54 @@ public class TiffDecoderCorrectnessTests
         }
 
         return colorMap;
+    }
+
+    /// <summary>
+    /// Sets the red, green and blue values of the last palette entry, as laid out in TIFF 6.0.
+    /// </summary>
+    private static void SetLastPaletteEntry(ushort[] colorMap, int colorCount, ushort r, ushort g, ushort b)
+    {
+        colorMap[colorCount - 1] = r;
+        colorMap[(colorCount * 2) - 1] = g;
+        colorMap[(colorCount * 3) - 1] = b;
+    }
+
+    /// <summary>
+    /// Gets the strip of a 1x1 image whose pixel is the last palette index (all bits set).
+    /// </summary>
+    private static byte[] LastIndexStrip(ushort bitsPerSample)
+    {
+        byte[] strip = new byte[(bitsPerSample + 7) / 8];
+        strip.AsSpan().Fill(byte.MaxValue);
+        return strip;
+    }
+
+    /// <summary>
+    /// Builds an uncompressed 1x1 palette TIFF. A null <paramref name="colorMap"/> leaves out the ColorMap entry.
+    /// </summary>
+    /// <param name="bitsPerSample">The BitsPerSample value.</param>
+    /// <param name="colorMap">The ColorMap values, or null.</param>
+    /// <param name="strip">The strip data, or null to store index 0.</param>
+    private static byte[] CreatePaletteTiff(ushort bitsPerSample, ushort[] colorMap, byte[] strip = null)
+    {
+        strip ??= new byte[(bitsPerSample + 7) / 8];
+
+        TiffTestFileBuilder builder = new TiffTestFileBuilder()
+            .AddPage(strip)
+            .AddLong(ExifTagValue.ImageWidth, 1)
+            .AddLong(ExifTagValue.ImageLength, 1)
+            .AddShort(ExifTagValue.BitsPerSample, bitsPerSample)
+            .AddShort(ExifTagValue.Compression, (ushort)TiffCompression.None)
+            .AddShort(ExifTagValue.PhotometricInterpretation, (ushort)TiffPhotometricInterpretation.PaletteColor)
+            .AddShort(ExifTagValue.SamplesPerPixel, 1)
+            .AddLong(ExifTagValue.RowsPerStrip, 1);
+
+        if (colorMap != null)
+        {
+            builder.AddShort(ExifTagValue.ColorMap, colorMap);
+        }
+
+        return builder.Build();
     }
 
     private static byte[] CreatePaletteTiff(ushort[] colorMap, TiffCompression compression)
