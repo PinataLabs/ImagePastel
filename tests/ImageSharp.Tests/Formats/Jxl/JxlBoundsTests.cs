@@ -1,0 +1,304 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Entropy;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.PixelFormats;
+using Xunit;
+
+namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+
+/// <summary>
+/// One test per structural bound ported from libjxl (issue #112): input over the bound throws
+/// <see cref="InvalidImageContentException"/>, and input at the bound still decodes.
+/// </summary>
+[Trait("Format", "Jxl")]
+public class JxlBoundsTests
+{
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    [InlineData(1, true)]
+    public void MaTree_OverTheNodeLimit_Throws(long limit, bool throws)
+    {
+        // A split on property 0 with two leaves: three nodes. The limit is checked before each node.
+        JxlTestBitWriter writer = new();
+        WriteTwoSymbolPrefixHistograms(writer, numContexts: 6);
+        writer.Bit(true).Bit(false); // property 0 + 1, split value 0
+        writer.Bits(10, false); // two leaves: property, predictor, offset, multiplier log and bits
+
+        JxlBitReader reader = writer.ToReader();
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlMaTree.DecodeTree(reader, limit));
+        }
+        else
+        {
+            Assert.Equal(3, JxlMaTree.DecodeTree(reader, limit).Count);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(0, true)]
+    public void MaTree_SplitOutsideItsPropertyRange_Throws(int nestedSplitToken, bool throws)
+    {
+        // The root splits property 0 at 0, so its right subtree only sees values <= 0. A nested split
+        // there at -1 (token 1) narrows the range; a split at 0 (token 0) cannot.
+        JxlTestBitWriter writer = new();
+        WriteTwoSymbolPrefixHistograms(writer, numContexts: 6);
+        writer.Bit(true).Bit(false); // root: property 0, split value 0
+        writer.Bits(5, false); // left child: leaf
+        writer.Bit(true).Write(1, (ulong)nestedSplitToken); // right child: property 0
+        writer.Bits(10, false); // two leaves
+
+        JxlBitReader reader = writer.ToReader();
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlMaTree.DecodeTree(reader, 1024));
+        }
+        else
+        {
+            Assert.Equal(5, JxlMaTree.DecodeTree(reader, 1024).Count);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(3, false)]
+    [InlineData(4, true)]
+    [InlineData(8, true)]
+    public void ExtraChannel_DimShiftOver3_Throws(int dimShift, bool throws)
+    {
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).Write(2, 0); // not all default, alpha
+        writer.Bit(false).Write(2, 0); // 8-bit integer samples
+        if (dimShift == 0)
+        {
+            writer.Write(2, 0);
+        }
+        else
+        {
+            writer.Write(2, 3).Write(3, (ulong)(dimShift - 1)); // BitsOffset(3, 1)
+        }
+
+        writer.Write(2, 0).Bit(false); // empty name, not premultiplied
+
+        JxlBitReader reader = writer.ToReader();
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlBundle.Read(reader, new JxlExtraChannelInfo()));
+        }
+        else
+        {
+            JxlExtraChannelInfo info = new();
+            JxlBundle.Read(reader, info);
+            Assert.Equal((uint)dimShift, info.DimShift);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(20, true)]
+    public void ContextMap_ClusterIdOver255_Throws(int token, bool throws)
+    {
+        // Token 20 with split exponent 4 carries 8 raw bits, which are zero: cluster 256.
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).Bit(false); // not simple, no move-to-front
+        writer.Bit(false).Bit(true); // nested histograms: no LZ77, prefix codes
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, 20); // alphabet size 21
+        writer.Write(2, 1).Write(2, 0).Write(5, (ulong)token); // simple prefix code with one symbol
+        writer.Bits(3 * 8, false);
+
+        byte[] contextMap = new byte[3];
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlContextMap.DecodeContextMap(contextMap, writer.ToReader()));
+        }
+        else
+        {
+            Assert.Equal(1, JxlContextMap.DecodeContextMap(contextMap, writer.ToReader()));
+        }
+    }
+
+    [Theory]
+    [InlineData(32, false)]
+    [InlineData(33, true)]
+    public void AnsAlphabet_OverTheLimit_Throws(int alphabetSize, bool throws)
+    {
+        // log_alpha_size 5 allows 32 symbols; a flat histogram of alphabetSize symbols follows.
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).Bit(false); // no LZ77, ANS
+        writer.Write(2, 0); // log_alpha_size = 5
+        writer.Write(3, 5); // split exponent = log_alpha_size: no msb or lsb fields
+        writer.Bit(false).Bit(true); // not simple, flat
+        WriteVarLenUint8(writer, alphabetSize - 1);
+
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode()));
+        }
+        else
+        {
+            JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode());
+        }
+    }
+
+    [Theory]
+    [InlineData(1 << 15, false)]
+    [InlineData((1 << 15) + 1, true)]
+    [InlineData(1 << 16, true)]
+    public void PrefixAlphabet_Over2Pow15_Throws(int alphabetSize, bool throws)
+    {
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).Bit(true); // no LZ77, prefix codes
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, alphabetSize - 1);
+        writer.Write(2, 1).Write(2, 0).Write(15, 0); // simple prefix code with symbol 0
+
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode()));
+        }
+        else
+        {
+            JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode());
+        }
+    }
+
+    [Fact]
+    public void Toc_OverTheEntryLimit_Throws()
+        => Assert.Throws<InvalidImageContentException>(() => JxlToc.ReadToc(JxlToc.MaxTocEntries + 1, new JxlBitReader(new byte[16])));
+
+    [Fact]
+    public void Toc_WithinTheLimit_ReadsTheSizes()
+    {
+        JxlTestBitWriter writer = new();
+        writer.Bit(false).ZeroPadToByte(); // no permutation
+        writer.Write(2, 0).Write(10, 5).ZeroPadToByte(); // one entry of 5 bytes
+
+        Assert.Equal(new uint[] { 5 }, JxlToc.ReadToc(1, writer.ToReader()));
+    }
+
+    [Fact]
+    public void Header_SideOver2Pow30_Throws()
+    {
+        // ysize = 2^30 and ratio 2:1, so xsize = 2^31.
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(false).Write(2, 3).Write(30, (1 << 30) - 1).Write(3, 7);
+        writer.Bit(true).Bit(true); // all-default image metadata and transform data
+
+        Assert.Throws<InvalidImageContentException>(() => Identify(writer));
+    }
+
+    [Theory]
+    [InlineData(256, false)]
+    [InlineData(257, true)]
+    public void Header_MoreThan256ExtraChannels_Throws(int count, bool throws)
+    {
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(true).Write(5, 0).Write(3, 1); // 8 x 8
+        writer.Bit(false).Bit(false); // image metadata: not all default, no extra fields
+        writer.Bit(false).Write(2, 0).Bit(true); // 8-bit integer samples, 16-bit buffers suffice
+        writer.Write(2, 3).Write(12, (ulong)(count - 1)); // extra channels
+        writer.Bits(count, true); // each all default (8-bit alpha)
+        writer.Bit(true).Bit(true).Write(2, 0); // XYB, default colour encoding, no extensions
+        writer.Bit(true); // all-default transform data
+
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => Identify(writer));
+        }
+        else
+        {
+            Assert.Equal(8, Identify(writer).Width);
+        }
+    }
+
+    [Fact]
+    public void PixelCap_ThrowsInvalidMemoryOperationBeforeAllocating()
+    {
+        // 20000 x 20000 is over the 2^28-pixel cap.
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(false).Write(2, 2).Write(18, 19999).Write(3, 0).Write(2, 2).Write(18, 19999);
+        writer.Bit(true).Bit(true);
+
+        using MemoryStream stream = new(writer.ToArray());
+        Assert.Throws<InvalidMemoryOperationException>(() => new JxlDecoder().Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None));
+    }
+
+    [Fact]
+    public void PixelCap_DoesNotApplyToIdentify()
+    {
+        JxlTestBitWriter writer = Codestream();
+        writer.Bit(false).Write(2, 2).Write(18, 19999).Write(3, 0).Write(2, 2).Write(18, 19999);
+        writer.Bit(true).Bit(true);
+
+        IImageInfo info = Identify(writer);
+
+        Assert.Equal(20000, info.Width);
+        Assert.Equal(20000, info.Height);
+    }
+
+    private static JxlTestBitWriter Codestream() => new JxlTestBitWriter().Write(8, 0xFF).Write(8, 0x0A);
+
+    private static IImageInfo Identify(JxlTestBitWriter writer)
+    {
+        using MemoryStream stream = new(writer.ToArray());
+        return new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None);
+    }
+
+    // No LZ77, one histogram for every context, prefix codes with two 1-bit symbols: each bit is a token.
+    private static void WriteTwoSymbolPrefixHistograms(JxlTestBitWriter writer, int numContexts)
+    {
+        writer.Bit(false);
+        if (numContexts > 1)
+        {
+            writer.Bit(true).Write(2, 0); // simple context map, 0 bits per entry
+        }
+
+        writer.Bit(true);
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, 1); // alphabet size 2
+        writer.Write(2, 1).Write(2, 1).Write(1, 0).Write(1, 1); // simple prefix code: symbols 0 and 1
+    }
+
+    // Split exponent 4, no msb or lsb in the token, for log_alpha_size 15.
+    private static void WriteUintConfigSplit4(JxlTestBitWriter writer) => writer.Write(4, 4).Write(3, 0).Write(3, 0);
+
+    private static void WriteVarLenUint8(JxlTestBitWriter writer, int value) => WriteVarLen(writer, value, 3);
+
+    private static void WriteVarLenUint16(JxlTestBitWriter writer, int value) => WriteVarLen(writer, value, 4);
+
+    private static void WriteVarLen(JxlTestBitWriter writer, int value, int lengthBits)
+    {
+        if (value == 0)
+        {
+            writer.Bit(false);
+            return;
+        }
+
+        writer.Bit(true);
+        int nbits = 0;
+        while ((value >> (nbits + 1)) != 0)
+        {
+            nbits++;
+        }
+
+        writer.Write(lengthBits, (ulong)nbits);
+        if (nbits != 0)
+        {
+            writer.Write(nbits, (ulong)(value - (1 << nbits)));
+        }
+    }
+}
