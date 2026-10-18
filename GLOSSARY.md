@@ -36,6 +36,14 @@ _Avoid_: working space, intermediate space
 The rule an ICC conversion follows for colours that the target cannot show: perceptual, relative colorimetric, saturation or absolute colorimetric. A profile can hold a different table for each one.
 _Avoid_: conversion mode, gamut mapping mode
 
+**Black-point compensation** (BPC):
+A scaling in the profile connection space that maps the darkest colour of the source profile to the darkest colour of the target profile, keeping white, so that shadows keep their detail when the target cannot show as deep a black. The black points are found with Adobe's published algorithm.
+_Avoid_: black-point mapping, shadow compensation
+
+**Media white point**:
+The colour of the medium's white (the `wtpt` tag), such as paper. Absolute colorimetric keeps it; the other intents map it to the PCS white.
+_Avoid_: paper white (for the tag), reference white
+
 **Matrix/TRC profile**:
 An RGB ICC profile that describes its colours with three tone curves (TRCs) and a 3x3 matrix of colorants, instead of lookup tables. Gray profiles are the one-channel case: a single tone curve.
 _Avoid_: shaper profile, simple profile

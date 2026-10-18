@@ -17,7 +17,8 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 
 /// <summary>
 /// A profile used through one of its LUT-based tags (ICC.1:2022 sections 10.10, 10.11, 10.12 and
-/// 10.13): <c>A2B0</c> as a source, <c>B2A0</c> as a target. The tag may be a <c>lut8Type</c>,
+/// 10.13): an <c>A2Bn</c> tag as a source, a <c>B2An</c> tag as a target, chosen by the rendering
+/// intent (see <see cref="IccProfileModel.Read"/>). The tag may be a <c>lut8Type</c>,
 /// <c>lut16Type</c>, <c>lutAToBType</c> or <c>lutBToAType</c>, and the profile may be RGB, gray
 /// or CMYK.
 /// </summary>
@@ -57,14 +58,15 @@ internal sealed class IccLutModel : IccProfileModel
     /// <summary>
     /// Reads the model of a profile from its LUT-based tag.
     /// </summary>
-    /// <param name="lut">The tag: <c>A2B0</c> for a source, <c>B2A0</c> for a target.</param>
+    /// <param name="lut">The table: an <c>A2Bn</c> tag for a source, a <c>B2An</c> tag for a target.</param>
+    /// <param name="tag">The tag the table comes from, for error messages.</param>
     /// <param name="dataColorSpace">The profile's data color space: RGB, gray or CMYK.</param>
     /// <param name="connectionSpace">The profile's PCS encoding.</param>
     /// <param name="asSource">Whether the profile is the source.</param>
     /// <param name="role">"source" or "target", for error messages.</param>
     /// <returns>The model.</returns>
     /// <exception cref="InvalidImageContentException">The table does not fit the profile.</exception>
-    public static IccLutModel Read(IccTagDataEntry lut, IccColorSpaceType dataColorSpace, IccColorSpaceType connectionSpace, bool asSource, string role)
+    public static IccLutModel Read(IccTagDataEntry lut, IccProfileTag tag, IccColorSpaceType dataColorSpace, IccColorSpaceType connectionSpace, bool asSource, string role)
     {
         int deviceChannels = dataColorSpace switch
         {
@@ -73,8 +75,7 @@ internal sealed class IccLutModel : IccProfileModel
             _ => 4,
         };
 
-        string tag = asSource ? "AToB0" : "BToA0";
-        Builder table = new(asSource ? deviceChannels : 3, role, tag);
+        Builder table = new(asSource ? deviceChannels : 3, role, tag.ToString());
 
         // Little CMS interpolates three-input tables indexed by Lab trilinearly.
         bool trilinear = !asSource && connectionSpace == IccColorSpaceType.CieLab;

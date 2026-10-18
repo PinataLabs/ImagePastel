@@ -369,17 +369,27 @@ public class ConvertColorProfileProcessorTests
     }
 
     [Theory]
-    [InlineData(IccRenderingIntent.MediaRelativeColorimetric, false)]
-    [InlineData(IccRenderingIntent.Saturation, false)]
-    [InlineData(IccRenderingIntent.AbsoluteColorimetric, false)]
-    [InlineData(IccRenderingIntent.Perceptual, true)]
-    public void ConvertColorProfile_OptionsOfLaterStages_ThrowNotSupportedException(IccRenderingIntent intent, bool blackPointCompensation)
+    [InlineData(TestImages.Icc.LittleCmsRgbIntentsV2, null, IccRenderingIntent.Saturation, false)]
+    [InlineData(TestImages.Icc.LittleCmsRgbIntentsV2, null, IccRenderingIntent.AbsoluteColorimetric, false)]
+    [InlineData(null, TestImages.Icc.LittleCmsRgbIntentsV2, IccRenderingIntent.MediaRelativeColorimetric, true)]
+    [InlineData(TestImages.Icc.LittleCmsRgbIntentsMatrixV2, TestImages.Icc.LittleCmsSrgbV2, IccRenderingIntent.Perceptual, true)]
+    public void ConvertColorProfile_IntentAndBlackPointCompensation_MatchLittleCms(string sourceProfile, string targetProfile, IccRenderingIntent intent, bool blackPointCompensation)
     {
+        LittleCmsReference reference = LittleCmsReferences.Get(sourceProfile, targetProfile, intent, blackPointCompensation);
         IccColorTransformOptions options = new() { RenderingIntent = intent, BlackPointCompensation = blackPointCompensation };
-        using Image<Rgb24> image = new(1, 1);
-        image.Metadata.IccProfile = LoadProfile(TestImages.Icc.CompactAdobeRgbV2);
+        using Image<Rgb24> image = CreateRgb24(reference);
+        image.Metadata.IccProfile = sourceProfile is null ? null : LoadProfile(sourceProfile);
 
-        Assert.Throws<NotSupportedException>(() => image.Mutate(x => x.ConvertColorProfileToSrgb(options)));
+        if (targetProfile is null)
+        {
+            image.Mutate(x => x.ConvertColorProfileToSrgb(options));
+        }
+        else
+        {
+            image.Mutate(x => x.ConvertColorProfile(LoadProfile(targetProfile), options));
+        }
+
+        AssertPixels(image, reference, EightBitTolerance);
     }
 
     /// <summary>
