@@ -13,9 +13,10 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
-/// Writes the rendered planes into an <see cref="ImageFrame{TPixel}"/>, clamped to [0, 1]. The
-/// first alpha channel becomes the pixel alpha, un-premultiplied if it is premultiplied; other extra
-/// channels are dropped (issue #111). A grey plane goes into every colour component.
+/// Writes each rendered frame into a frame of an <see cref="Image{TPixel}"/>, clamped to [0, 1]: the
+/// first into the root frame, each later one into a new frame. The first alpha channel becomes the
+/// pixel alpha, un-premultiplied if it is premultiplied; other extra channels are dropped (issue #111).
+/// A grey plane goes into every colour component.
 /// </summary>
 /// <typeparam name="TPixel">The pixel type.</typeparam>
 internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
@@ -25,24 +26,25 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     private const float SmallAlpha = 1F / (1u << 26);
 
     private readonly Configuration configuration;
-    private readonly ImageFrame<TPixel> frame;
+    private readonly Image<TPixel> image;
     private readonly int greenPlane;
     private readonly int bluePlane;
     private readonly int alphaPlane;
     private readonly bool unpremultiply;
+    private int framesWritten;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlImageFrameSink{TPixel}"/> class.
     /// </summary>
     /// <param name="configuration">The configuration.</param>
-    /// <param name="frame">The frame to write.</param>
+    /// <param name="image">The image whose frames are written.</param>
     /// <param name="colorPlanes">The number of colour planes: 1 for grey, 3 for RGB.</param>
     /// <param name="alphaChannel">The extra channel that holds alpha, or -1 for an opaque image.</param>
     /// <param name="alphaPremultiplied">Whether the colours are premultiplied by that alpha.</param>
-    public JxlImageFrameSink(Configuration configuration, ImageFrame<TPixel> frame, int colorPlanes, int alphaChannel, bool alphaPremultiplied)
+    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, int colorPlanes, int alphaChannel, bool alphaPremultiplied)
     {
         this.configuration = configuration;
-        this.frame = frame;
+        this.image = image;
         this.greenPlane = colorPlanes == 1 ? 0 : 1;
         this.bluePlane = colorPlanes == 1 ? 0 : 2;
         this.alphaPlane = alphaChannel < 0 ? -1 : colorPlanes + alphaChannel;
@@ -52,7 +54,9 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
         // Spot colours, CMYK and the sRGB transfer for XYB arrive with later slices.
-        Buffer2D<TPixel> pixels = this.frame.PixelBuffer;
+        ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
+        this.framesWritten++;
+        Buffer2D<TPixel> pixels = frame.PixelBuffer;
         using IMemoryOwner<Vector4> rowOwner = this.configuration.MemoryAllocator.Allocate<Vector4>(width);
         Span<Vector4> row = rowOwner.GetSpan();
         for (int y = 0; y < height; y++)

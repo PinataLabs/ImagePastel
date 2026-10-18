@@ -23,6 +23,12 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
     public bool IgnoreMetadata { get; set; }
 
     /// <summary>
+    /// Gets or sets the maximum number of displayed frames to decode. Decoding stops once that many
+    /// frames are out; the default decodes them all.
+    /// </summary>
+    public uint MaxFrames { get; set; } = uint.MaxValue;
+
+    /// <summary>
     /// Gets or sets the conversion from the embedded ICC profile that runs after the pixels are
     /// decoded. Defaults to <see cref="ColorProfileConversion.None"/>. Nothing is converted when
     /// <see cref="IgnoreMetadata"/> is set, when the image has no embedded profile, or when the

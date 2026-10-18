@@ -86,6 +86,8 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       # The scanner version is pinned in dotnet-tools.json.
+      # The Python scripts under tests/Images make test input files. No test runs
+      # them, so, like the images they make, they are left out of coverage.
       - name: Begin analysis
         run: |
           if [ -z "$SONAR_TOKEN" ]; then
@@ -97,6 +99,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.opencover.reportsPaths="artifacts/coverage/**/coverage.opencover.xml" \
             /d:sonar.exclusions="**/*.pdf,**/*.pptx,**/*.ttf,**/*.woff,**/*.jpg,**/*.png" \
+            /d:sonar.coverage.exclusions="tests/Images/**/*.py" \
             /d:sonar.test.exclusions="**/*.pdf,**/*.pptx,**/*.ttf,**/*.woff,**/*.jpg,**/*.png"
 
       - name: Build

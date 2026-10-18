@@ -70,7 +70,8 @@ internal sealed class JxlConformanceVector
             frames.Add(new JxlConformanceFrame(
                 frame.GetProperty("name").GetString(),
                 frame.GetProperty("rms_error").GetDouble(),
-                frame.GetProperty("peak_error").GetDouble()));
+                frame.GetProperty("peak_error").GetDouble(),
+                frame.TryGetProperty("duration", out JsonElement duration) ? duration.GetDouble() : null));
         }
 
         Dictionary<string, string> sums = new(StringComparer.Ordinal);
@@ -90,8 +91,11 @@ internal sealed class JxlConformanceVector
         .ToArray();
 }
 
-/// <summary>The error thresholds for one displayed frame, in nominal [0, 1] sample units.</summary>
-internal sealed record JxlConformanceFrame(string Name, double RmsError, double PeakError);
+/// <summary>
+/// The error thresholds for one displayed frame, in nominal [0, 1] sample units, and its duration in
+/// seconds, which only animations list.
+/// </summary>
+internal sealed record JxlConformanceFrame(string Name, double RmsError, double PeakError, double? Duration = null);
 
 /// <summary>The pinned upstream source of the conformance vectors, from <c>source.json</c>.</summary>
 internal sealed class JxlConformanceSource

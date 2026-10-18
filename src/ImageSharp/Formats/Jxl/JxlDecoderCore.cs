@@ -5,7 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -33,6 +35,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     private const int MaxExtraChannels = 256;
 
     private readonly bool ignoreMetadata;
+    private readonly uint maxFrames;
 
     private JxlCodecMetadata metadata;
 
@@ -57,13 +60,17 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         this.Configuration = configuration;
         this.ignoreMetadata = options.IgnoreMetadata;
+        this.maxFrames = options.MaxFrames;
     }
 
     /// <inheritdoc/>
     public Configuration Configuration { get; }
 
     /// <inheritdoc/>
-    public Size Dimensions => this.metadata == null ? default : new Size((int)this.metadata.XSize, (int)this.metadata.YSize);
+    public Size Dimensions => this.metadata == null ? default : this.OrientedSize;
+
+    // The size of the image once its orientation is undone: the size of the decoded image.
+    private Size OrientedSize => new((int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize);
 
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
@@ -150,13 +157,27 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
+        // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
+        Size size = this.OrientedSize;
+        Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
         try
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
             bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
-            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.NumColorPlanes, alpha, premultiplied);
-            new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
+            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M.NumColorPlanes, alpha, premultiplied);
+            IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
+            List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+
+            // JxlDecoderGetFrameHeader and JxlDecoderGetFrameName: the duration is 0 unless the image is
+            // animated, as the frame header only stores it then. libjxl hands the name over as raw
+            // bytes; as a string, bytes that are not UTF-8 become U+FFFD.
+            for (int i = 0; i < displayed.Count; i++)
+            {
+                JxlFrameMetadata frameMetadata = image.Frames[i].Metadata.GetFormatMetadata(JxlFormat.Instance);
+                frameMetadata.Duration = displayed[i].AnimationFrame.Duration;
+                frameMetadata.Name = Encoding.UTF8.GetString(displayed[i].Name);
+            }
+
             return image;
         }
         catch
@@ -177,7 +198,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             bitsPerPixel += (int)eci.BitDepth.BitsPerSample;
         }
 
-        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
+        // The oriented size, as libjxl's JxlDecoderGetBasicInfo gives when it does not keep the orientation.
+        Size size = this.OrientedSize;
+        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), size.Width, size.Height, this.imageMetadata);
     }
 
     /// <summary>
@@ -193,17 +216,52 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        JxlPlanesSink sink = new();
+        // djxl orients its output, so the planes are oriented too.
+        JxlPlanesSink planesSink = new();
+        IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
-            new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
-            return sink.Image;
+            this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+            return planesSink.Image;
         }
         catch
         {
-            sink.Image.Dispose();
+            planesSink.Image.Dispose();
             throw;
         }
+    }
+
+    // The frame loop of JxlDecoderProcessCodestream: frame after frame, each from where the previous
+    // frame's sections end, until the last one. Frames are coalesced, as djxl does by default, so only
+    // the displayed frames reach the sink. Returns the header of each displayed frame, which libjxl
+    // reports with JXL_DEC_FRAME.
+    //
+    // MaxFrames has no libjxl counterpart. As in the GIF decoder, the loop stops once that many frames
+    // are displayed, so a value of 0 never matches and every frame is decoded. The frames after the
+    // last one decoded are not read at all.
+    private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
+    {
+        using JxlReferenceFrames references = new();
+        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
+        List<JxlFrameHeader> displayed = new();
+        uint frameCount = 0;
+        JxlFrameHeader frameHeader;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            frameHeader = frameDecoder.DecodeFrame(data, offset, sink, cancellationToken, out offset);
+            if (JxlFrameDecoder.IsLastOfStill(frameHeader))
+            {
+                displayed.Add(frameHeader);
+                if (++frameCount == this.maxFrames)
+                {
+                    break;
+                }
+            }
+        }
+        while (!frameHeader.IsLast);
+
+        return displayed;
     }
 
     private static void CheckPixelCap(ulong xsize, ulong ysize)
@@ -227,6 +285,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
         if (contents.Exif != null)
         {
+            // The decoder always undoes the codestream orientation, which overrides the Exif one, so
+            // djxl's reset applies to every image. Identify gets it too, as it reports the oriented size.
+            JxlExif.ResetOrientation(contents.Exif);
             this.imageMetadata.ExifProfile = new ExifProfile(contents.Exif);
         }
 
@@ -336,6 +397,17 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
+        if (codecMetadata.M.HaveAnimation)
+        {
+            // As JxlDecoderGetBasicInfo, which leaves the animation fields 0 for a still image. A departure:
+            // LoopCount is an int (issue #108), so a loop count past int.MaxValue, which libjxl keeps as a
+            // uint32, saturates at int.MaxValue.
+            JxlAnimationHeader animation = codecMetadata.M.Animation;
+            jxlMetadata.LoopCount = (int)Math.Min(animation.NumLoops, int.MaxValue);
+            jxlMetadata.TicksPerSecondNumerator = animation.TpsNumerator;
+            jxlMetadata.TicksPerSecondDenominator = animation.TpsDenominator;
+        }
+
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
             this.SetIccProfile(JxlIccReader.Read(reader));

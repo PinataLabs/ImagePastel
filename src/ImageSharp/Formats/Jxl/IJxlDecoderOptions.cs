@@ -8,4 +8,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// </summary>
 internal interface IJxlDecoderOptions : IColorProfileDecoderOptions
 {
+    /// <summary>
+    /// Gets the maximum number of displayed frames to decode, with the semantics of
+    /// <see cref="Gif.IGifDecoderOptions.MaxFrames"/>: decoding stops once that many are out.
+    /// </summary>
+    uint MaxFrames { get; }
 }

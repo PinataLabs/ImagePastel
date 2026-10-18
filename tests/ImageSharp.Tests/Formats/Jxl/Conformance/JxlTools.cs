@@ -36,6 +36,17 @@ internal static class JxlTools
 
     public static async Task RunAsync(string name, CancellationToken cancellationToken, params string[] arguments)
     {
+        (int exitCode, string output) = await RunForExitCodeAsync(name, cancellationToken, arguments);
+        Assert.True(exitCode == 0, $"{name} exited with code {exitCode}.{Environment.NewLine}{output}");
+    }
+
+    /// <summary>Runs a tool and returns its exit code and output, for tests that expect it to fail.</summary>
+    /// <param name="name">The tool.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="arguments">The arguments.</param>
+    /// <returns>The exit code and the standard output and error.</returns>
+    public static async Task<(int ExitCode, string Output)> RunForExitCodeAsync(string name, CancellationToken cancellationToken, params string[] arguments)
+    {
         ProcessStartInfo info = new(GetToolPath(name))
         {
             RedirectStandardOutput = true,
@@ -64,8 +75,6 @@ internal static class JxlTools
             throw;
         }
 
-        Assert.True(
-            process.ExitCode == 0,
-            $"{name} exited with code {process.ExitCode}.{Environment.NewLine}{await output}{Environment.NewLine}{await error}");
+        return (process.ExitCode, $"{await output}{Environment.NewLine}{await error}");
     }
 }

@@ -31,4 +31,13 @@ internal sealed class JxlCodecMetadata
 
     /// <summary>Gets the image height.</summary>
     public ulong YSize => this.Size.YSize;
+
+    /// <summary>
+    /// Gets the width of the image once it is oriented: libjxl's <c>oriented_xsize</c> without keeping
+    /// the orientation, which this decoder always undoes. Orientations 5 to 8 swap width and height.
+    /// </summary>
+    public ulong OrientedXSize => (uint)this.M.GetOrientation() > 4 ? this.YSize : this.XSize;
+
+    /// <summary>Gets the height of the image once it is oriented: libjxl's <c>oriented_ysize</c>.</summary>
+    public ulong OrientedYSize => (uint)this.M.GetOrientation() > 4 ? this.XSize : this.YSize;
 }
