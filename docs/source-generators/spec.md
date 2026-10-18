@@ -55,7 +55,7 @@ Supporting setup: `dotnet-t4` 3.0.0 in `dotnet-tools.json` at the repo root; `ci
 | Reviewability | Hand-rolled snapshot tests. The expected files are seeded from today's committed outputs, so the snapshot tests also prove byte-identity. |
 | Local inspection | `EmitCompilerGeneratedFiles=true` in both consuming projects. |
 | Bad gate value | Error `ISG001`. A missing property means no output. |
-| Coverage | Generated sources are excluded from coverage. Slice SG1 compares the coverage report's file list before and after. |
+| Coverage | Generated sources are excluded from coverage. Slice SG1 compares the coverage report's file list before and after. The generator's own code is covered by its tests, and that coverage goes into the same reports as the library's. |
 | Docs | `CONTRIBUTING.md` is updated in SG1 and SG5. |
 
 ### Out of scope
@@ -69,7 +69,7 @@ Supporting setup: `dotnet-t4` 3.0.0 in `dotnet-tools.json` at the repo root; `ci
 
 ### Projects
 
-**`gen/Directory.Build.props`** sets `SixLaborsProjectCategory` to `gen` and imports the root `Directory.Build.props`, the same way `src/` and `tests/` do. It does not import `src/Directory.Build.props`, so the generator gets no package metadata, MinVer, documentation file or `InternalsVisibleTo` list. StyleCop, strong-name signing, `LangVersion` 14.0 and `TreatWarningsAsErrors` still apply.
+**`gen/Directory.Build.props`** sets `SixLaborsProjectCategory` to `gen` and imports the root `Directory.Build.props`, the same way `src/` and `tests/` do. It does not import `src/Directory.Build.props`, so the generator gets no package metadata, MinVer, documentation file or `InternalsVisibleTo` list. StyleCop, strong-name signing, `LangVersion` 14.0 and `TreatWarningsAsErrors` still apply. It also sets `IsPackable` to `false`, as `tests/Directory.Build.props` does for the test projects.
 
 **`gen/ImageSharp.SourceGenerators/ImageSharp.SourceGenerators.csproj`**
 
@@ -79,33 +79,47 @@ Supporting setup: `dotnet-t4` 3.0.0 in `dotnet-tools.json` at the repo root; `ci
     <TargetFramework>netstandard2.0</TargetFramework>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SixLabors.ImageSharp.SourceGenerators.Tests" Key="$(PinataLabsPublicKey)" />
+  </ItemGroup>
 </Project>
 ```
 
-The package version, 4.14.0, comes from `Directory.Packages.props`.
+The package version, 4.14.0, comes from `Directory.Packages.props`. The generator is strong-named, so the `InternalsVisibleTo` item gives the test project's public key. The tests use it to reuse internal constants, such as the gate property name.
 
 `netstandard2.0` has no `IsExternalInit`, so the generator code avoids `record` types and `init` accessors. It does not need them.
 
-**Consuming projects** (`src/ImageSharp/ImageSharp.csproj` with `Library`, `tests/ImageSharp.Tests/ImageSharp.Tests.csproj` with `Tests`):
+**Consuming projects** (`src/ImageSharp/ImageSharp.csproj` with `Library`, `tests/ImageSharp.Tests/ImageSharp.Tests.csproj` with `Tests`) each set their own target and import the shared wiring:
 
 ```xml
 <PropertyGroup>
   <ImageSharpGeneratedSources>Library</ImageSharpGeneratedSources>
+</PropertyGroup>
+
+<Import Project="..\..\gen\ImageSharp.SourceGenerators.props" />
+```
+
+**`gen/ImageSharp.SourceGenerators.props`** holds the wiring that both projects share:
+
+```xml
+<PropertyGroup>
   <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 </PropertyGroup>
 <ItemGroup>
   <CompilerVisibleProperty Include="ImageSharpGeneratedSources" />
-  <ProjectReference Include="..\..\gen\ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
+  <ProjectReference Include="$(MSBuildThisFileDirectory)ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false"
-                    PrivateAssets="all" />
+                    PrivateAssets="all"
+                    GlobalPropertiesToRemove="AssemblyName" />
 </ItemGroup>
 ```
+
+The reference needs `GlobalPropertiesToRemove="AssemblyName"`. `ci-apicompat.ps1` builds the library with a global `AssemblyName`, and without it the generator would get the same assembly name. For the same reason, `ci-apicompat.ps1` moves its output with a global `BaseArtifactsPath`, not `BaseIntermediateOutputPath`. With a global `BaseIntermediateOutputPath`, the generator and the library share one `project.assets.json`, and the build fails with NETSDK1005.
 
 Generated files are written under `artifacts/obj/<category>/<project>/…/generated/`, which git ignores.
 
@@ -118,10 +132,11 @@ Both `ImageSharp` and `ImageSharp.Tests` reference the generator. Without a gate
 ```text
 gen/ImageSharp.SourceGenerators/
   ImageSharpSourceGenerator.cs      [Generator]; reads the gate, runs the emitters for the target
-  GeneratedSourcesTarget.cs         Library | Tests, and parsing of the property value
+  GeneratedSourcesTarget.cs         Library | Tests with the emitters of each, and parsing of the property value
   DiagnosticDescriptors.cs          ISG001
   SourceWriter.cs                   indentation-aware text writer; emits "\n"
-  IEmitter.cs                       hint name(s) and Emit(SourceWriter)
+  IEmitter.cs                       Files: the files that one emitter writes
+  GeneratedFile.cs                  one file: its hint name and the action that writes it
   Names/
     PixelTypeNames.cs               CommonPixelTypes, OptimizedPixelTypes, Rgba32CompatibleTypes
     PixelBlenderNames.cs            composers, blenders
@@ -152,6 +167,8 @@ context.RegisterSourceOutput(gate, static (spc, value) =>
 
 The gate is a `string`, which is equatable, so the source output is cached and only reruns when the property changes. The emitters take no other input.
 
+The generator trims the gate value and compares it with the target names without case, as MSBuild compares property values. A value that is empty or only white space counts as a missing property, so it generates nothing and reports no diagnostic. The `ISG001` message lists the valid values, which come from the targets.
+
 Each emitter is a mechanical port of one template family. A `<# foreach #>` block becomes a C# `foreach` that writes `$$"""…"""` blocks, and `<#= x #>` becomes `{{x}}`. Whitespace, blank lines and line breaks must match the committed output exactly. The snapshot tests check this.
 
 ### Snapshot tests
@@ -175,7 +192,7 @@ For each target, the harness:
 4. Asserts that each output's text, with line endings normalized to `\n`, equals its expected file.
 5. When `IMAGESHARP_UPDATE_SNAPSHOTS=1` is set, writes the outputs to `Expected/<Target>/` instead, and then fails, so a refresh can't pass silently in CI.
 
-There are also two small tests: one for `ISG001` on an unknown value, and one for no output when the property is missing.
+There are also small gate tests: `ISG001` and its message on an unknown value, and no output when the property is missing or empty.
 
 The expected files are seeded by copying today's committed outputs, unchanged. A green run is the byte-identity check.
 
@@ -185,11 +202,13 @@ The expected files are seeded by copying today's committed outputs, unchanged. A
 
 Generated sources are excluded from the coverlet collector in `tests/coverlet.runsettings`: `ExcludeByFile` on the generated-files path, or `ExcludeByAttribute` if the outputs carry `[GeneratedCode]`. SG1 picks whichever works. SG1 records the coverage report's file list on `main` and on the branch, and confirms that the only change is the generated files.
 
+The generator's own code is covered by `tests/ImageSharp.SourceGenerators.Tests`. The same runsettings file includes both `[PinataLabs.ImageSharp]*` and `[ImageSharp.SourceGenerators]*`; each test project loads only one of the two assemblies. On the coverage leg of CI, the "Test source generator with coverage" step writes its reports to `artifacts/coverage/`, next to the library's. The coverage summary and the SonarQube analysis read every report there, so the generator counts as covered new code. On the other legs, the "Test source generator" step runs the same tests without coverage, so the snapshot comparison runs on every OS.
+
 ## Delivery
 
 ### Merge strategy
 
-Merge each slice to `main` on its own. While migration is in progress, the remaining templates still go through `ci-t4.ps1` and the CI `t4` job. The script lists `*.tt` files with `git ls-files`, so it ignores templates that have already been deleted.
+Each slice is merged into the integration branch `feat/source-generators`. When every slice is in, one pull request ([#204](https://github.com/PinataLabs/ImagePastel/pull/204)) merges the integration branch into `main`. Until SG5, the remaining templates still go through `ci-t4.ps1`. The script lists `*.tt` files with `git ls-files`, so it ignores templates that have already been deleted.
 
 ### Rules for every slice
 
@@ -209,4 +228,4 @@ SG1 and SG4 can start at once. SG2 and SG3 can run in parallel after SG1. SG5 co
 | SG2 ([#201](https://github.com/PinataLabs/ImagePastel/issues/201)) | SG1 | `PixelTypeNames`; `PixelOperationsEmitter` (14 outputs); `PixelOperationsTestsEmitter`; `ImageSharp.Tests.csproj` wiring (`Tests`). Deletes the 13 per-pixel templates, `PixelOperations{TPixel}.Generated.tt`, the tests template, both `_Common.ttinclude` files and their outputs. | Snapshot tests pass for all 15 outputs; the tests project has no CS0436; the `PixelOperations` test suite passes; ApiCompat passes |
 | SG3 ([#202](https://github.com/PinataLabs/ImagePastel/issues/202)) | SG1 | `PixelBlenderNames`; `PixelBlendersEmitter` (2 outputs). Deletes both blender templates and their outputs. | Snapshot tests pass for both outputs; blender tests pass; ApiCompat passes |
 | SG4 ([#200](https://github.com/PinataLabs/ImagePastel/issues/200)) | None | `Block8x8F.Generated.cs` renamed to `Block8x8F.Clamp.cs`, its `// <auto-generated />` marker dropped and analyzer warnings fixed. Deletes `Block8x8F.Generated.tt`. Does not touch the generator. | JPEG and `Block8x8F` tests pass; no analyzer suppressions added |
-| SG5 ([#203](https://github.com/PinataLabs/ImagePastel/issues/203)) | SG2, SG3, SG4 | Deletes `dotnet-t4` from the tool manifest, `ci-t4.ps1`, the CI `t4` job and its `pack` `needs:` entry, any leftover `TextTemplatingFileGenerator` items, and the T4 paragraph in `CONTRIBUTING.md`. | No `*.tt`, `*.ttinclude`, `TextTemplatingFileGenerator`, `dotnet-t4` or `ci-t4.ps1` reference left in the repo; full CI run passes |
+| SG5 ([#203](https://github.com/PinataLabs/ImagePastel/issues/203)) | SG2, SG3, SG4 | Deletes `dotnet-t4` from the tool manifest, `ci-t4.ps1`, the CI `t4` job and its `pack` `needs:` entry, any leftover `TextTemplatingFileGenerator` items, and the T4 paragraph in `CONTRIBUTING.md`. | No `*.tt`, `*.ttinclude`, `TextTemplatingFileGenerator`, `dotnet-t4` or `ci-t4.ps1` reference left in the repo, except the provenance doc comments that name the template an emitter was ported from; full CI run passes |
