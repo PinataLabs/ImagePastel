@@ -11,10 +11,14 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -28,13 +32,32 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     private const long MaxSideLength = 1L << 30;
     private const int MaxExtraChannels = 256;
 
+    private readonly bool ignoreMetadata;
+
     private JxlCodecMetadata metadata;
+
+    // The Exif and XMP of the file, read with the codestream.
+    private ImageMetadata imageMetadata;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class with the default options.
+    /// </summary>
+    /// <param name="configuration">The configuration.</param>
+    public JxlDecoderCore(Configuration configuration)
+        : this(configuration, new JxlDecoder())
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class.
     /// </summary>
     /// <param name="configuration">The configuration.</param>
-    public JxlDecoderCore(Configuration configuration) => this.Configuration = configuration;
+    /// <param name="options">The options.</param>
+    public JxlDecoderCore(Configuration configuration, IJxlDecoderOptions options)
+    {
+        this.Configuration = configuration;
+        this.ignoreMetadata = options.IgnoreMetadata;
+    }
 
     /// <inheritdoc/>
     public Configuration Configuration { get; }
@@ -46,7 +69,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
         return this.Decode<TPixel>(data, frameOffset, cancellationToken);
     }
@@ -60,7 +83,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <returns>The image.</returns>
     public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        byte[] data = ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
         Type pixelType = ChoosePixelType(this.metadata.M);
         return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
@@ -127,7 +150,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
+        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
         try
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
@@ -146,7 +169,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(ReadCodestream(stream));
+        this.ReadHeaders(this.ReadCodestream(stream));
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -154,7 +177,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             bitsPerPixel += (int)eci.BitDepth.BitsPerSample;
         }
 
-        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
+        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
     }
 
     /// <summary>
@@ -166,7 +189,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = ReadCodestream(bufferedStream);
+        byte[] data = this.ReadCodestream(bufferedStream);
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
@@ -191,11 +214,28 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
-    // Reads the whole file, and takes the codestream out of a container.
-    private static byte[] ReadCodestream(BufferedReadStream stream)
+    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container.
+    private byte[] ReadCodestream(BufferedReadStream stream)
     {
         byte[] data = ReadAll(stream);
-        return data.AsSpan().StartsWith(JxlConstants.ContainerSignature) ? JxlContainer.ExtractCodestream(data) : data;
+        this.imageMetadata = new ImageMetadata();
+        if (!data.AsSpan().StartsWith(JxlConstants.ContainerSignature))
+        {
+            return data;
+        }
+
+        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
+        if (contents.Exif != null)
+        {
+            this.imageMetadata.ExifProfile = new ExifProfile(contents.Exif);
+        }
+
+        if (contents.Xmp != null)
+        {
+            this.imageMetadata.XmpProfile = new XmpProfile(contents.Xmp);
+        }
+
+        return contents.Codestream;
     }
 
     // libjxl reads the codestream incrementally. This decoder decodes from memory, so it reads the
@@ -227,6 +267,39 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
 
         return data;
+    }
+
+    // The pixel-profile rules of issue #105, with #111's CMYK exception: the embedded ICC is always the
+    // original profile, and it is the pixel profile only where the pixels are the coded samples. XYB
+    // images decode to sRGB, and CMYK images are converted naively to RGB.
+    private void SetIccProfile(byte[] icc)
+    {
+        if (this.ignoreMetadata)
+        {
+            return;
+        }
+
+        IccProfile original = new(icc);
+        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = original;
+        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && original.Header.DataColorSpace != IccColorSpaceType.Cmyk)
+        {
+            // Its own copy, so the two profiles share no bytes.
+            this.imageMetadata.IccProfile = original.DeepClone();
+        }
+    }
+
+    // The rest of #105's rules: sRGB, and grey with the sRGB curve, get no pixel profile; every other
+    // colour encoding gets a built one. libjxl builds a profile for every colour encoding as it reads the header and
+    // rejects the image when it cannot, so the profile is built, and checked, even when it is not kept.
+    private void SetColorEncodingProfile(JxlColorEncoding c)
+    {
+        IccProfile profile = JxlIccBuilder.Create(c);
+        bool srgbCurve = !c.Tf.HaveGamma && c.Tf.TransferFunction == JxlTransferFunction.Srgb && c.WhitePoint == JxlWhitePoint.D65;
+        bool srgb = srgbCurve && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
+        if (!this.ignoreMetadata && !srgb)
+        {
+            this.imageMetadata.IccProfile = profile;
+        }
     }
 
     // Reads the signature, size header, image metadata, transform data and ICC profile, and returns
@@ -261,10 +334,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         codecMetadata.TransformData.NonserializedXybEncoded = codecMetadata.M.XybEncoded;
         JxlBundle.Read(reader, codecMetadata.TransformData);
 
+        JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
+        jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
-            // libjxl decodes the entropy-coded ICC profile here.
-            JxlThrowHelper.ThrowNotSupportedException("ICC profiles");
+            this.SetIccProfile(JxlIccReader.Read(reader));
+        }
+        else
+        {
+            jxlMetadata.ColorEncoding = codecMetadata.M.ColorEncoding.Clone();
+            this.SetColorEncodingProfile(codecMetadata.M.ColorEncoding);
         }
 
         reader.JumpToByteBoundary();
