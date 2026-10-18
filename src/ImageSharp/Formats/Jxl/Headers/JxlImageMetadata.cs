@@ -81,6 +81,10 @@ internal sealed class JxlImageMetadata : JxlFields
     /// <returns>The index, or -1.</returns>
     public int Find(JxlExtraChannelType type) => this.ExtraChannelInfo.FindIndex(eci => eci.Type == type);
 
+    /// <summary>Returns the orientation, as libjxl's <c>GetOrientation</c>.</summary>
+    /// <returns>The orientation.</returns>
+    public JxlOrientation GetOrientation() => (JxlOrientation)this.orientation;
+
     public override void VisitFields(JxlVisitor visitor)
     {
         if (visitor.AllDefault(this))

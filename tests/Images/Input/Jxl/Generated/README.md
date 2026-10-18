@@ -23,6 +23,8 @@ These files cover features that no conformance vector checks. They were made for
 | `colour_custom.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_0.3457;0.3585_0.7;0.29;0.18;0.72;0.14;0.05_Abs_SRG`: custom white point and primaries, absolute intent. | `External/ReferenceOutput/JxlDecoderTests/colour_custom.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `colour_dci.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_DCI_DCI_Rel_DCI`: DCI white point, P3 primaries, DCI curve. | `External/ReferenceOutput/JxlDecoderTests/colour_dci.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG: no pixel profile until D11. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `orientation_1.jxl` to `orientation_8.jxl` | Lossless Modular, 37 x 23 8-bit RGBA, with codestream orientations 1 to 8. The files differ only in the three orientation bits; every pixel differs, so a wrong flip or transpose shows. Orientations 5 to 8 decode to 23 x 37. | `External/ReferenceOutput/JxlDecoderTests/orientation_1.png` to `orientation_8.png` |
+| `orientation_exif.jxl` | The same image with orientation 6, in a container with an uncompressed `Exif` box whose orientation tag is also 6. | `External/ReferenceOutput/JxlDecoderTests/orientation_exif.png`, whose Exif (a `zTXt` "Raw profile type exif" chunk) has the orientation reset to 1 |
 
 #### How `premultiplied_alpha` was made
 
@@ -108,3 +110,26 @@ djxl colour_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_hlg
 - `make_colour_encodings.py` writes `colour_source.ppm` and `colour_grey_source.pgm`. PPM and PGM carry no colour information, so `cjxl` takes the colour encoding from `-x color_space`. They are not committed; the script makes them again.
 - Each file stores its colour encoding as enumerated fields, not as an ICC profile.
 - `djxl` writes the profile it builds from the colour encoding into the PNG's `iCCP` chunk; it equals `djxl --icc_out`. For `colour_srgb` and `colour_grey_srgb` it writes an `sRGB` chunk instead.
+
+#### How the orientation files were made
+
+```sh
+py -3 make_orientation.py
+cjxl orientation_source.png orientation_base.jxl -d 0 --container=0
+cjxl orientation_source.png orientation_exif.jxl -d 0 --compress_boxes=0
+py -3 make_orientation.py orientation_base.jxl
+djxl orientation_1.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_1.png
+djxl orientation_2.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_2.png
+djxl orientation_3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_3.png
+djxl orientation_4.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_4.png
+djxl orientation_5.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_5.png
+djxl orientation_6.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_6.png
+djxl orientation_7.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_7.png
+djxl orientation_8.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_8.png
+djxl orientation_exif.jxl ../../../External/ReferenceOutput/JxlDecoderTests/orientation_exif.png
+```
+
+- With no argument, `make_orientation.py` writes `orientation_source.png`, whose `eXIf` chunk sets the Exif orientation to 6. `cjxl` copies that orientation into the codestream.
+- `--container=0` drops the Exif box but keeps the codestream orientation, so `orientation_base.jxl` is a bare codestream with orientation 6. Its orientation field is present, because the orientation is not 1.
+- Given that file, `make_orientation.py` rewrites its three orientation bits to each orientation and writes `orientation_1.jxl` to `orientation_8.jxl`. `orientation_6.jxl` equals `orientation_base.jxl`. Neither the source PNG nor the base file is committed; the commands make them again.
+- `djxl` orients its output by default, and when it writes the Exif it resets the orientation tag to 1 (`ResetExifOrientation`).

@@ -63,7 +63,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Configuration Configuration { get; }
 
     /// <inheritdoc/>
-    public Size Dimensions => this.metadata == null ? default : new Size((int)this.metadata.XSize, (int)this.metadata.YSize);
+    public Size Dimensions => this.metadata == null ? default : new Size((int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize);
 
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
@@ -150,12 +150,14 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
+        // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
+        Image<TPixel> image = new(this.Configuration, (int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize, this.imageMetadata);
         try
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
             bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
-            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.NumColorPlanes, alpha, premultiplied);
+            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.NumColorPlanes, alpha, premultiplied);
+            IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
             new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
             return image;
         }
@@ -177,7 +179,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             bitsPerPixel += (int)eci.BitDepth.BitsPerSample;
         }
 
-        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
+        // The oriented size, as libjxl's JxlDecoderGetBasicInfo gives when it does not keep the orientation.
+        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize, this.imageMetadata);
     }
 
     /// <summary>
@@ -193,15 +196,17 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        JxlPlanesSink sink = new();
+        // djxl orients its output, so the planes are oriented too.
+        JxlPlanesSink planesSink = new();
+        IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
             new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
-            return sink.Image;
+            return planesSink.Image;
         }
         catch
         {
-            sink.Image.Dispose();
+            planesSink.Image.Dispose();
             throw;
         }
     }
@@ -227,6 +232,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
         if (contents.Exif != null)
         {
+            // The decoder always undoes the codestream orientation, which overrides the Exif one, so
+            // djxl's reset applies to every image. Identify gets it too, as it reports the oriented size.
+            JxlExif.ResetOrientation(contents.Exif);
             this.imageMetadata.ExifProfile = new ExifProfile(contents.Exif);
         }
 
