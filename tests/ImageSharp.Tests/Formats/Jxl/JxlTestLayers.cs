@@ -299,7 +299,17 @@ internal sealed class JxlTestLayers
     {
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
         w.Bit(false).Write(2, (ulong)frame.Type);
-        w.Bit(true).Write(2, 0).Bit(false); // Modular, no flags, no YCbCr
+        w.Bit(true); // Modular
+        if (frame.Flags == 0)
+        {
+            w.Write(2, 0);
+        }
+        else
+        {
+            w.Write(2, 1).Write(4, frame.Flags - 1); // U64: 1 to 16
+        }
+
+        w.Bit(false); // no YCbCr
         w.Write(2, 0); // upsampling 1
         for (int i = 0; i < this.numExtraChannels; i++)
         {
@@ -382,6 +392,9 @@ internal readonly record struct JxlTestBlending(JxlBlendMode Mode, uint Source =
 internal sealed record JxlTestFrame(byte[] Section)
 {
     public JxlFrameType Type { get; init; } = JxlFrameType.Regular;
+
+    /// <summary>Gets the frame flags, up to 16, which must not change the rest of the header (no LF frame).</summary>
+    public ulong Flags { get; init; }
 
     public bool Crop { get; init; }
 

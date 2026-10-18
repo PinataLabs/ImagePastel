@@ -166,6 +166,21 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (189.80393F, 294.90199F, 197.45099F, 159.87451F));
     }
 
+    [Theory]
+    [InlineData(false, 258.22411F, 88.80306F, 195.56026F, 289.36472F)]
+    [InlineData(true, 252F, 90F, 180F, 255F)]
+    public void Blend_StraightAlpha_ClampsTheAlphaOnlyWithClamp(bool clamp, float r, float g, float b, float a)
+    {
+        byte[] codestream = TwoLayers(new(JxlBlendMode.Blend, Clamp: clamp), new(JxlBlendMode.Replace), top: JxlTestLayers.Ramp).ToArray();
+
+        using JxlDecodedImage decoded = DecodeToPlanes(codestream);
+
+        // At (0, 0) the ramp's alpha is 9, so the clamp changes nothing. At (20, 15) it is 324: clamped
+        // to 255, the ramp replaces the background.
+        AssertPixel(decoded.Frames[0], 0, 0, (186.88884F, 99.32067F, 46.94299F, 132.48235F));
+        AssertPixel(decoded.Frames[0], 20, 15, (r, g, b, a));
+    }
+
     [Fact]
     public void AlphaWeightedAdd_AddsTheColourWeightedByTheAlpha()
     {
@@ -277,6 +292,18 @@ public class JxlLayersTests
 
         NotSupportedException ex = Assert.Throws<NotSupportedException>(() => Image.Load<Rgba32>(CreateConfiguration(), path));
         Assert.Contains("Depth", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1)] // noise
+    [InlineData(2)] // patches
+    [InlineData(16)] // splines
+    public void Decode_FrameWithNoisePatchesOrSplines_IsNotSupported(ulong flags)
+    {
+        byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }).ToArray();
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream));
+        Assert.Contains("Patches, splines, noise", ex.Message, StringComparison.Ordinal);
     }
 
     // Each allocation of a decode, in turn, fails. Whichever it is, the decode throws and every buffer it
