@@ -220,6 +220,7 @@ artifacts/
 
 # Tests
 **/Images/ActualOutput
+**/Images/External/Jxl/.cache
 **/Images/ReferenceOutput
 **/Images/Input/MemoryStress
 .DS_Store
