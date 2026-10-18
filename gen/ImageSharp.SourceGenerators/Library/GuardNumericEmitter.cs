@@ -43,7 +43,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     writer.WriteLine();
                 }
 
-                string t = Types[i];
+                string numericType = Types[i];
                 writer.WriteLine($$"""
                     /// <summary>
                     /// Ensures that the specified value is less than a maximum value.
@@ -55,7 +55,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     /// <paramref name="value"/> is greater than the maximum value.
                     /// </exception>
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public static void MustBeLessThan({{t}} value, {{t}} max, string parameterName)
+                    public static void MustBeLessThan({{numericType}} value, {{numericType}} max, string parameterName)
                     {
                         if (value < max)
                         {
@@ -76,7 +76,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     /// <paramref name="value"/> is greater than the maximum value.
                     /// </exception>
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public static void MustBeLessThanOrEqualTo({{t}} value, {{t}} max, string parameterName)
+                    public static void MustBeLessThanOrEqualTo({{numericType}} value, {{numericType}} max, string parameterName)
                     {
                         if (value <= max)
                         {
@@ -97,7 +97,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     /// <paramref name="value"/> is less than the minimum value.
                     /// </exception>
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public static void MustBeGreaterThan({{t}} value, {{t}} min, string parameterName)
+                    public static void MustBeGreaterThan({{numericType}} value, {{numericType}} min, string parameterName)
                     {
                         if (value > min)
                         {
@@ -118,7 +118,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     /// <paramref name="value"/> is less than the minimum value.
                     /// </exception>
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public static void MustBeGreaterThanOrEqualTo({{t}} value, {{t}} min, string parameterName)
+                    public static void MustBeGreaterThanOrEqualTo({{numericType}} value, {{numericType}} min, string parameterName)
                     {
                         if (value >= min)
                         {
@@ -140,7 +140,7 @@ internal sealed class GuardNumericEmitter : IEmitter
                     /// <paramref name="value"/> is less than the minimum value of greater than the maximum value.
                     /// </exception>
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public static void MustBeBetweenOrEqualTo({{t}} value, {{t}} min, {{t}} max, string parameterName)
+                    public static void MustBeBetweenOrEqualTo({{numericType}} value, {{numericType}} min, {{numericType}} max, string parameterName)
                     {
                         if (value >= min && value <= max)
                         {

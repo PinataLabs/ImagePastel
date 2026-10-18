@@ -73,20 +73,20 @@ internal sealed class PixelOperationsEmitter : IEmitter
             EmitRgba32CompatibleVector4ConversionMethods(pixelType, pixelType.EndsWith("32"), writer);
         }
 
-        IEnumerable<string> matching32BitTypes = PixelTypeNames.OptimizedPixelTypes.Contains(pixelType)
+        IEnumerable<string> optimizedDestTypes = PixelTypeNames.OptimizedPixelTypes.Contains(pixelType)
             ? PixelTypeNames.OptimizedPixelTypes.Where(p => p != pixelType)
             : [];
 
-        foreach (string destPixelType in matching32BitTypes)
+        foreach (string destPixelType in optimizedDestTypes)
         {
-            EmitOptimized32BitConversionMethods(pixelType, destPixelType, writer);
+            EmitOptimizedConversionMethods(pixelType, destPixelType, writer);
         }
 
-        IEnumerable<string> otherCommonNon32Types = PixelTypeNames.CommonPixelTypes
+        IEnumerable<string> otherDestTypes = PixelTypeNames.CommonPixelTypes
             .Where(p => p != pixelType)
-            .Except(matching32BitTypes);
+            .Except(optimizedDestTypes);
 
-        foreach (string destPixelType in otherCommonNon32Types)
+        foreach (string destPixelType in otherDestTypes)
         {
             EmitDefaultConvertToMethod(pixelType, destPixelType, writer);
         }
@@ -158,7 +158,7 @@ internal sealed class PixelOperationsEmitter : IEmitter
             """);
     }
 
-    private static void EmitOptimized32BitConversionMethods(string thisPixelType, string otherPixelType, SourceWriter writer)
+    private static void EmitOptimizedConversionMethods(string thisPixelType, string otherPixelType, SourceWriter writer)
     {
         writer.WriteLine($$"""
             /// <inheritdoc />
