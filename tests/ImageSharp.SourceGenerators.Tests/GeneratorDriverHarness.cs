@@ -92,6 +92,7 @@ internal static class GeneratorDriverHarness
 
     /// <summary>
     /// Checks generator output against the expected files in <paramref name="expectedDirectory"/>.
+    /// Both sides have their line endings normalized to <c>"\n"</c> before the comparison.
     /// </summary>
     /// <param name="diagnostics">The diagnostics the generator reported. There must be none.</param>
     /// <param name="sources">The generated text of each hint name.</param>
@@ -126,7 +127,7 @@ internal static class GeneratorDriverHarness
             // Decode without dropping a BOM, so a BOM in the expected file is a difference.
             byte[] expectedBytes = File.ReadAllBytes(Path.Combine(expectedDirectory, source.Key));
             string expected = Utf8NoBom.GetString(expectedBytes);
-            Assert.Equal(expected, Normalize(source.Value));
+            Assert.Equal(Normalize(expected), Normalize(source.Value));
         }
     }
 

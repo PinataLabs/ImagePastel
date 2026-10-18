@@ -41,6 +41,14 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
     }
 
     [Fact]
+    public void Passes_WhenTheExpectedFileHasCrLfLineEndings()
+    {
+        this.WriteExpected("A.cs", "class A\r\n{\r\n}\r\n");
+
+        GeneratorDriverHarness.AssertMatchesSnapshots(NoDiagnostics, Sources(("A.cs", "class A\n{\n}\n")), this.directory, update: false);
+    }
+
+    [Fact]
     public void Fails_WhenAnOutputIsMissing()
     {
         this.WriteExpected("A.cs", "class A { }\n");
@@ -72,7 +80,6 @@ public sealed class GeneratorDriverHarnessTests : IDisposable
     }
 
     [Theory]
-    [InlineData("class A { }\r\n")]
     [InlineData("﻿class A { }\n")]
     [InlineData("class A { }")]
     [InlineData("class A  { }\n")]
