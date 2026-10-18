@@ -91,6 +91,10 @@ Applied to the slice tables below after D1.
   - The reference-frame bookkeeping (about 0.05K) is added to D5.
 - **No slice is added for the four Modular fast paths** (about 0.35K). The general path is fast enough, and the PRD has no performance target.
 - **Totals.** The rest of the decoder (D2 to D15) is about 19.0K C++ lines: about 13.6K C# and about 3.2 agent hours. The encoder track (T2, E1 to E6) is about 12.8K C++ lines: about 9.2K C# and about 2.2 agent hours.
+- **Done-checks are checked against the vector headers.** Three vectors need a feature from a later slice than the one that names them:
+  - `lossless_pfm` (D2) is in a container. D2 takes the minimal container read for one `jxlc` box (about 0.05K) from D4. `jxlp`, `brob` and 64-bit sizes stay in D4.
+  - `grayscale_public_university` (D3) uses Gaborish and EPF. It moves to D9. D3 is checked with a generated greyscale squeeze file with no loop filters.
+  - `alpha_premultiplied` is VarDCT, so it cannot check the D2 un-premultiply. D2 uses a generated lossless premultiplied file.
 - **Treat the hour estimates as a floor.** D1 passed its conformance vector on the first run, because its integer code is exact. The float slices (D8, D9, D11, D12, E3 to E5) must match references within tight thresholds, and debugging a numeric mismatch can take longer than the port. Plan about twice the estimate for them.
 
 ### Rules for every slice
@@ -116,14 +120,14 @@ The size column is a rough count of libjxl C++ lines, taken from the [decoder](h
 | # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
 |---|---|---|---|---|---|
 | D1 ([#127](https://github.com/PinataLabs/ImageSharp/issues/127)) | **Porting spike, first real slice:** bit reader, fields, image headers, entropy (prefix, ANS, hybrid uint, context map; no LZ77), Modular general path, RCT and palette (including delta), single-frame frame header and TOC, simple pipeline with `PlanesSink` and `ImageFrameSink<TPixel>`, `Identify` | `delta_palette`; measurements recorded in this file | 7.15K ported (9.2K estimated; 1.9K deferred, see the gate) | 5.15K (actual) | 1.2 (actual) |
-| D2 | Alpha extra channel, 9–16-bit and float32 samples, LZ77, un-premultiply in the sink, pixel-type choice for the non-generic `Decode` | `alpha_nonpremultiplied`, `alpha_triangles`, `lossless_pfm` (bit-exact), `lz77_flower` | ≈ 0.8K | ≈ 0.58K | ≈ 0.1 |
-| D3 | Squeeze; greyscale output | `grayscale_public_university` | ≈ 0.5K | ≈ 0.36K | ≈ 0.1 |
-| D4 | Container and box parsing (`jxlc`, `jxlp`, `brob`, 64-bit sizes); ICC codec; Exif/XMP mapped to ImageSharp profiles; pixel-profile rules; enum → ICC builder; `JxlMetadata` colour fields | `OriginalIccProfile` bytes equal `original.icc` for every ICC vector (via `Identify`); `square-extended-size-container`; `1x1_exif_xmp` | ≈ 2.2K | ≈ 1.58K | ≈ 0.4 |
+| D2 | Alpha extra channel, 9–16-bit and float32 samples, LZ77, un-premultiply in the sink, pixel-type choice for the non-generic `Decode`; the minimal container read for one `jxlc` box | `alpha_nonpremultiplied`, `alpha_triangles`, `lossless_pfm` (bit-exact), `lz77_flower`; a `cjxl`-made lossless premultiplied file | ≈ 0.85K (0.8K + 0.05K `jxlc` read from D4) | ≈ 0.61K | ≈ 0.1 |
+| D3 | Squeeze; greyscale output | A `cjxl`-made lossless greyscale file that uses squeeze and no loop filters | ≈ 0.5K | ≈ 0.36K | ≈ 0.1 |
+| D4 | Container and box parsing (`jxlp`, `brob`, 64-bit sizes; D2 reads one `jxlc` box); ICC codec; Exif/XMP mapped to ImageSharp profiles; pixel-profile rules; enum → ICC builder; `JxlMetadata` colour fields | `OriginalIccProfile` bytes equal `original.icc` for every ICC vector (via `Identify`); `square-extended-size-container`; `1x1_exif_xmp` | ≈ 2.15K (2.2K − 0.05K `jxlc` read moved to D2) | ≈ 1.55K | ≈ 0.4 |
 | D5 | Multi-frame: blending, layers, reference frames, coalescing, animation, orientation, `JxlFrameMetadata`, `MaxFrames` | `sunset_logo`, `blendmodes`, `mul_no_extra_channels`, `animation_newtons_cradle`, `cropped_traffic_light` | ≈ 2.15K (2.1K + 0.05K reference bookkeeping from D1) | ≈ 1.55K | ≈ 0.4 |
 | D6 | Spot-colour rendering, CMYK naive conversion, `JxlMetadata.ExtraChannels` | `spot`, `cmyk_layers` | ≈ 0.3K | ≈ 0.22K | ≈ 0.1 |
 | D7 | Patches on Modular frames | `patches_lossless` | ≈ 0.5K | ≈ 0.36K | ≈ 0.1 |
 | D8 | VarDCT core: DCT8, quantiser and DC, coefficient orders, VarDCT group decode, XYB → sRGB, `JxlFastMath` | `cjxl -e 2 --gaborish=0 --epf=0` files with `djxl` references; `JxlFastMath` unit tests within libjxl's error bounds | ≈ 4.75K (4.3K + 0.45K VarDCT glue from D1) | ≈ 3.42K | ≈ 0.8 |
-| D9 | All transform sizes and AFV, adaptive quantisation, chroma-from-luma, Gaborish, EPF | `bike`, `opsin_inverse`, `grayscale` (linear at the seam), `alpha_premultiplied`, `animation_icos4d` | ≈ 3.0K | ≈ 2.16K | ≈ 0.5 |
+| D9 | All transform sizes and AFV, adaptive quantisation, chroma-from-luma, Gaborish, EPF | `bike`, `opsin_inverse`, `grayscale` (linear at the seam), `alpha_premultiplied`, `animation_icos4d`, `grayscale_public_university` (Modular with Gaborish and EPF) | ≈ 3.0K | ≈ 2.16K | ≈ 0.5 |
 | D10 | Upsampling, chroma upsampling, YCbCr | `upsampling`, `cafe` (fetched), `grayscale_jpeg`, `bench_oriented_brg` | ≈ 0.6K | ≈ 0.43K | ≈ 0.1 |
 | D11 | All transfer functions (709, DCI, gamma, PQ, HLG) and their ICC tables | `pq_gradient`; a `cjxl`-made HLG file | ≈ 1.6K | ≈ 1.15K | ≈ 0.3 |
 | D12 | Patches on VarDCT frames, splines, noise | `patches`, `animation_spline`, `noise`, libjxl `splines.jxl` and `spline_on_first_frame.jxl` | ≈ 1.4K | ≈ 1.01K | ≈ 0.2 |
