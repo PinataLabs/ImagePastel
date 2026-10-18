@@ -136,5 +136,7 @@
 *.wbmp              filter=lfs diff=lfs merge=lfs -text
 *.jxl               filter=lfs diff=lfs merge=lfs -text
 *.npy               filter=lfs diff=lfs merge=lfs -text
+*.icc               filter=lfs diff=lfs merge=lfs -text
+*.icm               filter=lfs diff=lfs merge=lfs -text
 # libjxl OSS-Fuzz crash inputs have no file extension.
 tests/Images/Input/Jxl/libjxl/oss-fuzz/**  filter=lfs diff=lfs merge=lfs -text
