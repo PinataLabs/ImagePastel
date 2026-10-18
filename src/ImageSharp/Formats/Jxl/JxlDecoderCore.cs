@@ -55,7 +55,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
         try
         {
-            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame, this.metadata.M.Find(JxlExtraChannelType.Alpha));
+            int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
+            bool premultiplied = alpha >= 0 && this.metadata.M.ExtraChannelInfo[alpha].AlphaAssociated;
+            JxlImageFrameSink<TPixel> sink = new(this.Configuration, image.Frames.RootFrame, alpha, premultiplied);
             new JxlFrameDecoder(this.Configuration, this.metadata).DecodeFrame(data, frameOffset, sink, cancellationToken);
             return image;
         }

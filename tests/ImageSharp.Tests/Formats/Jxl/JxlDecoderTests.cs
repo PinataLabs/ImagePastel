@@ -24,6 +24,10 @@ public class JxlDecoderTests
 {
     private static string DeltaPalettePath => JxlConformanceVector.Load("delta_palette").CommittedInputPath;
 
+    private static string GeneratedDirectory => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated");
+
+    private static string PremultipliedAlphaPath => Path.Combine(GeneratedDirectory, "premultiplied_alpha.jxl");
+
     [Fact]
     public void Identify_ReportsSizeAndBitDepth()
     {
@@ -90,6 +94,52 @@ public class JxlDecoderTests
 
         // Samples on a rounding boundary may land one 16-bit step apart, in each colour channel.
         ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 3).VerifySimilarity(reference, image);
+    }
+
+    [Fact]
+    public void Load_PremultipliedAlpha_GivesStraightAlpha()
+    {
+        // The straight PNG holds the pixels before they were premultiplied and rounded to 16 bits.
+        // Dividing by alpha again is off by at most 2.5 16-bit steps per channel where alpha >= 1/4.
+        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), PremultipliedAlphaPath);
+        using Image<Rgba64> expected = Image.Load<Rgba64>(Path.Combine(GeneratedDirectory, "premultiplied_alpha_straight.png"));
+
+        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 9).VerifySimilarity(expected, image);
+    }
+
+    [Fact]
+    public void Load_PremultipliedAlpha_WhereAlphaIsZero_GivesBlack()
+    {
+        // Alpha is 0 in the first 8 columns.
+        using Image<RgbaVector> image = Image.Load<RgbaVector>(CreateConfiguration(), PremultipliedAlphaPath);
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < 8; x++)
+            {
+                Assert.Equal(new RgbaVector(0, 0, 0, 0), image[x, y]);
+            }
+        }
+    }
+
+    [Fact]
+    public void DecodeToPlanes_PremultipliedAlpha_KeepsTheColoursAsCoded()
+    {
+        using FileStream stream = File.OpenRead(PremultipliedAlphaPath);
+        using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using Image<Rgba64> reference = Image.Load<Rgba64>(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "premultiplied_alpha.png"));
+
+        for (int y = 0; y < reference.Height; y++)
+        {
+            for (int x = 0; x < reference.Width; x++)
+            {
+                Rgba64 expected = reference[x, y];
+                Assert.Equal(expected.R, Quantize16(planes.Frames[0].Planes[0].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.G, Quantize16(planes.Frames[0].Planes[1].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.B, Quantize16(planes.Frames[0].Planes[2].DangerousGetRowSpan(y)[x]));
+                Assert.Equal(expected.A, Quantize16(planes.Frames[0].Planes[3].DangerousGetRowSpan(y)[x]));
+            }
+        }
     }
 
     [Theory]

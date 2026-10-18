@@ -123,11 +123,6 @@ internal sealed class JxlFrameDecoder
             {
                 JxlThrowHelper.ThrowNotSupportedException($"The {eci.Type} extra channel");
             }
-
-            if (eci.AlphaAssociated)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("Premultiplied alpha");
-            }
         }
 
         if (frameHeader.FrameType != JxlFrameType.Regular || !frameHeader.IsLast)

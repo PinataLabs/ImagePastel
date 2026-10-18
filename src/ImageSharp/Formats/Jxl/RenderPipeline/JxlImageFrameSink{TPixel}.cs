@@ -1,5 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
+// Un-premultiplying follows libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// UnpremultiplyAlpha in lib/jxl/alpha.cc and kSmallAlpha in lib/jxl/alpha.h.
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using System.Buffers;
@@ -11,15 +14,20 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// Writes the rendered planes into an <see cref="ImageFrame{TPixel}"/>, clamped to [0, 1]. The
-/// first alpha channel becomes the pixel alpha; other extra channels are dropped (issue #111).
+/// first alpha channel becomes the pixel alpha, un-premultiplied if it is premultiplied; other extra
+/// channels are dropped (issue #111).
 /// </summary>
 /// <typeparam name="TPixel">The pixel type.</typeparam>
 internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     where TPixel : unmanaged, IPixel<TPixel>
 {
+    // libjxl's kSmallAlpha: un-premultiplying divides by at least this, so alpha 0 gives a defined colour.
+    private const float SmallAlpha = 1F / (1u << 26);
+
     private readonly Configuration configuration;
     private readonly ImageFrame<TPixel> frame;
     private readonly int alphaPlane;
+    private readonly bool unpremultiply;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlImageFrameSink{TPixel}"/> class.
@@ -27,11 +35,13 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     /// <param name="configuration">The configuration.</param>
     /// <param name="frame">The frame to write.</param>
     /// <param name="alphaChannel">The extra channel that holds alpha, or -1 for an opaque image.</param>
-    public JxlImageFrameSink(Configuration configuration, ImageFrame<TPixel> frame, int alphaChannel)
+    /// <param name="alphaPremultiplied">Whether the colours are premultiplied by that alpha.</param>
+    public JxlImageFrameSink(Configuration configuration, ImageFrame<TPixel> frame, int alphaChannel, bool alphaPremultiplied)
     {
         this.configuration = configuration;
         this.frame = frame;
         this.alphaPlane = alphaChannel < 0 ? -1 : 3 + alphaChannel;
+        this.unpremultiply = alphaChannel >= 0 && alphaPremultiplied;
     }
 
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
@@ -52,12 +62,23 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
                     row[x] = Vector4.Clamp(new Vector4(r[x], g[x], b[x], 1F), Vector4.Zero, Vector4.One);
                 }
             }
-            else
+            else if (!this.unpremultiply)
             {
                 Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
                 for (int x = 0; x < width; x++)
                 {
                     row[x] = Vector4.Clamp(new Vector4(r[x], g[x], b[x], a[x]), Vector4.Zero, Vector4.One);
+                }
+            }
+            else
+            {
+                // As libjxl's UnpremultiplyAlpha (lib/jxl/alpha.cc), before the clamp.
+                Span<float> a = planes[this.alphaPlane].DangerousGetRowSpan(y);
+                for (int x = 0; x < width; x++)
+                {
+                    float multiplier = 1F / MathF.Max(SmallAlpha, a[x]);
+                    Vector4 v = new(r[x] * multiplier, g[x] * multiplier, b[x] * multiplier, a[x]);
+                    row[x] = Vector4.Clamp(v, Vector4.Zero, Vector4.One);
                 }
             }
 
