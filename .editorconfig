@@ -122,7 +122,6 @@ dotnet_style_coalesce_expression = true:warning
 dotnet_style_null_propagation = true:warning
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
 # File header preferences
-file_header_template = Copyright (c) Six Labors.\nLicensed under the Apache License, Version 2.0.
 # SA1636: File header copyright text should match
 # Justification: existing files keep the Six Labors notice, and new files carry a PinataLabs notice,
 # so the text can't match one template. SA1633 still requires every file to have a header.
