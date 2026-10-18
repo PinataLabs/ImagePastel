@@ -314,6 +314,68 @@ public class WebpEncoderTests
         Assert.True(allocated < 4 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
     }
 
+    [Fact]
+    public void Encode_Lossy_WithRandomAlpha_AllocatesInProportionToImageSize()
+    {
+        const int width = 1000;
+        const int height = 750;
+
+        // Run on a single thread so that all allocations are made on the current thread.
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MaxDegreeOfParallelism = 1;
+        using var image = new Image<Rgba32>(configuration, width, height);
+        var random = new Random(42);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                random.NextBytes(MemoryMarshal.AsBytes(accessor.GetRowSpan(y)));
+            }
+        });
+
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, UseAlphaCompression = true };
+        using var memStream = new MemoryStream();
+
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        image.SaveAsWebp(memStream, encoder);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        // Lossless alpha compression that creates an object for each backward reference allocates about 21 times
+        // the pixel and output size here. The bound leaves room for the histograms of the alpha encoder, whose
+        // number is capped and so does not shrink with the image.
+        long pixelBytes = width * height * 4;
+        Assert.True(allocated < 8 * (pixelBytes + memStream.Length), $"Allocated {allocated} bytes for {memStream.Length} bytes of output.");
+    }
+
+    [Fact]
+    public void Encode_Lossless_WithBackwardReferencesOverAllocationLimit_Works()
+    {
+        // The image buffers fit in 1 MB, but its backward references (8 bytes per pixel) do not.
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.MemoryAllocator = MemoryAllocator.Create(new MemoryAllocatorOptions { AllocationLimitMegabytes = 1 });
+        using var image = new Image<Rgba32>(configuration, 500, 400);
+        var random = new Random(42);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    row[x] = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+                }
+            }
+        });
+
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossless };
+        using var memStream = new MemoryStream();
+        image.SaveAsWebp(memStream, encoder);
+
+        memStream.Position = 0;
+        using var decoded = Image.Load<Rgba32>(memStream);
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
     [Theory]
     [WithFile(Lossy.NoFilter06, PixelTypes.Rgba32, 100)]
     [WithFile(Lossy.NoFilter06, PixelTypes.Rgba32, 75)]

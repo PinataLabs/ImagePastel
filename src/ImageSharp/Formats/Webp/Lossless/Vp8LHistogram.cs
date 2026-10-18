@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NETCOREAPP3_0_OR_GREATER
@@ -21,21 +20,7 @@ internal sealed class Vp8LHistogram : IDeepCloneable
     /// </summary>
     /// <param name="other">The histogram to create an instance from.</param>
     private Vp8LHistogram(Vp8LHistogram other)
-        : this(other.PaletteCodeBits)
-    {
-        other.Red.AsSpan().CopyTo(this.Red);
-        other.Blue.AsSpan().CopyTo(this.Blue);
-        other.Alpha.AsSpan().CopyTo(this.Alpha);
-        other.Literal.AsSpan().CopyTo(this.Literal);
-        other.Distance.AsSpan().CopyTo(this.Distance);
-        other.IsUsed.AsSpan().CopyTo(this.IsUsed);
-        this.LiteralCost = other.LiteralCost;
-        this.RedCost = other.RedCost;
-        this.BlueCost = other.BlueCost;
-        this.BitCost = other.BitCost;
-        this.TrivialSymbol = other.TrivialSymbol;
-        this.PaletteCodeBits = other.PaletteCodeBits;
-    }
+        : this(other.PaletteCodeBits) => other.CopyTo(this);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Vp8LHistogram"/> class.
@@ -107,15 +92,34 @@ internal sealed class Vp8LHistogram : IDeepCloneable
     public IDeepCloneable DeepClone() => new Vp8LHistogram(this);
 
     /// <summary>
+    /// Copies the counts and cached costs of this histogram to another histogram.
+    /// </summary>
+    /// <param name="other">The histogram to copy to.</param>
+    public void CopyTo(Vp8LHistogram other)
+    {
+        this.Red.AsSpan().CopyTo(other.Red);
+        this.Blue.AsSpan().CopyTo(other.Blue);
+        this.Alpha.AsSpan().CopyTo(other.Alpha);
+        this.Literal.AsSpan().CopyTo(other.Literal);
+        this.Distance.AsSpan().CopyTo(other.Distance);
+        this.IsUsed.AsSpan().CopyTo(other.IsUsed);
+        other.LiteralCost = this.LiteralCost;
+        other.RedCost = this.RedCost;
+        other.BlueCost = this.BlueCost;
+        other.BitCost = this.BitCost;
+        other.TrivialSymbol = this.TrivialSymbol;
+        other.PaletteCodeBits = this.PaletteCodeBits;
+    }
+
+    /// <summary>
     /// Collect all the references into a histogram (without reset).
     /// </summary>
     /// <param name="refs">The backward references.</param>
     public void StoreRefs(Vp8LBackwardRefs refs)
     {
-        using List<PixOrCopy>.Enumerator c = refs.Refs.GetEnumerator();
-        while (c.MoveNext())
+        foreach (PixOrCopy v in refs.Refs)
         {
-            this.AddSinglePixOrCopy(c.Current, false);
+            this.AddSinglePixOrCopy(v, false);
         }
     }
 
