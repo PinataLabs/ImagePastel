@@ -39,6 +39,16 @@ internal sealed class JxlCustomTransferFunction : JxlFields
     /// <summary>Gets a value indicating whether the transfer function is unknown.</summary>
     public bool IsUnknown => !this.HaveGamma && this.TransferFunction == JxlTransferFunction.Unknown;
 
+    /// <summary>Copies the fields of <paramref name="other"/> into this instance.</summary>
+    /// <param name="other">The transfer function to copy.</param>
+    public void CopyFrom(JxlCustomTransferFunction other)
+    {
+        this.NonserializedColorSpace = other.NonserializedColorSpace;
+        this.HaveGamma = other.HaveGamma;
+        this.Gamma = other.Gamma;
+        this.TransferFunction = other.TransferFunction;
+    }
+
     public override void VisitFields(JxlVisitor visitor)
     {
         if (visitor.Conditional(!this.SetImplicit()))

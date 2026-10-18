@@ -26,6 +26,17 @@ internal sealed class JxlCustomXy : JxlFields
     /// <summary>Gets the y chromaticity, times 10^6.</summary>
     public int Y { get; private set; }
 
+    /// <summary>Gets the chromaticity as CIE xy (Customxy::GetValue).</summary>
+    public (double X, double Y) Value => (this.X * (1.0 / 1000000), this.Y * (1.0 / 1000000));
+
+    /// <summary>Copies the fields of <paramref name="other"/> into this instance.</summary>
+    /// <param name="other">The chromaticity to copy.</param>
+    public void CopyFrom(JxlCustomXy other)
+    {
+        this.X = other.X;
+        this.Y = other.Y;
+    }
+
     public override void VisitFields(JxlVisitor visitor)
     {
         this.X = JxlBits.UnpackSigned(visitor.U32(Enc, 0, JxlBits.PackSigned(this.X)));

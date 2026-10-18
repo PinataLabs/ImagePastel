@@ -13,8 +13,13 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// <summary>
 /// Image decoder for JPEG XL codestreams.
 /// </summary>
-internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector
+internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecoderOptions
 {
+    /// <summary>
+    /// Gets or sets a value indicating whether the metadata should be ignored when the image is being decoded.
+    /// </summary>
+    public bool IgnoreMetadata { get; set; }
+
     /// <inheritdoc/>
     /// <remarks>
     /// A frame over the 2^28-pixel cap throws <see cref="InvalidMemoryOperationException"/>. This bypasses
@@ -25,7 +30,7 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector
     {
         Guard.NotNull(stream, nameof(stream));
 
-        JxlDecoderCore decoder = new(configuration);
+        JxlDecoderCore decoder = new(configuration, this);
         BufferedReadStream bufferedReadStream = stream as BufferedReadStream ?? new BufferedReadStream(configuration, stream);
         try
         {
@@ -46,7 +51,7 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector
     {
         Guard.NotNull(stream, nameof(stream));
 
-        JxlDecoderCore decoder = new(configuration);
+        JxlDecoderCore decoder = new(configuration, this);
         BufferedReadStream bufferedReadStream = stream as BufferedReadStream ?? new BufferedReadStream(configuration, stream);
         try
         {
@@ -66,6 +71,6 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector
     {
         Guard.NotNull(stream, nameof(stream));
 
-        return new JxlDecoderCore(configuration).Identify(configuration, stream, cancellationToken);
+        return new JxlDecoderCore(configuration, this).Identify(configuration, stream, cancellationToken);
     }
 }
