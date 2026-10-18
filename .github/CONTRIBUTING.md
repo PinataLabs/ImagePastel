@@ -33,6 +33,8 @@ Install Git LFS before you clone the repository. If you do not, the test images 
 4. Run the source generator tests: `dotnet test tests/ImageSharp.SourceGenerators.Tests -c Release --no-build`.
 5. Compare the public API with the baseline: `pwsh ./ci-apicompat.ps1`.
 
+The expected output of `ImageSharp.Tests` is in `tests/Images/External`, in Git LFS.
+
 The build treats all warnings as errors. A suppression of an analyzer rule must give its reason.
 
 ## Edit generated code
@@ -63,8 +65,6 @@ To change generated code:
 To add a generated file, add it to the `Files` of an emitter.
 Each item gives the hint name of the file and the method that writes it. The hint name is the file name, without a directory.
 A new emitter must also be added to the emitter list of its target in `GeneratedSourcesTarget`.
-
-The expected test output is in `tests/Images/External`, in Git LFS.
 
 ## Publish a package (maintainers)
 
