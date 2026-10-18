@@ -99,11 +99,11 @@ internal sealed class JxlFrameDecoder
         bool isLastOfStill = IsLastOfStill(frameHeader);
 
         // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
-        int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
-            ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled, numChannels)
+            ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim);
+        int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numChannels);
 
         ProcessSections(frameHeader, frameDim, sections, modularFrameDecoder, pipeline, cancellationToken);

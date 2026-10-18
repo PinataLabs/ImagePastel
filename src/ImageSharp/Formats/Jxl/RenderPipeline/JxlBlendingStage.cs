@@ -25,7 +25,7 @@ internal sealed class JxlBlendingStage : IDisposable
     private readonly int numColorPlanes;
     private readonly JxlReferenceFrame bg;
     private readonly JxlReferenceFrame[] ecBg;
-    private readonly IMemoryOwner<float> zeroes;
+    private readonly IMemoryOwner<float> zeros;
     private readonly Buffer2D<float> tmp;
     private readonly JxlBlendingRows bgRows;
     private readonly JxlBlendingRows fgRows;
@@ -38,10 +38,10 @@ internal sealed class JxlBlendingStage : IDisposable
     /// <param name="frameHeader">The header of the frame.</param>
     /// <param name="references">The reference slots.</param>
     /// <param name="frameXSize">The width of the frame.</param>
-    /// <param name="numChannels">The number of channels: the colour planes plus the extra channels.</param>
-    public JxlBlendingStage(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlReferenceFrames references, int frameXSize, int numChannels)
+    public JxlBlendingStage(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlReferenceFrames references, int frameXSize)
     {
         JxlImageMetadata m = frameHeader.NonserializedMetadata.M;
+        int numChannels = m.NumColorPlanes + m.NumExtraChannels;
         this.frameHeader = frameHeader;
         this.ImageXSize = (int)frameHeader.NonserializedMetadata.XSize;
         this.ImageYSize = (int)frameHeader.NonserializedMetadata.YSize;
@@ -72,8 +72,13 @@ internal sealed class JxlBlendingStage : IDisposable
         // libjxl also rejects blending an XYB image whose output colour encoding is not the original
         // one ("Blending in unsupported color space"). XYB frames are a later slice.
 
-        // libjxl allocates its zeros only when a slot is empty; they are always allocated here.
-        this.zeroes = allocator.Allocate<float>(this.ImageXSize, AllocationOptions.Clean);
+        // As libjxl, the zeros are allocated only when a slot the frame blends onto is empty.
+        if (this.bg == null || Array.IndexOf(this.ecBg, null) >= 0)
+        {
+            this.zeros = allocator.Allocate<float>(this.ImageXSize, AllocationOptions.Clean);
+        }
+
+        Memory<float> zeros = this.zeros?.Memory ?? Memory<float>.Empty;
         this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
 
         Buffer2D<float>[] bgPlanes = new Buffer2D<float>[numChannels];
@@ -87,8 +92,8 @@ internal sealed class JxlBlendingStage : IDisposable
             bgPlanes[this.numColorPlanes + i] = this.ecBg[i]?.Planes[this.numColorPlanes + i];
         }
 
-        this.bgRows = new JxlBlendingRows(bgPlanes, this.zeroes.Memory);
-        this.fgRows = new JxlBlendingRows(new Buffer2D<float>[numChannels], this.zeroes.Memory);
+        this.bgRows = new JxlBlendingRows(bgPlanes, zeros);
+        this.fgRows = new JxlBlendingRows(new Buffer2D<float>[numChannels], zeros);
     }
 
     /// <summary>Gets the width of the image, which the pipeline switches to.</summary>
@@ -139,8 +144,8 @@ internal sealed class JxlBlendingStage : IDisposable
             this.fgRows.SetPlane(c, planes[c]);
         }
 
-        this.fgRows.Set(offset, ypos, (int)size);
-        this.bgRows.Set((int)bgXpos, (int)bgYpos, (int)size);
+        this.fgRows.PointAt(offset, ypos, (int)size);
+        this.bgRows.PointAt((int)bgXpos, (int)bgYpos, (int)size);
         JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.numColorPlanes, this.frameHeader.BlendingInfo, this.frameHeader.ExtraChannelBlendingInfo, this.extraChannelInfo, this.tmp, (int)size);
     }
 
@@ -149,40 +154,35 @@ internal sealed class JxlBlendingStage : IDisposable
     /// <param name="ypos">The row.</param>
     public void ProcessPaddingRow(Buffer2D<float>[] output, int ypos)
     {
-        int xsize = this.ImageXSize;
         for (int c = 0; c < this.numColorPlanes; c++)
         {
-            Span<float> row = output[c].DangerousGetRowSpan(ypos).Slice(0, xsize);
-            if (this.bg == null)
-            {
-                row.Clear();
-            }
-            else
-            {
-                this.bg.Planes[c].DangerousGetRowSpan(ypos).Slice(0, xsize).CopyTo(row);
-            }
+            this.CopyBackgroundRow(this.bg, output, c, ypos);
         }
 
         for (int ec = 0; ec < this.extraChannelInfo.Count; ec++)
         {
-            int c = this.numColorPlanes + ec;
-            Span<float> row = output[c].DangerousGetRowSpan(ypos).Slice(0, xsize);
-            JxlReferenceFrame ecBackground = this.ecBg[ec];
-            if (ecBackground == null)
-            {
-                row.Clear();
-            }
-            else
-            {
-                ecBackground.Planes[c].DangerousGetRowSpan(ypos).Slice(0, xsize).CopyTo(row);
-            }
+            this.CopyBackgroundRow(this.ecBg[ec], output, this.numColorPlanes + ec, ypos);
         }
     }
 
     public void Dispose()
     {
-        this.zeroes.Dispose();
+        this.zeros?.Dispose();
         this.tmp.Dispose();
+    }
+
+    // Copies row ypos of channel c from the background, or clears it when the slot is empty.
+    private void CopyBackgroundRow(JxlReferenceFrame background, Buffer2D<float>[] output, int c, int ypos)
+    {
+        Span<float> row = output[c].DangerousGetRowSpan(ypos).Slice(0, this.ImageXSize);
+        if (background == null)
+        {
+            row.Clear();
+        }
+        else
+        {
+            background.Planes[c].DangerousGetRowSpan(ypos).Slice(0, this.ImageXSize).CopyTo(row);
+        }
     }
 
     // verify_bg_size. A slot's frame always starts at the image origin here: libjxl sets an origin only

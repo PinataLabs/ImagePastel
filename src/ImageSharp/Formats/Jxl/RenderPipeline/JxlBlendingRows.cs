@@ -25,7 +25,7 @@ internal sealed class JxlBlendingRows
     /// Initializes a new instance of the <see cref="JxlBlendingRows"/> class.
     /// </summary>
     /// <param name="planes">The plane of each channel, or <see langword="null"/> for zeros.</param>
-    /// <param name="zeros">Zeros, at least as long as any row.</param>
+    /// <param name="zeros">Zeros, at least as long as any row; empty when every channel has a plane.</param>
     public JxlBlendingRows(Buffer2D<float>[] planes, Memory<float> zeros)
     {
         this.planes = planes;
@@ -46,7 +46,7 @@ internal sealed class JxlBlendingRows
     /// <param name="x">The first column.</param>
     /// <param name="y">The row.</param>
     /// <param name="xsize">The number of pixels.</param>
-    public void Set(int x, int y, int xsize)
+    public void PointAt(int x, int y, int xsize)
     {
         this.x = x;
         this.y = y;
