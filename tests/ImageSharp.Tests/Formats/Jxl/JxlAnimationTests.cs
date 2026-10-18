@@ -155,7 +155,9 @@ public class JxlAnimationTests
     [Fact]
     public void Decoder_MaxFrames_DefaultsToAllFrames() => Assert.Equal(uint.MaxValue, new JxlDecoder().MaxFrames);
 
+    // As in the GIF decoder, 0 never matches the count of displayed frames, so every frame is decoded.
     [Theory]
+    [InlineData(0u, new uint[] { 300, 100, 300, 100 })]
     [InlineData(1u, new uint[] { 300 })]
     [InlineData(2u, new uint[] { 300, 100 })]
     [InlineData(4u, new uint[] { 300, 100, 300, 100 })]
