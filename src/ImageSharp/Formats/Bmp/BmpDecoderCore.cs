@@ -1452,9 +1452,7 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         int colorMapSizeBytes = -1;
         if (this.infoHeader.ClrUsed == 0)
         {
-            if (this.infoHeader.BitsPerPixel == 1
-                || this.infoHeader.BitsPerPixel == 4
-                || this.infoHeader.BitsPerPixel == 8)
+            if (this.infoHeader.BitsPerPixel is 1 or 2 or 4 or 8)
             {
                 switch (this.fileMarkerType)
                 {

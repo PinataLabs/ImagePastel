@@ -847,11 +847,13 @@ public class BmpDecoderTests
     [InlineData(4, (int)BmpCompression.RLE4, false, 1)]
     [InlineData(8, (int)BmpCompression.RLE8, false, 1)]
     [InlineData(1, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, false, 0)]
     [InlineData(4, (int)BmpCompression.RGB, false, 0)]
     [InlineData(8, (int)BmpCompression.RGB, false, 0)]
     [InlineData(4, (int)BmpCompression.RLE4, false, 0)]
     [InlineData(8, (int)BmpCompression.RLE8, false, 0)]
     [InlineData(1, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, true, 0)]
     [InlineData(4, (int)BmpCompression.RGB, true, 0)]
     [InlineData(8, (int)BmpCompression.RGB, true, 0)]
     public void BmpDecoder_DecodesIndicesBeyondShortPaletteAsBlack(
@@ -875,7 +877,9 @@ public class BmpDecoderTests
 
     [Theory]
     [InlineData(1, 8)] // Unused bytes between the palette and the pixel data.
-    [InlineData(4, 0)] // Short palette.
+    [InlineData(2, 0)] // Short palette.
+    [InlineData(2, 24)]
+    [InlineData(4, 0)]
     [InlineData(4, 120)]
     [InlineData(8, 0)]
     public void BmpDecoder_ReadsFourBytePaletteEntries_WhenColorsUsedIsZero(short bitsPerPixel, int unusedBytes)
@@ -903,6 +907,29 @@ public class BmpDecoderTests
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(data);
         });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BmpDecoder_Reads2BitFullPalette_WhenColorsUsedIsZero(bool coreHeader)
+    {
+        byte[][] colors = [[0x00, 0x00, 0xFF], [0x00, 0xFF, 0x00], [0xFF, 0x00, 0x00], [0xFF, 0xFF, 0xFF]];
+        int entrySize = coreHeader ? 3 : 4;
+        byte[] palette = new byte[colors.Length * entrySize];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i].CopyTo(palette, i * entrySize);
+        }
+
+        byte[] data = CreateIndexedBmp(2, BmpCompression.RGB, coreHeader, palette, colorsUsed: 0, indices: [0, 1, 2, 3]);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 0, 0), image[0, 0]);
+        Assert.Equal(new Rgba32(0, 255, 0), image[1, 0]);
+        Assert.Equal(new Rgba32(0, 0, 255), image[2, 0]);
+        Assert.Equal(new Rgba32(255, 255, 255), image[3, 0]);
     }
 
     /// <summary>
