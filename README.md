@@ -19,7 +19,6 @@ It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP
 
 This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
 Pinata Labs fixes security issues in this v2 line.
-If Six Labors publishes a security fix that applies to the v2 code, Pinata Labs ports the fix to this fork.
 
 To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md).
 
