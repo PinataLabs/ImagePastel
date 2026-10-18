@@ -310,17 +310,24 @@ internal sealed class JxlModularFrameDecoder : IDisposable
 
         JxlRect r = pipeline.GetGroupRect(groupId);
         bool accurate = this.fullImage.BitDepth >= 23;
+        int numColorPlanes = metadata.NumColorPlanes;
         int c = 0;
         if (this.doColor)
         {
             // libjxl copies a grey channel into all three colour channels (rgb_from_gray); this port
-            // renders grey as one plane (JxlImageMetadata.NumColorPlanes), so it is converted once.
+            // renders grey as one plane (JxlImageMetadata.NumColorPlanes), so it is converted once. A
+            // grey image whose frame has a colour transform has three channels but one plane; libjxl
+            // allows it with YCbCr, which comes with a later slice.
             bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
-            int numColor = rgbFromGray ? 1 : 3;
+            if ((rgbFromGray ? 1 : 3) != numColorPlanes)
+            {
+                JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform on a grey image");
+            }
+
             bool fp = metadata.BitDepth.FloatingPointSample && frameHeader.ColorTransform != JxlColorTransform.Xyb;
             int bits = (int)metadata.BitDepth.BitsPerSample;
             int expBits = (int)metadata.BitDepth.ExponentBitsPerSample;
-            for (; c < numColor; c++)
+            for (; c < numColorPlanes; c++)
             {
                 // libjxl's XYB conversion comes with a later slice; the frame decoder rejects XYB
                 // images, so it is not reached.
@@ -381,7 +388,7 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             for (int y = 0; y < r.YSize; y++)
             {
                 ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, metadata.NumColorPlanes + ec, r, y));
+                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, numColorPlanes + ec, r, y));
             }
         }
     }

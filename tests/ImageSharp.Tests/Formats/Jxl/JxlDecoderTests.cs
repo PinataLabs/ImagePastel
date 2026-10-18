@@ -202,11 +202,13 @@ public class JxlDecoderTests
         }
     }
 
-    [Fact]
-    public void Load_GreyscaleSqueeze_MatchesDjxl()
+    [Theory]
+    [InlineData("greyscale_squeeze")]
+    [InlineData("greyscale_squeeze_wide")] // squeezed channels in the DC groups
+    public void Load_GreyscaleSqueeze_MatchesDjxl(string name)
     {
-        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, "greyscale_squeeze.jxl"));
-        using Image<L8> reference = Image.Load<L8>(GeneratedReferencePath("greyscale_squeeze"));
+        using Image image = Image.Load(CreateConfiguration(), Path.Combine(GeneratedDirectory, name + ".jxl"));
+        using Image<L8> reference = Image.Load<L8>(GeneratedReferencePath(name));
 
         Image<L8> grey = Assert.IsType<Image<L8>>(image);
         ImageComparer.Exact.VerifySimilarity(reference, grey);

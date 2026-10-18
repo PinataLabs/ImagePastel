@@ -5,6 +5,7 @@
 #   greyscale_source.png         64 x 64 8-bit grey
 #   greyscale_alpha_source.png   64 x 64 16-bit grey with alpha
 #   rgba_source.png              321 x 283 8-bit RGBA: odd sizes, and larger than one 256 x 256 group
+#   greyscale_wide_source.png    2061 x 40 8-bit grey: wider than one 2048-pixel DC group
 # The patterns mix smooth gradients with hard edges, so squeeze has both kinds of detail to code.
 
 import struct
@@ -13,6 +14,8 @@ import zlib
 SIZE = 64
 RGBA_WIDTH = 321
 RGBA_HEIGHT = 283
+WIDE_WIDTH = 2061
+WIDE_HEIGHT = 40
 
 
 def grey8(x, y):
@@ -33,6 +36,10 @@ def rgba8(x, y):
     return r, g, b, a
 
 
+def grey_wide8(x, y):
+    return 255 - ((x * 255) // (WIDE_WIDTH - 1)) if (x // 100) % 3 == 0 else (x * 3 + y * 7) & 0xFF
+
+
 def write_png(path, bit_depth, colour_type, fmt, pixel, width=SIZE, height=SIZE):
     rows = b""
     for y in range(height):
@@ -49,3 +56,4 @@ def write_png(path, bit_depth, colour_type, fmt, pixel, width=SIZE, height=SIZE)
 write_png("greyscale_source.png", 8, 0, ">B", lambda x, y: (grey8(x, y),))
 write_png("greyscale_alpha_source.png", 16, 4, ">2H", grey_alpha16)
 write_png("rgba_source.png", 8, 6, ">4B", rgba8, RGBA_WIDTH, RGBA_HEIGHT)
+write_png("greyscale_wide_source.png", 8, 0, ">B", lambda x, y: (grey_wide8(x, y),), WIDE_WIDTH, WIDE_HEIGHT)

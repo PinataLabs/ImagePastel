@@ -26,7 +26,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     private readonly Configuration configuration;
     private readonly ImageFrame<TPixel> frame;
-    private readonly int colorPlanes;
+    private readonly int greenPlane;
+    private readonly int bluePlane;
     private readonly int alphaPlane;
     private readonly bool unpremultiply;
 
@@ -42,7 +43,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     {
         this.configuration = configuration;
         this.frame = frame;
-        this.colorPlanes = colorPlanes;
+        this.greenPlane = colorPlanes == 1 ? 0 : 1;
+        this.bluePlane = colorPlanes == 1 ? 0 : 2;
         this.alphaPlane = alphaChannel < 0 ? -1 : colorPlanes + alphaChannel;
         this.unpremultiply = alphaChannel >= 0 && alphaPremultiplied;
     }
@@ -56,8 +58,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         for (int y = 0; y < height; y++)
         {
             Span<float> r = planes[0].DangerousGetRowSpan(y);
-            Span<float> g = planes[this.colorPlanes == 1 ? 0 : 1].DangerousGetRowSpan(y);
-            Span<float> b = planes[this.colorPlanes == 1 ? 0 : 2].DangerousGetRowSpan(y);
+            Span<float> g = planes[this.greenPlane].DangerousGetRowSpan(y);
+            Span<float> b = planes[this.bluePlane].DangerousGetRowSpan(y);
             if (this.alphaPlane < 0)
             {
                 for (int x = 0; x < width; x++)

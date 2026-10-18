@@ -9,6 +9,7 @@ These files cover features that no conformance vector checks. They were made for
 | `greyscale_alpha.jxl` | Lossless Modular, 16-bit grey with straight alpha, no squeeze. `cjxl` puts it in a container with a `jxll` box. | `External/ReferenceOutput/JxlDecoderTests/greyscale_alpha.png` |
 | `greyscale_squeeze.jxl` | Lossless Modular, 8-bit grey with the default squeeze and no loop filters: the D3 done-check. Same pixels as `greyscale.jxl`. | `External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze.png` |
 | `rgba_squeeze.jxl` | Lossless Modular, 8-bit RGBA with the default squeeze, including the chroma and alpha channels. 321 x 283: odd sizes, and more than one group. | `External/ReferenceOutput/JxlDecoderTests/rgba_squeeze.png` |
+| `greyscale_squeeze_wide.jxl` | Lossless Modular, 8-bit grey with the default squeeze, 2061 x 40. It is wider than one 2048-pixel DC group, so the squeezed channels with a shift of 3 or more are decoded in the DC groups. | `External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze_wide.png` |
 
 #### How `premultiplied_alpha` was made
 
@@ -30,10 +31,12 @@ cjxl greyscale_source.png greyscale.jxl -d 0
 cjxl greyscale_alpha_source.png greyscale_alpha.jxl -d 0
 cjxl greyscale_source.png greyscale_squeeze.jxl -d 0 --responsive=1
 cjxl rgba_source.png rgba_squeeze.jxl -d 0 --responsive=1
+cjxl greyscale_wide_source.png greyscale_squeeze_wide.jxl -d 0 --responsive=1
 djxl greyscale.jxl ../../../External/ReferenceOutput/JxlDecoderTests/greyscale.png
 djxl greyscale_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/greyscale_alpha.png
 djxl greyscale_squeeze.jxl ../../../External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze.png
 djxl rgba_squeeze.jxl ../../../External/ReferenceOutput/JxlDecoderTests/rgba_squeeze.png
+djxl greyscale_squeeze_wide.jxl ../../../External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze_wide.png
 ```
 
 - `make_greyscale_and_squeeze.py` writes the source PNGs. They are not committed; the script makes them again.
