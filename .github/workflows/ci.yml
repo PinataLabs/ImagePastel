@@ -80,6 +80,10 @@ jobs:
       - name: Build
         run: dotnet build ImageSharp.slnx -c Release -p:codecov=${{ matrix.coverage == true }}
 
+      # Compares the generator output with the expected files, so it runs on every OS.
+      - name: Test source generator
+        run: dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+
       - name: Test
         if: ${{ !matrix.coverage }}
         run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build

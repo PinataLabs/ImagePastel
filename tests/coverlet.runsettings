@@ -11,6 +11,8 @@
                     <!-- opencover is the format SonarQube reads for C#. -->
                     <Format>lcov,cobertura,opencover</Format>
                     <Include>[PinataLabs.ImageSharp]*</Include>
+                    <!-- Output of gen/ImageSharp.SourceGenerators, written under obj/.../generated/. -->
+                    <ExcludeByFile>**/generated/ImageSharp.SourceGenerators/**/*.cs</ExcludeByFile>
                 </Configuration>
             </DataCollector>
         </DataCollectors>
