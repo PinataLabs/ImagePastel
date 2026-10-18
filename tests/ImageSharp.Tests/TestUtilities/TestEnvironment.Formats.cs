@@ -7,6 +7,7 @@ using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Pbm;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tga;
@@ -78,6 +79,10 @@ public static partial class TestEnvironment
             IsWindows ? (IImageDecoder)SystemDrawingReferenceDecoder.Instance : MagickReferenceDecoder.Instance,
             bmpEncoder,
             new BmpImageFormatDetector());
+
+        // JPEG XL has no encoder yet. Magick reads it through 16-bit samples, so 9- to 16-bit images keep their precision.
+        cfg.ImageFormatsManager.SetDecoder(JxlFormat.Instance, MagickReferenceDecoder.HighBitDepthInstance);
+        cfg.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
 
         return cfg;
     }

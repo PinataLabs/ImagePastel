@@ -3,6 +3,8 @@
 
 using System;
 using System.Numerics;
+using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -61,6 +63,36 @@ internal static class JxlConformanceImages
                             data[index++] = v.Z;
                             data[index++] = v.W;
                             break;
+                    }
+                }
+            }
+        }
+
+        return new NpyArray(new[] { frames, height, width, channels }, data);
+    }
+
+    /// <summary>
+    /// Converts the decoder's float planes to the reference layout, one channel per plane, values as they are.
+    /// </summary>
+    public static NpyArray ToNpy(JxlDecodedImage image)
+    {
+        int width = image.Width;
+        int height = image.Height;
+        int frames = image.Frames.Count;
+        int channels = frames == 0 ? 0 : image.Frames[0].Planes.Count;
+        float[] data = new float[frames * height * width * channels];
+        int index = 0;
+        for (int f = 0; f < frames; f++)
+        {
+            JxlDecodedFrame frame = image.Frames[f];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    for (int c = 0; c < channels; c++)
+                    {
+                        Buffer2D<float> plane = frame.Planes[c];
+                        data[index++] = plane.DangerousGetRowSpan(y)[x];
                     }
                 }
             }
