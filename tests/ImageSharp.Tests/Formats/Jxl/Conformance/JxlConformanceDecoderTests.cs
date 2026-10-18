@@ -19,6 +19,7 @@ public class JxlConformanceDecoderTests
 
     [Theory]
     [InlineData("delta_palette")]
+    [InlineData("lz77_flower")]
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

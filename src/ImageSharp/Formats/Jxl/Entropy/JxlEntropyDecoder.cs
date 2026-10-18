@@ -44,19 +44,22 @@ internal static class JxlEntropyDecoder
     /// <param name="numContexts">The number of contexts.</param>
     /// <param name="code">The histograms to fill.</param>
     /// <param name="disallowLz77">Whether LZ77 is forbidden in this stream.</param>
-    /// <returns>The context map, which maps each context to a histogram.</returns>
+    /// <returns>
+    /// The context map, which maps each context to a histogram. With LZ77 it has one more entry, the
+    /// context of copy distances.
+    /// </returns>
     public static byte[] DecodeHistograms(JxlBitReader br, int numContexts, JxlAnsCode code, bool disallowLz77 = false)
     {
         JxlBundle.Read(br, code.Lz77);
         if (code.Lz77.Enabled)
         {
-            if (disallowLz77)
-            {
-                JxlThrowHelper.ThrowInvalidImageContentException("Using LZ77 when explicitly disallowed");
-            }
+            numContexts++;
+            code.Lz77.LengthUintConfig = DecodeUintConfig(8, br);
+        }
 
-            // libjxl adds a distance context and reads the length configuration here.
-            JxlThrowHelper.ThrowNotSupportedException("LZ77");
+        if (code.Lz77.Enabled && disallowLz77)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Using LZ77 when explicitly disallowed");
         }
 
         int numHistograms = 1;

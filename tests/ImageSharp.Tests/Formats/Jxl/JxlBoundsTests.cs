@@ -176,6 +176,84 @@ public class JxlBoundsTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void Lz77_CopyLengthThatWraps_Throws(bool lengthBitsAllOnes, bool throws)
+    {
+        // Every token is 40, a copy: length token 32 with split exponent 0 reads 31 more bits, so all
+        // ones give 2^32 - 1, which wraps when the minimum length of 3 is added.
+        JxlTestBitWriter writer = new();
+        WriteLz77Params(writer, minSymbol: 8);
+        writer.Write(4, 0); // length uint config: split exponent 0
+        writer.Bit(true).Write(2, 0); // simple context map, 0 bits per entry
+        writer.Bit(true); // prefix codes
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, 40); // alphabet size 41
+        writer.Write(2, 1).Write(2, 0).Write(6, 40); // simple prefix code with one symbol
+        writer.Bits(31, lengthBitsAllOnes); // copy length
+        writer.Bits(28, false); // distance
+        writer.Bits(64, false);
+
+        JxlBitReader br = writer.ToReader();
+        JxlAnsCode code = new();
+        byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, 1, code);
+        JxlAnsSymbolReader reader = new(code, br);
+
+        Assert.Equal(0u, reader.ReadHybridUint(0, br, contextMap));
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => br.EnsureAllReadsWithinBounds("LZ77 copy"));
+        }
+        else
+        {
+            br.EnsureAllReadsWithinBounds("LZ77 copy");
+        }
+    }
+
+    [Fact]
+    public void Lz77_DistanceBeyondTheDecodedValues_IsClamped()
+    {
+        // Tokens 5 (a literal) and 8 (a copy of length 3), one bit each. The copy's distance token 5
+        // is distance 6, but only one value has been decoded, so the copy repeats that value.
+        JxlTestBitWriter writer = new();
+        WriteLz77Params(writer, minSymbol: 8);
+        writer.Write(4, 0); // length uint config: split exponent 0
+        writer.Bit(true).Write(2, 0); // simple context map, 0 bits per entry
+        writer.Bit(true); // prefix codes
+        WriteUintConfigSplit4(writer);
+        WriteVarLenUint16(writer, 8); // alphabet size 9
+        writer.Write(2, 1).Write(2, 1).Write(4, 5).Write(4, 8); // simple prefix code: symbols 5 and 8
+        writer.Bit(false); // literal 5
+        writer.Bit(true).Bit(false); // copy, distance token 5
+        writer.Bit(false); // literal 5
+        writer.Bits(64, false);
+
+        JxlBitReader br = writer.ToReader();
+        JxlAnsCode code = new();
+        byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, 1, code);
+        JxlAnsSymbolReader reader = new(code, br);
+
+        uint[] values = new uint[5];
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = reader.ReadHybridUint(0, br, contextMap);
+        }
+
+        Assert.Equal(new uint[] { 5, 5, 5, 5, 5 }, values);
+        br.EnsureAllReadsWithinBounds("LZ77 copy");
+    }
+
+    [Fact]
+    public void Lz77_WhereDisallowed_Throws()
+    {
+        JxlTestBitWriter writer = new();
+        WriteLz77Params(writer, minSymbol: 8);
+        writer.Write(4, 0).Bits(64, false);
+
+        Assert.Throws<InvalidImageContentException>(() => JxlEntropyDecoder.DecodeHistograms(writer.ToReader(), 1, new JxlAnsCode(), disallowLz77: true));
+    }
+
     [Fact]
     public void Toc_OverTheEntryLimit_Throws()
         => Assert.Throws<InvalidImageContentException>(() => JxlToc.ReadToc(JxlToc.MaxTocEntries + 1, new JxlBitReader(new byte[16])));
@@ -272,6 +350,10 @@ public class JxlBoundsTests
         WriteVarLenUint16(writer, 1); // alphabet size 2
         writer.Write(2, 1).Write(2, 1).Write(1, 0).Write(1, 1); // simple prefix code: symbols 0 and 1
     }
+
+    // LZ77 enabled, with a minimum symbol from 8 to 2^15 + 7 and the default minimum length of 3.
+    private static void WriteLz77Params(JxlTestBitWriter writer, int minSymbol)
+        => writer.Bit(true).Write(2, 3).Write(15, (ulong)(minSymbol - 8)).Write(2, 0);
 
     // Split exponent 4, no msb or lsb in the token, for log_alpha_size 15.
     private static void WriteUintConfigSplit4(JxlTestBitWriter writer) => writer.Write(4, 4).Write(3, 0).Write(3, 0);

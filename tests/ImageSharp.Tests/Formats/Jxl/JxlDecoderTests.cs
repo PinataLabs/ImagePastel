@@ -44,13 +44,16 @@ public class JxlDecoderTests
         Assert.Equal(751, info.Height);
     }
 
-    [Fact]
-    public void Load_Rgb24_MatchesMagickExactly()
+    [Theory]
+    [InlineData("delta_palette")]
+    [InlineData("lz77_flower")]
+    public void Load_Rgb24_MatchesMagickExactly(string id)
     {
         Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
 
-        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), DeltaPalettePath);
-        using FileStream stream = File.OpenRead(DeltaPalettePath);
+        string path = JxlConformanceVector.Load(id).CommittedInputPath;
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), path);
+        using FileStream stream = File.OpenRead(path);
         using Image<Rgb24> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
