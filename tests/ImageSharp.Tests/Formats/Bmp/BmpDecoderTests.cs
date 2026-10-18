@@ -951,6 +951,201 @@ public class BmpDecoderTests
         return data;
     }
 
+    [Theory]
+    [InlineData(1, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(4, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, false, 2)] // Less than one palette entry.
+    [InlineData(4, (int)BmpCompression.RLE4, false, 0)]
+    [InlineData(8, (int)BmpCompression.RLE8, false, 0)]
+    [InlineData(1, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(4, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, true, 2)] // Less than one palette entry.
+    public void BmpDecoder_ThrowsInvalidImageContentException_WhenIndexedBitmapHasNoPalette(
+        short bitsPerPixel,
+        int compression,
+        bool coreHeader,
+        int paletteLength)
+    {
+        byte[] data = CreateIndexedBmp(bitsPerPixel, (BmpCompression)compression, coreHeader, new byte[paletteLength], colorsUsed: 0, indices: [0, 1, 0]);
+
+        IImageInfo info = Image.Identify(data);
+        Assert.Equal(3, info.Width);
+        Assert.Equal(1, info.Height);
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+        Assert.Contains("palette", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(1, (int)BmpCompression.RGB, false, 1)]
+    [InlineData(2, (int)BmpCompression.RGB, false, 1)]
+    [InlineData(4, (int)BmpCompression.RGB, false, 1)]
+    [InlineData(8, (int)BmpCompression.RGB, false, 1)]
+    [InlineData(4, (int)BmpCompression.RLE4, false, 1)]
+    [InlineData(8, (int)BmpCompression.RLE8, false, 1)]
+    [InlineData(1, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(4, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, false, 0)]
+    [InlineData(4, (int)BmpCompression.RLE4, false, 0)]
+    [InlineData(8, (int)BmpCompression.RLE8, false, 0)]
+    [InlineData(1, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(2, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(4, (int)BmpCompression.RGB, true, 0)]
+    [InlineData(8, (int)BmpCompression.RGB, true, 0)]
+    public void BmpDecoder_DecodesIndicesBeyondShortPaletteAsBlack(
+        short bitsPerPixel,
+        int compression,
+        bool coreHeader,
+        int colorsUsed)
+    {
+        // One red palette entry. A BITMAPCOREHEADER palette has 3 byte entries, the others have 4.
+        // The two trailing bytes of the core palette are an incomplete second entry.
+        byte[] palette = coreHeader ? [0x00, 0x00, 0xFF, 0x7F, 0x7F] : [0x00, 0x00, 0xFF, 0x00];
+        int maxIndex = (1 << bitsPerPixel) - 1;
+        byte[] data = CreateIndexedBmp(bitsPerPixel, (BmpCompression)compression, coreHeader, palette, colorsUsed, indices: [0, 1, (byte)maxIndex]);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 0, 0), image[0, 0]);
+        Assert.Equal(new Rgba32(0, 0, 0), image[1, 0]);
+        Assert.Equal(new Rgba32(0, 0, 0), image[2, 0]);
+    }
+
+    [Theory]
+    [InlineData(1, 8)] // Unused bytes between the palette and the pixel data.
+    [InlineData(2, 0)] // Short palette.
+    [InlineData(2, 24)]
+    [InlineData(4, 0)]
+    [InlineData(4, 120)]
+    [InlineData(8, 0)]
+    public void BmpDecoder_ReadsFourBytePaletteEntries_WhenColorsUsedIsZero(short bitsPerPixel, int unusedBytes)
+    {
+        // Red and green 4 byte entries in a 40 byte header bitmap, followed by unused bytes.
+        byte[] palette = new byte[8 + unusedBytes];
+        palette.AsSpan(8).Fill(0xAA);
+        palette[2] = 0xFF;
+        palette[5] = 0xFF;
+        byte[] data = CreateIndexedBmp(bitsPerPixel, BmpCompression.RGB, false, palette, colorsUsed: 0, indices: [0, 1]);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 0, 0), image[0, 0]);
+        Assert.Equal(new Rgba32(0, 255, 0), image[1, 0]);
+    }
+
+    [Fact]
+    public void BmpDecoder_ThrowsInvalidImageContentException_WhenColorsUsedOverflowsPaletteSize()
+    {
+        // 0x40000001 * 4 wraps to 4 bytes in 32 bit arithmetic.
+        byte[] data = CreateIndexedBmp(8, BmpCompression.RGB, false, [0x00, 0x00, 0xFF, 0x00], colorsUsed: 0x40000001, indices: [0, 0]);
+
+        Assert.Throws<InvalidImageContentException>(() =>
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(data);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BmpDecoder_Reads2BitFullPalette_WhenColorsUsedIsZero(bool coreHeader)
+    {
+        byte[][] colors = [[0x00, 0x00, 0xFF], [0x00, 0xFF, 0x00], [0xFF, 0x00, 0x00], [0xFF, 0xFF, 0xFF]];
+        int entrySize = coreHeader ? 3 : 4;
+        byte[] palette = new byte[colors.Length * entrySize];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i].CopyTo(palette, i * entrySize);
+        }
+
+        byte[] data = CreateIndexedBmp(2, BmpCompression.RGB, coreHeader, palette, colorsUsed: 0, indices: [0, 1, 2, 3]);
+
+        using Image<Rgba32> image = Image.Load<Rgba32>(data);
+
+        Assert.Equal(new Rgba32(255, 0, 0), image[0, 0]);
+        Assert.Equal(new Rgba32(0, 255, 0), image[1, 0]);
+        Assert.Equal(new Rgba32(0, 0, 255), image[2, 0]);
+        Assert.Equal(new Rgba32(255, 255, 255), image[3, 0]);
+    }
+
+    /// <summary>
+    /// Creates a one row indexed bitmap with the given raw palette bytes, placed directly after the info header.
+    /// </summary>
+    private static byte[] CreateIndexedBmp(
+        short bitsPerPixel,
+        BmpCompression compression,
+        bool coreHeader,
+        byte[] palette,
+        int colorsUsed,
+        byte[] indices)
+    {
+        byte[] pixelData;
+        if (compression == BmpCompression.RGB)
+        {
+            int rowBytes = ((indices.Length * bitsPerPixel) + 31) / 32 * 4;
+            pixelData = new byte[rowBytes];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                int bit = i * bitsPerPixel;
+                pixelData[bit / 8] |= (byte)(indices[i] << (8 - bitsPerPixel - (bit % 8)));
+            }
+        }
+        else
+        {
+            // One encoded run of length one per pixel, then end of bitmap. RLE4 uses the high nibble first.
+            pixelData = new byte[(indices.Length * 2) + 2];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                pixelData[i * 2] = 1;
+                pixelData[(i * 2) + 1] = compression == BmpCompression.RLE4 ? (byte)(indices[i] << 4) : indices[i];
+            }
+
+            pixelData[^1] = 1;
+        }
+
+        int headerSize = coreHeader ? BmpInfoHeader.CoreSize : BmpInfoHeader.SizeV3;
+        int pixelDataOffset = BmpFileHeader.Size + headerSize + palette.Length;
+        byte[] data = new byte[pixelDataOffset + pixelData.Length];
+        Span<byte> span = data;
+
+        span[0] = (byte)'B';
+        span[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(span[2..], data.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(span[10..], pixelDataOffset);
+
+        Span<byte> infoHeader = span[BmpFileHeader.Size..];
+        BinaryPrimitives.WriteInt32LittleEndian(infoHeader, headerSize);
+        if (coreHeader)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(infoHeader[4..], (ushort)indices.Length);
+            BinaryPrimitives.WriteUInt16LittleEndian(infoHeader[6..], 1);
+            BinaryPrimitives.WriteInt16LittleEndian(infoHeader[8..], 1);
+            BinaryPrimitives.WriteInt16LittleEndian(infoHeader[10..], bitsPerPixel);
+        }
+        else
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(infoHeader[4..], indices.Length);
+            BinaryPrimitives.WriteInt32LittleEndian(infoHeader[8..], 1);
+            BinaryPrimitives.WriteInt16LittleEndian(infoHeader[12..], 1);
+            BinaryPrimitives.WriteInt16LittleEndian(infoHeader[14..], bitsPerPixel);
+            BinaryPrimitives.WriteInt32LittleEndian(infoHeader[16..], (int)compression);
+            BinaryPrimitives.WriteInt32LittleEndian(infoHeader[32..], colorsUsed);
+        }
+
+        palette.CopyTo(span[(BmpFileHeader.Size + headerSize)..]);
+        pixelData.CopyTo(span[pixelDataOffset..]);
+
+        return data;
+    }
+
     /// <summary>
     /// Creates a bitmap with a 40 byte BITMAPINFOHEADER, an optional black color palette and zeroed pixel data.
     /// </summary>

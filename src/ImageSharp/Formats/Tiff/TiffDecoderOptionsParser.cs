@@ -373,11 +373,23 @@ internal static class TiffDecoderOptionsParser
                         TiffThrowHelper.ThrowNotSupported("The number of samples in the TIFF BitsPerSample entry is not supported.");
                     }
 
+                    if (options.BitsPerSample.Channel0 > 16)
+                    {
+                        TiffThrowHelper.ThrowNotSupported("Bits per sample is not supported.");
+                    }
+
+                    // TIFF 6.0 requires a red, a green and a blue table of 2^BitsPerSample entries each.
+                    int colorCount = 1 << options.BitsPerSample.Channel0;
+                    if (options.ColorMap.Length < colorCount * 3)
+                    {
+                        TiffThrowHelper.ThrowImageFormatException($"Invalid ColorMap, expected {colorCount * 3} values but found {options.ColorMap.Length}.");
+                    }
+
                     options.ColorType = TiffColorType.PaletteColor;
                 }
                 else
                 {
-                    TiffThrowHelper.ThrowNotSupported("The TIFF ColorMap entry is missing for a palette color image.");
+                    TiffThrowHelper.ThrowImageFormatException("The TIFF ColorMap entry is missing for a palette color image.");
                 }
 
                 break;
