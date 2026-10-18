@@ -22,13 +22,6 @@
         "dotnet-sonarscanner"
       ],
       "rollForward": false
-    },
-    "dotnet-t4": {
-      "version": "3.0.0",
-      "commands": [
-        "t4"
-      ],
-      "rollForward": false
     }
   }
 }

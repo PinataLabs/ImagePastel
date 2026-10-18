@@ -7,7 +7,7 @@ namespace SixLabors.ImageSharp.Common.Tuples;
 
 /// <summary>
 /// Contains value type tuples of 8 elements.
-/// TODO: We should T4 this stuff to be DRY
+/// TODO: Generate these tuples with the source generator to be DRY.
 /// </summary>
 internal static class Tuple8
 {

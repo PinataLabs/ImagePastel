@@ -19,13 +19,15 @@
     <InternalsVisibleTo Include="ImageSharp.Tests.ProfilingSandbox" Key="$(PinataLabsPublicKey)" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="PixelFormats\PixelOperations\Generated\PixelOperationsTests.Specialized.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>PixelOperationsTests.Specialized.Generated.tt</DependentUpon>
-    </None>
-  </ItemGroup>
+  <!--
+    The specialized pixel operation tests are written by gen/ImageSharp.SourceGenerators.
+    The generated files are under artifacts/obj/tests/ImageSharp.Tests/<configuration>/<tfm>/generated/.
+  -->
+  <PropertyGroup>
+    <ImageSharpGeneratedSources>Tests</ImageSharpGeneratedSources>
+  </PropertyGroup>
+
+  <Import Project="..\..\gen\ImageSharp.SourceGenerators.props" />
 
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />
@@ -36,10 +38,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="PixelFormats\PixelOperations\Generated\PixelOperationsTests.Specialized.Generated.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>PixelOperationsTests.Specialized.Generated.cs</LastGenOutput>
-    </None>
     <None Update="TestFonts\OpenSans-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -49,18 +47,6 @@
     <None Update="xunit.runner.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="PixelFormats\PixelOperations\Generated\PixelOperationsTests.Specialized.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>PixelOperationsTests.Specialized.Generated.tt</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
   </ItemGroup>
 
 </Project>
