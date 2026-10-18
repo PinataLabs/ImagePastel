@@ -13,6 +13,11 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
 internal sealed partial class IccDataReader
 {
     /// <summary>
+    /// The size in bytes of the header (type signature and reserved bytes) that starts every tag.
+    /// </summary>
+    private const uint TagHeaderSize = 8;
+
+    /// <summary>
     /// Reads a tag data entry
     /// </summary>
     /// <param name="info">The table entry with reading information</param>
@@ -129,9 +134,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUnknownTagDataEntry ReadUnknownTagDataEntry(uint size)
     {
-        int count = (int)size - 8;  // 8 is the tag header size
+        int count = (int)this.CheckTagContentLength(size, 0, "unknown");
         return new IccUnknownTagDataEntry(this.ReadBytes(count));
     }
 
@@ -224,14 +230,16 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header and flags or runs past the end of the data.</exception>
     public IccDataTagDataEntry ReadDataTagDataEntry(uint size)
     {
+        int length = (int)this.CheckTagContentLength(size, 4, "data") - 4; // 4 flag bytes
+
         this.AddIndex(3);   // first 3 bytes are zero
         byte b = this.data[this.AddIndex(1)];
 
         // last bit of 4th byte is either 0 = ASCII or 1 = binary
         bool ascii = this.GetBit(b, 7);
-        int length = (int)size - 12;
         byte[] cdata = this.ReadBytes(length);
 
         return new IccDataTagDataEntry(cdata, ascii);
@@ -648,9 +656,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccFix16ArrayTagDataEntry ReadFix16ArrayTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 4;
+        uint count = this.CheckTagContentLength(size, 0, "s15Fixed16Array") / 4;
         float[] arrayData = new float[count];
         for (int i = 0; i < count; i++)
         {
@@ -674,9 +683,11 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccTextTagDataEntry ReadTextTagDataEntry(uint size)
     {
-        return new IccTextTagDataEntry(this.ReadAsciiString((int)size - 8)); // 8 is the tag header size
+        int length = (int)this.CheckTagContentLength(size, 0, "text");
+        return new IccTextTagDataEntry(this.ReadAsciiString(length));
     }
 
     /// <summary>
@@ -684,9 +695,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUFix16ArrayTagDataEntry ReadUFix16ArrayTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 4;
+        uint count = this.CheckTagContentLength(size, 0, "u16Fixed16Array") / 4;
         float[] arrayData = new float[count];
         for (int i = 0; i < count; i++)
         {
@@ -701,9 +713,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUInt16ArrayTagDataEntry ReadUInt16ArrayTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 2;
+        uint count = this.CheckTagContentLength(size, 0, "uInt16Array") / 2;
         ushort[] arrayData = new ushort[count];
         for (int i = 0; i < count; i++)
         {
@@ -718,9 +731,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUInt32ArrayTagDataEntry ReadUInt32ArrayTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 4;
+        uint count = this.CheckTagContentLength(size, 0, "uInt32Array") / 4;
         uint[] arrayData = new uint[count];
         for (int i = 0; i < count; i++)
         {
@@ -735,9 +749,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUInt64ArrayTagDataEntry ReadUInt64ArrayTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 8;
+        uint count = this.CheckTagContentLength(size, 0, "uInt64Array") / 8;
         ulong[] arrayData = new ulong[count];
         for (int i = 0; i < count; i++)
         {
@@ -752,9 +767,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccUInt8ArrayTagDataEntry ReadUInt8ArrayTagDataEntry(uint size)
     {
-        int count = (int)size - 8; // 8 is the tag header size
+        int count = (int)this.CheckTagContentLength(size, 0, "uInt8Array");
         byte[] adata = this.ReadBytes(count);
 
         return new IccUInt8ArrayTagDataEntry(adata);
@@ -777,9 +793,10 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">The size is shorter than the tag header or runs past the end of the data.</exception>
     public IccXyzTagDataEntry ReadXyzTagDataEntry(uint size)
     {
-        uint count = (size - 8) / 12;
+        uint count = this.CheckTagContentLength(size, 0, "XYZ") / 12;
         var arrayData = new Vector3[count];
         for (int i = 0; i < count; i++)
         {
@@ -875,9 +892,15 @@ internal sealed partial class IccDataReader
     /// </summary>
     /// <param name="size">The size of the entry in bytes</param>
     /// <returns>The read entry</returns>
+    /// <exception cref="InvalidIccProfileException">
+    /// The size is shorter than the tag header and counts, runs past the end of the data, or is too short for the counted curve entries.
+    /// </exception>
     public IccUcrBgTagDataEntry ReadUcrBgTagDataEntry(uint size)
     {
+        uint contentLength = this.CheckTagContentLength(size, 8, "ucrbg"); // two 4-byte counts
+
         uint ucrCount = this.ReadUInt32();
+        CheckUcrBgCurveLength(ucrCount, contentLength - 8);
         ushort[] ucrCurve = new ushort[ucrCount];
         for (int i = 0; i < ucrCurve.Length; i++)
         {
@@ -885,6 +908,7 @@ internal sealed partial class IccDataReader
         }
 
         uint bgCount = this.ReadUInt32();
+        CheckUcrBgCurveLength(bgCount, contentLength - 8 - (ucrCount * 2));
         ushort[] bgCurve = new ushort[bgCount];
         for (int i = 0; i < bgCurve.Length; i++)
         {
@@ -893,9 +917,49 @@ internal sealed partial class IccDataReader
 
         // ((ucr length + bg length) * UInt16 size) + (ucrCount + bgCount)
         uint dataSize = ((ucrCount + bgCount) * 2) + 8;
-        int descriptionLength = (int)(size - 8 - dataSize);   // 8 is the tag header size
+        int descriptionLength = (int)(contentLength - dataSize);
         string description = this.ReadAsciiString(descriptionLength);
 
         return new IccUcrBgTagDataEntry(ucrCurve, bgCurve, description);
+
+        static void CheckUcrBgCurveLength(uint count, uint remaining)
+        {
+            if (count > remaining / 2)
+            {
+                throw new InvalidIccProfileException(
+                    $"The ucrbg tag counts {count} curve entries, but only {remaining} bytes remain in the tag.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks the size of a tag whose length depends on its size, and returns the number of bytes after the tag header.
+    /// Call it after the tag header has been read and before any length or element count is derived from the size.
+    /// </summary>
+    /// <param name="size">The size of the entry in bytes, including the tag header</param>
+    /// <param name="minContentLength">The fixed number of bytes the type needs after the tag header</param>
+    /// <param name="typeName">The ICC name of the tag type, for the error message</param>
+    /// <returns>The number of bytes after the tag header</returns>
+    /// <exception cref="InvalidIccProfileException">
+    /// The size is shorter than the tag header plus <paramref name="minContentLength"/>, or the tag runs past the end of the data.
+    /// </exception>
+    private uint CheckTagContentLength(uint size, uint minContentLength, string typeName)
+    {
+        uint minSize = TagHeaderSize + minContentLength;
+        if (size < minSize)
+        {
+            throw new InvalidIccProfileException(
+                $"The {typeName} tag is {size} bytes long, shorter than its minimum of {minSize} bytes.");
+        }
+
+        uint contentLength = size - TagHeaderSize;
+        uint available = (uint)Math.Max(0, this.data.Length - this.currentIndex);
+        if (contentLength > available)
+        {
+            throw new InvalidIccProfileException(
+                $"The {typeName} tag needs {contentLength} bytes after its header, but only {available} remain in the profile data.");
+        }
+
+        return contentLength;
     }
 }
