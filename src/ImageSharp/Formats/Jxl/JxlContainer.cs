@@ -23,14 +23,23 @@ internal static class JxlContainer
     // JxlDecoderStruct::kNumBuffersLimit: the most out-of-order jxlp boxes held at once.
     private const int NumBuffersLimit = 1 << 20;
 
+    // kBlockSizeLimit in HandleBoxes: the largest Exif or XMP box libjxl decompresses for JPEG
+    // reconstruction. This decoder uses it for every Brotli-compressed metadata box.
+    private const int BlockSizeLimit = 64 << 20;
+
     /// <summary>
-    /// Returns the codestream in <paramref name="data"/>, which starts with the container signature.
-    /// Throws <see cref="InvalidImageContentException"/> for an invalid container.
+    /// Reads the codestream in <paramref name="data"/>, which starts with the container signature, and
+    /// the Exif and XMP boxes when <paramref name="readMetadata"/> is set. Throws
+    /// <see cref="InvalidImageContentException"/> for an invalid container.
     /// </summary>
     /// <param name="data">The file.</param>
-    /// <returns>The codestream.</returns>
-    public static byte[] ExtractCodestream(byte[] data)
+    /// <param name="readMetadata">Whether to read the Exif and XMP boxes.</param>
+    /// <returns>The contents.</returns>
+    public static JxlContainerContents Read(byte[] data, bool readMetadata)
     {
+        // djxl keeps the last box of each kind: each Exif or xml box overwrites the one before.
+        byte[] exifBox = null;
+        byte[] xmlBox = null;
         List<ReadOnlyMemory<byte>> codestream = new();
         Dictionary<uint, (ReadOnlyMemory<byte> Part, bool IsLast)> outOfOrder = new();
         bool lastCodestreamSeen = false;
@@ -139,8 +148,29 @@ internal static class JxlContainer
                     JxlThrowHelper.ThrowInvalidImageContentException($"jxlp box index {counter} is out of order (expected {nextJxlpIndex}); out-of-order jxlp boxes require file format version 1 in the ftyp box");
                 }
             }
+            else if (readMetadata && type.SequenceEqual("Exif"u8))
+            {
+                exifBox = contents.ToArray();
+            }
+            else if (readMetadata && type.SequenceEqual("xml "u8))
+            {
+                xmlBox = contents.ToArray();
+            }
+            else if (readMetadata && type.SequenceEqual("brob"u8) && contents.Length >= 4)
+            {
+                // A brob box starts with the type of the box it compresses. It never holds the
+                // codestream: libjxl skips it when it looks for one.
+                ReadOnlySpan<byte> decodedType = contents.Span.Slice(0, 4);
+                if (decodedType.SequenceEqual("Exif"u8))
+                {
+                    exifBox = Decompress(contents.Slice(4)) ?? exifBox;
+                }
+                else if (decodedType.SequenceEqual("xml "u8))
+                {
+                    xmlBox = Decompress(contents.Slice(4)) ?? xmlBox;
+                }
+            }
 
-            // libjxl skips every other box, brob included: a brob box never holds the codestream.
             pos = contentsEnd;
         }
 
@@ -150,8 +180,99 @@ internal static class JxlContainer
         }
 
         // jxlp boxes still buffered leave a gap, which the codestream reader finds as truncation.
-        return Join(codestream);
+        return new JxlContainerContents
+        {
+            Codestream = Join(codestream),
+            Exif = exifBox == null ? null : ExifFromBox(exifBox),
+            Xmp = xmlBox,
+        };
     }
+
+    // The Exif box starts with the offset of the TIFF header. djxl drops the bytes before it, and
+    // warns and keeps the box as it is when there is no TIFF header there (lib/extras/dec/jxl.cc);
+    // ImageSharp has no profile for bytes that are not Exif, so this gives none.
+    private static byte[] ExifFromBox(byte[] box)
+    {
+        // 16 = 4 + 12 = offset + min EXIF payload.
+        if (box.Length < 16)
+        {
+            return null;
+        }
+
+        uint offset = BinaryPrimitives.ReadUInt32BigEndian(box);
+        if (offset > box.Length - 16)
+        {
+            return null;
+        }
+
+        // IsExif in lib/jxl/base/exif.h: a little- or big-endian TIFF header.
+        byte[] exif = box.AsSpan(4 + (int)offset).ToArray();
+        uint header = BinaryPrimitives.ReadUInt32LittleEndian(exif);
+        return header is 0x2A004D4D or 0x002A4949 ? exif : null;
+    }
+
+    // Decompresses the contents of a brob box after its type, as JxlBoxContentDecoder does. Returns
+    // null where there is no Brotli decoder.
+    private static byte[] Decompress(ReadOnlyMemory<byte> compressed)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        // Not a using declaration: that would make the struct read-only, and each call would mutate a copy.
+        System.IO.Compression.BrotliDecoder decoder = default;
+        try
+        {
+            return Decompress(ref decoder, compressed.Span);
+        }
+        finally
+        {
+            decoder.Dispose();
+        }
+#else
+        // netstandard2.1 has no BrotliDecoder, so a compressed Exif or XMP box is dropped and the image
+        // still decodes (issue #165).
+        _ = compressed;
+        return null;
+#endif
+    }
+
+#if NETCOREAPP3_0_OR_GREATER
+    private static byte[] Decompress(ref System.IO.Compression.BrotliDecoder decoder, ReadOnlySpan<byte> input)
+    {
+        byte[] output = new byte[Math.Clamp(input.Length * 4, 64, BlockSizeLimit)];
+        int written = 0;
+        while (true)
+        {
+            System.Buffers.OperationStatus status = decoder.Decompress(input, output.AsSpan(written), out int consumed, out int produced);
+            input = input.Slice(consumed);
+            written += produced;
+            switch (status)
+            {
+                case System.Buffers.OperationStatus.Done:
+                    // The Brotli stream has to end with the box.
+                    if (!input.IsEmpty)
+                    {
+                        JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box ends before the box");
+                    }
+
+                    Array.Resize(ref output, written);
+                    return output;
+                case System.Buffers.OperationStatus.DestinationTooSmall:
+                    if (output.Length >= BlockSizeLimit)
+                    {
+                        JxlThrowHelper.ThrowInvalidImageContentException("EXIF/XMP box is too large");
+                    }
+
+                    Array.Resize(ref output, Math.Min(output.Length * 2, BlockSizeLimit));
+                    break;
+                case System.Buffers.OperationStatus.NeedMoreData:
+                    JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box is truncated");
+                    break;
+                default:
+                    JxlThrowHelper.ThrowInvalidImageContentException("The Brotli stream in a brob box is invalid");
+                    break;
+            }
+        }
+    }
+#endif
 
     // The file type box: the major brand "jxl " and the file format version.
     private static uint ReadFtyp(ReadOnlySpan<byte> contents)

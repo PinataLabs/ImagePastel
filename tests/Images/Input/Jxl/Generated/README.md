@@ -10,6 +10,8 @@ These files cover features that no conformance vector checks. They were made for
 | `greyscale_squeeze.jxl` | Lossless Modular, 8-bit grey with the default squeeze and no loop filters: the D3 done-check. Same pixels as `greyscale.jxl`. | `External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze.png` |
 | `rgba_squeeze.jxl` | Lossless Modular, 8-bit RGBA with the default squeeze, including the chroma and alpha channels. 321 x 283: odd sizes, and more than one group. | `External/ReferenceOutput/JxlDecoderTests/rgba_squeeze.png` |
 | `greyscale_squeeze_wide.jxl` | Lossless Modular, 8-bit grey with the default squeeze, 2061 x 40. It is wider than one 2048-pixel DC group, so the squeezed channels with a shift of 3 or more are decoded in the DC groups. | `External/ReferenceOutput/JxlDecoderTests/greyscale_squeeze_wide.png` |
+| `exif_xmp.jxl` | Lossless Modular, 16 x 16 8-bit RGB with the Exif and XMP of libjxl's `1x1_exif_xmp.jpg` in uncompressed `Exif` and `xml ` boxes. `cjxl` splits the codestream into two `jxlp` boxes with the metadata boxes between them. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
+| `exif_xmp_brob.jxl` | The same image and metadata, with both metadata boxes Brotli-compressed in `brob` boxes. | `External/ReferenceOutput/JxlDecoderTests/exif_xmp.png` |
 
 #### How `premultiplied_alpha` was made
 
@@ -42,3 +44,15 @@ djxl greyscale_squeeze_wide.jxl ../../../External/ReferenceOutput/JxlDecoderTest
 - `make_greyscale_and_squeeze.py` writes the source PNGs. They are not committed; the script makes them again.
 - `--responsive=1` makes lossless `cjxl` use the squeeze transform. Lossless encoding turns the loop filters off, and these files have one pass.
 - The files are lossless, so each `djxl` PNG holds the same pixels as its source PNG.
+
+#### How the Exif and XMP files were made
+
+```sh
+py -3 make_exif_xmp.py ../libjxl/jxl/jpeg_reconstruction/1x1_exif_xmp.jpg
+cjxl exif_xmp_source.png exif_xmp.jxl -d 0 --compress_boxes=0
+cjxl exif_xmp_source.png exif_xmp_brob.jxl -d 0 --compress_boxes=1
+djxl exif_xmp.jxl ../../../External/ReferenceOutput/JxlDecoderTests/exif_xmp.png
+```
+
+- `make_exif_xmp.py` writes `exif_xmp_source.png`, with the JPEG's Exif in an `eXIf` chunk and its XMP in an `iTXt` chunk. It is not committed; the script makes it again. `cjxl` given the JPEG itself keeps the Exif but drops the XMP, so the PNG carries both.
+- `djxl` gives the same PNG for `exif_xmp_brob.jxl`.

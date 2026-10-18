@@ -15,6 +15,8 @@ using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -28,13 +30,32 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     private const long MaxSideLength = 1L << 30;
     private const int MaxExtraChannels = 256;
 
+    private readonly bool ignoreMetadata;
+
     private JxlCodecMetadata metadata;
+
+    // The Exif and XMP of the file, read with the codestream.
+    private ImageMetadata imageMetadata;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class with the default options.
+    /// </summary>
+    /// <param name="configuration">The configuration.</param>
+    public JxlDecoderCore(Configuration configuration)
+        : this(configuration, new JxlDecoder())
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class.
     /// </summary>
     /// <param name="configuration">The configuration.</param>
-    public JxlDecoderCore(Configuration configuration) => this.Configuration = configuration;
+    /// <param name="options">The options.</param>
+    public JxlDecoderCore(Configuration configuration, IJxlDecoderOptions options)
+    {
+        this.Configuration = configuration;
+        this.ignoreMetadata = options.IgnoreMetadata;
+    }
 
     /// <inheritdoc/>
     public Configuration Configuration { get; }
@@ -46,7 +67,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
         return this.Decode<TPixel>(data, frameOffset, cancellationToken);
     }
@@ -60,7 +81,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <returns>The image.</returns>
     public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        byte[] data = ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream);
         int frameOffset = this.ReadHeaders(data);
         Type pixelType = ChoosePixelType(this.metadata.M);
         return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
@@ -127,7 +148,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
-        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
+        Image<TPixel> image = new(this.Configuration, (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
         try
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
@@ -146,7 +167,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(ReadCodestream(stream));
+        this.ReadHeaders(this.ReadCodestream(stream));
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -154,7 +175,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             bitsPerPixel += (int)eci.BitDepth.BitsPerSample;
         }
 
-        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, new ImageMetadata());
+        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.XSize, (int)this.metadata.YSize, this.imageMetadata);
     }
 
     /// <summary>
@@ -166,7 +187,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = ReadCodestream(bufferedStream);
+        byte[] data = this.ReadCodestream(bufferedStream);
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
@@ -191,11 +212,28 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
-    // Reads the whole file, and takes the codestream out of a container.
-    private static byte[] ReadCodestream(BufferedReadStream stream)
+    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container.
+    private byte[] ReadCodestream(BufferedReadStream stream)
     {
         byte[] data = ReadAll(stream);
-        return data.AsSpan().StartsWith(JxlConstants.ContainerSignature) ? JxlContainer.ExtractCodestream(data) : data;
+        this.imageMetadata = new ImageMetadata();
+        if (!data.AsSpan().StartsWith(JxlConstants.ContainerSignature))
+        {
+            return data;
+        }
+
+        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
+        if (contents.Exif != null)
+        {
+            this.imageMetadata.ExifProfile = new ExifProfile(contents.Exif);
+        }
+
+        if (contents.Xmp != null)
+        {
+            this.imageMetadata.XmpProfile = new XmpProfile(contents.Xmp);
+        }
+
+        return contents.Codestream;
     }
 
     // libjxl reads the codestream incrementally. This decoder decodes from memory, so it reads the
