@@ -445,6 +445,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
     {
         int stripsPerPixel = this.BitsPerSample.Channels;
         int stripsPerPlane = stripOffsets.Length / stripsPerPixel;
+        if (stripsPerPlane == 0)
+        {
+            TiffThrowHelper.ThrowImageFormatException("The planar TIFF image has fewer StripOffsets than planes.");
+        }
+
         int bitsPerPixel = this.BitsPerPixel;
 
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
@@ -650,6 +655,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
 
         DebugGuard.MustBeLessThanOrEqualTo((ulong)width.Value, (ulong)int.MaxValue, nameof(ExifTag.ImageWidth));
 
+        if ((int)width.Value <= 0)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException("The TIFF ImageWidth must be greater than zero.");
+        }
+
         return (int)width.Value;
     }
 
@@ -664,6 +674,11 @@ internal class TiffDecoderCore : IImageDecoderInternals
         if (height == null)
         {
             TiffThrowHelper.ThrowImageFormatException("The TIFF image frame is missing the ImageLength");
+        }
+
+        if ((int)height.Value <= 0)
+        {
+            TiffThrowHelper.ThrowInvalidImageContentException("The TIFF ImageLength must be greater than zero.");
         }
 
         return (int)height.Value;

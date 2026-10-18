@@ -1,6 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.IO;
@@ -37,6 +38,11 @@ internal class Vp8BitReader : BitReaderBase
     private uint bufferMax;
 
     private uint bufferEnd;
+
+    /// <summary>
+    /// The end of the data in the buffer. The buffer can end before the image data, whose missing end is read as zeros.
+    /// </summary>
+    private long dataEnd;
 
     /// <summary>
     /// True if input is exhausted.
@@ -176,7 +182,11 @@ internal class Vp8BitReader : BitReaderBase
         this.eof = false;
         this.pos = pos;
         this.bufferEnd = (uint)posPlusSize;
-        this.bufferMax = (uint)(size > 8 ? posPlusSize - 8 + 1 : pos);
+
+        // Whole words are only read from the data in the buffer. The bytes after it are read one at a time.
+        this.dataEnd = this.Data.Memory.Length;
+        long readEnd = Math.Min(posPlusSize, this.dataEnd);
+        this.bufferMax = (uint)(readEnd - pos > 8 ? readEnd - 8 + 1 : pos);
 
         this.LoadNewBytes();
     }
@@ -205,7 +215,9 @@ internal class Vp8BitReader : BitReaderBase
         if (this.pos < this.bufferEnd)
         {
             this.bits += 8;
-            this.value = this.Data.Memory.Span[(int)this.pos++] | (this.value << 8);
+            ulong nextByte = this.pos < this.dataEnd ? this.Data.Memory.Span[(int)this.pos] : 0UL;
+            this.pos++;
+            this.value = nextByte | (this.value << 8);
         }
         else if (!this.eof)
         {

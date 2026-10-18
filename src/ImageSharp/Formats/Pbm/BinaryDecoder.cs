@@ -106,6 +106,7 @@ internal class BinaryDecoder
                 return;
             }
 
+            SampleScaler.SwapShortsBigEndian(rowSpan);
             SampleScaler.ScaleShorts(rowSpan, maxPixelValue);
 
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);
@@ -162,6 +163,7 @@ internal class BinaryDecoder
                 return;
             }
 
+            SampleScaler.SwapShortsBigEndian(rowSpan);
             SampleScaler.ScaleShorts(rowSpan, maxPixelValue);
 
             Span<TPixel> pixelSpan = pixels.DangerousGetRowSpan(y);

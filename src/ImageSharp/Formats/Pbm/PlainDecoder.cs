@@ -244,9 +244,10 @@ internal class PlainDecoder
         {
             for (int x = 0; x < width; x++)
             {
-                stream.ReadDecimal(out int value);
+                // Each bit is one character, so bits do not need white space between them.
+                int value = stream.ReadByte();
 
-                rowSpan[x] = value == 0 ? White : Black;
+                rowSpan[x] = value is >= '1' and <= '9' ? Black : White;
                 eofReached = !stream.SkipWhitespaceAndComments();
                 if (eofReached)
                 {

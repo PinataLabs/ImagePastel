@@ -413,6 +413,54 @@ public class TiffEncoderTests : TiffEncoderBaseTester
     }
 
     [Theory]
+    [InlineData(TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.None)]
+    [InlineData(TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Lzw)]
+    [InlineData(TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.Deflate)]
+    [InlineData(TiffPhotometricInterpretation.WhiteIsZero, TiffCompression.PackBits)]
+    [InlineData(TiffPhotometricInterpretation.BlackIsZero, TiffCompression.None)]
+    [InlineData(TiffPhotometricInterpretation.BlackIsZero, TiffCompression.Lzw)]
+    public void TiffEncoder_Gray8_RoundTripsWithPhotometricInterpretation(TiffPhotometricInterpretation photometricInterpretation, TiffCompression compression)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateBlackDiagonalOnWhite(16, 8);
+        using var memStream = new MemoryStream();
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = TiffBitsPerPixel.Bit8,
+            PhotometricInterpretation = photometricInterpretation,
+            Compression = compression,
+            HorizontalPredictor = compression is TiffCompression.Lzw or TiffCompression.Deflate ? TiffPredictor.Horizontal : null
+        };
+
+        // act
+        input.Save(memStream, encoder);
+
+        // assert
+        memStream.Position = 0;
+        using var output = Image.Load<Rgba32>(memStream);
+        Assert.Equal(photometricInterpretation, output.Frames.RootFrame.Metadata.GetTiffMetadata().PhotometricInterpretation);
+        AssertBlackDiagonalOnWhite(output);
+    }
+
+    [Theory]
+    [InlineData(TiffPhotometricInterpretation.WhiteIsZero, 0x00)]
+    [InlineData(TiffPhotometricInterpretation.BlackIsZero, 0xFF)]
+    public void TiffEncoder_Gray8_WritesWhiteSampleForPhotometricInterpretation(TiffPhotometricInterpretation photometricInterpretation, byte expectedWhiteSample)
+    {
+        // arrange
+        using var input = new Image<Rgba32>(4, 1, Color.White);
+        using var memStream = new MemoryStream();
+
+        // act
+        input.Save(memStream, new TiffEncoder { BitsPerPixel = TiffBitsPerPixel.Bit8, PhotometricInterpretation = photometricInterpretation, Compression = TiffCompression.None });
+
+        // assert
+        byte[] tiff = memStream.ToArray();
+        int stripOffset = ReadFirstIfdValue(tiff, ExifTagValue.StripOffsets);
+        Assert.Equal(new[] { expectedWhiteSample, expectedWhiteSample, expectedWhiteSample, expectedWhiteSample }, tiff.AsSpan(stripOffset, 4).ToArray());
+    }
+
+    [Theory]
     [InlineData(TiffBitsPerPixel.Bit1, null, TiffCompression.None)]
     [InlineData(TiffBitsPerPixel.Bit1, null, TiffCompression.CcittGroup4Fax)]
     [InlineData(TiffBitsPerPixel.Bit4, null, TiffCompression.None)]
@@ -718,6 +766,26 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         }
 
         return fieldTypes;
+    }
+
+    private static int ReadFirstIfdValue(byte[] data, ExifTagValue tag)
+    {
+        Assert.Equal(0x49, data[0]);
+        int ifdOffset = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(4));
+        int count = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(ifdOffset));
+        for (int i = 0; i < count; i++)
+        {
+            int entryOffset = ifdOffset + 2 + (i * 12);
+            if (BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(entryOffset)) == (ushort)tag)
+            {
+                var type = (ExifDataType)BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(entryOffset + 2));
+                return type == ExifDataType.Short
+                    ? BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(entryOffset + 8))
+                    : (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(entryOffset + 8));
+            }
+        }
+
+        throw new InvalidOperationException($"Tag {tag} not found.");
     }
 
     private static void AssertBaselineFieldTypes(Dictionary<ExifTagValue, ExifDataType> fieldTypes)

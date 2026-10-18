@@ -1121,7 +1121,10 @@ internal sealed class WebpLossyDecoder
     {
         uint size = this.bitReader.Remaining - this.bitReader.PartitionLength;
         int startIdx = (int)this.bitReader.PartitionLength;
-        Span<byte> sz = this.bitReader.Data.Slice(startIdx);
+
+        // The buffer can end before the image data. The missing partition sizes are read as zeros.
+        Span<byte> data = this.bitReader.Data.GetSpan();
+        int sizeIdx = startIdx;
         int sizeLeft = (int)size;
         dec.NumPartsMinusOne = (1 << (int)this.bitReader.ReadValue(2)) - 1;
         int lastPart = dec.NumPartsMinusOne;
@@ -1131,7 +1134,7 @@ internal sealed class WebpLossyDecoder
         sizeLeft -= lastPartMul3;
         for (int p = 0; p < lastPart; ++p)
         {
-            int pSize = sz[0] | (sz[1] << 8) | (sz[2] << 16);
+            int pSize = ByteOrZero(data, sizeIdx) | (ByteOrZero(data, sizeIdx + 1) << 8) | (ByteOrZero(data, sizeIdx + 2) << 16);
             if (pSize > sizeLeft)
             {
                 pSize = sizeLeft;
@@ -1140,11 +1143,13 @@ internal sealed class WebpLossyDecoder
             dec.Vp8BitReaders[p] = new Vp8BitReader(this.bitReader.Data, (uint)pSize, partStart);
             partStart += pSize;
             sizeLeft -= pSize;
-            sz = sz.Slice(3);
+            sizeIdx += 3;
         }
 
         dec.Vp8BitReaders[lastPart] = new Vp8BitReader(this.bitReader.Data, (uint)sizeLeft, partStart);
     }
+
+    private static int ByteOrZero(Span<byte> data, int index) => index < data.Length ? data[index] : 0;
 
     private void ParseDequantizationIndices(Vp8Decoder decoder)
     {
