@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
@@ -27,6 +27,13 @@ internal sealed class IccWriter
             this.WriteHeader(writer, profile.Header);
             return writer.GetData();
         }
+    }
+
+    private static byte[] Encode(IccTagDataEntry entry)
+    {
+        using var writer = new IccDataWriter();
+        writer.WriteTagDataEntry(entry);
+        return writer.GetData();
     }
 
     private void WriteHeader(IccDataWriter writer, IccProfileHeader header)
@@ -70,22 +77,36 @@ internal sealed class IccWriter
 
     private IccTagTableEntry[] WriteTagData(IccDataWriter writer, IccTagDataEntry[] entries)
     {
-        // TODO: Investigate cost of Linq GroupBy
-        IEnumerable<IGrouping<IccTagDataEntry, IccTagDataEntry>> grouped = entries.GroupBy(t => t);
-
         // (Header size) + (entry count) + (nr of entries) * (size of table entry)
-        writer.SetIndex(128 + 4 + (entries.Length * 12));
+        uint offset = (uint)(128 + 4 + (entries.Length * 12));
+        writer.SetIndex((int)offset);
 
-        var table = new List<IccTagTableEntry>();
-        foreach (IGrouping<IccTagDataEntry, IccTagDataEntry> group in grouped)
+        // Tags whose data is equal share one copy of it, as the ICC specification allows.
+        // Compare the encoded bytes, so that equal data in separate entries is written once too.
+        var written = new List<(byte[] Data, uint Offset)>(entries.Length);
+        var table = new IccTagTableEntry[entries.Length];
+        for (int i = 0; i < entries.Length; i++)
         {
-            writer.WriteTagDataEntry(group.Key, out IccTagTableEntry tableEntry);
-            foreach (IccTagDataEntry item in group)
+            IccTagDataEntry entry = entries[i];
+            byte[] data = Encode(entry);
+
+            int index = written.FindIndex(w => w.Data.AsSpan().SequenceEqual(data));
+            uint dataOffset;
+            if (index >= 0)
             {
-                table.Add(new IccTagTableEntry(item.TagSignature, tableEntry.Offset, tableEntry.DataSize));
+                dataOffset = written[index].Offset;
             }
+            else
+            {
+                dataOffset = offset;
+                written.Add((data, dataOffset));
+                offset += (uint)writer.WriteArray(data);
+                offset += (uint)writer.WritePadding();
+            }
+
+            table[i] = new IccTagTableEntry(entry.TagSignature, dataOffset, (uint)data.Length);
         }
 
-        return table.ToArray();
+        return table;
     }
 }
