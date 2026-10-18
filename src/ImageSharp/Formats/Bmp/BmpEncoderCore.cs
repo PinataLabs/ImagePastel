@@ -243,12 +243,15 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
     }
 
     /// <summary>
-    /// Gets the bytes of the pixel profile to embed, or null when there is none or it is not a valid profile.
+    /// Gets the bytes of the pixel profile to embed, or null when there is none, it is not valid,
+    /// or it is not an RGB profile. Bitmap samples are always RGB, so only an RGB profile can describe them.
     /// </summary>
     /// <param name="iccProfile">The pixel profile.</param>
     /// <returns>The profile bytes, or null.</returns>
     private static byte[] GetIccProfileData(IccProfile iccProfile)
-        => iccProfile is not null && iccProfile.CheckIsValid() ? iccProfile.ToByteArray() : null;
+        => iccProfile is not null && iccProfile.CheckIsValid() && iccProfile.Header.DataColorSpace == IccColorSpaceType.Rgb
+            ? iccProfile.ToByteArray()
+            : null;
 
     /// <summary>
     /// Maps an ICC rendering intent to the matching <c>bV5Intent</c> value.

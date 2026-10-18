@@ -203,6 +203,21 @@ public class BmpMetadataTests
         Assert.Equal(expectedHeaderSize, BinaryPrimitives.ReadInt32LittleEndian(bmp.AsSpan(FileHeaderSize))); // biSize
     }
 
+    [Fact]
+    public void Encode_ImageWithGrayIccProfile_WritesNoProfile()
+    {
+        // BMP samples are always RGB, so a gray profile can't describe them.
+        using Image source = Image.Load(TestFile.Create(TestImages.Png.GrayA8BitInterlaced).Bytes);
+        Assert.Equal(IccColorSpaceType.Gray, source.Metadata.IccProfile?.Header.DataColorSpace);
+
+        using var stream = new MemoryStream();
+        source.SaveAsBmp(stream, new BmpEncoder { BitsPerPixel = BmpBitsPerPixel.Pixel24 });
+        byte[] bmp = stream.ToArray();
+
+        Assert.Equal(40, BinaryPrimitives.ReadInt32LittleEndian(bmp.AsSpan(FileHeaderSize))); // biSize
+        Assert.Null(Image.Identify(bmp).Metadata.IccProfile);
+    }
+
     [Theory]
     [InlineData(IccRenderingIntent.Perceptual, 4)] // LCS_GM_IMAGES
     [InlineData(IccRenderingIntent.MediaRelativeColorimetric, 2)] // LCS_GM_GRAPHICS
