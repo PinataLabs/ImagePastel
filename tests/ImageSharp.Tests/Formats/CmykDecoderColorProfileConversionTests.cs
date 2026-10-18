@@ -29,7 +29,8 @@ namespace SixLabors.ImageSharp.Tests.Formats;
 /// Decodes Adobe CMYK and YCCK JPEGs and <c>Separated</c> TIFFs with the <c>ColorProfileConversion</c>
 /// decoder option. With an embedded CMYK profile the samples go through that profile; without one
 /// the CMYK-to-RGB formula stays. Expected colours come from Little CMS inside Magick.NET, which
-/// converts the CMYK samples from the embedded profile, perceptual, without black-point compensation.
+/// converts the CMYK samples from the embedded profile, perceptual, without asking for black-point
+/// compensation (which Little CMS, like the engine, still applies when the target is version 4).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -86,9 +87,11 @@ public class CmykDecoderColorProfileConversionTests
     [MemberData(nameof(FilesWithCmykProfile))]
     public void Decode_ToSrgb_MatchesLittleCmsAndLeavesNoPixelProfile(string file)
     {
-        // The engine's sRGB and Little CMS's agree to well under a tenth of a code value.
+        // The engine's sRGB counts as a version 4 profile (perceptual forces black-point compensation,
+        // as in Little CMS), so the reference targets the v4 sRGB; the two agree to well under a tenth
+        // of a code value.
         byte[] bytes = ReadFile(file);
-        float[] expected = Expected(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV2));
+        float[] expected = Expected(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV4));
 
         using Image<Rgb24> image = Decode<Rgb24>(bytes, ColorProfileConversion.ToSrgb);
 
@@ -108,7 +111,7 @@ public class CmykDecoderColorProfileConversionTests
     {
         // The profile-less JPEGs, with the redistributable test profile of Tiff/Cmyk added as APP2.
         byte[] bytes = WithJpegIccProfile(ReadFile(file), ReadFile(TestImages.Icc.TiffCmykTestProfile));
-        float[] expected = Expected(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV2));
+        float[] expected = Expected(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV4));
 
         using Image<Rgb24> image = Decode<Rgb24>(bytes, ColorProfileConversion.ToSrgb);
 
@@ -126,7 +129,7 @@ public class CmykDecoderColorProfileConversionTests
         byte[] bytes = planar
             ? ReadFile(TestImages.Tiff.Cmyk16BitPlanarWithIccProfile)
             : WithTiffIccProfile(ReadFile(TestImages.Tiff.Cmyk16BitContiguousBigEndian), ReadFile(TestImages.Icc.LittleCmsFakeCmykV4));
-        ushort[] expected = ConvertWithMagick16(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV2));
+        ushort[] expected = ConvertWithMagick16(bytes, LoadProfile(TestImages.Icc.LittleCmsSrgbV4));
 
         using Image<Rgb48> image = Decode<Rgb48>(bytes, ColorProfileConversion.ToSrgb);
 
