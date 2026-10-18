@@ -486,8 +486,8 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
     {
         this.webpMetadata.FileFormat = WebpFileFormatType.Lossless;
 
-        // VP8 data size.
-        uint imageDataSize = this.ReadChunkSize();
+        // VP8L data size, without the padding byte of an odd-sized chunk.
+        uint imageDataSize = this.ReadPayloadSize();
 
         // The bit reader holds the data in a single buffer, which can not be larger than int.MaxValue.
         if (imageDataSize >= int.MaxValue)
@@ -506,6 +506,8 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
         var bitReader = new Vp8LBitReader(this.currentStream, imageDataSize, this.memoryAllocator);
         try
         {
+            // Skip the padding byte of an odd-sized chunk, so a following chunk is read from its start.
+            this.SkipChunkData(imageDataSize & 1);
             return this.ReadVp8LHeaderFields(bitReader, features);
         }
         catch
@@ -587,7 +589,7 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
                 break;
 
             case WebpChunkType.Alpha:
-                uint alphaChunkSize = this.ReadChunkSize();
+                uint alphaChunkSize = this.ReadPayloadSize();
 
                 // The chunk holds a 1 byte header and the alpha data. Check its size before allocating the data.
                 if (alphaChunkSize == 0 || alphaChunkSize > this.RemainingStreamBytes)
@@ -597,6 +599,10 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
 
                 features.AlphaChunkHeader = (byte)this.currentStream.ReadByte();
                 int alphaDataSize = (int)(alphaChunkSize - 1);
+
+                // A later alpha chunk replaces an earlier one, so release the earlier alpha data.
+                features.AlphaData?.Dispose();
+                features.AlphaData = null;
                 features.AlphaData = this.memoryAllocator.Allocate<byte>(alphaDataSize);
                 int bytesRead = this.currentStream.Read(features.AlphaData.Memory.Span, 0, alphaDataSize);
                 if (bytesRead != alphaDataSize)
@@ -604,6 +610,8 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
                     WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the alpha chunk");
                 }
 
+                // Skip the padding byte of an odd-sized chunk, so a following chunk is read from its start.
+                this.SkipChunkData(alphaChunkSize & 1);
                 break;
             default:
                 WebpThrowHelper.ThrowImageFormatException("Unexpected chunk followed VP8X header");
