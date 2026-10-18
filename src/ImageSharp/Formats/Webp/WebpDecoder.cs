@@ -3,7 +3,9 @@
 
 using System.IO;
 using System.Threading;
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Webp;
@@ -18,6 +20,21 @@ public sealed class WebpDecoder : IImageDecoder, IWebpDecoderOptions, IImageInfo
     /// </summary>
     public bool IgnoreMetadata { get; set; }
 
+    /// <summary>
+    /// Gets or sets the conversion from the embedded ICC profile that runs after the pixels are
+    /// decoded. Defaults to <see cref="ColorProfileConversion.None"/>. Nothing is converted when
+    /// <see cref="IgnoreMetadata"/> is set, when the image has no embedded profile, or when the
+    /// embedded profile is corrupt or not supported; the image then keeps its embedded profile.
+    /// </summary>
+    public ColorProfileConversion ColorProfileConversion { get; set; }
+
+    /// <summary>
+    /// Gets or sets the profile to convert to when <see cref="ColorProfileConversion"/> is
+    /// <see cref="ColorProfileConversion.ToTargetProfile"/>. Decoding throws when it is missing,
+    /// corrupt or not supported.
+    /// </summary>
+    public IccProfile ColorProfileConversionTarget { get; set; }
+
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -25,10 +42,11 @@ public sealed class WebpDecoder : IImageDecoder, IWebpDecoderOptions, IImageInfo
         Guard.NotNull(stream, nameof(stream));
 
         var decoder = new WebpDecoderCore(configuration, this);
+        Image<TPixel> image;
 
         try
         {
-            return decoder.Decode<TPixel>(configuration, stream, cancellationToken);
+            image = decoder.Decode<TPixel>(configuration, stream, cancellationToken);
         }
         catch (InvalidMemoryOperationException ex)
         {
@@ -36,6 +54,8 @@ public sealed class WebpDecoder : IImageDecoder, IWebpDecoderOptions, IImageInfo
 
             throw new InvalidImageContentException($"Cannot decode image. Failed to allocate buffers for possibly degenerate dimensions: {dims.Width}x{dims.Height}.", ex);
         }
+
+        return DecoderColorProfileConversion.Apply(image, this, cancellationToken);
     }
 
     /// <inheritdoc />
