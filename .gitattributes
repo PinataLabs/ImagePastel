@@ -61,6 +61,11 @@
 ###############################################################################
 *.cs                text        eol=lf          diff=csharp
 ###############################################################################
+# Expected source generator output. The snapshot tests compare bytes, so pin
+# the line endings to those of the generator output (LF) on every OS.
+###############################################################################
+tests/ImageSharp.SourceGenerators.Tests/Expected/** text eol=lf diff=csharp
+###############################################################################
 # Set explicit file behavior to:
 #   treat as text
 #   normalize to Unix-style line endings and

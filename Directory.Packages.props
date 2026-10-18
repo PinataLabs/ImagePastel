@@ -20,6 +20,11 @@
   <!-- Build tooling. -->
   <ItemGroup>
     <PackageVersion Include="MinVer" Version="8.0.0" />
+    <!--
+      The source generator's Roslyn API. 4.8.0 is the oldest compiler the generator supports
+      (the .NET 8 SDK); a newer one would stop older SDKs and IDEs from loading it.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
   </ItemGroup>
 
   <!-- Test, benchmark and sandbox dependencies. -->

@@ -5,6 +5,10 @@
     <BuildType Name="Release" />
     <BuildType Name="Release-InnerLoop" />
   </Configurations>
+  <Folder Name="/gen/">
+    <File Path="gen/Directory.Build.props" />
+    <Project Path="gen/ImageSharp.SourceGenerators/ImageSharp.SourceGenerators.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />
     <File Path="src/README.md" />
@@ -13,6 +17,7 @@
   <Folder Name="/tests/">
     <File Path="tests/Directory.Build.props" />
     <Project Path="tests/ImageSharp.Benchmarks/ImageSharp.Benchmarks.csproj" />
+    <Project Path="tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj" />
     <Project Path="tests/ImageSharp.Tests.ProfilingSandbox/ImageSharp.Tests.ProfilingSandbox.csproj" />
     <Project Path="tests/ImageSharp.Tests/ImageSharp.Tests.csproj" />
   </Folder>
