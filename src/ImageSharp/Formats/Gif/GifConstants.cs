@@ -132,4 +132,16 @@ internal static class GifConstants
         (byte)'t', (byte)'a',
         (byte)'X', (byte)'M', (byte)'P'
     };
+
+    /// <summary>
+    /// Gets the ASCII encoded application identifier and authentication code of the ICC profile extension:
+    /// <c>ICCRGBG1</c> followed by <c>012</c>.
+    /// </summary>
+    internal static ReadOnlySpan<byte> IccApplicationIdentificationBytes => new[]
+    {
+        (byte)'I', (byte)'C', (byte)'C',
+        (byte)'R', (byte)'G', (byte)'B',
+        (byte)'G', (byte)'1',
+        (byte)'0', (byte)'1', (byte)'2'
+    };
 }
