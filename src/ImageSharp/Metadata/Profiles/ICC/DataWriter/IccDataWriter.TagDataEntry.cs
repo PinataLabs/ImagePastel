@@ -11,21 +11,6 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
 internal sealed partial class IccDataWriter
 {
     /// <summary>
-    /// Writes a tag data entry
-    /// </summary>
-    /// <param name="data">The entry to write</param>
-    /// <param name="table">The table entry for the written data entry</param>
-    /// <returns>The number of bytes written (excluding padding)</returns>
-    public int WriteTagDataEntry(IccTagDataEntry data, out IccTagTableEntry table)
-    {
-        uint offset = (uint)this.dataStream.Position;
-        int count = this.WriteTagDataEntry(data);
-        this.WritePadding();
-        table = new IccTagTableEntry(data.TagSignature, offset, (uint)count);
-        return count;
-    }
-
-    /// <summary>
     /// Writes a tag data entry (without padding)
     /// </summary>
     /// <param name="entry">The entry to write</param>

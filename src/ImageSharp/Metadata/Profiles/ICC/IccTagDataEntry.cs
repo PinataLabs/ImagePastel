@@ -65,4 +65,17 @@ public abstract class IccTagDataEntry : IEquatable<IccTagDataEntry>
 
     /// <inheritdoc/>
     public override int GetHashCode() => this.Signature.GetHashCode();
+
+    /// <summary>
+    /// Creates a shallow copy of this entry with another tag signature.
+    /// The copy shares its data (arrays and nested objects) with this entry.
+    /// </summary>
+    /// <param name="tagSignature">The tag signature of the copy.</param>
+    /// <returns>The copy.</returns>
+    internal IccTagDataEntry CloneWithTagSignature(IccProfileTag tagSignature)
+    {
+        IccTagDataEntry clone = (IccTagDataEntry)this.MemberwiseClone();
+        clone.TagSignature = tagSignature;
+        return clone;
+    }
 }
