@@ -47,11 +47,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Formats\Jpeg\Components\Block8x8F.Generated.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Block8x8F.Generated.tt</DependentUpon>
-    </Compile>
     <Compile Update="PixelFormats\PixelImplementations\PixelOperations\Generated\Abgr32.PixelOperations.Generated.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -145,10 +140,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Formats\Jpeg\Components\Block8x8F.Generated.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Block8x8F.Generated.cs</LastGenOutput>
-    </None>
     <None Update="PixelFormats\PixelImplementations\PixelOperations\Generated\Abgr32.PixelOperations.Generated.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>Abgr32.PixelOperations.Generated.cs</LastGenOutput>
