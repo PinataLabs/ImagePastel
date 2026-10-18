@@ -24,6 +24,16 @@
     <DefineConstants Condition="'$(IsWindows)' == 'true'">$(DefineConstants);OS_WINDOWS</DefineConstants>
   </PropertyGroup>
 
+  <!--
+    The .NET target frameworks of the library and its tests. global.json selects the .NET 10 SDK,
+    so net11.0 builds only when a .NET 11 SDK is selected instead (the net11 CI job does this).
+    Releases use global.json, so the package does not get a net11.0 build from a preview SDK.
+  -->
+  <PropertyGroup>
+    <ImageSharpNetTargetFrameworks>net10.0</ImageSharpNetTargetFrameworks>
+    <ImageSharpNetTargetFrameworks Condition="'$(BundledNETCoreAppTargetFrameworkVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(BundledNETCoreAppTargetFrameworkVersion)', '11.0'))">net10.0;net11.0</ImageSharpNetTargetFrameworks>
+  </PropertyGroup>
+
   <!-- Compilation settings that differ from the SDK defaults. -->
   <PropertyGroup>
     <!--

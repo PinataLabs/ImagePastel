@@ -15,6 +15,8 @@ internal static class TestHelpers
     internal const string ImageSharpBuiltAgainst =
 #if NETSTANDARD2_1
         "netstandard2.1";
+#elif NET11_0_OR_GREATER
+        "net11.0";
 #else
         "net10.0";
 #endif

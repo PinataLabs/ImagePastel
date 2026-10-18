@@ -24,12 +24,12 @@
   <Choose>
     <When Condition="$(Configuration.EndsWith('InnerLoop')) == true">
       <PropertyGroup>
-        <TargetFrameworks>net10.0</TargetFrameworks>
+        <TargetFrameworks>$(ImageSharpNetTargetFrameworks)</TargetFrameworks>
       </PropertyGroup>
     </When>
     <Otherwise>
       <PropertyGroup>
-        <TargetFrameworks>net10.0;netstandard2.1</TargetFrameworks>
+        <TargetFrameworks>$(ImageSharpNetTargetFrameworks);netstandard2.1</TargetFrameworks>
       </PropertyGroup>
     </Otherwise>
   </Choose>

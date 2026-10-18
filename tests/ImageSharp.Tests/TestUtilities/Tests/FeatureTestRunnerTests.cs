@@ -131,19 +131,19 @@ public class FeatureTestRunnerTests
                     Assert.False(Pclmulqdq.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE3:
-                    Assert.False(Sse3.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse3.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSSE3:
-                    Assert.False(Ssse3.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Ssse3.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE41:
-                    Assert.False(Sse41.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse41.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE42:
-                    Assert.False(Sse42.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse42.IsSupported);
                     break;
                 case HwIntrinsics.DisablePOPCNT:
-                    Assert.False(Popcnt.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Popcnt.IsSupported);
                     break;
                 case HwIntrinsics.DisableAVX:
                     Assert.False(Avx.IsSupported);
@@ -232,19 +232,19 @@ public class FeatureTestRunnerTests
                     Assert.False(Pclmulqdq.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE3:
-                    Assert.False(Sse3.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse3.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSSE3:
-                    Assert.False(Ssse3.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Ssse3.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE41:
-                    Assert.False(Sse41.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse41.IsSupported);
                     break;
                 case HwIntrinsics.DisableSSE42:
-                    Assert.False(Sse42.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Sse42.IsSupported);
                     break;
                 case HwIntrinsics.DisablePOPCNT:
-                    Assert.False(Popcnt.IsSupported);
+                    Assert.False(FeatureTestRunner.CanDisableSse42 && Popcnt.IsSupported);
                     break;
                 case HwIntrinsics.DisableAVX:
                     Assert.False(Avx.IsSupported);
