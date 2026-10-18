@@ -64,7 +64,8 @@ internal sealed class JxlFrameDecoder
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
         CheckSupported(frameHeader, this.metadata);
 
-        // The pixel cap is checked before anything is allocated for the frame.
+        // The pixel cap is checked before anything is allocated for the frame. It also covers libjxl's
+        // CheckSizeLimit in decode.cc, which only guards against size_t overflow.
         if (frameDim.XSizeUpsampled * frameDim.YSizeUpsampled > MaxPixelsPerFrame)
         {
             throw new InvalidMemoryOperationException($"The JPEG XL frame is {frameDim.XSizeUpsampled}x{frameDim.YSizeUpsampled} pixels, more than the limit of {MaxPixelsPerFrame}.");
