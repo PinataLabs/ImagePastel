@@ -19,14 +19,33 @@ public class MagickReferenceDecoder : IImageDecoder
 {
     private readonly bool validate;
 
+    private readonly bool keepHighBitDepth;
+
     public MagickReferenceDecoder()
         : this(true)
     {
     }
 
-    public MagickReferenceDecoder(bool validate) => this.validate = validate;
+    public MagickReferenceDecoder(bool validate)
+        : this(validate, false)
+    {
+    }
+
+    /// <param name="validate">Whether Magick validates the input.</param>
+    /// <param name="keepHighBitDepth">
+    /// Whether to read every image through 16-bit samples. By default, depths from 9 to 12 bits are
+    /// narrowed to 8 bits. JPEG XL tests need this, because the format codes 9 to 16 bits per sample.
+    /// </param>
+    public MagickReferenceDecoder(bool validate, bool keepHighBitDepth)
+    {
+        this.validate = validate;
+        this.keepHighBitDepth = keepHighBitDepth;
+    }
 
     public static MagickReferenceDecoder Instance { get; } = new MagickReferenceDecoder();
+
+    /// <summary>Gets a decoder that reads every image through 16-bit samples, for JPEG XL.</summary>
+    public static MagickReferenceDecoder HighBitDepthInstance { get; } = new MagickReferenceDecoder(true, true);
 
     private static void FromRgba32Bytes<TPixel>(Configuration configuration, Span<byte> rgbaBytes, IMemoryGroup<TPixel> destinationGroup)
         where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
@@ -79,13 +98,13 @@ public class MagickReferenceDecoder : IImageDecoder
             MemoryGroup<TPixel> framePixels = frame.PixelBuffer.FastMemoryGroup;
 
             using IUnsafePixelCollection<ushort> pixels = magicFrame.GetPixelsUnsafe();
-            if (magicFrame.Depth is 12 or 10 or 8 or 6 or 5 or 4 or 3 or 2 or 1)
+            if (!this.keepHighBitDepth && magicFrame.Depth is 12 or 10 or 8 or 6 or 5 or 4 or 3 or 2 or 1)
             {
                 byte[] data = pixels.ToByteArray(PixelMapping.RGBA);
 
                 FromRgba32Bytes(configuration, data, framePixels);
             }
-            else if (magicFrame.Depth is 16 or 14)
+            else if (this.keepHighBitDepth || magicFrame.Depth is 16 or 14)
             {
                 ushort[] data = pixels.ToShortArray(PixelMapping.RGBA);
                 Span<byte> bytes = MemoryMarshal.Cast<ushort, byte>(data.AsSpan());

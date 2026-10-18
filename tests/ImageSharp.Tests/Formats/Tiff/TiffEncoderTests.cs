@@ -5,10 +5,14 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Processing.Processors.Dithering;
+using SixLabors.ImageSharp.Processing.Processors.Quantization;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
@@ -19,6 +23,11 @@ namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
 [Trait("Format", "Tiff")]
 public class TiffEncoderTests : TiffEncoderBaseTester
 {
+    /// <summary>
+    /// Data already in the stream before the TIFF is written. The odd length keeps the TIFF off a word boundary.
+    /// </summary>
+    private static readonly byte[] StreamPrefix = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
+
     /// <summary>
     /// The field types TIFF 6.0 allows for the baseline and extension tags the encoder can write.
     /// </summary>
@@ -848,6 +857,83 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         Assert.Equal(seekableStream.ToArray(), memStream.ToArray());
     }
 
+    [Theory]
+    [InlineData(TiffCompression.None, 1)]
+    [InlineData(TiffCompression.None, 3)]
+    [InlineData(TiffCompression.Deflate, 1)]
+    [InlineData(TiffCompression.Deflate, 3)]
+    [InlineData(TiffCompression.Lzw, 1)]
+    [InlineData(TiffCompression.Lzw, 3)]
+    [InlineData(TiffCompression.PackBits, 1)]
+    [InlineData(TiffCompression.PackBits, 3)]
+    [InlineData(TiffCompression.Jpeg, 1)]
+    [InlineData(TiffCompression.Jpeg, 3)]
+    [InlineData(TiffCompression.Ccitt1D, 1)]
+    [InlineData(TiffCompression.Ccitt1D, 3)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 1)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 3)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 1)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 3)]
+    public void TiffEncoder_AtNonZeroStreamPosition_MatchesEncodingAtPositionZero(TiffCompression compression, int frameCount)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, frameCount);
+        var encoder = new TiffEncoder { Compression = compression };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+
+        // act
+        input.Save(memStream, encoder);
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), frameCount);
+    }
+
+    [Fact]
+    public async Task TiffEncoder_AtNonZeroStreamPosition_Async_MatchesEncodingAtPositionZero()
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, 3);
+        var encoder = new TiffEncoder { Compression = TiffCompression.Lzw };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+
+        // act
+        await input.SaveAsync(memStream, encoder, TestContext.Current.CancellationToken);
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), 3);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TiffEncoder_ToNonSeekableStreamWithData_MatchesEncodingAtPositionZero(bool async)
+    {
+        // arrange
+        using Image<Rgba32> input = CreateRandomColorImage(64, 80, 3);
+        var encoder = new TiffEncoder { Compression = TiffCompression.Deflate };
+        byte[] expected = EncodeAtPositionZero(input, encoder);
+        using var memStream = new MemoryStream();
+        memStream.Write(StreamPrefix);
+        var nonSeekableStream = new NonSeekableStream(memStream);
+
+        // act
+        if (async)
+        {
+            await input.SaveAsync(nonSeekableStream, encoder, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            input.Save(nonSeekableStream, encoder);
+        }
+
+        // assert
+        AssertPrefixedTiff(expected, memStream.ToArray(), 3);
+    }
+
     // This makes sure, that when decoding a planar tiff, the planar configuration is not carried over to the encoded image.
     [Theory]
     [WithFile(FlowerRgb444Planar, PixelTypes.Rgba32)]
@@ -964,6 +1050,76 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         TestTiffEncoderCore(provider, TiffBitsPerPixel.Bit8, TiffPhotometricInterpretation.PaletteColor, TiffCompression.Lzw, TiffPredictor.Horizontal, useExactComparer: false, compareTolerance: 0.001f);
 
     [Theory]
+    [InlineData(TiffBitsPerPixel.Bit4, false)]
+    [InlineData(TiffBitsPerPixel.Bit8, false)]
+    [InlineData(TiffBitsPerPixel.Bit4, true)]
+    [InlineData(TiffBitsPerPixel.Bit8, true)]
+    public void TiffEncoder_EncodeColorPalette_WithoutDither_KeepsGradientRowsIdenticalAndMonotonic(TiffBitsPerPixel bitsPerPixel, bool zeroDitherScale)
+    {
+        // A dither scale of zero adds no error to the neighbouring pixels, so it must match no dither.
+        QuantizerOptions options = zeroDitherScale
+            ? new QuantizerOptions { Dither = KnownDitherings.FloydSteinberg, DitherScale = 0 }
+            : new QuantizerOptions { Dither = null };
+
+        using Image<Rgba32> image = CreateGrayGradient();
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = TiffPhotometricInterpretation.PaletteColor,
+            Quantizer = new PaletteQuantizer(CreateGrayPalette(), options)
+        };
+
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        decoded.ProcessPixelRows(accessor =>
+        {
+            Span<Rgba32> firstRow = accessor.GetRowSpan(0);
+            Assert.Equal(new Rgba32(0, 0, 0), firstRow[0]);
+            Assert.Equal(new Rgba32(255, 255, 255), firstRow[^1]);
+            for (int x = 1; x < firstRow.Length; x++)
+            {
+                Assert.True(firstRow[x].R >= firstRow[x - 1].R, $"Row 0 decreases at x={x}.");
+            }
+
+            for (int y = 1; y < accessor.Height; y++)
+            {
+                Assert.True(firstRow.SequenceEqual(accessor.GetRowSpan(y)), $"Row {y} differs from row 0.");
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(TiffBitsPerPixel.Bit4, "Bayer8x8", 1F)]
+    [InlineData(TiffBitsPerPixel.Bit8, "Bayer8x8", 1F)]
+    [InlineData(TiffBitsPerPixel.Bit4, "FloydSteinberg", 0.5F)]
+    [InlineData(TiffBitsPerPixel.Bit8, "FloydSteinberg", 0.5F)]
+    public void TiffEncoder_EncodeColorPalette_MatchesQuantizeWithSameDither(TiffBitsPerPixel bitsPerPixel, string ditherName, float ditherScale)
+    {
+        IDither dither = ditherName == "Bayer8x8" ? KnownDitherings.Bayer8x8 : KnownDitherings.FloydSteinberg;
+        var quantizer = new PaletteQuantizer(CreateGrayPalette(), new QuantizerOptions { Dither = dither, DitherScale = ditherScale });
+
+        // The palette has 16 entries, so the color limit of either bit depth does not change the result.
+        using Image<Rgba32> image = CreateGrayGradient();
+        using Image<Rgba32> expected = image.Clone(x => x.Quantize(quantizer));
+        var encoder = new TiffEncoder
+        {
+            BitsPerPixel = bitsPerPixel,
+            PhotometricInterpretation = TiffPhotometricInterpretation.PaletteColor,
+            Quantizer = quantizer
+        };
+
+        using var stream = new MemoryStream();
+        image.Save(stream, encoder);
+        stream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(stream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, decoded);
+    }
+
+    [Theory]
     [WithFile(Calliphora_BiColorUncompressed, PixelTypes.Rgba32)]
     public void TiffEncoder_EncodeBiColor_BlackIsZero_Works<TPixel>(TestImageProvider<TPixel> provider)
         where TPixel : unmanaged, IPixel<TPixel> => TestTiffEncoderCore(provider, TiffBitsPerPixel.Bit1, TiffPhotometricInterpretation.BlackIsZero);
@@ -1061,6 +1217,43 @@ public class TiffEncoderTests : TiffEncoderBaseTester
     }
 
     /// <summary>
+    /// Creates a 64x16 image whose rows run from black to white.
+    /// </summary>
+    private static Image<Rgba32> CreateGrayGradient()
+    {
+        var image = new Image<Rgba32>(64, 16);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    byte value = (byte)(x * 255 / (row.Length - 1));
+                    row[x] = new Rgba32(value, value, value);
+                }
+            }
+        });
+
+        return image;
+    }
+
+    /// <summary>
+    /// Creates a palette of 16 evenly spaced grays, which fits both the 4 bit and the 8 bit color map.
+    /// </summary>
+    private static Color[] CreateGrayPalette()
+    {
+        var palette = new Color[16];
+        for (int i = 0; i < palette.Length; i++)
+        {
+            byte value = (byte)(i * 255 / (palette.Length - 1));
+            palette[i] = Color.FromRgb(value, value, value);
+        }
+
+        return palette;
+    }
+
+    /// <summary>
     /// Reads the tag and field type of each entry in the first IFD of a TIFF file.
     /// </summary>
     private static Dictionary<ExifTagValue, ExifDataType> ReadFirstIfdFieldTypes(byte[] data)
@@ -1137,6 +1330,35 @@ public class TiffEncoderTests : TiffEncoderBaseTester
                 Assert.True(expected == image[x, y], $"Pixel ({x},{y}) is {image[x, y]}, expected {expected}.");
             }
         }
+    }
+
+    private static byte[] EncodeAtPositionZero(Image<Rgba32> image, TiffEncoder encoder)
+    {
+        using var memStream = new MemoryStream();
+        image.Save(memStream, encoder);
+        return memStream.ToArray();
+    }
+
+    private static void AssertPrefixedTiff(byte[] expected, byte[] actual, int expectedFrameCount)
+    {
+        Assert.Equal(StreamPrefix, actual.AsSpan(0, StreamPrefix.Length).ToArray());
+        byte[] tiff = actual.AsSpan(StreamPrefix.Length).ToArray();
+        Assert.Equal(expected, tiff);
+
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(tiff);
+        Assert.Equal(expectedFrameCount, decoded.Frames.Count);
+    }
+
+    private static Image<Rgba32> CreateRandomColorImage(int width, int height, int frameCount)
+    {
+        Image<Rgba32> image = CreateRandomColorImage(width, height);
+        for (int i = 1; i < frameCount; i++)
+        {
+            using Image<Rgba32> frame = CreateRandomColorImage(width, height);
+            image.Frames.AddFrame(frame.Frames.RootFrame);
+        }
+
+        return image;
     }
 
     /// <summary>

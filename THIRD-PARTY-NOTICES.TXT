@@ -18,3 +18,25 @@ https://github.com/icsharpcode/SharpZipLib
 Crc32 and Adler32 SIMD implementation adapted from Chromium.
 Licensed under BSD 3-Clause "New" or "Revised" License.
 https://github.com/chromium/chromium
+
+
+License notice for JPEG XL test data
+-----
+
+The JPEG XL conformance test vectors under tests/Images/Input/Jxl/Conformance
+come from the libjxl conformance repository and are licensed under the
+BSD 3-Clause License, Copyright (c) the JPEG XL Project Authors.
+"All test bitstreams and reference decoded images can be reproduced freely
+for testing purposes." The source images they were made from are CC0, except:
+animation_newtons_cradle and upsampling (CC BY-SA 3.0), and
+grayscale_public_university (CC BY 3.0, Arnold and Richter Cine Technik GmbH).
+The bike, cafe (ITU-T T.24) and progressive (Microsoft) vectors are not
+redistributed; the tests download them.
+https://github.com/libjxl/conformance
+
+The files under tests/Images/Input/Jxl/libjxl come from the libjxl testdata
+repository and are licensed under the Creative Commons Attribution 4.0
+International License, Copyright (c) the JPEG XL Project Authors.
+https://github.com/libjxl/testdata
+
+The README.md in each directory lists the source, licence and author of every file.
