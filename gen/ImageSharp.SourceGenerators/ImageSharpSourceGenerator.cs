@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using SixLabors.ImageSharp.SourceGenerators.Library;
+using SixLabors.ImageSharp.SourceGenerators.Tests;
 
 namespace SixLabors.ImageSharp.SourceGenerators;
 
@@ -27,10 +28,14 @@ public sealed class ImageSharpSourceGenerator : IIncrementalGenerator
     [
         new GuardNumericEmitter(),
         new ImageExtensionsSaveEmitter(),
+        new PixelOperationsEmitter(),
         new PixelBlendersEmitter(),
     ];
 
-    private static readonly IEmitter[] TestsEmitters = [];
+    private static readonly IEmitter[] TestsEmitters =
+    [
+        new PixelOperationsTestsEmitter(),
+    ];
 
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
