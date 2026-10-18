@@ -52,6 +52,11 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
     private readonly MemoryAllocator memoryAllocator;
 
     /// <summary>
+    /// The cICP, sRGB, cHRM and gAMA chunks read before the image data.
+    /// </summary>
+    private readonly PngColorSpaceChunks colorSpaceChunks = new();
+
+    /// <summary>
     /// The stream to decode from.
     /// </summary>
     private BufferedReadStream currentStream;
@@ -174,6 +179,12 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                             break;
                         case PngChunkType.Gamma:
                             this.ReadGammaChunk(pngMetadata, chunk.Data.GetSpan());
+                            this.ReadColorSpaceChunk(chunk, image is not null);
+                            break;
+                        case PngChunkType.Chroma:
+                        case PngChunkType.StandardRgbColourSpace:
+                        case PngChunkType.CodingIndependentCodePoints:
+                            this.ReadColorSpaceChunk(chunk, image is not null);
                             break;
                         case PngChunkType.Data:
                             if (image is null)
@@ -240,6 +251,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                 PngThrowHelper.ThrowNoData();
             }
 
+            this.SetPixelProfile(metadata);
             return image;
         }
         catch
@@ -291,6 +303,18 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                             }
 
                             this.ReadGammaChunk(pngMetadata, chunk.Data.GetSpan());
+                            this.ReadColorSpaceChunk(chunk, hasSeenImageData);
+                            break;
+                        case PngChunkType.Chroma:
+                        case PngChunkType.StandardRgbColourSpace:
+                        case PngChunkType.CodingIndependentCodePoints:
+                            if (this.colorMetadataOnly)
+                            {
+                                this.SkipChunkDataAndCrc(chunk);
+                                break;
+                            }
+
+                            this.ReadColorSpaceChunk(chunk, hasSeenImageData);
                             break;
                         case PngChunkType.Data:
 
@@ -395,6 +419,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                 PngThrowHelper.ThrowNoHeader();
             }
 
+            this.SetPixelProfile(metadata);
             return new ImageInfo(new PixelTypeInfo(this.CalculateBitsPerPixel()), this.header.Width, this.header.Height, metadata);
         }
         finally
@@ -488,6 +513,52 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
         // For example, a gamma of 1/2.2 would be stored as 45455.
         // The value is encoded as a 4-byte unsigned integer, representing gamma times 100000.
         pngMetadata.Gamma = BinaryPrimitives.ReadUInt32BigEndian(data) * 1e-5F;
+    }
+
+    /// <summary>
+    /// Reads a cICP, sRGB, cHRM or gAMA chunk for the pixel profile. Like iCCP, these chunks belong
+    /// before the image data, so a later one is out of place and ignored.
+    /// </summary>
+    /// <param name="chunk">The chunk.</param>
+    /// <param name="afterImageData">Whether the image data has been seen.</param>
+    private void ReadColorSpaceChunk(in PngChunk chunk, bool afterImageData)
+    {
+        if (this.ignoreMetadata || afterImageData)
+        {
+            return;
+        }
+
+        ReadOnlySpan<byte> data = chunk.Data.GetSpan();
+        switch (chunk.Type)
+        {
+            case PngChunkType.CodingIndependentCodePoints:
+                this.colorSpaceChunks.ReadCicp(data);
+                break;
+            case PngChunkType.StandardRgbColourSpace:
+                this.colorSpaceChunks.ReadSrgb(data);
+                break;
+            case PngChunkType.Chroma:
+                this.colorSpaceChunks.ReadChromaticities(data);
+                break;
+            case PngChunkType.Gamma:
+                this.colorSpaceChunks.ReadGamma(data);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Sets the pixel profile from the colour space chunks, with the precedence of the PNG specification.
+    /// </summary>
+    /// <param name="metadata">The metadata, holding the iCCP profile if there is one.</param>
+    private void SetPixelProfile(ImageMetadata metadata)
+    {
+        if (this.ignoreMetadata)
+        {
+            return;
+        }
+
+        bool gray = this.pngColorType is PngColorType.Grayscale or PngColorType.GrayscaleWithAlpha;
+        metadata.IccProfile = this.colorSpaceChunks.GetPixelProfile(metadata.IccProfile, gray);
     }
 
     /// <summary>
