@@ -67,7 +67,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Configuration Configuration { get; }
 
     /// <inheritdoc/>
-    public Size Dimensions => this.metadata == null ? default : new Size((int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize);
+    public Size Dimensions => this.metadata == null ? default : this.OrientedSize;
+
+    // The size of the image once its orientation is undone: the size of the decoded image.
+    private Size OrientedSize => new((int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize);
 
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
@@ -155,7 +158,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
 
         // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
-        Image<TPixel> image = new(this.Configuration, (int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize, this.imageMetadata);
+        Size size = this.OrientedSize;
+        Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
         try
         {
             int alpha = this.metadata.M.Find(JxlExtraChannelType.Alpha);
@@ -195,7 +199,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
 
         // The oriented size, as libjxl's JxlDecoderGetBasicInfo gives when it does not keep the orientation.
-        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), (int)this.metadata.OrientedXSize, (int)this.metadata.OrientedYSize, this.imageMetadata);
+        Size size = this.OrientedSize;
+        return new ImageInfo(new PixelTypeInfo(bitsPerPixel), size.Width, size.Height, this.imageMetadata);
     }
 
     /// <summary>

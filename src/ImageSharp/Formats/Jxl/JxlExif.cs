@@ -45,7 +45,7 @@ internal static class JxlExif
         }
 
         long t = 4;
-        ulong offset = bigEndian ? BinaryPrimitives.ReadUInt32BigEndian(exif.Slice((int)t)) : BinaryPrimitives.ReadUInt32LittleEndian(exif.Slice((int)t));
+        ulong offset = ReadUInt32(exif, t, bigEndian);
         if ((ulong)exif.Length < 12 + offset + 2 || offset < 8)
         {
             return;
@@ -67,7 +67,7 @@ internal static class JxlExif
             {
                 ushort type = ReadUInt16(exif, t, bigEndian);
                 t += 2;
-                uint count = bigEndian ? BinaryPrimitives.ReadUInt32BigEndian(exif.Slice((int)t)) : BinaryPrimitives.ReadUInt32LittleEndian(exif.Slice((int)t));
+                uint count = ReadUInt32(exif, t, bigEndian);
                 t += 4;
                 if (type == 3 && count == 1)
                 {
@@ -91,4 +91,7 @@ internal static class JxlExif
 
     private static ushort ReadUInt16(Span<byte> data, long position, bool bigEndian)
         => bigEndian ? BinaryPrimitives.ReadUInt16BigEndian(data.Slice((int)position)) : BinaryPrimitives.ReadUInt16LittleEndian(data.Slice((int)position));
+
+    private static uint ReadUInt32(Span<byte> data, long position, bool bigEndian)
+        => bigEndian ? BinaryPrimitives.ReadUInt32BigEndian(data.Slice((int)position)) : BinaryPrimitives.ReadUInt32LittleEndian(data.Slice((int)position));
 }

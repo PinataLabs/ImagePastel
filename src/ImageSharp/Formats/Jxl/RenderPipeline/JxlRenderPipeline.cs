@@ -195,11 +195,7 @@ internal sealed class JxlRenderPipeline : IDisposable
         }
         catch
         {
-            foreach (Buffer2D<float> plane in imagePlanes)
-            {
-                plane?.Dispose();
-            }
-
+            JxlPlanes.DisposeAll(imagePlanes);
             throw;
         }
 
@@ -226,11 +222,7 @@ internal sealed class JxlRenderPipeline : IDisposable
         }
         catch
         {
-            foreach (Buffer2D<float> plane in copy)
-            {
-                plane?.Dispose();
-            }
-
+            JxlPlanes.DisposeAll(copy);
             throw;
         }
 
@@ -246,11 +238,7 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     private void DisposePlanes()
     {
-        foreach (Buffer2D<float> plane in this.planes)
-        {
-            plane?.Dispose();
-        }
-
+        JxlPlanes.DisposeAll(this.planes);
         this.planes = Array.Empty<Buffer2D<float>>();
     }
 }

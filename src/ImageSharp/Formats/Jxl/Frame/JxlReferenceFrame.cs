@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -38,11 +39,7 @@ internal sealed class JxlReferenceFrame : IDisposable
 
     public void Dispose()
     {
-        foreach (Buffer2D<float> plane in this.Planes)
-        {
-            plane?.Dispose();
-        }
-
+        JxlPlanes.DisposeAll(this.Planes);
         this.Planes = Array.Empty<Buffer2D<float>>();
     }
 }

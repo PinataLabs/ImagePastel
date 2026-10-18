@@ -69,10 +69,7 @@ internal sealed class JxlOrientingSink : IJxlRenderSink
         }
         finally
         {
-            foreach (Buffer2D<float> plane in oriented)
-            {
-                plane?.Dispose();
-            }
+            JxlPlanes.DisposeAll(oriented);
         }
 
         // The unoriented planes stay with the pipeline, which disposes them.
