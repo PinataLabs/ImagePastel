@@ -8,6 +8,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using SixLabors.ImageSharp.ColorManagement;
 using SixLabors.ImageSharp.Common.Helpers;
 using SixLabors.ImageSharp.Formats.Jpeg.Components;
 using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
@@ -45,6 +46,11 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     private readonly byte[] markerBuffer = new byte[2];
 
     /// <summary>
+    /// The options for converting from the embedded color profile.
+    /// </summary>
+    private readonly IColorProfileDecoderOptions colorProfileOptions;
+
+    /// <summary>
     /// Whether the image has an EXIF marker.
     /// </summary>
     private bool hasExif;
@@ -63,6 +69,12 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     /// Contains ICC data.
     /// </summary>
     private byte[] iccData;
+
+    /// <summary>
+    /// The profile parsed from <see cref="iccData"/>, and the array it was parsed from (a later APP2
+    /// segment replaces the array), so the frame header and the metadata share one parse.
+    /// </summary>
+    private (byte[] Data, IccProfile Profile) parsedIcc;
 
     /// <summary>
     /// Whether the image has a IPTC data.
@@ -118,6 +130,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     {
         this.Configuration = configuration ?? Configuration.Default;
         this.IgnoreMetadata = options.IgnoreMetadata;
+        this.colorProfileOptions = options;
     }
 
     /// <inheritdoc />
@@ -154,6 +167,9 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
 
     /// <inheritdoc/>
     public Block8x8F[] QuantizationTables { get; private set; }
+
+    /// <inheritdoc/>
+    public IccColorTransform CmykTransform { get; private set; }
 
     /// <summary>
     /// Finds the next file marker within the byte stream, skipping any bytes before it one at a time.
@@ -643,18 +659,68 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
     }
 
     /// <summary>
-    /// Initializes the ICC profile.
+    /// Initializes the ICC profile. A valid embedded profile is always exposed as
+    /// <see cref="JpegMetadata.EmbeddedIccProfile"/>. It is also the pixel profile when it matches
+    /// the decoded pixels: a gray profile for a grayscale JPEG, an RGB profile for a color one. A
+    /// CMYK JPEG decodes to RGB through a formula, so no embedded profile describes its pixels. When
+    /// the CMYK samples were converted through the profile, the pixel profile is the conversion's target.
     /// </summary>
     private void InitIccProfile()
     {
-        if (this.hasIcc)
+        if (!this.hasIcc)
         {
-            var profile = new IccProfile(this.iccData);
-            if (profile.CheckIsValid())
-            {
-                this.Metadata.IccProfile = profile;
-            }
+            return;
         }
+
+        IccProfile profile = this.GetIccProfile();
+        if (!profile.CheckIsValid())
+        {
+            return;
+        }
+
+        this.Metadata.GetJpegMetadata().EmbeddedIccProfile = profile;
+        if (this.CmykTransform is not null)
+        {
+            this.Metadata.IccProfile = DecoderColorProfileConversion.GetConvertedProfile(this.colorProfileOptions);
+        }
+        else if (this.ColorSpace is JpegColorSpace.Grayscale or JpegColorSpace.RGB or JpegColorSpace.YCbCr
+            && DecoderColorProfileConversion.CanBePixelProfile(profile, this.ColorSpace == JpegColorSpace.Grayscale))
+        {
+            this.Metadata.IccProfile = profile;
+        }
+    }
+
+    /// <summary>
+    /// Builds the transform for CMYK and YCCK samples from the embedded profile, when the options ask
+    /// for a conversion and the profile is a CMYK profile the engine can use. The profile must come
+    /// before the frame header, as it does in the files Adobe and libjpeg write.
+    /// </summary>
+    /// <returns>The transform, or <see langword="null"/> to keep the CMYK-to-RGB formula.</returns>
+    private IccColorTransform CreateCmykTransform()
+    {
+        if (this.ColorSpace is not (JpegColorSpace.Cmyk or JpegColorSpace.Ycck) || !this.hasIcc)
+        {
+            return null;
+        }
+
+        IccProfile profile = this.GetIccProfile();
+        if (!profile.CheckIsValid()
+            || !DecoderColorProfileConversion.TryCreateCmykTransform(this.colorProfileOptions, profile, out IccColorTransform transform))
+        {
+            return null;
+        }
+
+        return transform;
+    }
+
+    private IccProfile GetIccProfile()
+    {
+        if (!ReferenceEquals(this.parsedIcc.Data, this.iccData))
+        {
+            this.parsedIcc = (this.iccData, new IccProfile(this.iccData));
+        }
+
+        return this.parsedIcc.Profile;
     }
 
     /// <summary>
@@ -1242,6 +1308,7 @@ internal sealed class JpegDecoderCore : IRawJpegData, IImageDecoderInternals
         if (!metadataOnly)
         {
             this.Frame.Init(maxH, maxV);
+            this.CmykTransform = this.CreateCmykTransform();
             this.scanDecoder.InjectFrameData(this.Frame, this);
         }
     }

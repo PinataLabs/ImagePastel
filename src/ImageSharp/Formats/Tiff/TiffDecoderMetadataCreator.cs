@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SixLabors.ImageSharp.Common.Helpers;
+using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -33,7 +34,7 @@ internal static class TiffDecoderMetadataCreator
         {
             for (int i = 0; i < frames.Count; i++)
             {
-                SetFrameProfiles(frames[i].Metadata);
+                SetFrameProfiles(frames[i].Metadata, frames[i].Metadata.GetTiffMetadata().PhotometricInterpretation);
             }
 
             SetImageProfiles(imageMetaData, frames[0].Metadata);
@@ -43,10 +44,16 @@ internal static class TiffDecoderMetadataCreator
     }
 
     /// <summary>
-    /// Reads the IPTC, XMP and ICC profiles of a frame from the frame's EXIF profile.
+    /// Reads the IPTC, XMP and ICC profiles of a frame from the frame's EXIF profile. The embedded ICC
+    /// profile goes to <see cref="TiffFrameMetadata.EmbeddedIccProfile"/>, and is also the frame's
+    /// pixel profile when it describes the decoded pixels: a gray profile for a grayscale frame, an
+    /// RGB profile for a color one. Separated (CMYK) frames decode to RGB through a formula, so no
+    /// embedded profile describes them. A profile that is not the pixel profile is also removed from
+    /// the frame's EXIF profile, so an encoder does not pair it with the pixels.
     /// </summary>
     /// <param name="frameMetaData">The frame metadata. Its EXIF profile must be set.</param>
-    public static void SetFrameProfiles(ImageFrameMetadata frameMetaData)
+    /// <param name="photometricInterpretation">The frame's photometric interpretation.</param>
+    public static void SetFrameProfiles(ImageFrameMetadata frameMetaData, TiffPhotometricInterpretation? photometricInterpretation)
     {
         if (TryGetIptc(frameMetaData.ExifProfile.Values, out byte[] iptcBytes))
         {
@@ -62,7 +69,16 @@ internal static class TiffDecoderMetadataCreator
         IExifValue<byte[]> iccProfileBytes = frameMetaData.ExifProfile.GetValue(ExifTag.IccProfile);
         if (iccProfileBytes != null)
         {
-            frameMetaData.IccProfile = new IccProfile(iccProfileBytes.Value);
+            var profile = new IccProfile(iccProfileBytes.Value);
+            frameMetaData.GetTiffMetadata().EmbeddedIccProfile = profile;
+            if (CanBePixelProfile(iccProfileBytes.Value, profile, photometricInterpretation))
+            {
+                frameMetaData.IccProfile = profile;
+            }
+            else
+            {
+                frameMetaData.ExifProfile.RemoveValue(ExifTag.IccProfile);
+            }
         }
     }
 
@@ -77,6 +93,7 @@ internal static class TiffDecoderMetadataCreator
         // where other encoders look for them. The instances are shared, so an edit through either one is kept.
         imageMetaData.IccProfile = rootFrameMetaData.IccProfile;
         imageMetaData.IptcProfile = rootFrameMetaData.IptcProfile;
+        imageMetaData.GetTiffMetadata().EmbeddedIccProfile = rootFrameMetaData.GetTiffMetadata().EmbeddedIccProfile;
     }
 
     public static ImageMetadata Create(ByteOrder byteOrder, bool isBigTiff, ExifProfile exifProfile)
@@ -106,6 +123,16 @@ internal static class TiffDecoderMetadataCreator
             imageMetaData.VerticalResolution = verticalResolution.Value;
         }
     }
+
+    // Profiles are kept without validation, so a header too short to read stays the pixel profile.
+    private static bool CanBePixelProfile(byte[] bytes, IccProfile profile, TiffPhotometricInterpretation? photometricInterpretation)
+        => photometricInterpretation switch
+        {
+            TiffPhotometricInterpretation.Separated => false,
+            _ when bytes.Length < 128 => true,
+            TiffPhotometricInterpretation.BlackIsZero or TiffPhotometricInterpretation.WhiteIsZero => DecoderColorProfileConversion.CanBePixelProfile(profile, gray: true),
+            _ => DecoderColorProfileConversion.CanBePixelProfile(profile, gray: false),
+        };
 
     private static bool TryGetIptc(IReadOnlyList<IExifValue> exifValues, out byte[] iptcBytes)
     {

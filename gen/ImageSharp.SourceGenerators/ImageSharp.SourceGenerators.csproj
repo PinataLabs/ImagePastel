@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <RootNamespace>SixLabors.ImageSharp.SourceGenerators</RootNamespace>
+    <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests reuse the generator's constants, such as the gate property name. -->
+    <InternalsVisibleTo Include="SixLabors.ImageSharp.SourceGenerators.Tests" Key="$(PinataLabsPublicKey)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Release tracking for the diagnostic IDs (RS2008). -->
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+</Project>

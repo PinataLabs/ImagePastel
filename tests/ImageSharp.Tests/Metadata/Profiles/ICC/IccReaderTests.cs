@@ -1,6 +1,8 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Collections.Generic;
+using System.Linq;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using Xunit;
 
@@ -48,7 +50,27 @@ public class IccReaderTests
         IccProfile output = reader.Read(IccTestDataProfiles.Profile_Random_Array);
 
         Assert.Equal(2, output.Entries.Length);
-        Assert.True(ReferenceEquals(output.Entries[0], output.Entries[1]));
+        Assert.NotSame(output.Entries[0], output.Entries[1]);
+        Assert.Equal(output.Entries[0], output.Entries[1]);
+    }
+
+    [Fact]
+    public void ReadProfile_SharedTagData_EachTagKeepsItsOwnSignature()
+    {
+        IccReader reader = this.CreateReader();
+
+        IccProfile output = reader.Read(IccTestDataProfiles.Profile_SharedTrc_Array);
+
+        Assert.Equal(
+            new[] { IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc },
+            output.Entries.Select(e => e.TagSignature));
+        Assert.Equal(3, output.Entries.Distinct(ReferenceEqualityComparer.Instance).Count());
+        Assert.All(output.Entries, e =>
+        {
+            IccCurveTagDataEntry curve = Assert.IsType<IccCurveTagDataEntry>(e);
+            Assert.True(curve.IsGamma);
+            Assert.Equal(IccTestDataProfiles.Profile_SharedTrc_Gamma, curve.Gamma);
+        });
     }
 
     private IccReader CreateReader()

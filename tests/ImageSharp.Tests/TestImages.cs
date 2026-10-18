@@ -839,6 +839,21 @@ public static class TestImages
         public const string FlowerRgb888Contiguous = "Tiff/flower-rgb-contig-08.tiff";
         public const string FlowerRgb888Planar6Strips = "Tiff/flower-rgb-planar-08-6strips.tiff";
         public const string FlowerRgb888Planar15Strips = "Tiff/flower-rgb-planar-08-15strips.tiff";
+        public const string Cmyk8BitContiguous = "Tiff/Cmyk/cmyk-contig-08.tiff";
+        public const string Cmyk8BitPlanar = "Tiff/Cmyk/cmyk-planar-08.tiff";
+        public const string Cmyk16BitContiguousLittleEndian = "Tiff/Cmyk/cmyk-contig-16_lsb.tiff";
+        public const string Cmyk16BitContiguousBigEndian = "Tiff/Cmyk/cmyk-contig-16_msb.tiff";
+        public const string Cmyk16BitPlanarLittleEndian = "Tiff/Cmyk/cmyk-planar-16_lsb.tiff";
+        public const string Cmyk16BitPlanarBigEndian = "Tiff/Cmyk/cmyk-planar-16_msb.tiff";
+        public const string Cmyk8BitDeflatePredictor = "Tiff/Cmyk/cmyk-contig-08_deflate_predictor.tiff";
+        public const string Cmyk16BitDeflatePredictorBigEndian = "Tiff/Cmyk/cmyk-contig-16_msb_deflate_predictor.tiff";
+        public const string Cmyk8BitPlanarDeflatePredictor = "Tiff/Cmyk/cmyk-planar-08_deflate_predictor.tiff";
+        public const string Cmyk16BitPlanarDeflatePredictorBigEndian = "Tiff/Cmyk/cmyk-planar-16_msb_deflate_predictor.tiff";
+        public const string Cmyk8BitWithIccProfile = "Tiff/Cmyk/cmyk-contig-08_icc.tiff";
+        public const string Cmyk16BitPlanarWithIccProfile = "Tiff/Cmyk/cmyk-planar-16_msb_icc.tiff";
+        public const string CmykTestIccProfile = "Tiff/Cmyk/cmyk-test-profile.icc";
+        public const string CmykJpegCompressed = "Tiff/Cmyk/cmyk-contig-08_jpeg.tiff";
+        public const string InkSetNotCmyk = "Tiff/Cmyk/inkset-not-cmyk-08.tiff";
         public const string FlowerYCbCr888Contiguous = "Tiff/flower-ycbcr-contig-08_h1v1.tiff";
         public const string FlowerYCbCr888Planar = "Tiff/flower-ycbcr-planar-08_h1v1.tiff";
         public const string FlowerYCbCr888Contiguoush2v1 = "Tiff/flower-ycbcr-contig-08_h2v1.tiff";
@@ -997,5 +1012,45 @@ public static class TestImages
         public const string RgbPlain = "Pbm/rgb_plain.ppm";
         public const string RgbPlainNormalized = "Pbm/rgb_plain_normalized.ppm";
         public const string RgbPlainMagick = "Pbm/rgb_plain_magick.ppm";
+    }
+
+    /// <summary>
+    /// ICC profiles. Sources and licences are listed in Icc/README.md.
+    /// </summary>
+    public static class Icc
+    {
+        public const string LittleCmsSrgbV4 = "Icc/LittleCms/sRGB-v4.icc";
+        public const string LittleCmsSrgbV2 = "Icc/LittleCms/sRGB-v2.icc";
+        public const string LittleCmsGray22V4 = "Icc/LittleCms/Gray22-v4.icc";
+        public const string LittleCmsGrayLab18V4 = "Icc/LittleCms/GrayLab18-v4.icc";
+        public const string LittleCmsLinearSrgbV4 = "Icc/LittleCms/LinearSrgb-v4.icc";
+        public const string LittleCmsDisplayP3V4 = "Icc/LittleCms/DisplayP3-v4.icc";
+        public const string LittleCmsRec2020V4 = "Icc/LittleCms/Rec2020-v4.icc";
+        public const string LittleCmsAdobeRgbV4 = "Icc/LittleCms/AdobeRgb-v4.icc";
+        public const string LittleCmsProPhoto18V4 = "Icc/LittleCms/ProPhoto18-v4.icc";
+        public const string LittleCmsProPhotoMixedV4 = "Icc/LittleCms/ProPhotoMixed-v4.icc";
+        public const string LittleCmsGraySrgbV4 = "Icc/LittleCms/GraySrgb-v4.icc";
+        public const string LittleCmsGrayLinearV4 = "Icc/LittleCms/GrayLinear-v4.icc";
+        public const string LittleCmsGrayGamma22V4 = "Icc/LittleCms/GrayGamma22-v4.icc";
+        public const string LittleCmsRgbLut8V2 = "Icc/LittleCms/RgbLut8-v2.icc";
+        public const string LittleCmsRgbLut16V2 = "Icc/LittleCms/RgbLut16-v2.icc";
+        public const string LittleCmsRgbLutAToBV4 = "Icc/LittleCms/RgbLutAToB-v4.icc";
+        public const string LittleCmsGrayLutV4 = "Icc/LittleCms/GrayLut-v4.icc";
+        public const string LittleCmsFakeCmykV4 = "Icc/LittleCms/FakeCmyk-v4.icc";
+        public const string LittleCmsRgbIntentsV2 = "Icc/LittleCms/RgbIntents-v2.icc";
+        public const string LittleCmsRgbIntentsV4 = "Icc/LittleCms/RgbIntents-v4.icc";
+        public const string LittleCmsRgbIntentsMatrixV2 = "Icc/LittleCms/RgbIntentsMatrix-v2.icc";
+        public const string LittleCmsRec709Gamma22V4 = "Icc/LittleCms/Rec709Gamma22-v4.icc";
+        public const string LittleCmsP3Gamma182224V4 = "Icc/LittleCms/P3Gamma182224-v4.icc";
+        public const string TiffCmykTestProfile = "Tiff/Cmyk/cmyk-test-profile.icc";
+        public const string QcmsSrgb = "Icc/qcms/sRGB_lcms.icc";
+        public const string QcmsRec709 = "Icc/qcms/ITU-709.icc";
+        public const string QcmsRec2020 = "Icc/qcms/ITU-2020.icc";
+        public const string CompactDisplayP3V4 = "Icc/CompactIcc/DisplayP3-v4.icc";
+        public const string CompactAdobeRgbV2 = "Icc/CompactIcc/AdobeCompat-v2.icc";
+        public const string CompactGrayV4 = "Icc/CompactIcc/sGrey-v4.icc";
+        public const string CompactSrgbV2Micro = "Icc/CompactIcc/sRGB-v2-micro.icc";
+        public const string CompactProPhotoV4 = "Icc/CompactIcc/ProPhoto-v4.icc";
+        public const string CompactLinearSrgbV2 = "Icc/CompactIcc/scRGB-v2.icc";
     }
 }

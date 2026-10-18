@@ -20,6 +20,13 @@ public enum IccTypeSignature : uint
     Chromaticity = 0x6368726D,
 
     /// <summary>
+    /// The cicpType (ICC v4.4) holds the four coding-independent code points of ITU-T H.273
+    /// that identify the color space: color primaries, transfer characteristics, matrix
+    /// coefficients and video full range flag, one byte each
+    /// </summary>
+    Cicp = 0x63696370,
+
+    /// <summary>
     /// This is an optional tag which specifies the laydown order in which colorants
     /// will be printed on an n-colorant device. The laydown order may be the same
     /// as the channel generation order listed in the colorantTableTag or the channel

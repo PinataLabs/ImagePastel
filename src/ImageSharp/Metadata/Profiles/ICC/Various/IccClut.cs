@@ -173,14 +173,26 @@ internal sealed class IccClut : IEquatable<IccClut>
         bool isLengthDifferent = this.Values.Any(t => t.Length != this.OutputChannelCount);
         Guard.IsFalse(isLengthDifferent, nameof(this.Values), "The number of output values varies");
 
-        int length = 0;
-        for (int i = 0; i < this.InputChannelCount; i++)
-        {
-            length += (int)Math.Pow(this.GridPointCount[i], this.InputChannelCount);
-        }
-
-        length /= this.InputChannelCount;
+        long length = GetGridPointTotal(this.GridPointCount, this.InputChannelCount);
 
         Guard.IsTrue(this.Values.Length == length, nameof(this.Values), "Length of values array does not match the grid points");
+    }
+
+    /// <summary>
+    /// Gets the number of grid points in a CLUT: the product of the grid-point counts of its
+    /// dimensions, which may differ in <c>lutAToBType</c> and <c>lutBToAType</c> tags.
+    /// </summary>
+    /// <param name="gridPointCount">The grid-point count of each dimension.</param>
+    /// <param name="inputChannelCount">The number of dimensions.</param>
+    /// <returns>The number of grid points, capped just above <see cref="int.MaxValue"/> so that it can't overflow.</returns>
+    internal static long GetGridPointTotal(byte[] gridPointCount, int inputChannelCount)
+    {
+        long total = 1;
+        for (int i = 0; i < inputChannelCount; i++)
+        {
+            total = Math.Min(total * gridPointCount[i], (long)int.MaxValue + 1);
+        }
+
+        return total;
     }
 }

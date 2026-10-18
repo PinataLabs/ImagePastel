@@ -21,6 +21,8 @@ public class MagickReferenceDecoder : IImageDecoder
 
     private readonly bool keepHighBitDepth;
 
+    private readonly bool convertCmykToSrgb;
+
     public MagickReferenceDecoder()
         : this(true)
     {
@@ -37,15 +39,27 @@ public class MagickReferenceDecoder : IImageDecoder
     /// narrowed to 8 bits. JPEG XL tests need this, because the format codes 9 to 16 bits per sample.
     /// </param>
     public MagickReferenceDecoder(bool validate, bool keepHighBitDepth)
+        : this(validate, keepHighBitDepth, false)
+    {
+    }
+
+    private MagickReferenceDecoder(bool validate, bool keepHighBitDepth, bool convertCmykToSrgb)
     {
         this.validate = validate;
         this.keepHighBitDepth = keepHighBitDepth;
+        this.convertCmykToSrgb = convertCmykToSrgb;
     }
 
     public static MagickReferenceDecoder Instance { get; } = new MagickReferenceDecoder();
 
     /// <summary>Gets a decoder that reads every image through 16-bit samples, for JPEG XL.</summary>
     public static MagickReferenceDecoder HighBitDepthInstance { get; } = new MagickReferenceDecoder(true, true);
+
+    /// <summary>
+    /// Gets a decoder that removes the profiles of CMYK images and converts them to sRGB.
+    /// Without a profile, ImageMagick converts with the formula R = (1 - C) * (1 - K), and so on for G and B.
+    /// </summary>
+    public static MagickReferenceDecoder CmykToSrgbInstance { get; } = new MagickReferenceDecoder(true, false, true);
 
     private static void FromRgba32Bytes<TPixel>(Configuration configuration, Span<byte> rgbaBytes, IMemoryGroup<TPixel> destinationGroup)
         where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
@@ -92,6 +106,12 @@ public class MagickReferenceDecoder : IImageDecoder
         var framesList = new List<ImageFrame<TPixel>>();
         foreach (IMagickImage<ushort> magicFrame in magickImageCollection)
         {
+            if (this.convertCmykToSrgb && magicFrame.ColorSpace == ColorSpace.CMYK)
+            {
+                magicFrame.Strip();
+                magicFrame.ColorSpace = ColorSpace.sRGB;
+            }
+
             var frame = new ImageFrame<TPixel>(configuration, (int)magicFrame.Width, (int)magicFrame.Height);
             framesList.Add(frame);
 

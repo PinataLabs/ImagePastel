@@ -86,7 +86,7 @@ public partial class PngDecoderTests
     [Fact]
     public void Decode_IccpChunk_ReadsProfile()
     {
-        byte[] iccBytes = GetJpegIccProfileBytes();
+        byte[] iccBytes = GetGrayIccProfileBytes();
         byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(iccBytes))));
 
         using (Image image = Image.Load(png))
@@ -100,7 +100,7 @@ public partial class PngDecoderTests
     [Fact]
     public void Decode_IccpChunk_IgnoreMetadata_DoesNotReadProfile()
     {
-        byte[] iccBytes = GetJpegIccProfileBytes();
+        byte[] iccBytes = GetGrayIccProfileBytes();
         byte[] png = BuildGrayscalePng(PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(iccBytes))));
         var decoder = new PngDecoder { IgnoreMetadata = true };
 
@@ -126,7 +126,7 @@ public partial class PngDecoderTests
     [InlineData("zero-filled profile")]
     public void Decode_MalformedIccpChunk_IsIgnored(string defect)
     {
-        byte[] compressed = PngTestFileBuilder.Zlib(GetJpegIccProfileBytes());
+        byte[] compressed = PngTestFileBuilder.Zlib(GetGrayIccProfileBytes());
         byte[] data = defect switch
         {
             "no separator" => Encoding.Latin1.GetBytes("ICC Profile"),
@@ -158,8 +158,8 @@ public partial class PngDecoderTests
     [Fact]
     public void Decode_SecondIccpChunk_IsIgnored()
     {
-        byte[] first = GetJpegIccProfileBytes();
-        byte[] second = WithDataColorSpace(first, "GRAY");
+        byte[] first = GetGrayIccProfileBytes();
+        byte[] second = WithDataColorSpace(first, "RGB ");
         byte[] png = BuildGrayscalePng(
             PngTestFileBuilder.Chunk("iCCP", IccpChunkData("first", 0, PngTestFileBuilder.Zlib(first))),
             PngTestFileBuilder.Chunk("iCCP", IccpChunkData("second", 0, PngTestFileBuilder.Zlib(second))));
@@ -178,7 +178,7 @@ public partial class PngDecoderTests
         byte[] png = PngTestFileBuilder.Build(
             PngTestFileBuilder.Header(1, 1, 8, PngColorType.Grayscale),
             PngTestFileBuilder.Chunk("IDAT", PngTestFileBuilder.Zlib(new byte[] { 0, 0x80 })),
-            PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(GetJpegIccProfileBytes()))),
+            PngTestFileBuilder.Chunk("iCCP", IccpChunkData("ICC Profile", 0, PngTestFileBuilder.Zlib(GetGrayIccProfileBytes()))),
             PngTestFileBuilder.End());
 
         using (Image image = Image.Load(png))
@@ -225,11 +225,7 @@ public partial class PngDecoderTests
         return copy;
     }
 
-    private static byte[] GetJpegIccProfileBytes()
-    {
-        using Image jpeg = Image.Load(TestFile.Create(TestImages.Jpeg.Baseline.Snake).Bytes);
-        IccProfile profile = jpeg.Metadata.IccProfile;
-        Assert.NotNull(profile);
-        return profile.ToByteArray();
-    }
+    // The test files are grayscale, so their iCCP profile must be a gray profile.
+    private static byte[] GetGrayIccProfileBytes()
+        => File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Icc.LittleCmsGray22V4));
 }

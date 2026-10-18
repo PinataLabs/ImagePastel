@@ -91,9 +91,10 @@ internal sealed class IccReader
         foreach (IccTagTableEntry tag in tagTable)
         {
             IccTagDataEntry entry;
-            if (store.ContainsKey(tag.Offset))
+            if (store.TryGetValue(tag.Offset, out IccTagDataEntry shared))
             {
-                entry = store[tag.Offset];
+                // Tags may share their data. Give each tag its own entry so that it keeps its own signature.
+                entry = shared.CloneWithTagSignature(tag.Signature);
             }
             else
             {
@@ -107,10 +108,10 @@ internal sealed class IccReader
                     continue;
                 }
 
+                entry.TagSignature = tag.Signature;
                 store.Add(tag.Offset, entry);
             }
 
-            entry.TagSignature = tag.Signature;
             entries.Add(entry);
         }
 

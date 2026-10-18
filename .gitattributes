@@ -48,8 +48,6 @@
 *.sql               text        eol=lf
 *.svg               text        eol=lf
 *.targets           text        eol=lf
-*.tt                text        eol=crlf
-*.ttinclude         text        eol=crlf
 *.txt               text        eol=lf
 *.vb                text        eol=lf
 *.yml               text        eol=lf
@@ -60,6 +58,11 @@
 #   diff as csharp
 ###############################################################################
 *.cs                text        eol=lf          diff=csharp
+###############################################################################
+# Expected source generator output. The snapshot tests compare bytes, so pin
+# the line endings to those of the generator output (LF) on every OS.
+###############################################################################
+tests/ImageSharp.SourceGenerators.Tests/Expected/** text eol=lf diff=csharp
 ###############################################################################
 # Set explicit file behavior to:
 #   treat as text
@@ -87,6 +90,8 @@
 *.dll               binary
 *.eot               binary
 *.exe               binary
+*.icc               binary
+*.icm               binary
 *.otf               binary
 *.pdf               binary
 *.ppt               binary
@@ -134,5 +139,7 @@
 *.wbmp              filter=lfs diff=lfs merge=lfs -text
 *.jxl               filter=lfs diff=lfs merge=lfs -text
 *.npy               filter=lfs diff=lfs merge=lfs -text
+*.icc               filter=lfs diff=lfs merge=lfs -text
+*.icm               filter=lfs diff=lfs merge=lfs -text
 # libjxl OSS-Fuzz crash inputs have no file extension.
 tests/Images/Input/Jxl/libjxl/oss-fuzz/**  filter=lfs diff=lfs merge=lfs -text

@@ -3,6 +3,8 @@
 
 using System.IO;
 using System.Threading;
+using SixLabors.ImageSharp.ColorManagement;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Png;
@@ -15,12 +17,28 @@ public sealed class PngDecoder : IImageDecoder, IPngDecoderOptions, IImageInfoDe
     /// <inheritdoc/>
     public bool IgnoreMetadata { get; set; }
 
+    /// <summary>
+    /// Gets or sets the conversion from the embedded ICC profile that runs after the pixels are
+    /// decoded. Defaults to <see cref="ColorProfileConversion.None"/>. Nothing is converted when
+    /// <see cref="IgnoreMetadata"/> is set, when the image has no embedded profile, or when the
+    /// embedded profile is corrupt or not supported; the image then keeps its embedded profile.
+    /// </summary>
+    public ColorProfileConversion ColorProfileConversion { get; set; }
+
+    /// <summary>
+    /// Gets or sets the profile to convert to when <see cref="ColorProfileConversion"/> is
+    /// <see cref="ColorProfileConversion.ToTargetProfile"/>. Decoding throws when it is missing,
+    /// corrupt or not supported.
+    /// </summary>
+    public IccProfile ColorProfileConversionTarget { get; set; }
+
     /// <inheritdoc/>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         PngDecoderCore decoder = new(configuration, this);
-        return decoder.Decode<TPixel>(configuration, stream, cancellationToken);
+        Image<TPixel> image = decoder.Decode<TPixel>(configuration, stream, cancellationToken);
+        return DecoderColorProfileConversion.Apply(image, this, cancellationToken);
     }
 
     /// <inheritdoc />

@@ -1,24 +1,20 @@
-# PinataLabs.ImageSharp
+# PinataLabs.ImagePastel
 
 [![CI](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImageSharp.svg)](https://www.nuget.org/packages/PinataLabs.ImageSharp/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE)
 
-PinataLabs.ImageSharp is a fully managed, cross-platform 2D graphics library for .NET.
+PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
 
 > [!IMPORTANT]
-> This fork exists only to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
+> This fork exists to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
 > Pinata Labs does not offer support for this package.
-> For a supported version, use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package from [Six Labors](https://github.com/SixLabors/ImageSharp).
-
-> **Community fork.** This package is a fork of [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) 2.1.x, the last release line under the Apache License 2.0.
-> Pinata Labs maintains the fork. Pinata Labs is not affiliated with Six Labors, and Six Labors does not endorse this package.
+> For a supported version, please use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package from [Six Labors](https://github.com/SixLabors/ImageSharp).
 
 ## Security
 
 This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
-Pinata Labs fixes security issues in this v2 line.
 
 To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md).
 
@@ -53,7 +49,7 @@ The package does not support .NET Framework.
 
 ## Differences from SixLabors.ImageSharp 2.1.13
 
-- The package ID and the assembly name are `PinataLabs.ImageSharp`.
+- The package ID and the assembly name are `PinataLabs.ImagePastel`.
 - The strong-name key is different. The public key token is `4ebeb91ace1f6a56`.
 - The package targets `net10.0` and `netstandard2.1` only.
 - The dependencies are current versions.
@@ -94,7 +90,7 @@ For more information, read the [.NET Foundation Code of Conduct](https://dotnetf
 
 ## License
 
-PinataLabs.ImageSharp is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
+PinataLabs.ImagePastel is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
 The [NOTICE](https://github.com/PinataLabs/ImageSharp/blob/main/NOTICE) file gives the origin of the code and the changes that Pinata Labs made.
 Third-party code is listed in [THIRD-PARTY-NOTICES.TXT](https://github.com/PinataLabs/ImageSharp/blob/main/THIRD-PARTY-NOTICES.TXT).
 

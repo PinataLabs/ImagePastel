@@ -719,8 +719,9 @@ internal sealed class WebpDecoderCore : IImageDecoderInternals
                 WebpThrowHelper.ThrowInvalidImageContentException("Not enough data to read the iccp chunk");
             }
 
+            // WebP pixels are always color, so only an RGB profile describes them.
             var profile = new IccProfile(iccpData);
-            if (profile.CheckIsValid())
+            if (profile.CheckIsValid() && DecoderColorProfileConversion.CanBePixelProfile(profile, gray: false))
             {
                 this.Metadata.IccProfile = profile;
             }

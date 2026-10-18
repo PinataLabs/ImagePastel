@@ -34,6 +34,31 @@ public class IccDataWriterTagDataEntryTests
     }
 
     [Theory]
+    [MemberData(nameof(IccTestDataTagDataEntry.CicpTagDataEntryTestData), MemberType = typeof(IccTestDataTagDataEntry))]
+    internal void WriteCicpTagDataEntry(byte[] expected, IccCicpTagDataEntry data, uint size)
+    {
+        using IccDataWriter writer = CreateWriter();
+
+        writer.WriteCicpTagDataEntry(data);
+        byte[] output = writer.GetData();
+
+        Assert.Equal(expected, output);
+        Assert.Equal(size - 8, (uint)output.Length);
+    }
+
+    [Fact]
+    public void WriteTagDataEntry_Cicp_WritesTypeSignatureReservedBytesAndCodePoints()
+    {
+        using IccDataWriter writer = CreateWriter();
+
+        writer.WriteTagDataEntry(new IccCicpTagDataEntry(9, 1, 0, 1, IccProfileTag.Cicp));
+        byte[] output = writer.GetData();
+
+        // 'cicp', 4 reserved bytes, then the code points; 12 bytes, already 4-byte aligned.
+        Assert.Equal(new byte[] { 0x63, 0x69, 0x63, 0x70, 0x00, 0x00, 0x00, 0x00, 0x09, 0x01, 0x00, 0x01 }, output);
+    }
+
+    [Theory]
     [MemberData(nameof(IccTestDataTagDataEntry.ColorantOrderTagDataEntryTestData), MemberType = typeof(IccTestDataTagDataEntry))]
     internal void WriteColorantOrderTagDataEntry(byte[] expected, IccColorantOrderTagDataEntry data)
     {

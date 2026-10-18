@@ -11,21 +11,6 @@ namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
 internal sealed partial class IccDataWriter
 {
     /// <summary>
-    /// Writes a tag data entry
-    /// </summary>
-    /// <param name="data">The entry to write</param>
-    /// <param name="table">The table entry for the written data entry</param>
-    /// <returns>The number of bytes written (excluding padding)</returns>
-    public int WriteTagDataEntry(IccTagDataEntry data, out IccTagTableEntry table)
-    {
-        uint offset = (uint)this.dataStream.Position;
-        int count = this.WriteTagDataEntry(data);
-        this.WritePadding();
-        table = new IccTagTableEntry(data.TagSignature, offset, (uint)count);
-        return count;
-    }
-
-    /// <summary>
     /// Writes a tag data entry (without padding)
     /// </summary>
     /// <param name="entry">The entry to write</param>
@@ -38,6 +23,9 @@ internal sealed partial class IccDataWriter
         {
             case IccTypeSignature.Chromaticity:
                 count += this.WriteChromaticityTagDataEntry((IccChromaticityTagDataEntry)entry);
+                break;
+            case IccTypeSignature.Cicp:
+                count += this.WriteCicpTagDataEntry((IccCicpTagDataEntry)entry);
                 break;
             case IccTypeSignature.ColorantOrder:
                 count += this.WriteColorantOrderTagDataEntry((IccColorantOrderTagDataEntry)entry);
@@ -779,6 +767,17 @@ internal sealed partial class IccDataWriter
 
         return count;
     }
+
+    /// <summary>
+    /// Writes a <see cref="IccCicpTagDataEntry"/>
+    /// </summary>
+    /// <param name="value">The entry to write</param>
+    /// <returns>The number of bytes written</returns>
+    public int WriteCicpTagDataEntry(IccCicpTagDataEntry value)
+        => this.WriteByte(value.ColorPrimaries)
+         + this.WriteByte(value.TransferCharacteristics)
+         + this.WriteByte(value.MatrixCoefficients)
+         + this.WriteByte(value.VideoFullRangeFlag);
 
     /// <summary>
     /// Writes a <see cref="IccSignatureTagDataEntry"/>

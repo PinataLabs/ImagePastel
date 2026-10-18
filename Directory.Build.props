@@ -2,7 +2,7 @@
 <Project>
 
   <!--
-    Settings shared by every project. src/ and tests/ have their own Directory.Build.props,
+    Settings shared by every project. gen/, src/ and tests/ have their own Directory.Build.props,
     which set SixLaborsProjectCategory and then import this file.
   -->
 
