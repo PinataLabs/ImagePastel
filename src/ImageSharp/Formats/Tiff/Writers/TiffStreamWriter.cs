@@ -4,6 +4,7 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
+using SixLabors.ImageSharp.Formats.Tiff.Utils;
 
 namespace SixLabors.ImageSharp.Formats.Tiff.Writers;
 
@@ -23,7 +24,7 @@ internal sealed class TiffStreamWriter : IDisposable
     /// Initializes a new instance of the <see cref="TiffStreamWriter"/> class.
     /// </summary>
     /// <param name="output">The output stream.</param>
-    public TiffStreamWriter(Stream output) => this.BaseStream = output;
+    public TiffStreamWriter(Stream output) => this.BaseStream = OffsetStream.FromCurrentPosition(output);
 
     /// <summary>
     /// Gets a value indicating whether the architecture is little-endian.
@@ -36,7 +37,8 @@ internal sealed class TiffStreamWriter : IDisposable
     public long Position => this.BaseStream.Position;
 
     /// <summary>
-    /// Gets the base stream.
+    /// Gets the base stream. Its positions count from the start of the TIFF data, as TIFF offsets do,
+    /// even when the output stream already held data.
     /// </summary>
     public Stream BaseStream { get; }
 

@@ -128,6 +128,16 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
             int bytesPerColorMapEntry = this.ReadImageHeaders(stream, out bool inverted, out byte[] palette);
             this.VerifyUncompressedPixelDataLength();
 
+            if (this.infoHeader.Compression is BmpCompression.RLE4 or BmpCompression.RLE8)
+            {
+                // The RLE reader always reads 4 byte palette entries.
+                palette = GetFullPalette(palette, this.infoHeader.BitsPerPixel, 4);
+            }
+            else if (this.infoHeader.Compression == BmpCompression.RGB && this.infoHeader.BitsPerPixel <= 8)
+            {
+                palette = GetFullPalette(palette, this.infoHeader.BitsPerPixel, bytesPerColorMapEntry);
+            }
+
             image = new Image<TPixel>(this.Configuration, this.infoHeader.Width, this.infoHeader.Height, this.metadata);
 
             Buffer2D<TPixel> pixels = image.GetRootFramePixelBuffer();
@@ -819,6 +829,35 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
+    /// Returns a palette with an entry for every index the bit depth can address.
+    /// Indices beyond the end of a short palette are black.
+    /// </summary>
+    /// <param name="palette">The palette read from the stream, or <see langword="null"/> if there is none.</param>
+    /// <param name="bitsPerPixel">The number of bits per pixel.</param>
+    /// <param name="bytesPerColorMapEntry">The size of one palette entry in bytes. At least 3.</param>
+    /// <returns>The palette, padded with black entries if it is short.</returns>
+    /// <exception cref="InvalidImageContentException">The palette has no complete entry.</exception>
+    private static byte[] GetFullPalette(byte[] palette, int bitsPerPixel, int bytesPerColorMapEntry)
+    {
+        int entryCount = (palette?.Length ?? 0) / bytesPerColorMapEntry;
+        if (entryCount == 0)
+        {
+            BmpThrowHelper.ThrowInvalidImageContentException("The indexed bitmap has no color palette.");
+        }
+
+        int colorCount = ColorNumerics.GetColorCountForBitDepth(bitsPerPixel);
+        if (entryCount >= colorCount)
+        {
+            return palette;
+        }
+
+        // Only whole entries are copied, so an incomplete last entry is also black.
+        byte[] fullPalette = new byte[colorCount * bytesPerColorMapEntry];
+        palette.AsSpan(0, entryCount * bytesPerColorMapEntry).CopyTo(fullPalette);
+        return fullPalette;
+    }
+
+    /// <summary>
     /// Reads the color palette from the stream.
     /// </summary>
     /// <typeparam name="TPixel">The pixel format.</typeparam>
@@ -1440,9 +1479,7 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         int colorMapSizeBytes = -1;
         if (this.infoHeader.ClrUsed == 0)
         {
-            if (this.infoHeader.BitsPerPixel == 1
-                || this.infoHeader.BitsPerPixel == 4
-                || this.infoHeader.BitsPerPixel == 8)
+            if (this.infoHeader.BitsPerPixel is 1 or 2 or 4 or 8)
             {
                 switch (this.fileMarkerType)
                 {
@@ -1454,11 +1491,13 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
                         }
 
                         colorMapSizeBytes = this.fileHeader.Offset - BmpFileHeader.Size - this.infoHeader.HeaderSize;
-                        int colorCountForBitDepth = ColorNumerics.GetColorCountForBitDepth(this.infoHeader.BitsPerPixel);
-                        bytesPerColorMapEntry = colorMapSizeBytes / colorCountForBitDepth;
-
-                        // Edge case for less-than-full-sized palette: bytesPerColorMapEntry should be at least 3.
-                        bytesPerColorMapEntry = Math.Max(bytesPerColorMapEntry, 3);
+                        if (this.infoHeader.HeaderSize == BmpInfoHeader.CoreSize)
+                        {
+                            // A BITMAPCOREHEADER palette usually has 3 byte entries, but some files use 4 byte entries.
+                            // Guess the entry size from the space before the pixel data. A less-than-full-sized palette gives 3.
+                            int colorCountForBitDepth = ColorNumerics.GetColorCountForBitDepth(this.infoHeader.BitsPerPixel);
+                            bytesPerColorMapEntry = Math.Clamp(colorMapSizeBytes / colorCountForBitDepth, 3, 4);
+                        }
 
                         break;
                     case BmpFileMarkerType.BitmapArray:
@@ -1475,7 +1514,8 @@ internal sealed class BmpDecoderCore : IImageDecoderInternals
         }
         else
         {
-            colorMapSizeBytes = this.infoHeader.ClrUsed * bytesPerColorMapEntry;
+            // Saturate rather than overflow, so the bitmap offset check below rejects a ClrUsed that is too large.
+            colorMapSizeBytes = (int)Math.Min((long)this.infoHeader.ClrUsed * bytesPerColorMapEntry, int.MaxValue);
         }
 
         palette = null;

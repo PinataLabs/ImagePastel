@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Numerics;
 using SixLabors.ImageSharp.Formats.Tiff.Utils;
 using SixLabors.ImageSharp.Memory;
@@ -19,11 +20,17 @@ internal class PaletteTiffColor<TPixel> : TiffBaseColorDecoder<TPixel>
 
     private readonly TPixel[] palette;
 
+    private readonly bool reverseIndexBytes;
+
     /// <param name="bitsPerSample">The number of bits per sample for each pixel.</param>
     /// <param name="colorMap">The RGB color lookup table to use for decoding the image.</param>
-    public PaletteTiffColor(TiffBitsPerSample bitsPerSample, ushort[] colorMap)
+    /// <param name="isBigEndian">if set to <c>true</c> decodes the pixel data as big endian, otherwise as little endian.</param>
+    public PaletteTiffColor(TiffBitsPerSample bitsPerSample, ushort[] colorMap, bool isBigEndian)
     {
         this.bitsPerSample0 = bitsPerSample.Channel0;
+
+        // A 16-bit index is stored in the byte order of the file, but the bit reader reads the most significant byte first.
+        this.reverseIndexBytes = this.bitsPerSample0 == 16 && !isBigEndian;
         int colorCount = 1 << this.bitsPerSample0;
         this.palette = GeneratePalette(colorMap, colorCount);
     }
@@ -39,6 +46,11 @@ internal class PaletteTiffColor<TPixel> : TiffBaseColorDecoder<TPixel>
             for (int x = 0; x < pixelRow.Length; x++)
             {
                 int index = bitReader.ReadBits(this.bitsPerSample0);
+                if (this.reverseIndexBytes)
+                {
+                    index = BinaryPrimitives.ReverseEndianness((ushort)index);
+                }
+
                 pixelRow[x] = this.palette[index];
             }
 
@@ -56,7 +68,8 @@ internal class PaletteTiffColor<TPixel> : TiffBaseColorDecoder<TPixel>
 
         // ColorMap entries are 16-bit values, but many writers store 8-bit values instead.
         // For compatibility, a colormap where every entry fits in 8 bits is scaled as 8-bit.
-        float maxValue = IsEightBitColorMap(colorMap) ? 255F : 65535F;
+        // Entries after the 3 * colorCount that form the palette are ignored.
+        float maxValue = IsEightBitColorMap(colorMap.AsSpan(0, colorCount * 3)) ? 255F : 65535F;
 
         for (int i = 0; i < palette.Length; i++)
         {
