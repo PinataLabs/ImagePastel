@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
@@ -59,14 +60,17 @@ public class JxlEncoderGroupTransformTests
         Assert.DoesNotContain(JxlEncodedFrame.ReadGlobalTransforms(encoded), t => t.Id == JxlTransformId.Rct);
     }
 
+    // At Thorough the palette's colour cap comes from each group's estimated cost, as at libjxl effort 7.
     [Theory]
-    [InlineData(nameof(Rgb24), "group-icons", 3)]
-    [InlineData(nameof(Rgba32), "translucent-group-icons", 4)]
-    public void Encode_DefaultGroupsOfFewColours_WritesALocalPaletteOnEachGroup(string pixelType, string pattern, int expectedChannels)
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgb24), "group-icons", 3)]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgba32), "translucent-group-icons", 4)]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgb24), "group-icons", 3)]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgba32), "translucent-group-icons", 4)]
+    public void Encode_GroupsOfFewColours_WritesALocalPaletteOnEachGroup(string effort, string pixelType, string pattern, int expectedChannels)
     {
         // Four groups of 300 colours each: too many colours in all for the global palette. A channel
         // palette (here on alpha) may still apply to the whole image.
-        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, 512, 512, LosslessDefault));
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, 512, 512, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort))));
 
         Assert.DoesNotContain(JxlEncodedFrame.ReadGlobalTransforms(encoded), t => t.Id == JxlTransformId.Palette && t.NumC > 1);
         List<List<JxlTransform>> groups = JxlEncodedFrame.ReadGroupTransforms(encoded);

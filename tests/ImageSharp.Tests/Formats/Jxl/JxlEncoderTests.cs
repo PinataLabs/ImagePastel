@@ -31,15 +31,32 @@ public class JxlEncoderTests
         Assert.Contains("E3", ex.Message);
     }
 
+    // No lossless effort throws.
+    [Theory]
+    [InlineData(nameof(JxlEffort.Fastest))]
+    [InlineData(nameof(JxlEffort.Default))]
+    [InlineData(nameof(JxlEffort.Thorough))]
+    public void Encode_LosslessAtEveryEffort_Encodes(string effort)
+    {
+        using Image<Rgb24> image = new(1, 1);
+        image[0, 0] = new Rgb24(12, 34, 56);
+        using MemoryStream stream = new();
+
+        image.Save(stream, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort)));
+
+        using Image<Rgb24> actual = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), stream.ToArray());
+        Assert.Equal(image[0, 0], actual[0, 0]);
+    }
+
     [Fact]
-    public void Encode_LosslessThorough_ThrowsNotSupportedNamingE2d()
+    public void Encode_LossyThorough_ThrowsNotSupportedNamingE3()
     {
         using Image<Rgb24> image = new(1, 1);
         using MemoryStream stream = new();
 
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 0, Effort = JxlEffort.Thorough }));
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = JxlEffort.Thorough }));
 
-        Assert.Contains("E2d", ex.Message);
+        Assert.Contains("E3", ex.Message);
     }
 
     [Fact]
