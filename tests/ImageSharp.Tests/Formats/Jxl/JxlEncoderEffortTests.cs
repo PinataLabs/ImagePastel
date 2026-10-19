@@ -189,6 +189,10 @@ public class JxlEncoderEffortTests
     [Fact]
     public void Encode_Corpus_TotalSizeFallsWithEachEffort()
     {
+        // It encodes the whole corpus three times, which takes minutes with coverage instrumentation;
+        // the test jobs without coverage still run it.
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Too slow under code coverage.");
+
         long fastest = 0;
         long @default = 0;
         long thorough = 0;

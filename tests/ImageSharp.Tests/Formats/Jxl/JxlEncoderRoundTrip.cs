@@ -29,10 +29,10 @@ internal static class JxlEncoderRoundTrip
     public static JxlEncoder LosslessFastest => Lossless(JxlEffort.Fastest);
 
     /// <summary>
-    /// Gets the round-trip cases at each supported effort: effort name, pixel type, pattern (see
-    /// <see cref="CreateImage{TPixel}"/>), width and height.
+    /// Gets the round-trip cases at each supported effort, and the large cases at Fastest only: effort
+    /// name, pixel type, pattern (see <see cref="CreateImage{TPixel}"/>), width and height.
     /// </summary>
-    public static TheoryData<string, string, string, int, int> Cases { get; } = AtEveryEffort(CreateCases());
+    public static TheoryData<string, string, string, int, int> Cases { get; } = AtEveryEffort(CreateCases(), CreateLargeCases());
 
     /// <summary>
     /// Gets the lossless corpus cases at each supported effort: effort name, a repo test image (relative
@@ -71,7 +71,14 @@ internal static class JxlEncoderRoundTrip
     /// <param name="pixelType">The pixel type name.</param>
     /// <returns>A task.</returns>
     public static Task AssertCorpusRoundTripAsync(Reader reader, string effort, string file, string pixelType)
-        => JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), file));
+    {
+        // The largest 16-bit corpus image takes minutes at Thorough with coverage instrumentation; the
+        // test jobs without coverage still run it.
+        Assert.SkipWhen(
+            TestEnvironment.RunsWithCodeCoverage && effort == nameof(JxlEffort.Thorough) && file == TestImages.Tiff.Issues1716Rgb161616BitLittleEndian,
+            "Too slow under code coverage.");
+        return JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), file));
+    }
 
     /// <summary>Gets a lossless encoder at <paramref name="effort"/>.</summary>
     /// <param name="effort">The effort.</param>
@@ -181,20 +188,26 @@ internal static class JxlEncoderRoundTrip
         return configuration;
     }
 
-    // Each case of the slices below, once at each effort of Efforts.
-    private static TheoryData<string, string, string, int, int> AtEveryEffort(TheoryData<string, string, int, int> cases)
+    // Each case of the slices below, once at each effort of Efforts; then each of fastestOnly, at Fastest.
+    private static TheoryData<string, string, string, int, int> AtEveryEffort(TheoryData<string, string, int, int> cases, TheoryData<string, string, int, int> fastestOnly)
     {
         TheoryData<string, string, string, int, int> result = new();
         foreach (JxlEffort effort in Efforts)
         {
-            foreach (ITheoryDataRow row in cases)
-            {
-                object[] data = row.GetData();
-                result.Add(effort.ToString(), (string)data[0], (string)data[1], (int)data[2], (int)data[3]);
-            }
+            AddAtEffort(result, effort, cases);
         }
 
+        AddAtEffort(result, JxlEffort.Fastest, fastestOnly);
         return result;
+    }
+
+    private static void AddAtEffort(TheoryData<string, string, string, int, int> result, JxlEffort effort, TheoryData<string, string, int, int> cases)
+    {
+        foreach (ITheoryDataRow row in cases)
+        {
+            object[] data = row.GetData();
+            result.Add(effort.ToString(), (string)data[0], (string)data[1], (int)data[2], (int)data[3]);
+        }
     }
 
     private static TheoryData<string, string, string> AtEveryEffort(TheoryData<string, string> cases)
@@ -302,11 +315,17 @@ internal static class JxlEncoderRoundTrip
                 cases.Add(pixelType, "gradient", width, height);
             }
         }
+    }
 
-        // The large cases are slow to encode, so each runs once: an exact multiple of the LF group,
-        // and four LF groups with partial groups at both edges.
+    // E1c: the large cases are slow to encode, so each runs once, at Fastest only: an exact multiple of
+    // the LF group, and four LF groups with partial groups at both edges. The frame's group and LF group
+    // layout does not depend on effort, and the cases above cross the group boundary at every effort.
+    private static TheoryData<string, string, int, int> CreateLargeCases()
+    {
+        TheoryData<string, string, int, int> cases = new();
         cases.Add(nameof(L8), "gradient", 2048, 2048);
         cases.Add(nameof(Rgb24), "noise", 2051, 2309);
+        return cases;
     }
 
     // Each slice adds its corpus files with one call here and its own Add method below.
