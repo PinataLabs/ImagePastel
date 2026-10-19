@@ -10,10 +10,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
 /// A box over the two static properties, channel and stream id: for each, the half-open range
 /// [begin, end). libjxl's <c>std::array&lt;std::array&lt;uint32_t, 2&gt;, 2&gt;</c>, a value type.
 /// </summary>
-internal unsafe struct JxlStaticPropRange
+internal struct JxlStaticPropRange
 {
-    // The bounds in libjxl's order: the channel's begin and end, then the stream id's.
-    private fixed uint bounds[4];
+    private uint channelBegin;
+    private uint channelEnd;
+    private uint streamBegin;
+    private uint streamEnd;
 
     /// <summary>Gets or sets one bound.</summary>
     /// <param name="property">The static property: 0 for the channel, 1 for the stream id.</param>
@@ -21,14 +23,25 @@ internal unsafe struct JxlStaticPropRange
     /// <returns>The bound.</returns>
     public uint this[int property, int bound]
     {
-        readonly get => this.bounds[Index(property, bound)];
-        set => this.bounds[Index(property, bound)] = value;
+        get => Bound(ref this, property, bound);
+        set => Bound(ref this, property, bound) = value;
     }
 
-    private static int Index(int property, int bound)
+    // The one place that maps libjxl's [property][bound] index to a field.
+    private static ref uint Bound(ref JxlStaticPropRange range, int property, int bound)
     {
         DebugGuard.MustBeBetweenOrEqualTo(property, 0, 1, nameof(property));
         DebugGuard.MustBeBetweenOrEqualTo(bound, 0, 1, nameof(bound));
-        return (property * 2) + bound;
+        switch ((property * 2) + bound)
+        {
+            case 0:
+                return ref range.channelBegin;
+            case 1:
+                return ref range.channelEnd;
+            case 2:
+                return ref range.streamBegin;
+            default:
+                return ref range.streamEnd;
+        }
     }
 }
