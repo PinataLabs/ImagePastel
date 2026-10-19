@@ -202,7 +202,28 @@ internal static class JxlEntropyEncoder
     }
 
     // libjxl's choice between prefix codes and ANS: prefix codes when forced, for fewer than 100
-    // tokens, with kFastest clustering, or when every context has a single symbol. The prefix-code
-    // writer is slice E1g; until then every stream uses ANS, which codes all of those cases too.
-    private static bool UsePrefixCode(JxlHistogramParams parameters, int totalTokens, JxlHistogram[] builder) => false;
+    // tokens, with kFastest clustering, or when every context has a single symbol. libjxl also
+    // forces them for its ANS fuzzer (ans_fuzzer_friendly_), which is always false outside it.
+    private static bool UsePrefixCode(JxlHistogramParams parameters, int totalTokens, JxlHistogram[] builder)
+    {
+        bool usePrefixCode = parameters.ForceHuffman || totalTokens < 100 || parameters.Clustering == JxlHistogramParams.ClusteringType.Fastest;
+        if (!usePrefixCode)
+        {
+            bool allSingleton = true;
+            foreach (JxlHistogram histogram in builder)
+            {
+                if (histogram.ShannonEntropy() >= 1e-5)
+                {
+                    allSingleton = false;
+                }
+            }
+
+            if (allSingleton)
+            {
+                usePrefixCode = true;
+            }
+        }
+
+        return usePrefixCode;
+    }
 }
