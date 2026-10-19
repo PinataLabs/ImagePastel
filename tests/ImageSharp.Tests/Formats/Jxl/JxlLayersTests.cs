@@ -286,14 +286,15 @@ public class JxlLayersTests
 
     [Theory]
     [InlineData(1)] // noise
-    [InlineData(2)] // patches
     [InlineData(16)] // splines
-    public void Decode_FrameWithNoisePatchesOrSplines_IsNotSupported(ulong flags)
+    [InlineData(3)] // patches and noise
+    [InlineData(18)] // patches and splines
+    public void Decode_FrameWithNoiseOrSplines_IsNotSupported(ulong flags)
     {
         byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }).ToArray();
 
         NotSupportedException ex = Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream));
-        Assert.Contains("Patches, splines, noise", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Splines, noise", ex.Message, StringComparison.Ordinal);
     }
 
     // Each allocation of a decode, in turn, fails. Whichever it is, the decode throws and every buffer it

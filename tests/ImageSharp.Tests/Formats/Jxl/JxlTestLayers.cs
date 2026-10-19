@@ -304,9 +304,13 @@ internal sealed class JxlTestLayers
         {
             w.Write(2, 0);
         }
-        else
+        else if (frame.Flags <= 16)
         {
             w.Write(2, 1).Write(4, frame.Flags - 1); // U64: 1 to 16
+        }
+        else
+        {
+            w.Write(2, 2).Write(8, frame.Flags - 17); // U64: 17 to 272
         }
 
         w.Bit(false); // no YCbCr
@@ -393,7 +397,7 @@ internal sealed record JxlTestFrame(byte[] Section)
 {
     public JxlFrameType Type { get; init; } = JxlFrameType.Regular;
 
-    /// <summary>Gets the frame flags, up to 16, which must not change the rest of the header (no LF frame).</summary>
+    /// <summary>Gets the frame flags, up to 272, which must not change the rest of the header (no LF frame).</summary>
     public ulong Flags { get; init; }
 
     public bool Crop { get; init; }
