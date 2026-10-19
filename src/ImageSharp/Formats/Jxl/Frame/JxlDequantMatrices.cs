@@ -45,11 +45,7 @@ internal sealed partial class JxlDequantMatrices
         {
             for (int c = 0; c < 3; c++)
             {
-                if (!JxlFieldCoders.TryReadF16(br, out float value))
-                {
-                    JxlThrowHelper.ThrowInvalidImageContentException("F16 infinity or NaN are not supported");
-                }
-
+                float value = JxlFieldCoders.ReadF16OrThrow(br);
                 value *= 1.0f / 128.0f;
 
                 // Negative values and nearly zero are invalid values.

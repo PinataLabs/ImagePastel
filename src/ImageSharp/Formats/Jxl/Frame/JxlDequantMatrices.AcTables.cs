@@ -184,16 +184,6 @@ internal sealed partial class JxlDequantMatrices
         return dct;
     }
 
-    private static float ReadF16(JxlBitReader br)
-    {
-        if (!JxlFieldCoders.TryReadF16(br, out float value))
-        {
-            JxlThrowHelper.ThrowInvalidImageContentException("F16 infinity or NaN are not supported");
-        }
-
-        return value;
-    }
-
     private static void DecodeDctParams(JxlBitReader br, JxlDctQuantWeightParams parameters)
     {
         parameters.NumDistanceBands = (int)br.ReadBits(JxlDctQuantWeightParams.Log2MaxDistanceBands) + 1;
@@ -201,7 +191,7 @@ internal sealed partial class JxlDequantMatrices
         {
             for (int i = 0; i < parameters.NumDistanceBands; i++)
             {
-                parameters.DistanceBands[c][i] = ReadF16(br);
+                parameters.DistanceBands[c][i] = JxlFieldCoders.ReadF16OrThrow(br);
             }
 
             if (parameters.DistanceBands[c][0] < AlmostZero)
@@ -262,7 +252,7 @@ internal sealed partial class JxlDequantMatrices
 
                 for (int c = 0; c < 3; c++)
                 {
-                    encoding.Dct4X8Multipliers[c] = ReadF16(br);
+                    encoding.Dct4X8Multipliers[c] = JxlFieldCoders.ReadF16OrThrow(br);
                     if (MathF.Abs(encoding.Dct4X8Multipliers[c]) < AlmostZero)
                     {
                         JxlThrowHelper.ThrowInvalidImageContentException("DCT4X8 multiplier is too small");
@@ -284,7 +274,7 @@ internal sealed partial class JxlDequantMatrices
                 {
                     for (int i = 0; i < 2; i++)
                     {
-                        encoding.Dct4Multipliers[c][i] = ReadF16(br);
+                        encoding.Dct4Multipliers[c][i] = JxlFieldCoders.ReadF16OrThrow(br);
                         if (MathF.Abs(encoding.Dct4Multipliers[c][i]) < AlmostZero)
                         {
                             JxlThrowHelper.ThrowInvalidImageContentException("DCT4 multiplier is too small");
@@ -307,7 +297,7 @@ internal sealed partial class JxlDequantMatrices
                 {
                     for (int i = 0; i < 9; i++)
                     {
-                        encoding.AfvWeights[c][i] = ReadF16(br);
+                        encoding.AfvWeights[c][i] = JxlFieldCoders.ReadF16OrThrow(br);
                     }
 
                     for (int i = 0; i < 6; i++)
@@ -345,7 +335,7 @@ internal sealed partial class JxlDequantMatrices
         {
             for (int i = 0; i < count; i++)
             {
-                weights[c][i] = ReadF16(br);
+                weights[c][i] = JxlFieldCoders.ReadF16OrThrow(br);
                 if (MathF.Abs(weights[c][i]) < AlmostZero)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException(tooSmall);

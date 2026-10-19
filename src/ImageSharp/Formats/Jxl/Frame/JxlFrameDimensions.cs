@@ -108,4 +108,31 @@ internal readonly struct JxlFrameDimensions
         long gy = groupIndex / this.XSizeGroups;
         return new JxlRect(gx * this.GroupDimension, gy * this.GroupDimension, this.GroupDimension, this.GroupDimension, this.XSize, this.YSize);
     }
+
+    /// <summary>
+    /// Returns the rectangle of AC group <paramref name="groupIndex"/> in blocks, clipped to the frame,
+    /// as libjxl's <c>BlockGroupRect</c>.
+    /// </summary>
+    /// <param name="groupIndex">The group.</param>
+    /// <returns>The rectangle, in blocks.</returns>
+    public JxlRect BlockGroupRect(long groupIndex)
+    {
+        long gx = groupIndex % this.XSizeGroups;
+        long gy = groupIndex / this.XSizeGroups;
+        int dim = this.GroupDimension >> 3;
+        return new JxlRect(gx * dim, gy * dim, dim, dim, this.XSizeBlocks, this.YSizeBlocks);
+    }
+
+    /// <summary>
+    /// Returns the rectangle of DC group <paramref name="groupIndex"/> in blocks, clipped to the frame,
+    /// as libjxl's <c>DCGroupRect</c>.
+    /// </summary>
+    /// <param name="groupIndex">The DC group.</param>
+    /// <returns>The rectangle, in blocks.</returns>
+    public JxlRect DcGroupRect(long groupIndex)
+    {
+        long gx = groupIndex % this.XSizeDcGroups;
+        long gy = groupIndex / this.XSizeDcGroups;
+        return new JxlRect(gx * this.GroupDimension, gy * this.GroupDimension, this.GroupDimension, this.GroupDimension, this.XSizeBlocks, this.YSizeBlocks);
+    }
 }

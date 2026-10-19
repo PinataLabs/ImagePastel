@@ -3,7 +3,7 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_group.cc (DequantLane, DequantBlock, DecodeGroupImpl, DecodeACVarBlock,
 // GetBlockFromBitstream, DecodeGroup), without the JPEG reconstruction branches and the encoder's
-// GetBlockFromEncoder, and FrameDimensions::BlockGroupRect from lib/jxl/frame_dimensions.h.
+// GetBlockFromEncoder.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -48,7 +48,7 @@ internal static class JxlVarDctGroup
         }
 
         int histoSelectorBits = JxlBits.CeilLog2Nonzero((uint)state.NumHistograms);
-        JxlRect blockRect = BlockGroupRect(state.FrameDim, groupIdx);
+        JxlRect blockRect = state.FrameDim.BlockGroupRect(groupIdx);
 
         // GetBlockFromBitstream::Init.
         JxlVarDctGroupCache cache = state.GroupCache;
@@ -81,15 +81,6 @@ internal static class JxlVarDctGroup
                 JxlThrowHelper.ThrowInvalidImageContentException("ANS checksum failure.");
             }
         }
-    }
-
-    // FrameDimensions::BlockGroupRect: the AC group, in blocks, clipped to the frame.
-    private static JxlRect BlockGroupRect(in JxlFrameDimensions frameDim, long groupIndex)
-    {
-        long gx = groupIndex % frameDim.XSizeGroups;
-        long gy = groupIndex / frameDim.XSizeGroups;
-        int dim = frameDim.GroupDimension >> 3;
-        return new JxlRect(gx * dim, gy * dim, dim, dim, frameDim.XSizeBlocks, frameDim.YSizeBlocks);
     }
 
     private static void DecodeGroupImpl(JxlFrameHeader frameHeader, JxlBitReader[] readers, int numPasses, JxlRect blockRect, JxlVarDctFrameState state, JxlRenderPipeline pipeline, JxlVarDctGroupCache cache)

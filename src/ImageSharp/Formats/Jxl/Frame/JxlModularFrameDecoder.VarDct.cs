@@ -2,8 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_modular.cc (ModularFrameDecoder: DecodeVarDCTDC, DecodeAcMetadata), with
-// FrameDimensions::DCGroupRect from lib/jxl/frame_dimensions.h and ConvertPlaneAndClamp from
-// lib/jxl/image_ops.h.
+// ConvertPlaneAndClamp from lib/jxl/image_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -31,7 +30,7 @@ internal sealed partial class JxlModularFrameDecoder
     /// <param name="state">The frame's VarDCT state.</param>
     public void DecodeVarDctDc(JxlFrameHeader frameHeader, long groupId, JxlBitReader reader, JxlVarDctFrameState state)
     {
-        JxlRect r = DcGroupRect(this.frameDim, groupId);
+        JxlRect r = this.frameDim.DcGroupRect(groupId);
 
         using JxlModularImage image = JxlModularImage.Create(this.allocator, (int)r.XSize, (int)r.YSize, this.fullImage.BitDepth, 3);
         long streamId = JxlModularStreamId.VarDctDc(this.frameDim, groupId);
@@ -59,7 +58,7 @@ internal sealed partial class JxlModularFrameDecoder
     /// <param name="state">The frame's VarDCT state.</param>
     public void DecodeAcMetadata(JxlFrameHeader frameHeader, long groupId, JxlBitReader reader, JxlVarDctFrameState state)
     {
-        JxlRect r = DcGroupRect(this.frameDim, groupId);
+        JxlRect r = this.frameDim.DcGroupRect(groupId);
         int rx0 = (int)r.X0;
         int ry0 = (int)r.Y0;
         int rxsize = (int)r.XSize;
@@ -160,14 +159,6 @@ internal sealed partial class JxlModularFrameDecoder
         {
             JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)JxlBits.Num0BitsBelowLs1BitNonzero(unsupported)} AC strategy");
         }
-    }
-
-    // FrameDimensions::DCGroupRect: the DC group, in blocks, clipped to the frame.
-    private static JxlRect DcGroupRect(in JxlFrameDimensions frameDim, long groupIndex)
-    {
-        long gx = groupIndex % frameDim.XSizeDcGroups;
-        long gy = groupIndex / frameDim.XSizeDcGroups;
-        return new JxlRect(gx * frameDim.GroupDimension, gy * frameDim.GroupDimension, frameDim.GroupDimension, frameDim.GroupDimension, frameDim.XSizeBlocks, frameDim.YSizeBlocks);
     }
 
     private static void ReplaceChannel(JxlModularImage image, int c, JxlModularChannel channel)
