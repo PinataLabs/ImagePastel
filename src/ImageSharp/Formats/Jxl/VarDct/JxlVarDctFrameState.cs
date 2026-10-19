@@ -175,7 +175,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <param name="numPasses">The number of passes.</param>
     public void InitForAc(int numPasses)
     {
-        this.GroupCache = new JxlVarDctGroupCache(this.FrameDim, numPasses);
+        this.GroupCache = new JxlVarDctGroupCache(this.FrameDim, numPasses, this.UsedAcs);
         this.CoeffOrderSize = JxlCoeffOrder.OrderSize(this.UsedAcs);
         int sz = numPasses * this.CoeffOrderSize;
         if (sz > this.CoeffOrders.Length)
