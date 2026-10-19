@@ -1,9 +1,12 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
@@ -38,6 +41,33 @@ public class JxlEncoderSampleFormatTests
     }
 
     [Fact]
+    public void RoundTrip_FloatsOutsideZeroToOne_KeepTheirBitPatterns()
+    {
+        using Image<RgbaVector> image = CreateWideRangeFloatImage();
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image);
+
+        JxlEncoderRoundTrip.AssertFloatBitsEqual(image, encoded);
+    }
+
+    [Fact]
+    public async Task RoundTrip_FloatsOutsideZeroToOne_DjxlAccepts()
+    {
+        // Resolve the tool first, so the test skips before it writes anything.
+        JxlTools.GetToolPath("djxl");
+        using Image<RgbaVector> image = CreateWideRangeFloatImage();
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", "Encoder");
+        string jxlPath = Path.Combine(directory, "float_wide_range.jxl");
+        string pfmPath = Path.Combine(directory, "float_wide_range.djxl.pfm");
+        File.Delete(pfmPath);
+        await File.WriteAllBytesAsync(jxlPath, JxlEncoderRoundTrip.Encode(image), TestContext.Current.CancellationToken);
+
+        await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, jxlPath, pfmPath);
+
+        Assert.True(File.Exists(pfmPath));
+    }
+
+    [Fact]
     public void DeepClone_CopiesTheBitDepth()
     {
         JxlMetadata metadata = new() { BitsPerSample = 32, ExponentBitsPerSample = 8 };
@@ -46,5 +76,24 @@ public class JxlEncoderSampleFormatTests
 
         Assert.Equal(32u, clone.BitsPerSample);
         Assert.Equal(8u, clone.ExponentBitsPerSample);
+    }
+
+    // Negative values, values above 1, a negative zero, a subnormal and the extremes of float32, in
+    // every channel including alpha.
+    private static Image<RgbaVector> CreateWideRangeFloatImage()
+    {
+        float[] values = { -1F, -0F, 0F, 0.5F, 1F, 1.5F, 1000F, -65504.25F, 1E-40F, float.MaxValue, float.MinValue, float.Epsilon, 3.14159274F };
+        Image<RgbaVector> image = new(values.Length, 5);
+        Random random = new(211);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                float Pick() => y == 0 ? values[x] : values[random.Next(values.Length)] * (float)(random.NextDouble() + 0.5);
+                image[x, y] = new RgbaVector(Pick(), Pick(), Pick(), Pick());
+            }
+        }
+
+        return image;
     }
 }
