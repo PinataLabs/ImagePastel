@@ -222,7 +222,7 @@ internal static class JxlVarDctGroup
                             state.Dc[c].DangerousGetRowSpan(ry0[c] + sby[c] + iy).Slice(rx0[c] + sbx[c], dcStride).CopyTo(cache.Dc.AsSpan(iy * dcStride));
                         }
 
-                        JxlDct.LowestFrequenciesFromDc(acs.Strategy, cache.Dc, dcStride, block.AsSpan(c * size, size), cache.Scratch);
+                        JxlDct.LowestFrequenciesFromDc(acs, cache.Dc, dcStride, block.AsSpan(c * size, size), cache.Scratch);
                     }
 
                     foreach (int c in ChannelOrder)
@@ -251,7 +251,7 @@ internal static class JxlVarDctGroup
         int width = acs.CoveredBlocksX * BlockDim;
         int height = acs.CoveredBlocksY * BlockDim;
         Span<float> pixels = cache.Pixels.AsSpan(0, width * height);
-        JxlDct.TransformToPixels(acs.Strategy, coefficients, pixels, width, cache.Scratch);
+        JxlDct.TransformToPixels(acs, coefficients, pixels, width, cache.Scratch);
         for (int iy = 0; iy < height; iy++)
         {
             pixels.Slice(iy * width, width).CopyTo(plane.DangerousGetRowSpan(y + iy).Slice(x, width));

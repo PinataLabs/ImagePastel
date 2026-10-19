@@ -68,6 +68,12 @@ internal sealed class JxlNeighbourRows : IDisposable
     public int Y { get; private set; }
 
     /// <summary>
+    /// Gets every row of the window, one after another: the row <see cref="GetRow"/> returns starts at
+    /// <see cref="GetRowStart"/>. A stage that reads many rows for each pixel indexes it directly.
+    /// </summary>
+    public ReadOnlySpan<float> Window => this.buffer.Memory.Span;
+
+    /// <summary>
     /// Returns the input row <paramref name="dy"/> rows from <see cref="Y"/> of channel <paramref name="c"/>,
     /// as libjxl's <c>GetInputRow</c>, widened by <see cref="Border"/> pixels on both sides: element
     /// <c>Border + x</c> is pixel <c>x</c>, for <c>x</c> from <c>-Border</c> to <c>xsize + Border - 1</c>.
@@ -75,13 +81,19 @@ internal sealed class JxlNeighbourRows : IDisposable
     /// <param name="c">A channel the stage changes.</param>
     /// <param name="dy">The row offset, from <c>-Border</c> to <c>Border</c>.</param>
     /// <returns>The widened row, of <c>xsize + 2 * Border</c> samples.</returns>
-    public ReadOnlySpan<float> GetRow(int c, int dy)
+    public ReadOnlySpan<float> GetRow(int c, int dy) => this.Window.Slice(this.GetRowStart(c, dy), this.rowLength);
+
+    /// <summary>Returns where in <see cref="Window"/> the row that <see cref="GetRow"/> returns starts.</summary>
+    /// <param name="c">A channel the stage changes.</param>
+    /// <param name="dy">The row offset, from <c>-Border</c> to <c>Border</c>.</param>
+    /// <returns>The index of the row's first element, pixel <c>-Border</c>.</returns>
+    public int GetRowStart(int c, int dy)
     {
         // libjxl's JXL_DASSERTs in GetInputRow.
         int slot = this.channelSlot[c];
         DebugGuard.IsTrue(slot >= 0, "The stage reads only the channels it changes");
         DebugGuard.IsTrue(dy >= -this.Border && dy <= this.Border, "The stage reads only the rows within its border");
-        return this.buffer.Memory.Span.Slice(this.RowStart(slot, this.Y + dy), this.rowLength);
+        return this.RowStart(slot, this.Y + dy);
     }
 
     public void Dispose() => this.buffer.Dispose();

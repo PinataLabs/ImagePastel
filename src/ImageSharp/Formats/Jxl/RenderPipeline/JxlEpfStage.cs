@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2: what the EPF0Stage,
 // EPF1Stage and EPF2Stage of lib/jxl/render_pipeline/stage_epf.cc share (Weight, the SAD multipliers,
-// the sigma test and GetChannelMode).
+// the sigma test, the weighted sum and its normalisation, and GetChannelMode).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -30,7 +30,6 @@ internal abstract class JxlEpfStage : IJxlLoopFilterStage
 
     private readonly float sadMul;
     private readonly float borderSadMul;
-    private float[] rows;
 
     /// <summary>Initializes a new instance of the <see cref="JxlEpfStage"/> class.</summary>
     /// <param name="lf">The loop-filter fields.</param>
@@ -61,24 +60,19 @@ internal abstract class JxlEpfStage : IJxlLoopFilterStage
     /// <inheritdoc/>
     public void ProcessRow(JxlNeighbourRows input, Buffer2D<float>[] output, int xsize, int y)
     {
-        // The rows the pass reads, one after another: channel c, row dy is at (c * (2 * Border + 1) +
-        // Border + dy) * stride, and pixel x of it at Border + x past that.
-        int stride = xsize + (2 * this.Border);
+        // Where pixel 0 of each row the pass reads lies in the window: channel c, row dy at
+        // c * (2 * Border + 1) + Border + dy.
         int rowsPerChannel = (2 * this.Border) + 1;
-        int channelStride = rowsPerChannel * stride;
-        if (this.rows == null || this.rows.Length != 3 * channelStride)
-        {
-            this.rows = new float[3 * channelStride];
-        }
-
+        Span<int> pixel0 = stackalloc int[3 * rowsPerChannel];
         for (int c = 0; c < 3; c++)
         {
             for (int dy = -this.Border; dy <= this.Border; dy++)
             {
-                input.GetRow(c, dy).CopyTo(this.rows.AsSpan(((c * rowsPerChannel) + this.Border + dy) * stride, stride));
+                pixel0[(c * rowsPerChannel) + this.Border + dy] = input.GetRowStart(c, dy) + this.Border;
             }
         }
 
+        Rows rows = new(input.Window, pixel0, this.Border);
         ReadOnlySpan<float> rowSigma = this.Sigma.GetRow(y);
 
         // The pixels on a block's edge rows and columns get the border multiplier.
@@ -86,36 +80,32 @@ internal abstract class JxlEpfStage : IJxlLoopFilterStage
         Span<float> outX = output[0].DangerousGetRowSpan(y);
         Span<float> outY = output[1].DangerousGetRowSpan(y);
         Span<float> outB = output[2].DangerousGetRowSpan(y);
-        int center0 = (this.Border * stride) + this.Border;
         for (int x = 0; x < xsize; x++)
         {
-            int center = center0 + x;
             float blockSigma = rowSigma[x / BlockDim];
             if (blockSigma < JxlEpfSigma.MinSigma)
             {
-                outX[x] = this.rows[center];
-                outY[x] = this.rows[center + channelStride];
-                outB[x] = this.rows[center + (2 * channelStride)];
+                outX[x] = rows[0, 0, x];
+                outY[x] = rows[1, 0, x];
+                outB[x] = rows[2, 0, x];
                 continue;
             }
 
             int ix = x % BlockDim;
             float vsm = borderRow || ix == 0 || ix == BlockDim - 1 ? this.borderSadMul : this.sadMul;
             float invSigma = blockSigma * vsm;
-            this.FilterPixel(this.rows, center, stride, channelStride, invSigma, out outX[x], out outY[x], out outB[x]);
+            this.FilterPixel(rows, x, invSigma, out outX[x], out outY[x], out outB[x]);
         }
     }
 
     /// <summary>Filters one pixel.</summary>
     /// <param name="rows">The rows around the pixel, of every channel.</param>
-    /// <param name="center">The index of the pixel in channel 0.</param>
-    /// <param name="stride">The distance between two rows.</param>
-    /// <param name="channelStride">The distance between two channels.</param>
+    /// <param name="x">The pixel's column.</param>
     /// <param name="invSigma">The inverse sigma of the pixel, with its SAD multiplier.</param>
     /// <param name="outX">The filtered X.</param>
     /// <param name="outY">The filtered Y.</param>
     /// <param name="outB">The filtered B.</param>
-    protected abstract void FilterPixel(float[] rows, int center, int stride, int channelStride, float invSigma, out float outX, out float outY, out float outB);
+    protected abstract void FilterPixel(Rows rows, int x, float invSigma, out float outX, out float outY, out float outB);
 
     /// <summary>libjxl's <c>Weight</c>: <c>max(0, sad * inv_sigma + 1)</c>, without the FMA.</summary>
     /// <param name="sad">The SAD of the two patches.</param>
@@ -128,5 +118,90 @@ internal abstract class JxlEpfStage : IJxlLoopFilterStage
 
         // ZeroIfNegative.
         return v < 0 ? 0 : v;
+    }
+
+    /// <summary>
+    /// The rows a pass reads around the row it writes, of the three colour channels, as libjxl's
+    /// <c>GetInputRow</c> gives them: straight from the <see cref="JxlNeighbourRows"/> window.
+    /// </summary>
+    protected readonly ref struct Rows
+    {
+        private readonly ReadOnlySpan<float> window;
+        private readonly ReadOnlySpan<int> pixel0;
+        private readonly int rowsPerChannel;
+        private readonly int border;
+
+        /// <summary>Initializes a new instance of the <see cref="Rows"/> struct.</summary>
+        /// <param name="window">The window of rows.</param>
+        /// <param name="pixel0">Where pixel 0 of each row is in the window, by channel and then row.</param>
+        /// <param name="border">The pass's border.</param>
+        public Rows(ReadOnlySpan<float> window, ReadOnlySpan<int> pixel0, int border)
+        {
+            this.window = window;
+            this.pixel0 = pixel0;
+            this.rowsPerChannel = (2 * border) + 1;
+            this.border = border;
+        }
+
+        /// <summary>Gets pixel <paramref name="x"/> of row <paramref name="dy"/>, from the row written, of channel <paramref name="c"/>.</summary>
+        /// <param name="c">The channel.</param>
+        /// <param name="dy">The row offset, from <c>-Border</c> to <c>Border</c>.</param>
+        /// <param name="x">The column, from <c>-Border</c> to <c>xsize + Border - 1</c>.</param>
+        /// <returns>The pixel.</returns>
+        public float this[int c, int dy, int x]
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => this.window[this.pixel0[(c * this.rowsPerChannel) + this.border + dy] + x];
+        }
+    }
+
+    /// <summary>
+    /// The weighted sum of the pixels of one output pixel, which starts with the pixel itself at weight
+    /// 1: libjxl's <c>w</c>, <c>X</c>, <c>Y</c> and <c>B</c>, and their normalisation by <c>inv_w</c>.
+    /// </summary>
+    protected struct WeightedSum
+    {
+        private float w;
+        private float x;
+        private float y;
+        private float b;
+
+        /// <summary>Initializes a new instance of the <see cref="WeightedSum"/> struct.</summary>
+        /// <param name="x">The pixel's X.</param>
+        /// <param name="y">The pixel's Y.</param>
+        /// <param name="b">The pixel's B.</param>
+        public WeightedSum(float x, float y, float b)
+        {
+            this.w = 1;
+            this.x = x;
+            this.y = y;
+            this.b = b;
+        }
+
+        /// <summary>Adds a neighbouring pixel, as libjxl's <c>AddPixel</c> does, without the FMA.</summary>
+        /// <param name="weight">The pixel's weight.</param>
+        /// <param name="cx">Its X.</param>
+        /// <param name="cy">Its Y.</param>
+        /// <param name="cb">Its B.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Add(float weight, float cx, float cy, float cb)
+        {
+            this.w += weight;
+            this.x = (weight * cx) + this.x;
+            this.y = (weight * cy) + this.y;
+            this.b = (weight * cb) + this.b;
+        }
+
+        /// <summary>Divides the sums by the sum of the weights.</summary>
+        /// <param name="outX">The filtered X.</param>
+        /// <param name="outY">The filtered Y.</param>
+        /// <param name="outB">The filtered B.</param>
+        public readonly void Normalize(out float outX, out float outY, out float outB)
+        {
+            float invW = 1.0f / this.w;
+            outX = this.x * invW;
+            outY = this.y * invW;
+            outB = this.b * invW;
+        }
     }
 }

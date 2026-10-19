@@ -128,7 +128,7 @@ internal sealed class JxlFrameDecoder
         // PreparePipeline adds the loop-filter stages before the sections are decoded, and they read
         // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
         // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
-        IJxlLoopFilterStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(this.configuration.MemoryAllocator, frameHeader, frameDim, varDct));
+        IJxlLoopFilterStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
         JxlReferenceFrame saved = pipeline.Finish(frameHeader, loopFilters, patchesStage, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.

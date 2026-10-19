@@ -24,7 +24,7 @@ internal sealed class JxlEpf1Stage : JxlEpfStage
     }
 
     /// <inheritdoc/>
-    protected override void FilterPixel(float[] rows, int center, int stride, int channelStride, float invSigma, out float outX, out float outY, out float outB)
+    protected override void FilterPixel(Rows rows, int x, float invSigma, out float outX, out float outY, out float outB)
     {
         float sad0 = 0;
         float sad1 = 0;
@@ -35,25 +35,24 @@ internal sealed class JxlEpf1Stage : JxlEpfStage
         // p22 and the one above it p21. The order of the additions is libjxl's.
         for (int c = 0; c < 3; c++)
         {
-            int p = center + (c * channelStride);
             float t;
 
-            float p20 = rows[p - (2 * stride)];
-            float p21 = rows[p - stride];
+            float p20 = rows[c, -2, x];
+            float p21 = rows[c, -1, x];
             float sad0c = MathF.Abs(p20 - p21); // SAD 2, 1
 
-            float p11 = rows[p - stride - 1];
+            float p11 = rows[c, -1, x - 1];
             float sad1c = MathF.Abs(p11 - p21); // SAD 1, 2
 
-            float p31 = rows[p - stride + 1];
+            float p31 = rows[c, -1, x + 1];
             float sad2c = MathF.Abs(p31 - p21); // SAD 3, 2
 
-            float p02 = rows[p - 2];
-            float p12 = rows[p - 1];
+            float p02 = rows[c, 0, x - 2];
+            float p12 = rows[c, 0, x - 1];
             sad1c += MathF.Abs(p02 - p12); // SAD 1, 2
             sad0c += MathF.Abs(p11 - p12); // SAD 2, 1
 
-            float p22 = rows[p];
+            float p22 = rows[c, 0, x];
             t = MathF.Abs(p12 - p22);
             sad1c += t; // SAD 1, 2
             sad2c += t; // SAD 3, 2
@@ -61,29 +60,29 @@ internal sealed class JxlEpf1Stage : JxlEpfStage
             float sad3c = t; // SAD 2, 3
             sad0c += t; // SAD 2, 1
 
-            float p32 = rows[p + 1];
+            float p32 = rows[c, 0, x + 1];
             sad0c += MathF.Abs(p31 - p32); // SAD 2, 1
             t = MathF.Abs(p22 - p32);
             sad1c += t; // SAD 1, 2
             sad2c += t; // SAD 3, 2
 
-            float p42 = rows[p + 2];
+            float p42 = rows[c, 0, x + 2];
             sad2c += MathF.Abs(p42 - p32); // SAD 3, 2
 
-            float p13 = rows[p + stride - 1];
+            float p13 = rows[c, 1, x - 1];
             sad3c += MathF.Abs(p13 - p12); // SAD 2, 3
 
-            float p23 = rows[p + stride];
+            float p23 = rows[c, 1, x];
             t = MathF.Abs(p22 - p23);
             sad0c += t; // SAD 2, 1
             sad3c += t; // SAD 2, 3
             sad1c += MathF.Abs(p13 - p23); // SAD 1, 2
 
-            float p33 = rows[p + stride + 1];
+            float p33 = rows[c, 1, x + 1];
             sad2c += MathF.Abs(p33 - p23); // SAD 3, 2
             sad3c += MathF.Abs(p33 - p32); // SAD 2, 3
 
-            float p24 = rows[p + (2 * stride)];
+            float p24 = rows[c, 2, x];
             sad3c += MathF.Abs(p24 - p23); // SAD 2, 3
 
             float scale = this.LoopFilter.EpfChannelScale[c];
@@ -93,31 +92,17 @@ internal sealed class JxlEpf1Stage : JxlEpfStage
             sad3 = (sad3c * scale) + sad3;
         }
 
-        int c1 = center + channelStride;
-        int c2 = center + (2 * channelStride);
-        float w = 1;
-        float x = rows[center];
-        float y = rows[c1];
-        float b = rows[c2];
+        WeightedSum sum = new(rows[0, 0, x], rows[1, 0, x], rows[2, 0, x]);
 
         // Top row, the centre row left and right, the bottom row.
-        AddPixel(rows, center, c1, c2, -stride, sad0, invSigma, ref x, ref y, ref b, ref w);
-        AddPixel(rows, center, c1, c2, -1, sad1, invSigma, ref x, ref y, ref b, ref w);
-        AddPixel(rows, center, c1, c2, 1, sad2, invSigma, ref x, ref y, ref b, ref w);
-        AddPixel(rows, center, c1, c2, stride, sad3, invSigma, ref x, ref y, ref b, ref w);
+        AddPixel(ref sum, rows, -1, x, sad0, invSigma);
+        AddPixel(ref sum, rows, 0, x - 1, sad1, invSigma);
+        AddPixel(ref sum, rows, 0, x + 1, sad2, invSigma);
+        AddPixel(ref sum, rows, 1, x, sad3, invSigma);
 
-        float invW = 1.0f / w;
-        outX = x * invW;
-        outY = y * invW;
-        outB = b * invW;
+        sum.Normalize(out outX, out outY, out outB);
     }
 
-    private static void AddPixel(float[] rows, int c0, int c1, int c2, int off, float sad, float invSigma, ref float x, ref float y, ref float b, ref float w)
-    {
-        float weight = Weight(sad, invSigma);
-        w += weight;
-        x = (weight * rows[c0 + off]) + x;
-        y = (weight * rows[c1 + off]) + y;
-        b = (weight * rows[c2 + off]) + b;
-    }
+    private static void AddPixel(ref WeightedSum sum, Rows rows, int dy, int x, float sad, float invSigma)
+        => sum.Add(Weight(sad, invSigma), rows[0, dy, x], rows[1, dy, x], rows[2, dy, x]);
 }

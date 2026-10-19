@@ -88,7 +88,7 @@ internal sealed class JxlEpfSigma
         float[] sharpLut = lf.EpfSharpLut;
         float[] sigma = new float[xsizeBlocks * ysizeBlocks];
 
-        for (int by = 0; by < ysizeBlocks; ++by)
+        for (int by = 0; by < ysizeBlocks; by++)
         {
             ReadOnlySpan<int> rowQuant = state.RawQuantField.DangerousGetRowSpan(by);
             for (int bx = 0; bx < xsizeBlocks; bx++)

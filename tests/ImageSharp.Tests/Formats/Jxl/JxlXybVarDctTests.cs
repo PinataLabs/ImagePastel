@@ -19,8 +19,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// and D9e's: the files made with <c>cjxl -e 7 --gaborish=0 --epf=0</c>, which mix the DCT sizes from 2x2
 /// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
 /// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
-/// field and a non-zero chroma-from-luma map. The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
-/// for lossy output"), and each case records the error measured when it was written.
+/// field and a non-zero chroma-from-luma map. The planes are compared with djxl's float output at the
+/// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
+/// measured when it was written.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlXybVarDctTests

@@ -69,17 +69,7 @@ public class JxlEpfTests
         NpyArray expected = LoadReference(name);
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name), out _);
 
-        NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
-        Assert.Equal(expected.Shape[1], actual.Shape[1]);
-        Assert.Equal(expected.Shape[2], actual.Shape[2]);
-        double worst = 0;
-        for (int i = 0; i < actual.Data.Length; i++)
-        {
-            worst = Math.Max(worst, Math.Abs(actual.Data[i] - Math.Clamp(expected.Data[i], 0F, 1F)) * 255);
-        }
-
-        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one 8-bit step");
-        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 8-bit steps");
+        JxlConformanceImages.AssertRgbWithinOneStepOfTheClampedReference(expected, JxlConformanceImages.ToNpy(image, 3));
     }
 
     // loop_filter.cc: epf_sigma_for_modular below 1e-8 fails, as djxl does for both files.

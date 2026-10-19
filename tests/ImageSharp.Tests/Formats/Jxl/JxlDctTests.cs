@@ -433,7 +433,7 @@ public class JxlDctTests
         float[] dc = Array.ConvertAll(dcDouble, v => (float)v);
         float[] llf = new float[cx * cy * 64];
 
-        JxlDct.LowestFrequenciesFromDc(type, dc, cx, llf, new float[JxlDct.ScratchSize]);
+        JxlDct.LowestFrequenciesFromDc(acs, dc, cx, llf, new float[JxlDct.ScratchSize]);
 
         // Every other coefficient is zero; the pixels come from the double-precision reference.
         double[] pixels;
@@ -524,7 +524,7 @@ public class JxlDctTests
         // A stride wider than the block, to show the transform keeps to its columns.
         int stride = width + 3;
         float[] pixels = new float[stride * height];
-        JxlDct.TransformToPixels(type, input, pixels, stride, new float[JxlDct.ScratchSize]);
+        JxlDct.TransformToPixels(JxlAcStrategy.FromRawStrategy((int)type), input, pixels, stride, new float[JxlDct.ScratchSize]);
         float[] result = new float[width * height];
         for (int y = 0; y < height; y++)
         {

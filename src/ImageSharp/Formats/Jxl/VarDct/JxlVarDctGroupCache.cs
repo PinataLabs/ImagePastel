@@ -74,7 +74,7 @@ internal sealed class JxlVarDctGroupCache
     public float[] Pixels { get; }
 
     /// <summary>Gets the DC values of the current varblock, one row of DC values after another.</summary>
-    public float[] Dc { get; } = new float[32 * 32];
+    public float[] Dc { get; } = new float[JxlDct.MaxCoveredBlocks * JxlDct.MaxCoveredBlocks];
 
     /// <summary>Gets the scratch space of the transforms.</summary>
     public float[] Scratch { get; } = new float[JxlDct.ScratchSize];

@@ -36,48 +36,34 @@ internal sealed class JxlEpf0Stage : JxlEpfStage
     }
 
     /// <inheritdoc/>
-    protected override void FilterPixel(float[] rows, int center, int stride, int channelStride, float invSigma, out float outX, out float outY, out float outB)
+    protected override void FilterPixel(Rows rows, int x, float invSigma, out float outX, out float outY, out float outB)
     {
         // Compute the SADs.
         Span<float> sads = stackalloc float[12];
         sads.Clear();
         for (int c = 0; c < 3; c++)
         {
-            int cc = center + (c * channelStride);
             float scale = this.LoopFilter.EpfChannelScale[c];
             for (int i = 0; i < 12; i++)
             {
-                int other = cc + (SadsOff[i].Dy * stride) + SadsOff[i].Dx;
+                (int sy, int sx) = SadsOff[i];
                 float sad = 0;
                 foreach ((int dy, int dx) in PlusOff)
                 {
-                    int off = (dy * stride) + dx;
-                    sad += MathF.Abs(rows[cc + off] - rows[other + off]);
+                    sad += MathF.Abs(rows[c, dy, x + dx] - rows[c, sy + dy, x + sx + dx]);
                 }
 
                 sads[i] = (sad * scale) + sads[i];
             }
         }
 
-        int c1 = center + channelStride;
-        int c2 = center + (2 * channelStride);
-        float w = 1;
-        float x = rows[center];
-        float y = rows[c1];
-        float b = rows[c2];
+        WeightedSum sum = new(rows[0, 0, x], rows[1, 0, x], rows[2, 0, x]);
         for (int i = 0; i < 12; i++)
         {
-            int off = (SadsOff[i].Dy * stride) + SadsOff[i].Dx;
-            float weight = Weight(sads[i], invSigma);
-            w += weight;
-            x = (weight * rows[center + off]) + x;
-            y = (weight * rows[c1 + off]) + y;
-            b = (weight * rows[c2 + off]) + b;
+            (int dy, int dx) = SadsOff[i];
+            sum.Add(Weight(sads[i], invSigma), rows[0, dy, x + dx], rows[1, dy, x + dx], rows[2, dy, x + dx]);
         }
 
-        float invW = 1.0f / w;
-        outX = x * invW;
-        outY = y * invW;
-        outB = b * invW;
+        sum.Normalize(out outX, out outY, out outB);
     }
 }

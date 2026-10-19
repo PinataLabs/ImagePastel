@@ -114,18 +114,7 @@ internal static partial class JxlDct
         // IAFV: (even, even) positions.
         Span<float> coeff = stackalloc float[4 * 4];
         coeff[0] = dc0;
-        for (int iy = 0; iy < 4; iy++)
-        {
-            for (int ix = 0; ix < 4; ix++)
-            {
-                if (ix == 0 && iy == 0)
-                {
-                    continue;
-                }
-
-                coeff[(iy * 4) + ix] = coefficients[(iy * 2 * 8) + (ix * 2)];
-            }
-        }
+        GatherAc(coefficients, 0, 16, 2, 4, 4, coeff);
 
         Span<float> block = stackalloc float[4 * 8];
         AfvIdct4X4(coeff, block);
@@ -140,35 +129,13 @@ internal static partial class JxlDct
 
         // IDCT4x4 in (odd, even) positions.
         block[0] = dc1;
-        for (int iy = 0; iy < 4; iy++)
-        {
-            for (int ix = 0; ix < 4; ix++)
-            {
-                if (ix == 0 && iy == 0)
-                {
-                    continue;
-                }
-
-                block[(iy * 4) + ix] = coefficients[(iy * 2 * 8) + (ix * 2) + 1];
-            }
-        }
+        GatherAc(coefficients, 1, 16, 2, 4, 4, block);
 
         ComputeScaledIdct(4, 4, block, pixels.Slice((afvY * 4 * pixelsStride) + (afvX == 1 ? 0 : 4)), pixelsStride, scratch);
 
         // IDCT4x8.
         block[0] = dc2;
-        for (int iy = 0; iy < 4; iy++)
-        {
-            for (int ix = 0; ix < 8; ix++)
-            {
-                if (ix == 0 && iy == 0)
-                {
-                    continue;
-                }
-
-                block[(iy * 8) + ix] = coefficients[(((iy * 2) + 1) * 8) + ix];
-            }
-        }
+        GatherAc(coefficients, 8, 16, 1, 4, 8, block);
 
         ComputeScaledIdct(4, 8, block, pixels.Slice((afvY == 1 ? 0 : 4) * pixelsStride), pixelsStride, scratch);
     }

@@ -238,7 +238,11 @@ internal sealed class JxlRenderPipeline : IDisposable
                     if (stage.ChangesChannel(c))
                     {
                         // The same size as the plane it replaces. The stages write only the frame, so
-                        // the padding past it holds whatever the plane held before; nothing reads it.
+                        // after the filters the padding past it is zero after an odd number of stages
+                        // (the first spare is allocated clean) and the decoded padding after an even
+                        // number. Nothing reads it: every later stage, save and sink takes the frame
+                        // size. A later stage that reads past the frame edge (D10's upsampling) must
+                        // mirror the frame there, as JxlNeighbourRows and libjxl do, not read the padding.
                         spare[c] ??= this.allocator.Allocate2D<float>(this.planes[c].Width, this.planes[c].Height, AllocationOptions.Clean);
                         output[c] = spare[c];
                     }

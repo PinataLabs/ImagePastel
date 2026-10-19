@@ -51,25 +51,7 @@ public class JxlGaborishTests
     {
         NpyArray expected = LoadReference(name);
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name), out _);
-        NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
-
-        // A grey image is R = G = B, so its one reference channel is compared with each.
-        Assert.Equal(expected.Shape[1], actual.Shape[1]);
-        Assert.Equal(expected.Shape[2], actual.Shape[2]);
-        int channels = expected.Shape[3];
-        int pixels = actual.Shape[1] * actual.Shape[2];
-        double worst = 0;
-        for (int i = 0; i < pixels; i++)
-        {
-            for (int c = 0; c < 3; c++)
-            {
-                double e = Math.Clamp(expected.Data[(i * channels) + (channels == 1 ? 0 : c)], 0F, 1F);
-                worst = Math.Max(worst, Math.Abs(actual.Data[(i * 3) + c] - e) * 255);
-            }
-        }
-
-        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one 8-bit step");
-        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 8-bit steps");
+        JxlConformanceImages.AssertRgbWithinOneStepOfTheClampedReference(expected, JxlConformanceImages.ToNpy(image, 3));
     }
 
     // Custom x weights of -0.125 and -0.125 make the unnormalized kernel 1 + 4 * (w1 + w2) = 0, which

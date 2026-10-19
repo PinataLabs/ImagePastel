@@ -1,9 +1,12 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
+// Structure after libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2: the parts of
+// PassesDecoderState (lib/jxl/dec_cache.h) that PassesDecoderState::PreparePipeline in
+// lib/jxl/dec_cache.cc hands to GetGaborishStage and GetEPFStage.
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
@@ -15,23 +18,18 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 internal sealed class JxlLoopFilterContext
 {
     /// <summary>Initializes a new instance of the <see cref="JxlLoopFilterContext"/> class.</summary>
-    /// <param name="allocator">The allocator.</param>
-    /// <param name="frameHeader">The frame header.</param>
+    /// <param name="loopFilter">The loop-filter fields of the frame header.</param>
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="varDct">The state of a VarDCT frame, or <see langword="null"/> for a Modular frame.</param>
-    public JxlLoopFilterContext(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlVarDctFrameState varDct)
+    public JxlLoopFilterContext(JxlLoopFilter loopFilter, JxlFrameDimensions frameDim, JxlVarDctFrameState varDct)
     {
-        this.Allocator = allocator;
-        this.FrameHeader = frameHeader;
+        this.LoopFilter = loopFilter;
         this.FrameDim = frameDim;
         this.VarDct = varDct;
     }
 
-    /// <summary>Gets the allocator.</summary>
-    public MemoryAllocator Allocator { get; }
-
-    /// <summary>Gets the frame header, with the loop-filter fields.</summary>
-    public JxlFrameHeader FrameHeader { get; }
+    /// <summary>Gets the loop-filter fields of the frame header.</summary>
+    public JxlLoopFilter LoopFilter { get; }
 
     /// <summary>Gets the frame dimensions.</summary>
     public JxlFrameDimensions FrameDim { get; }
@@ -42,7 +40,4 @@ internal sealed class JxlLoopFilterContext
     /// or <see langword="null"/> for a Modular frame.
     /// </summary>
     public JxlVarDctFrameState VarDct { get; }
-
-    /// <summary>Gets the loop-filter fields of the frame header.</summary>
-    public JxlLoopFilter LoopFilter => this.FrameHeader.LoopFilter;
 }

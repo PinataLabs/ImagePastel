@@ -30,6 +30,9 @@ internal static partial class JxlDct
     /// </summary>
     public const int ScratchSize = (MaxDim * MaxDim) + (4 * MaxDim);
 
+    /// <summary>The most 8x8 blocks a strategy covers along either side: a 256x256 block covers 32.</summary>
+    public const int MaxCoveredBlocks = MaxDim / BlockDim;
+
     private const int MaxDim = 256;
     private const int BlockDim = 8;
     private const int DctBlockSize = BlockDim * BlockDim;
@@ -39,13 +42,14 @@ internal static partial class JxlDct
     /// Transforms the coefficients of a DCT block into its pixels (libjxl's <c>TransformToPixels</c>).
     /// The coefficients are overwritten.
     /// </summary>
-    /// <param name="strategy">The strategy.</param>
+    /// <param name="acs">The strategy.</param>
     /// <param name="coefficients">The coefficients, 64 per 8x8 block the strategy covers; used as scratch space.</param>
     /// <param name="pixels">The first pixel of the block.</param>
     /// <param name="pixelsStride">The distance between pixel rows.</param>
     /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
-    public static void TransformToPixels(JxlAcStrategyType strategy, Span<float> coefficients, Span<float> pixels, int pixelsStride, Span<float> scratch)
+    public static void TransformToPixels(JxlAcStrategy acs, Span<float> coefficients, Span<float> pixels, int pixelsStride, Span<float> scratch)
     {
+        JxlAcStrategyType strategy = acs.Strategy;
         switch (strategy)
         {
             case JxlAcStrategyType.Dct8X4:
@@ -58,18 +62,7 @@ internal static partial class JxlDct
                 for (int x = 0; x < 2; x++)
                 {
                     block[0] = x == 0 ? dc0 : dc1;
-                    for (int iy = 0; iy < 4; iy++)
-                    {
-                        for (int ix = 0; ix < 8; ix++)
-                        {
-                            if (ix == 0 && iy == 0)
-                            {
-                                continue;
-                            }
-
-                            block[(iy * 8) + ix] = coefficients[((x + (iy * 2)) * 8) + ix];
-                        }
-                    }
+                    GatherAc(coefficients, x * 8, 16, 1, 4, 8, block);
 
                     ComputeScaledIdct(8, 4, block, pixels.Slice(x * 4), pixelsStride, scratch);
                 }
@@ -87,18 +80,7 @@ internal static partial class JxlDct
                 for (int y = 0; y < 2; y++)
                 {
                     block[0] = y == 0 ? dc0 : dc1;
-                    for (int iy = 0; iy < 4; iy++)
-                    {
-                        for (int ix = 0; ix < 8; ix++)
-                        {
-                            if (ix == 0 && iy == 0)
-                            {
-                                continue;
-                            }
-
-                            block[(iy * 8) + ix] = coefficients[((y + (iy * 2)) * 8) + ix];
-                        }
-                    }
+                    GatherAc(coefficients, y * 8, 16, 1, 4, 8, block);
 
                     ComputeScaledIdct(4, 8, block, pixels.Slice(y * 4 * pixelsStride), pixelsStride, scratch);
                 }
@@ -109,32 +91,14 @@ internal static partial class JxlDct
             case JxlAcStrategyType.Dct4X4:
             {
                 Span<float> dcs = stackalloc float[4];
-                float block00 = coefficients[0];
-                float block01 = coefficients[1];
-                float block10 = coefficients[8];
-                float block11 = coefficients[9];
-                dcs[0] = block00 + block01 + block10 + block11;
-                dcs[1] = block00 + block01 - block10 - block11;
-                dcs[2] = block00 - block01 + block10 - block11;
-                dcs[3] = block00 - block01 - block10 + block11;
+                SubBlockDcs(coefficients, dcs);
                 Span<float> block = stackalloc float[4 * 4];
                 for (int y = 0; y < 2; y++)
                 {
                     for (int x = 0; x < 2; x++)
                     {
                         block[0] = dcs[(y * 2) + x];
-                        for (int iy = 0; iy < 4; iy++)
-                        {
-                            for (int ix = 0; ix < 4; ix++)
-                            {
-                                if (ix == 0 && iy == 0)
-                                {
-                                    continue;
-                                }
-
-                                block[(iy * 4) + ix] = coefficients[((y + (iy * 2)) * 8) + x + (ix * 2)];
-                            }
-                        }
+                        GatherAc(coefficients, (y * 8) + x, 16, 2, 4, 4, block);
 
                         ComputeScaledIdct(4, 4, block, pixels.Slice((y * 4 * pixelsStride) + (x * 4)), pixelsStride, scratch);
                     }
@@ -163,14 +127,7 @@ internal static partial class JxlDct
                 // Four 4x4 squares of residuals about the pixel at (1, 1) of each, whose DCs are a 2x2
                 // Hadamard of the top-left coefficients. Slot (1, 1)'s residual belongs to pixel (0, 0).
                 Span<float> dcs = stackalloc float[4];
-                float block00 = coefficients[0];
-                float block01 = coefficients[1];
-                float block10 = coefficients[8];
-                float block11 = coefficients[9];
-                dcs[0] = block00 + block01 + block10 + block11;
-                dcs[1] = block00 + block01 - block10 - block11;
-                dcs[2] = block00 - block01 + block10 - block11;
-                dcs[3] = block00 - block01 - block10 + block11;
+                SubBlockDcs(coefficients, dcs);
                 for (int y = 0; y < 2; y++)
                 {
                     for (int x = 0; x < 2; x++)
@@ -225,7 +182,6 @@ internal static partial class JxlDct
             default:
             {
                 // Every other strategy is a DCT of its size: ComputeScaledIDCT<ROWS, COLS>.
-                JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)strategy);
                 ComputeScaledIdct(acs.CoveredBlocksY * BlockDim, acs.CoveredBlocksX * BlockDim, coefficients, pixels, pixelsStride, scratch);
                 break;
             }
@@ -236,14 +192,13 @@ internal static partial class JxlDct
     /// Sets the lowest frequencies of a block from its DC values (libjxl's <c>LowestFrequenciesFromDC</c>):
     /// the DC itself for a block of one 8x8 block, else a DCT of the DC values, rescaled to the block's size.
     /// </summary>
-    /// <param name="strategy">The strategy.</param>
+    /// <param name="acs">The strategy.</param>
     /// <param name="dc">The DC value of the first 8x8 block of the block.</param>
     /// <param name="dcStride">The distance between rows of DC values.</param>
     /// <param name="llf">The coefficients of the block, whose lowest frequencies are set.</param>
     /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
-    public static void LowestFrequenciesFromDc(JxlAcStrategyType strategy, ReadOnlySpan<float> dc, int dcStride, Span<float> llf, Span<float> scratch)
+    public static void LowestFrequenciesFromDc(JxlAcStrategy acs, ReadOnlySpan<float> dc, int dcStride, Span<float> llf, Span<float> scratch)
     {
-        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)strategy);
         int rows = acs.CoveredBlocksY;
         int cols = acs.CoveredBlocksX;
         if (rows * cols == 1)
@@ -289,7 +244,8 @@ internal static partial class JxlDct
         4 => ResampleScales4To32,
         8 => ResampleScales8To64,
         16 => ResampleScales16To128,
-        _ => ResampleScales32To256,
+        32 => ResampleScales32To256,
+        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a block count of a strategy"),
     };
 
     private static ReadOnlySpan<float> WcMultipliers(int n) => n switch
@@ -300,8 +256,41 @@ internal static partial class JxlDct
         32 => WcMultipliers32,
         64 => WcMultipliers64,
         128 => WcMultipliers128,
-        _ => WcMultipliers256,
+        256 => WcMultipliers256,
+        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a DCT size"),
     };
+
+    // The DCs of the four 4x4 sub-blocks of DCT4X4 and Identity: a 2x2 Hadamard of coefficients 0, 1,
+    // 8 and 9.
+    private static void SubBlockDcs(ReadOnlySpan<float> coefficients, Span<float> dcs)
+    {
+        float block00 = coefficients[0];
+        float block01 = coefficients[1];
+        float block10 = coefficients[8];
+        float block11 = coefficients[9];
+        dcs[0] = block00 + block01 + block10 + block11;
+        dcs[1] = block00 + block01 - block10 - block11;
+        dcs[2] = block00 - block01 + block10 - block11;
+        dcs[3] = block00 - block01 - block10 + block11;
+    }
+
+    // The loop that starts each sub-block transform in libjxl: the rows x cols block takes coefficient
+    // start + iy * rowStride + ix * colStep at (ix, iy), except at (0, 0), which holds the sub-block's DC.
+    private static void GatherAc(ReadOnlySpan<float> coefficients, int start, int rowStride, int colStep, int rows, int cols, Span<float> block)
+    {
+        for (int iy = 0; iy < rows; iy++)
+        {
+            for (int ix = 0; ix < cols; ix++)
+            {
+                if (ix == 0 && iy == 0)
+                {
+                    continue;
+                }
+
+                block[(iy * cols) + ix] = coefficients[start + (iy * rowStride) + (ix * colStep)];
+            }
+        }
+    }
 
     // IDCT2TopBlock<S>, in place in an 8x8 block.
     private static void Idct2TopBlock(int s, Span<float> block)

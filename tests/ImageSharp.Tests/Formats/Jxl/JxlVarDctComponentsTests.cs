@@ -63,7 +63,7 @@ public class JxlVarDctComponentsTests
         coefficients[(u * 8) + v] = 0.5f;
         float[] pixels = new float[64];
 
-        JxlDct.TransformToPixels(JxlAcStrategyType.Dct, coefficients, pixels, 8, new float[JxlDct.ScratchSize]);
+        JxlDct.TransformToPixels(JxlAcStrategy.FromRawStrategy((int)JxlAcStrategyType.Dct), coefficients, pixels, 8, new float[JxlDct.ScratchSize]);
 
         for (int y = 0; y < 8; y++)
         {

@@ -344,7 +344,7 @@ djxl vardct_xyb_gaborish_custom.jxl ../../../External/ReferenceOutput/JxlDecoder
 djxl xyb_modular_gaborish.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_gaborish.npy
 ```
 
-- `set_gaborish_weights.py` rewrites only the loop-filter bits of the frame header: it sets `gab_custom` and inserts the six weights as float16. The TOC and the sections are copied as they are. It handles only the simple files `cjxl` writes here (one frame, no ICC profile, no extra channels).
+- `set_gaborish_weights.py` rewrites only the loop-filter bits of the frame header: it sets `gab_custom` and inserts the six weights as float16. The TOC and the sections are copied as they are. It reads the headers with `lfhdr.py` and writes the bits with `patch_lf.py` (below), and handles only a frame with Gaborish on, its default weights and EPF off, in a bare codestream with no ICC profile.
 - The custom weights move `djxl`'s output away from that of the default weights by an RMSE of 0.039, so a decoder that ignored them would fail the test.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.7e-5 (`vardct_xyb_gaborish`), 1.1e-6 and 3.8e-5 (`vardct_xyb_gaborish_600x400`), 1.9e-7 and 9.5e-7 (`vardct_xyb_gaborish_grey`), and 1.1e-6 and 2.0e-5 (`vardct_xyb_gaborish_custom`). libjxl fuses the filter's multiplies and adds on AVX2, and this port does not (ADR 0004).
 
