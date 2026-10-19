@@ -78,6 +78,7 @@ internal static class JxlFastMath
     /// </summary>
     /// <param name="x">The argument.</param>
     /// <returns>log2(x).</returns>
+    [MethodImpl(InliningOptions.ShortMethod)]
     public static float FastLog2f(float x)
     {
         int xBits = BitConverter.SingleToInt32Bits(x);

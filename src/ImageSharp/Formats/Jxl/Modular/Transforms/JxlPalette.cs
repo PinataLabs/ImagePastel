@@ -16,6 +16,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 /// </summary>
 internal static class JxlPalette
 {
+    /// <summary>The largest sample range the encoder counts with a lookup table instead of a set.</summary>
+    public const int MaxPaletteLookupTableSize = 1 << 16;
+
+    /// <summary>The number of implicit colours: both colour cubes.</summary>
+    public const int ImplicitPaletteSize = LargeCubeOffset + (LargeCube * LargeCube * LargeCube);
+
     private const int RgbChannels = 3;
 
     // 5x5x5 color cube for the larger cube.
@@ -231,59 +237,18 @@ internal static class JxlPalette
         channels.RemoveAt(0);
     }
 
-    private static void UndoDeltaChannel(
-        JxlModularChannel channel,
-        JxlModularChannel indices,
-        JxlModularChannel palette,
-        int c,
-        int paletteSize,
-        uint nbDeltas,
-        JxlPredictor predictor,
-        int bitDepth,
-        JxlWeightedState wpState)
-    {
-        for (int y = 0; y < channel.H; y++)
-        {
-            Span<int> p = channel.Row(y);
-            ReadOnlySpan<int> top = y > 0 ? channel.Row(y - 1) : Span<int>.Empty;
-            ReadOnlySpan<int> topTop = y > 1 ? channel.Row(y - 2) : Span<int>.Empty;
-            ReadOnlySpan<int> idx = indices.Row(y);
-            for (int x = 0; x < channel.W; x++)
-            {
-                int index = idx[x];
-                long val;
-                int paletteEntry = GetPaletteValue(palette, index, c, paletteSize, bitDepth);
-
-                // libjxl always predicts with the weighted predictor, so its state sees every sample.
-                if (wpState != null)
-                {
-                    JxlPredictionResult pred = JxlModularPredict.PredictNoTree(channel.W, p, top, topTop, x, y, predictor, wpState);
-                    val = index < (int)nbDeltas ? pred.Guess + paletteEntry : paletteEntry;
-                    p[x] = unchecked((int)val);
-                    wpState.UpdateErrors(p[x], x, y, channel.W);
-                }
-                else
-                {
-                    if (index < (int)nbDeltas)
-                    {
-                        JxlPredictionResult pred = JxlModularPredict.PredictNoTree(channel.W, p, top, topTop, x, y, predictor, null);
-                        val = pred.Guess + paletteEntry;
-                    }
-                    else
-                    {
-                        val = paletteEntry;
-                    }
-
-                    p[x] = unchecked((int)val);
-                }
-            }
-        }
-    }
-
-    // We only call this with kSmallCube or kLargeCube - 1 as the denominator, both of which are 4.
-    private static int Scale4(ulong value, int bitDepth) => unchecked((int)((value * ((1UL << bitDepth) - 1)) >> 2));
-
-    private static int GetPaletteValue(JxlModularChannel palette, int index, int c, int paletteSize, int bitDepth)
+    /// <summary>
+    /// Returns channel <paramref name="c"/> of palette entry <paramref name="index"/>: a delta entry
+    /// below zero, an explicit colour below <paramref name="paletteSize"/>, and an implicit colour from
+    /// the colour cubes after it. Implicit colours do not read <paramref name="palette"/>, which may then be null.
+    /// </summary>
+    /// <param name="palette">The palette channel.</param>
+    /// <param name="index">The index.</param>
+    /// <param name="c">The channel.</param>
+    /// <param name="paletteSize">The number of explicit colours.</param>
+    /// <param name="bitDepth">The bit depth.</param>
+    /// <returns>The sample.</returns>
+    public static int GetPaletteValue(JxlModularChannel palette, int index, int c, int paletteSize, int bitDepth)
     {
         if (index < 0)
         {
@@ -343,4 +308,56 @@ internal static class JxlPalette
 
         return palette.Row(c)[index];
     }
+
+    private static void UndoDeltaChannel(
+        JxlModularChannel channel,
+        JxlModularChannel indices,
+        JxlModularChannel palette,
+        int c,
+        int paletteSize,
+        uint nbDeltas,
+        JxlPredictor predictor,
+        int bitDepth,
+        JxlWeightedState wpState)
+    {
+        for (int y = 0; y < channel.H; y++)
+        {
+            Span<int> p = channel.Row(y);
+            ReadOnlySpan<int> top = y > 0 ? channel.Row(y - 1) : Span<int>.Empty;
+            ReadOnlySpan<int> topTop = y > 1 ? channel.Row(y - 2) : Span<int>.Empty;
+            ReadOnlySpan<int> idx = indices.Row(y);
+            for (int x = 0; x < channel.W; x++)
+            {
+                int index = idx[x];
+                long val;
+                int paletteEntry = GetPaletteValue(palette, index, c, paletteSize, bitDepth);
+
+                // libjxl always predicts with the weighted predictor, so its state sees every sample.
+                if (wpState != null)
+                {
+                    JxlPredictionResult pred = JxlModularPredict.PredictNoTree(channel.W, p, top, topTop, x, y, predictor, wpState);
+                    val = index < (int)nbDeltas ? pred.Guess + paletteEntry : paletteEntry;
+                    p[x] = unchecked((int)val);
+                    wpState.UpdateErrors(p[x], x, y, channel.W);
+                }
+                else
+                {
+                    if (index < (int)nbDeltas)
+                    {
+                        JxlPredictionResult pred = JxlModularPredict.PredictNoTree(channel.W, p, top, topTop, x, y, predictor, null);
+                        val = pred.Guess + paletteEntry;
+                    }
+                    else
+                    {
+                        val = paletteEntry;
+                    }
+
+                    p[x] = unchecked((int)val);
+                }
+            }
+        }
+    }
+
+    // We only call this with kSmallCube or kLargeCube - 1 as the denominator, both of which are 4.
+    private static int Scale4(ulong value, int bitDepth) => unchecked((int)((value * ((1UL << bitDepth) - 1)) >> 2));
 }

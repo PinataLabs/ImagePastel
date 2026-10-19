@@ -4,6 +4,7 @@
 // lib/jxl/dec_ans.h and lib/jxl/dec_ans.cc (HybridUintConfig, LZ77Params, ANSCode).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
@@ -30,4 +31,33 @@ internal readonly struct JxlHybridUintConfig
     public uint MsbInToken { get; }
 
     public uint LsbInToken { get; }
+
+    /// <summary>
+    /// Splits <paramref name="value"/> into a token and the raw bits that follow it: the encoder's
+    /// half of <see cref="JxlAnsSymbolReader"/>'s hybrid uint read.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <param name="token">The token.</param>
+    /// <param name="nbits">The number of raw bits.</param>
+    /// <param name="bits">The raw bits.</param>
+    public void Encode(uint value, out uint token, out uint nbits, out uint bits)
+    {
+        if (value < this.SplitToken)
+        {
+            token = value;
+            nbits = 0;
+            bits = 0;
+        }
+        else
+        {
+            uint n = (uint)JxlBits.FloorLog2Nonzero(value);
+            uint m = value - (1u << (int)n);
+            token = this.SplitToken +
+                ((n - this.SplitExponent) << (int)(this.MsbInToken + this.LsbInToken)) +
+                ((m >> (int)(n - this.MsbInToken)) << (int)this.LsbInToken) +
+                (m & ((1u << (int)this.LsbInToken) - 1));
+            nbits = n - this.MsbInToken - this.LsbInToken;
+            bits = (uint)((value >> (int)this.LsbInToken) & ((1UL << (int)nbits) - 1));
+        }
+    }
 }

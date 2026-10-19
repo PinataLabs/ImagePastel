@@ -1,0 +1,259 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+// Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// lib/jxl/modular/encoding/enc_encoding.cc (MakeFixedTree, EncodeModularChannelMAANS, PredefinedTree,
+// ModularCompress) and lib/jxl/modular/encoding/enc_ma.cc (TokenizeTree).
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
+
+using System;
+using System.Collections.Generic;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Entropy;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+
+namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+
+/// <summary>
+/// Turns Modular images into tokens with an MA tree, and the tree itself into tokens. It is the
+/// mirror of <see cref="JxlModularDecoder"/> and <see cref="JxlMaTree"/>.
+/// </summary>
+internal static class JxlModularEncoder
+{
+    // The split values of libjxl's kWPFixedDC tree, on the weighted predictor's error property.
+    private static readonly int[] WpFixedDcCutoffs =
+    {
+        -500, -392, -255, -191, -127, -95, -63, -47, -31, -23, -15,
+        -11, -7, -4, -3, -1, 0, 1, 3, 5, 7, 11,
+        15, 23, 31, 47, 63, 95, 127, 191, 255, 392, 500,
+    };
+
+    /// <summary>
+    /// Returns libjxl's predefined <c>kWPFixedDC</c> tree, the one effort 3 uses: the Weighted
+    /// predictor, split on its error property, with fewer levels for small images. libjxl's
+    /// <c>PredefinedTree</c> also builds the trees of the VarDCT metadata and of effort 2; they come
+    /// with the slices that use them.
+    /// </summary>
+    /// <param name="totalPixels">The number of pixels in all channels of all streams.</param>
+    /// <param name="bitdepth">The largest bit depth of the streams.</param>
+    /// <returns>The tree.</returns>
+    public static List<JxlPropertyDecisionNode> PredefinedTreeWpFixedDc(long totalPixels, int bitdepth)
+        => MakeFixedTree(JxlModularPredict.WPProp, WpFixedDcCutoffs, JxlPredictor.Weighted, totalPixels, bitdepth);
+
+    /// <summary>
+    /// Turns <paramref name="tree"/> into tokens in the <see cref="JxlMaTree.NumTreeContexts"/>
+    /// tree contexts, in breadth-first order, and returns the tree as the decoder will read it back:
+    /// renumbered breadth first, with each leaf's <see cref="JxlPropertyDecisionNode.LChild"/> its leaf id.
+    /// </summary>
+    /// <param name="tree">The tree.</param>
+    /// <param name="tokens">The tokens to add to.</param>
+    /// <returns>The decoder's tree.</returns>
+    public static List<JxlPropertyDecisionNode> TokenizeTree(List<JxlPropertyDecisionNode> tree, List<JxlToken> tokens)
+    {
+        // TODO(veluca): very simple encoding scheme. This should be improved.
+        if (tree.Count > JxlMaTree.MaxTreeSize)
+        {
+            JxlThrowHelper.ThrowImageFormatException("MA tree too large");
+        }
+
+        Queue<int> q = new();
+        q.Enqueue(0);
+        uint leafId = 0;
+        List<JxlPropertyDecisionNode> decoderTree = new(tree.Count);
+        while (q.Count > 0)
+        {
+            int cur = q.Dequeue();
+            JxlPropertyDecisionNode node = tree[cur];
+            tokens.Add(new JxlToken(JxlMaTree.PropertyContext, (uint)(node.Property + 1)));
+            if (node.Property == -1)
+            {
+                tokens.Add(new JxlToken(JxlMaTree.PredictorContext, (uint)node.Predictor));
+                tokens.Add(new JxlToken(JxlMaTree.OffsetContext, JxlBits.PackSigned((int)node.PredictorOffset)));
+                uint mulLog = (uint)JxlBits.Num0BitsBelowLs1BitNonzero(node.Multiplier);
+                uint mulBits = (node.Multiplier >> (int)mulLog) - 1;
+                tokens.Add(new JxlToken(JxlMaTree.MultiplierLogContext, mulLog));
+                tokens.Add(new JxlToken(JxlMaTree.MultiplierBitsContext, mulBits));
+                decoderTree.Add(new JxlPropertyDecisionNode(-1, 0, leafId, 0, node.Predictor, node.PredictorOffset, node.Multiplier));
+                leafId++;
+                continue;
+            }
+
+            decoderTree.Add(new JxlPropertyDecisionNode(
+                node.Property,
+                node.SplitVal,
+                (uint)(decoderTree.Count + q.Count + 1),
+                (uint)(decoderTree.Count + q.Count + 2),
+                JxlPredictor.Zero,
+                0,
+                1));
+            q.Enqueue((int)node.LChild);
+            q.Enqueue((int)node.RChild);
+            tokens.Add(new JxlToken(JxlMaTree.SplitValContext, JxlBits.PackSigned(node.SplitVal)));
+        }
+
+        return decoderTree;
+    }
+
+    /// <summary>
+    /// Fills <paramref name="header"/> for <paramref name="image"/> and appends the tokens of its
+    /// channels, as <see cref="JxlModularDecoder.ModularGenericDecompress"/> reads them back with the
+    /// global tree. Channels stop at the first non-meta channel bigger than the options'
+    /// <see cref="JxlModularOptions.MaxChanSize"/>, and empty channels are skipped.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <param name="options">The options.</param>
+    /// <param name="groupId">The stream id, which is a static property of the tree.</param>
+    /// <param name="tree">The global tree, as the decoder reads it.</param>
+    /// <param name="header">The group header to fill.</param>
+    /// <param name="tokens">The tokens to add to.</param>
+    /// <returns>The width of the widest channel coded.</returns>
+    public static int ModularCompress(JxlModularImage image, JxlModularOptions options, int groupId, List<JxlPropertyDecisionNode> tree, JxlGroupHeader header, List<JxlToken> tokens)
+    {
+        int nbChannels = image.Channel.Count;
+
+        // is there any use for a zero-channel image?
+        if (image.W == 0 || image.H == 0 || nbChannels < 1)
+        {
+            return 0;
+        }
+
+        if (image.Error)
+        {
+            JxlThrowHelper.ThrowImageFormatException("Invalid image");
+        }
+
+        // encode transforms
+        JxlBundle.Init(header);
+
+        // libjxl sets the weighted predictor parameters from options.wp_mode here. Effort 3 keeps
+        // mode 0, which is the default header that Init leaves.
+        header.Transforms.Clear();
+        header.Transforms.AddRange(image.Transform);
+        header.UseGlobalTree = true;
+
+        int imageWidth = 0;
+        long totalTokens = 0;
+        for (int i = 0; i < nbChannels; i++)
+        {
+            JxlModularChannel channel = image.Channel[i];
+            if (i >= image.NbMetaChannels && (channel.W > options.MaxChanSize || channel.H > options.MaxChanSize))
+            {
+                break;
+            }
+
+            if (channel.W > imageWidth)
+            {
+                imageWidth = channel.W;
+            }
+
+            totalTokens += (long)channel.W * channel.H;
+        }
+
+        // libjxl can write all-zero tokens instead (options.zero_tokens), which only its fast paths use.
+        // Do one big allocation for all the tokens we'll need, to avoid reallocs that might require copying.
+        int start = tokens.Count;
+        tokens.Capacity = Math.Max(tokens.Capacity, (int)(start + totalTokens));
+        for (int i = 0; i < nbChannels; i++)
+        {
+            JxlModularChannel channel = image.Channel[i];
+            if (i >= image.NbMetaChannels && (channel.W > options.MaxChanSize || channel.H > options.MaxChanSize))
+            {
+                break;
+            }
+
+            if (channel.W == 0 || channel.H == 0)
+            {
+                // skip empty channels
+                continue;
+            }
+
+            EncodeModularChannelMaAns(image, i, header.WpHeader, tree, tokens, groupId);
+        }
+
+        // Make sure we actually wrote all tokens
+        DebugGuard.IsTrue(tokens.Count - start == totalTokens, "Every pixel gives one token");
+        return imageWidth;
+    }
+
+    // `cutoffs` must be sorted.
+    private static List<JxlPropertyDecisionNode> MakeFixedTree(int property, int[] cutoffs, JxlPredictor pred, long numPixels, int bitdepth)
+    {
+        int logPx = JxlBits.CeilLog2Nonzero((ulong)numPixels);
+        int minGap = 0;
+
+        // Reduce fixed tree height when encoding small images.
+        if (logPx < 14)
+        {
+            minGap = 8 * (14 - logPx);
+        }
+
+        int shift = bitdepth > 11 ? Math.Min(4, bitdepth - 11) : 0;
+        int mul = 1 << shift;
+        List<JxlPropertyDecisionNode> tree = new();
+        Queue<(int Begin, int End, int Pos)> q = new();
+
+        // Leaf IDs will be set by roundtrip decoding the tree.
+        tree.Add(Leaf(pred));
+        q.Enqueue((0, cutoffs.Length, 0));
+        while (q.Count > 0)
+        {
+            (int begin, int end, int pos) = q.Dequeue();
+            if (begin + minGap >= end)
+            {
+                continue;
+            }
+
+            int split = (begin + end) / 2;
+            int cutoff = cutoffs[split] * mul;
+            tree[pos] = new JxlPropertyDecisionNode(property, cutoff, (uint)tree.Count, (uint)tree.Count + 1, JxlPredictor.Zero, 0, 1);
+            q.Enqueue((split + 1, end, tree.Count));
+            tree.Add(Leaf(pred));
+            q.Enqueue((begin, split, tree.Count));
+            tree.Add(Leaf(pred));
+        }
+
+        return tree;
+    }
+
+    private static JxlPropertyDecisionNode Leaf(JxlPredictor predictor) => new(-1, 0, 0, 0, predictor, 0, 1);
+
+    // libjxl takes a fast path here when the tree only uses the weighted predictor and its property
+    // within a small range, which kWPFixedDC does. The port always takes the general path: it gives
+    // the same tokens and shares the decoder's prediction code.
+    private static void EncodeModularChannelMaAns(JxlModularImage image, int chan, JxlWeightedHeader wpHeader, List<JxlPropertyDecisionNode> globalTree, List<JxlToken> tokens, int groupId)
+    {
+        JxlModularChannel channel = image.Channel[chan];
+        DebugGuard.IsTrue(channel.W != 0 && channel.H != 0, "Channel is not empty");
+
+        Span<int> staticProps = stackalloc int[] { chan, groupId };
+
+        // The leaves keep their unclustered ids, the contexts of the tokens.
+        JxlFlatDecisionNode[] tree = JxlModularDecoder.FilterTree(globalTree, staticProps, out int numProps, out bool useWp);
+
+        int[] properties = new int[numProps];
+        int numExtraProps = numProps - JxlModularPredict.NumNonrefProperties;
+        int[] references = numExtraProps == 0 ? Array.Empty<int>() : new int[numExtraProps * channel.W];
+        JxlWeightedState wpState = useWp ? new JxlWeightedState(wpHeader, channel.W) : null;
+        int w = channel.W;
+        for (int y = 0; y < channel.H; y++)
+        {
+            ReadOnlySpan<int> p = channel.Row(y);
+            ReadOnlySpan<int> top = y > 0 ? channel.Row(y - 1) : Span<int>.Empty;
+            ReadOnlySpan<int> topTop = y > 1 ? channel.Row(y - 2) : Span<int>.Empty;
+            if (numExtraProps > 0)
+            {
+                JxlModularPredict.PrecomputeReferences(channel, y, image, chan, references, numExtraProps);
+            }
+
+            JxlModularPredict.InitPropsRow(properties, chan, groupId, y);
+            for (int x = 0; x < w; x++)
+            {
+                JxlPredictionResult res = JxlModularPredict.PredictTree(properties, w, p, top, topTop, x, y, tree, references, numExtraProps, wpState);
+                long residual = p[x] - res.Guess;
+                DebugGuard.IsTrue(residual % res.Multiplier == 0, "Residual must be a multiple of the multiplier");
+                tokens.Add(new JxlToken((uint)res.Context, JxlBits.PackSigned((int)(residual / res.Multiplier))));
+                wpState?.UpdateErrors(p[x], x, y, w);
+            }
+        }
+    }
+}

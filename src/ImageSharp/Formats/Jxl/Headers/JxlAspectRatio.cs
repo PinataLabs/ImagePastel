@@ -33,4 +33,21 @@ internal static class JxlAspectRatio
         (uint num, uint den) = Ratios[ratio - 1];
         return (ulong)(uint)ysize * num / den;
     }
+
+    /// <summary>Returns the ratio code 1 to 7 that gives <paramref name="xsize"/> from <paramref name="ysize"/>, or 0.</summary>
+    /// <param name="xsize">The width.</param>
+    /// <param name="ysize">The height.</param>
+    /// <returns>The ratio code, or 0 if the width must be sent.</returns>
+    public static uint Find(uint xsize, uint ysize)
+    {
+        for (uint r = 1; r < 8; ++r)
+        {
+            if (xsize == MulTruncate(r, ysize))
+            {
+                return r;
+            }
+        }
+
+        return 0; // Must send xsize instead
+    }
 }

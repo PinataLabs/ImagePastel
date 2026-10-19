@@ -21,26 +21,30 @@ internal sealed class JxlExtraChannelInfo : JxlFields
 
     public JxlExtraChannelInfo() => JxlBundle.Init(this);
 
-    /// <summary>Gets the channel type.</summary>
-    public JxlExtraChannelType Type { get; private set; } = JxlExtraChannelType.Alpha;
+    /// <summary>Gets or sets the channel type.</summary>
+    public JxlExtraChannelType Type { get; set; } = JxlExtraChannelType.Alpha;
 
     /// <summary>Gets the sample format.</summary>
     public JxlBitDepth BitDepth { get; } = new();
 
-    /// <summary>Gets the downsampling: the channel is 2^DimShift times smaller on each axis.</summary>
-    public uint DimShift { get; private set; }
+    /// <summary>Gets or sets the downsampling: the channel is 2^DimShift times smaller on each axis.</summary>
+    public uint DimShift { get; set; }
 
-    /// <summary>Gets the UTF-8 name.</summary>
-    public ReadOnlySpan<byte> Name => this.name;
+    /// <summary>Gets or sets the UTF-8 name.</summary>
+    public ReadOnlySpan<byte> Name
+    {
+        get => this.name;
+        set => this.name = value.ToArray();
+    }
 
-    /// <summary>Gets a value indicating whether the alpha is premultiplied. Only for alpha channels.</summary>
-    public bool AlphaAssociated { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the alpha is premultiplied. Only for alpha channels.</summary>
+    public bool AlphaAssociated { get; set; }
 
     /// <summary>Gets the spot colour in linear RGBA. Only for spot colour channels.</summary>
     public float[] SpotColor { get; } = new float[4];
 
-    /// <summary>Gets the CFA channel index. Only for CFA channels.</summary>
-    public uint CfaChannel { get; private set; }
+    /// <summary>Gets or sets the CFA channel index. Only for CFA channels.</summary>
+    public uint CfaChannel { get; set; }
 
     public override void VisitFields(JxlVisitor visitor)
     {

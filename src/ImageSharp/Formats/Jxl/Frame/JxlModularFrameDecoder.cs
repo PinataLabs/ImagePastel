@@ -55,6 +55,9 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     /// <summary>Gets a value indicating whether the frame keeps a full-frame Modular image until the end.</summary>
     public bool UsesFullImage => this.useFullImage;
 
+    /// <summary>Gets the transforms that the global stream's group header lists, after <see cref="DecodeGlobalInfo"/>.</summary>
+    public IReadOnlyList<JxlTransform> GlobalTransforms => this.globalHeader.Transforms;
+
     /// <summary>Reads the global Modular stream from the DC global section.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="frameHeader">The frame header.</param>

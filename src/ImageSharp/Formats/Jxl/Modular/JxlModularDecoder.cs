@@ -79,6 +79,114 @@ internal static class JxlModularDecoder
         }
     }
 
+    /// <summary>
+    /// Specialises the global tree for one channel and group: splits on the static properties
+    /// (channel, group id) are resolved now, and the remaining tree is flattened so a lookup step
+    /// descends two levels. The encoder uses it too, as libjxl's does.
+    /// </summary>
+    /// <param name="globalTree">The tree.</param>
+    /// <param name="staticProps">The channel and the group id.</param>
+    /// <param name="numProps">The number of properties the tree uses, rounded up to whole reference channels.</param>
+    /// <param name="useWp">Whether the tree uses the weighted predictor or its property.</param>
+    /// <returns>The flattened tree. Each leaf's <see cref="JxlFlatDecisionNode.ChildId"/> is its leaf id, not yet clustered.</returns>
+    public static JxlFlatDecisionNode[] FilterTree(
+        List<JxlPropertyDecisionNode> globalTree,
+        ReadOnlySpan<int> staticProps,
+        out int numProps,
+        out bool useWp)
+    {
+        numProps = 0;
+        bool hasWp = false;
+        List<JxlFlatDecisionNode> output = new();
+        Queue<int> nodes = new();
+        nodes.Enqueue(0);
+
+        // Produces a trimmed and flattened tree by doing a BFS visit of the original tree, ignoring
+        // branches that are known to be false and proceeding two levels at a time to collapse nodes
+        // in a flatter tree; if an inner parent node has a leaf as a child, the leaf is duplicated
+        // and an implicit fake node is added. This allows to reduce the number of branches when
+        // traversing the resulting flat tree.
+        while (nodes.Count > 0)
+        {
+            int cur = nodes.Dequeue();
+
+            // Skip nodes that we can decide now, by jumping directly to their children.
+            cur = SkipStaticSplits(globalTree, staticProps, cur);
+            JxlFlatDecisionNode flat = default;
+            JxlPropertyDecisionNode node = globalTree[cur];
+            if (node.Property == -1)
+            {
+                flat.Property0 = -1;
+                flat.ChildId = node.LChild;
+                flat.Predictor = node.Predictor;
+
+                // libjxl's union stores the offset as 32 bits and the multiplier as signed 32 bits.
+                flat.PredictorOffset = unchecked((int)node.PredictorOffset);
+                flat.Multiplier = unchecked((int)node.Multiplier);
+                hasWp |= node.Predictor == JxlPredictor.Weighted;
+                output.Add(flat);
+                continue;
+            }
+
+            flat.ChildId = (uint)(output.Count + nodes.Count + 1);
+
+            flat.Property0 = node.Property;
+            numProps = Math.Max(flat.Property0 + 1, numProps);
+            flat.SplitVal0 = node.SplitVal;
+
+            for (int i = 0; i < 2; i++)
+            {
+                int curChild = SkipStaticSplits(globalTree, staticProps, (int)(i == 0 ? node.LChild : node.RChild));
+                JxlPropertyDecisionNode child = globalTree[curChild];
+                short property;
+                int splitVal;
+
+                // We ended up in a leaf, add a placeholder decision and two copies of the leaf.
+                if (child.Property == -1)
+                {
+                    property = 0;
+                    splitVal = 0;
+                    nodes.Enqueue(curChild);
+                    nodes.Enqueue(curChild);
+                }
+                else
+                {
+                    property = child.Property;
+                    splitVal = child.SplitVal;
+                    nodes.Enqueue((int)child.LChild);
+                    nodes.Enqueue((int)child.RChild);
+                    numProps = Math.Max(property + 1, numProps);
+                }
+
+                if (i == 0)
+                {
+                    flat.Properties0 = property;
+                    flat.SplitVals0 = splitVal;
+                }
+                else
+                {
+                    flat.Properties1 = property;
+                    flat.SplitVals1 = splitVal;
+                }
+            }
+
+            hasWp |= flat.Properties0 == JxlModularPredict.WPProp || flat.Properties1 == JxlModularPredict.WPProp || flat.Property0 == JxlModularPredict.WPProp;
+            output.Add(flat);
+        }
+
+        if (numProps > JxlModularPredict.NumNonrefProperties)
+        {
+            numProps = ((int)JxlBits.DivCeil(numProps - JxlModularPredict.NumNonrefProperties, JxlModularPredict.ExtraPropsPerChannel) * JxlModularPredict.ExtraPropsPerChannel) + JxlModularPredict.NumNonrefProperties;
+        }
+        else
+        {
+            numProps = JxlModularPredict.NumNonrefProperties;
+        }
+
+        useWp = hasWp;
+        return output.ToArray();
+    }
+
     private static void ValidateChannelDimensions(JxlModularImage image, JxlModularOptions options)
     {
         int nbChannels = image.Channel.Count;
@@ -242,109 +350,6 @@ internal static class JxlModularDecoder
         {
             JxlThrowHelper.ThrowInvalidImageContentException("ANS decode final state failed");
         }
-    }
-
-    /// <summary>
-    /// Specialises the global tree for one channel and group: splits on the static properties
-    /// (channel, group id) are resolved now, and the remaining tree is flattened so a lookup step
-    /// descends two levels.
-    /// </summary>
-    private static JxlFlatDecisionNode[] FilterTree(
-        List<JxlPropertyDecisionNode> globalTree,
-        ReadOnlySpan<int> staticProps,
-        out int numProps,
-        out bool useWp)
-    {
-        numProps = 0;
-        bool hasWp = false;
-        List<JxlFlatDecisionNode> output = new();
-        Queue<int> nodes = new();
-        nodes.Enqueue(0);
-
-        // Produces a trimmed and flattened tree by doing a BFS visit of the original tree, ignoring
-        // branches that are known to be false and proceeding two levels at a time to collapse nodes
-        // in a flatter tree; if an inner parent node has a leaf as a child, the leaf is duplicated
-        // and an implicit fake node is added. This allows to reduce the number of branches when
-        // traversing the resulting flat tree.
-        while (nodes.Count > 0)
-        {
-            int cur = nodes.Dequeue();
-
-            // Skip nodes that we can decide now, by jumping directly to their children.
-            cur = SkipStaticSplits(globalTree, staticProps, cur);
-            JxlFlatDecisionNode flat = default;
-            JxlPropertyDecisionNode node = globalTree[cur];
-            if (node.Property == -1)
-            {
-                flat.Property0 = -1;
-                flat.ChildId = node.LChild;
-                flat.Predictor = node.Predictor;
-
-                // libjxl's union stores the offset as 32 bits and the multiplier as signed 32 bits.
-                flat.PredictorOffset = unchecked((int)node.PredictorOffset);
-                flat.Multiplier = unchecked((int)node.Multiplier);
-                hasWp |= node.Predictor == JxlPredictor.Weighted;
-                output.Add(flat);
-                continue;
-            }
-
-            flat.ChildId = (uint)(output.Count + nodes.Count + 1);
-
-            flat.Property0 = node.Property;
-            numProps = Math.Max(flat.Property0 + 1, numProps);
-            flat.SplitVal0 = node.SplitVal;
-
-            for (int i = 0; i < 2; i++)
-            {
-                int curChild = SkipStaticSplits(globalTree, staticProps, (int)(i == 0 ? node.LChild : node.RChild));
-                JxlPropertyDecisionNode child = globalTree[curChild];
-                short property;
-                int splitVal;
-
-                // We ended up in a leaf, add a placeholder decision and two copies of the leaf.
-                if (child.Property == -1)
-                {
-                    property = 0;
-                    splitVal = 0;
-                    nodes.Enqueue(curChild);
-                    nodes.Enqueue(curChild);
-                }
-                else
-                {
-                    property = child.Property;
-                    splitVal = child.SplitVal;
-                    nodes.Enqueue((int)child.LChild);
-                    nodes.Enqueue((int)child.RChild);
-                    numProps = Math.Max(property + 1, numProps);
-                }
-
-                if (i == 0)
-                {
-                    flat.Properties0 = property;
-                    flat.SplitVals0 = splitVal;
-                }
-                else
-                {
-                    flat.Properties1 = property;
-                    flat.SplitVals1 = splitVal;
-                }
-            }
-
-            hasWp |= flat.Properties0 == JxlModularPredict.WPProp || flat.Properties1 == JxlModularPredict.WPProp || flat.Property0 == JxlModularPredict.WPProp;
-            output.Add(flat);
-        }
-
-        if (numProps > JxlModularPredict.NumNonrefProperties)
-        {
-            numProps = ((int)JxlBits.DivCeil(numProps - JxlModularPredict.NumNonrefProperties, JxlModularPredict.ExtraPropsPerChannel) * JxlModularPredict.ExtraPropsPerChannel) + JxlModularPredict.NumNonrefProperties;
-        }
-        else
-        {
-            numProps = JxlModularPredict.NumNonrefProperties;
-        }
-
-        useWp = hasWp;
-        return output.ToArray();
     }
 
     private static int SkipStaticSplits(List<JxlPropertyDecisionNode> tree, ReadOnlySpan<int> staticProps, int cur)

@@ -95,8 +95,8 @@ internal sealed class JxlCustomTransformData : JxlFields
     /// <summary>Gets the opsin inverse matrix. Only read for XYB images.</summary>
     public JxlOpsinInverseMatrix OpsinInverseMatrix { get; } = new();
 
-    /// <summary>Gets the mask of custom upsampling weights: bit 0 for 2x, bit 1 for 4x, bit 2 for 8x.</summary>
-    public uint CustomWeightsMask { get; private set; }
+    /// <summary>Gets or sets the mask of custom upsampling weights: bit 0 for 2x, bit 1 for 4x, bit 2 for 8x.</summary>
+    public uint CustomWeightsMask { get; set; }
 
     /// <summary>Gets the 2x upsampling weights.</summary>
     public float[] Upsampling2Weights { get; } = new float[15];

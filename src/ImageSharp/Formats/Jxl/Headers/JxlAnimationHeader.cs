@@ -14,17 +14,17 @@ internal sealed class JxlAnimationHeader : JxlFields
 {
     public JxlAnimationHeader() => JxlBundle.Init(this);
 
-    /// <summary>Gets the numerator of the ticks per second (a rational, to support NTSC).</summary>
-    public uint TpsNumerator { get; private set; }
+    /// <summary>Gets or sets the numerator of the ticks per second (a rational, to support NTSC).</summary>
+    public uint TpsNumerator { get; set; }
 
-    /// <summary>Gets the denominator of the ticks per second.</summary>
-    public uint TpsDenominator { get; private set; }
+    /// <summary>Gets or sets the denominator of the ticks per second.</summary>
+    public uint TpsDenominator { get; set; }
 
-    /// <summary>Gets the number of loops; 0 repeats forever.</summary>
-    public uint NumLoops { get; private set; }
+    /// <summary>Gets or sets the number of loops; 0 repeats forever.</summary>
+    public uint NumLoops { get; set; }
 
-    /// <summary>Gets a value indicating whether frames carry a timecode.</summary>
-    public bool HaveTimecodes { get; private set; }
+    /// <summary>Gets or sets a value indicating whether frames carry a timecode.</summary>
+    public bool HaveTimecodes { get; set; }
 
     public override void VisitFields(JxlVisitor visitor)
     {

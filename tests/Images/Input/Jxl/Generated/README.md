@@ -35,6 +35,7 @@ These files cover features that no conformance vector checks. They were made for
 | `vardct_grey_alpha.jxl` | The same kind of frame, 70 x 50 8-bit grey with alpha: the alpha is a Modular extra channel after the three VarDCT colour planes. | `External/ReferenceOutput/JxlDecoderTests/vardct_grey_alpha.npy`, two channels |
 | `vardct_strategies.jxl` | The image of `vardct_small.jxl` at a slower effort, which also uses 4x8 and 16x32 blocks: the decoder rejects every strategy but DCT8 until D9. | None: it must throw `NotSupportedException` |
 | `vardct_xyb.jxl` | Lossy VarDCT of the same image with XYB (`cjxl -e 2`). It decodes since D8d; the `vardct_xyb_*` files below check XYB VarDCT output. | None: it must decode |
+| `twelve_bit.jxl` | Lossless Modular, 45 x 33 12-bit RGBA: ramps and noise, with alpha 0, 4095 and noise in turn. The encoder tests decode it, encode it again and check that it stays 12-bit with the same samples. | `External/ReferenceOutput/JxlDecoderTests/twelve_bit.png` (16-bit) |
 
 #### How `premultiplied_alpha` was made
 
@@ -282,3 +283,14 @@ djxl vardct_xyb_grey_d50.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - `djxl` writes float32 `.npy`, not clamped. The decoder cannot match it bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"): libjxl fuses multiplies and adds on AVX2 and approximates the reciprocal in the quantisation bias, and this port does neither (ADR 0004). Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.1e-6 and 1.2e-5 (`vardct_xyb_64`), 1.1e-6 and 2.6e-5 (`vardct_xyb_300x200_d05`), 1.3e-6 and 7.8e-5 (`vardct_xyb_600x400_d3`), 2.6e-7 and 1.6e-6 (`vardct_xyb_grey`), 3.0e-6 and 4.1e-5 (`vardct_xyb_alpha`), 1.4e-6 and 7.7e-6 (`vardct_xyb_icc`), and 1.1e-7 and 7.8e-7 (`vardct_xyb_grey_d50`).
 - `djxl` gives linear sRGB for `vardct_xyb_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.
 - `djxl` gives linear grey with sRGB's D65 white point for `vardct_xyb_grey_d50.jxl`: libjxl's `CanOutputToColorEncoding` rejects grey with any other white point.
+
+#### How `twelve_bit` was made
+
+```sh
+py -3 make_twelve_bit.py
+cjxl twelve_bit_source.png twelve_bit.jxl -d 0 --override_bitdepth=12
+djxl twelve_bit.jxl ../../../External/ReferenceOutput/JxlDecoderTests/twelve_bit.png
+```
+
+- `make_twelve_bit.py` writes `twelve_bit_source.png`, a 16-bit PNG whose samples are 12-bit values scaled to 16 bits, with an `sBIT` chunk of 12. The source PNG is not committed; the script makes it again.
+- `--override_bitdepth=12` stores 12 bits per sample, for alpha too; `jxlinfo` reports "12-bit RGB+Alpha".

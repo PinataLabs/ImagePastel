@@ -25,6 +25,8 @@ internal sealed class JxlMetadata : IDeepCloneable
     {
         this.ColorEncoding = other.ColorEncoding?.Clone();
         this.IsXybEncoded = other.IsXybEncoded;
+        this.BitsPerSample = other.BitsPerSample;
+        this.ExponentBitsPerSample = other.ExponentBitsPerSample;
         this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
         this.LoopCount = other.LoopCount;
         this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
@@ -45,6 +47,20 @@ internal sealed class JxlMetadata : IDeepCloneable
     /// decode to the colour their encoding or profile describes, not to XYB.
     /// </summary>
     public bool IsXybEncoded { get; set; }
+
+    /// <summary>
+    /// Gets or sets the bits per colour sample, including the sign and exponent bits of float samples.
+    /// The decoder sets it from the image header. When it is not 0, the encoder checks that it is a
+    /// valid depth, and writes it if it holds every sample of the pixel type losslessly; otherwise the
+    /// encoder takes the depth of the pixel type.
+    /// </summary>
+    public uint BitsPerSample { get; set; }
+
+    /// <summary>
+    /// Gets or sets the exponent bits per colour sample: 0 for integer samples, 8 for float32. It is
+    /// read and written with <see cref="BitsPerSample"/>.
+    /// </summary>
+    public uint ExponentBitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the ICC profile embedded in the codestream, or null when the stream describes its

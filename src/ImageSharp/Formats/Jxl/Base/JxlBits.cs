@@ -48,6 +48,14 @@ internal static class JxlBits
 #endif
     }
 
+    /// <summary>Returns ceil(log2(x)) for a nonzero <paramref name="x"/>.</summary>
+    [MethodImpl(InliningOptions.ShortMethod)]
+    public static int CeilLog2Nonzero(ulong x)
+    {
+        int floorLog2 = FloorLog2Nonzero(x);
+        return (x & (x - 1)) == 0 ? floorLog2 : floorLog2 + 1;
+    }
+
     /// <summary>Maps a signed value to an unsigned one: 0, -1, 1, -2, ... become 0, 1, 2, 3, ...</summary>
     [MethodImpl(InliningOptions.ShortMethod)]
     public static uint PackSigned(int value)

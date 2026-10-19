@@ -428,6 +428,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
+        jxlMetadata.BitsPerSample = codecMetadata.M.BitDepth.BitsPerSample;
+        jxlMetadata.ExponentBitsPerSample = codecMetadata.M.BitDepth.ExponentBitsPerSample;
         jxlMetadata.ExtraChannels = DescribeExtraChannels(codecMetadata.M.ExtraChannelInfo);
         if (codecMetadata.M.HaveAnimation)
         {
