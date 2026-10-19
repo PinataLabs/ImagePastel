@@ -42,6 +42,6 @@ public class JxlBlendingTests
         fg.PointAt(0, 0, 1);
         List<JxlExtraChannelInfo> extraChannels = new() { new JxlExtraChannelInfo() };
 
-        JxlBlending.PerformBlending(bg, fg, bg, 1, color, new[] { extraChannel }, extraChannels, tmp, 1);
+        JxlBlending.PerformBlending(bg, fg, bg, 1, color, new[] { extraChannel }, extraChannels, JxlBlending.HasAlpha(extraChannels), tmp, 1);
     }
 }

@@ -50,6 +50,25 @@ internal static class JxlBlending
     }
 
     /// <summary>
+    /// Returns whether any extra channel is an alpha channel. libjxl's <c>PerformBlending</c> works this
+    /// out on every call; it depends only on the image, so the stages work it out once.
+    /// </summary>
+    /// <param name="extraChannelInfo">The extra channels of the image.</param>
+    /// <returns>Whether the image has an alpha channel.</returns>
+    public static bool HasAlpha(List<JxlExtraChannelInfo> extraChannelInfo)
+    {
+        foreach (JxlExtraChannelInfo info in extraChannelInfo)
+        {
+            if (info.Type == JxlExtraChannelType.Alpha)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Blends <paramref name="xsize"/> pixels of one row of the foreground onto the background and
     /// writes the result to <paramref name="output"/>, which may be the background or the foreground:
     /// libjxl's blending stage writes over the foreground (<c>out == fg</c>) and its patches stage over
@@ -62,6 +81,7 @@ internal static class JxlBlending
     /// <param name="colorBlending">The blending of the colour planes.</param>
     /// <param name="ecBlending">The blending of each extra channel.</param>
     /// <param name="extraChannelInfo">The extra channels of the image.</param>
+    /// <param name="hasAlpha">Whether any extra channel is an alpha channel: <see cref="HasAlpha"/>.</param>
     /// <param name="tmp">Scratch rows: at least one per channel, each at least <paramref name="xsize"/> long.</param>
     /// <param name="xsize">The number of pixels.</param>
     public static void PerformBlending(
@@ -72,20 +92,11 @@ internal static class JxlBlending
         JxlPatchBlending colorBlending,
         ReadOnlySpan<JxlPatchBlending> ecBlending,
         List<JxlExtraChannelInfo> extraChannelInfo,
+        bool hasAlpha,
         Buffer2D<float> tmp,
         int xsize)
     {
-        bool hasAlpha = false;
         int numEc = extraChannelInfo.Count;
-        for (int i = 0; i < numEc; i++)
-        {
-            if (extraChannelInfo[i].Type == JxlExtraChannelType.Alpha)
-            {
-                hasAlpha = true;
-                break;
-            }
-        }
-
         int nc = numColorPlanes;
         Span<float> Tmp(int c) => tmp.DangerousGetRowSpan(c).Slice(0, xsize);
 

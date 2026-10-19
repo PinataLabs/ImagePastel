@@ -19,7 +19,9 @@ internal sealed class JxlPatchesStage : IDisposable
     private readonly JxlPatchDictionary patches;
     private readonly List<JxlExtraChannelInfo> extraChannelInfo;
     private readonly int numColorPlanes;
+    private readonly bool hasAlpha;
     private readonly Buffer2D<float> tmp;
+    private readonly JxlBlendingRows rows;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlPatchesStage"/> class, before the frame's
@@ -34,7 +36,10 @@ internal sealed class JxlPatchesStage : IDisposable
         this.patches = patches;
         this.extraChannelInfo = metadata.ExtraChannelInfo;
         this.numColorPlanes = metadata.NumColorPlanes;
-        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), metadata.NumColorPlanes + metadata.NumExtraChannels);
+        this.hasAlpha = JxlBlending.HasAlpha(metadata.ExtraChannelInfo);
+        int numChannels = metadata.NumColorPlanes + metadata.NumExtraChannels;
+        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
+        this.rows = new JxlBlendingRows(new Buffer2D<float>[numChannels], Memory<float>.Empty);
     }
 
     /// <summary>Adds the patches to row <paramref name="ypos"/> of the frame.</summary>
@@ -43,8 +48,12 @@ internal sealed class JxlPatchesStage : IDisposable
     /// <param name="ypos">The row.</param>
     public void ProcessRow(Buffer2D<float>[] planes, int xsize, int ypos)
     {
-        JxlBlendingRows rows = new(planes, Memory<float>.Empty);
-        this.patches.AddOneRow(rows, ypos, 0, xsize, this.numColorPlanes, this.extraChannelInfo, this.tmp);
+        for (int c = 0; c < planes.Length; c++)
+        {
+            this.rows.SetPlane(c, planes[c]);
+        }
+
+        this.patches.AddOneRow(this.rows, ypos, 0, xsize, this.numColorPlanes, this.extraChannelInfo, this.hasAlpha, this.tmp);
     }
 
     public void Dispose() => this.tmp.Dispose();

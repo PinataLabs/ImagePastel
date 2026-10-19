@@ -23,6 +23,7 @@ internal sealed class JxlBlendingStage : IDisposable
     private readonly JxlFrameHeader frameHeader;
     private readonly List<JxlExtraChannelInfo> extraChannelInfo;
     private readonly int numColorPlanes;
+    private readonly bool hasAlpha;
     private readonly JxlPatchBlending colorBlending;
     private readonly JxlPatchBlending[] ecBlending;
     private readonly JxlReferenceFrame bg;
@@ -49,6 +50,7 @@ internal sealed class JxlBlendingStage : IDisposable
         this.ImageYSize = (int)frameHeader.NonserializedMetadata.YSize;
         this.extraChannelInfo = m.ExtraChannelInfo;
         this.numColorPlanes = m.NumColorPlanes;
+        this.hasAlpha = JxlBlending.HasAlpha(m.ExtraChannelInfo);
 
         List<JxlBlendingInfo> ecInfo = frameHeader.ExtraChannelBlendingInfo;
         this.bg = references[frameHeader.BlendingInfo.Source];
@@ -164,7 +166,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         this.fgRows.PointAt(offset, ypos, (int)size);
         this.bgRows.PointAt((int)bgXpos, (int)bgYpos, (int)size);
-        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.fgRows, this.numColorPlanes, this.colorBlending, this.ecBlending, this.extraChannelInfo, this.tmp, (int)size);
+        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.fgRows, this.numColorPlanes, this.colorBlending, this.ecBlending, this.extraChannelInfo, this.hasAlpha, this.tmp, (int)size);
     }
 
     /// <summary>Fills row <paramref name="ypos"/> of the image-sized planes from the background, or with zeros.</summary>

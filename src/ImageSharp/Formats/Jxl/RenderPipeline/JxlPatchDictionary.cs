@@ -51,7 +51,9 @@ internal sealed class JxlPatchDictionary
     private readonly JxlReferenceFrames referenceFrames;
     private readonly List<PatchPosition> positions = new();
     private readonly List<PatchReferencePosition> refPositions = new();
-    private readonly List<JxlPatchBlending> blendings = new();
+
+    // An array once decoded, so AddOneRow can hand out a span of each patch's extra channel blendings.
+    private JxlPatchBlending[] blendings = Array.Empty<JxlPatchBlending>();
     private int blendingsStride;
 
     // Interval tree on the y coordinates of the patches.
@@ -65,7 +67,7 @@ internal sealed class JxlPatchDictionary
     // Scratch for AddOneRow.
     private readonly List<int> rowPatches = new();
     private JxlBlendingRows fgRows;
-    private JxlPatchBlending[] ecBlendings;
+    private JxlReferenceFrame fgReference;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlPatchDictionary"/> class.
@@ -86,7 +88,8 @@ internal sealed class JxlPatchDictionary
     {
         this.positions.Clear();
         this.refPositions.Clear();
-        this.blendings.Clear();
+        this.blendings = Array.Empty<JxlPatchBlending>();
+        List<JxlPatchBlending> blendings = new();
         this.blendingsStride = numExtraChannels + 1;
         JxlAnsCode code = new();
         byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, NumPatchDictionaryContexts, code);
@@ -164,7 +167,7 @@ internal sealed class JxlPatchDictionary
             }
 
             Reserve(this.positions, (int)nextSize);
-            Reserve(this.blendings, (int)(nextSize * this.blendingsStride));
+            Reserve(blendings, (int)(nextSize * this.blendingsStride));
             bool chooseAlpha = numExtraChannels > 1;
             for (long i = 0; i < idCount; i++)
             {
@@ -233,7 +236,7 @@ internal sealed class JxlPatchDictionary
                     }
 
                     bool clamp = UsesClamp(mode) && ReadNum(PatchClampContext) != 0;
-                    this.blendings.Add(new JxlPatchBlending(mode, alphaChannel, clamp));
+                    blendings.Add(new JxlPatchBlending(mode, alphaChannel, clamp));
                 }
 
                 this.positions.Add(pos);
@@ -243,6 +246,7 @@ internal sealed class JxlPatchDictionary
         }
 
         this.positions.TrimExcess();
+        this.blendings = blendings.ToArray();
 
         if (!decoder.CheckAnsFinalState)
         {
@@ -314,14 +318,14 @@ internal sealed class JxlPatchDictionary
     /// <param name="xsize">The number of pixels of the segment.</param>
     /// <param name="numColorPlanes">The number of colour planes: 1 or 3.</param>
     /// <param name="extraChannelInfo">The extra channels of the image.</param>
+    /// <param name="hasAlpha">Whether any extra channel is an alpha channel: <see cref="JxlBlending.HasAlpha"/>.</param>
     /// <param name="tmp">Scratch rows for the blending: one per channel, each at least <paramref name="xsize"/> long.</param>
-    public void AddOneRow(JxlBlendingRows inout, long y, long x0, long xsize, int numColorPlanes, List<JxlExtraChannelInfo> extraChannelInfo, Buffer2D<float> tmp)
+    public void AddOneRow(JxlBlendingRows inout, long y, long x0, long xsize, int numColorPlanes, List<JxlExtraChannelInfo> extraChannelInfo, bool hasAlpha, Buffer2D<float> tmp)
     {
         int numEc = extraChannelInfo.Count;
         DebugGuard.MustBeLessThanOrEqualTo(numEc + 1, this.blendingsStride, nameof(extraChannelInfo));
         int numChannels = numColorPlanes + numEc;
         this.fgRows ??= new JxlBlendingRows(new Buffer2D<float>[numChannels], Memory<float>.Empty);
-        this.ecBlendings ??= new JxlPatchBlending[numEc];
         this.GetPatchesForRow(y, this.rowPatches);
         foreach (int posIdx in this.rowPatches)
         {
@@ -344,21 +348,25 @@ internal sealed class JxlPatchDictionary
 
             long patchX0 = Math.Max(bx, x0);
             long patchX1 = Math.Min(bx + patchXSize, x0 + xsize);
+
+            // The slots do not change while the frame decodes, so the planes are re-pointed only when
+            // the patch takes another slot.
             JxlReferenceFrame reference = this.referenceFrames[(uint)refPos.Ref];
-            for (int c = 0; c < numChannels; c++)
+            if (reference != this.fgReference)
             {
-                this.fgRows.SetPlane(c, reference.Planes[c]);
+                for (int c = 0; c < numChannels; c++)
+                {
+                    this.fgRows.SetPlane(c, reference.Planes[c]);
+                }
+
+                this.fgReference = reference;
             }
 
             int n = (int)(patchX1 - patchX0);
             this.fgRows.PointAt((int)(refPos.X0 + patchX0 - bx), (int)(refPos.Y0 + iy), n);
             inout.PointAt((int)patchX0, (int)y, n);
-            for (int i = 0; i < numEc; i++)
-            {
-                this.ecBlendings[i] = this.blendings[blendingIdx + 1 + i];
-            }
-
-            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], this.ecBlendings, extraChannelInfo, tmp, n);
+            ReadOnlySpan<JxlPatchBlending> ecBlendings = this.blendings.AsSpan(blendingIdx + 1, numEc);
+            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], ecBlendings, extraChannelInfo, hasAlpha, tmp, n);
         }
     }
 
