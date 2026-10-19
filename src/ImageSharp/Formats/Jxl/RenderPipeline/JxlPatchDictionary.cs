@@ -7,7 +7,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -42,6 +41,9 @@ internal sealed class JxlPatchDictionary
 
     private const int NumPatchBlendModes = (int)JxlPatchBlendMode.AlphaWeightedAddBelow + 1;
 
+    private static readonly IComparer<PatchInterval> ByY0 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y0.CompareTo(i1.Y0));
+    private static readonly IComparer<PatchInterval> ByY1 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y1.CompareTo(i1.Y1));
+
     private readonly JxlReferenceFrames referenceFrames;
     private readonly List<PatchPosition> positions = new();
     private readonly List<PatchReferencePosition> refPositions = new();
@@ -59,6 +61,7 @@ internal sealed class JxlPatchDictionary
     // Scratch for AddOneRow.
     private readonly List<int> rowPatches = new();
     private JxlBlendingRows fgRows;
+    private JxlPatchBlending[] ecBlendings;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlPatchDictionary"/> class.
@@ -157,8 +160,8 @@ internal sealed class JxlPatchDictionary
                 JxlThrowHelper.ThrowInvalidImageContentException("Too many patches in dictionary");
             }
 
-            this.positions.EnsureCapacity((int)nextSize);
-            this.blendings.EnsureCapacity((int)(nextSize * this.blendingsStride));
+            Reserve(this.positions, (int)nextSize);
+            Reserve(this.blendings, (int)(nextSize * this.blendingsStride));
             bool chooseAlpha = numExtraChannels > 1;
             for (long i = 0; i < idCount; i++)
             {
@@ -266,7 +269,7 @@ internal sealed class JxlPatchDictionary
         result.Clear();
         if (y < this.numPatches.Count && this.numPatches[(int)y] > 0)
         {
-            result.EnsureCapacity(this.numPatches[(int)y]);
+            Reserve(result, this.numPatches[(int)y]);
             for (int treeIdx = 0; treeIdx != -1;)
             {
                 PatchTreeNode node = this.patchTree[treeIdx];
@@ -322,13 +325,10 @@ internal sealed class JxlPatchDictionary
     public void AddOneRow(JxlBlendingRows inout, long y, long x0, long xsize, int numColorPlanes, List<JxlExtraChannelInfo> extraChannelInfo, Buffer2D<float> tmp)
     {
         int numEc = extraChannelInfo.Count;
-        if (numEc + 1 > this.blendingsStride)
-        {
-            JxlThrowHelper.ThrowInvalidImageContentException("Patch blendings do not cover every extra channel");
-        }
-
+        DebugGuard.MustBeLessThanOrEqualTo(numEc + 1, this.blendingsStride, nameof(extraChannelInfo));
         int numChannels = numColorPlanes + numEc;
         this.fgRows ??= new JxlBlendingRows(new Buffer2D<float>[numChannels], Memory<float>.Empty);
+        this.ecBlendings ??= new JxlPatchBlending[numEc];
         this.GetPatchesForRow(y, this.rowPatches);
         foreach (int posIdx in this.rowPatches)
         {
@@ -360,8 +360,12 @@ internal sealed class JxlPatchDictionary
             int n = (int)(patchX1 - patchX0);
             this.fgRows.PointAt((int)(refPos.X0 + patchX0 - bx), (int)(refPos.Y0 + iy), n);
             inout.PointAt((int)patchX0, (int)y, n);
-            ReadOnlySpan<JxlPatchBlending> ecBlendings = CollectionsMarshal.AsSpan(this.blendings).Slice(blendingIdx + 1, numEc);
-            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], ecBlendings, extraChannelInfo, tmp, n);
+            for (int i = 0; i < numEc; i++)
+            {
+                this.ecBlendings[i] = this.blendings[blendingIdx + 1 + i];
+            }
+
+            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], this.ecBlendings, extraChannelInfo, tmp, n);
         }
     }
 
@@ -369,6 +373,15 @@ internal sealed class JxlPatchDictionary
         => mode is JxlPatchBlendMode.BlendAbove or JxlPatchBlendMode.BlendBelow or JxlPatchBlendMode.AlphaWeightedAddAbove or JxlPatchBlendMode.AlphaWeightedAddBelow;
 
     private static bool UsesClamp(JxlPatchBlendMode mode) => UsesAlpha(mode) || mode == JxlPatchBlendMode.Mul;
+
+    // std::vector::reserve. List.EnsureCapacity is not in netstandard2.1.
+    private static void Reserve<T>(List<T> list, int capacity)
+    {
+        if (list.Capacity < capacity)
+        {
+            list.Capacity = capacity;
+        }
+    }
 
     private void ComputePatchTree()
     {
@@ -391,13 +404,13 @@ internal sealed class JxlPatchDictionary
             intervals[i].Y1 = pos.Y + this.refPositions[pos.RefPosIdx].YSize;
         }
 
-        void SortByY0(int start, int end) => intervals.AsSpan(start, end - start).Sort(static (i0, i1) => i0.Y0.CompareTo(i1.Y0));
-        void SortByY1(int start, int end) => intervals.AsSpan(start, end - start).Sort(static (i0, i1) => i0.Y1.CompareTo(i1.Y1));
+        void SortByY0(int start, int end) => Array.Sort(intervals, start, end - start, ByY0);
+        void SortByY1(int start, int end) => Array.Sort(intervals, start, end - start, ByY1);
 
         // Count the number of patches for each row.
         SortByY1(0, intervals.Length);
         int rows = (int)intervals[^1].Y1;
-        this.numPatches.EnsureCapacity(rows);
+        Reserve(this.numPatches, rows);
         for (int y = 0; y < rows; y++)
         {
             this.numPatches.Add(0);
