@@ -112,8 +112,9 @@ internal sealed class JxlFrameDecoder
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
 
-        // A VarDCT frame always codes three colour planes, grey or not, as libjxl's.
-        int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct ? 3 : this.metadata.M.NumColorPlanes;
+        // A VarDCT frame always codes three colour planes, grey or not, as libjxl's. So does a Modular
+        // frame with a colour transform (libjxl's nb_chans in ModularFrameDecoder::DecodeGlobalInfo).
+        int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct || frameHeader.ColorTransform != JxlColorTransform.None ? 3 : this.metadata.M.NumColorPlanes;
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, JxlRenderPipeline.ChannelShifts(frameHeader, numColorPlanes));
         using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
@@ -205,17 +206,28 @@ internal sealed class JxlFrameDecoder
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
     {
-        // Chroma subsampling is read only for a YCbCr frame, so it comes first: each of the two checks
-        // can then be reached, and lifted, on its own.
+        // Chroma subsampling is read only for a YCbCr frame; the YCbCr colour transform itself decodes.
         JxlYCbCrChromaSubsampling chroma = frameHeader.ChromaSubsampling;
         if (chroma.MaxHShift != 0 || chroma.MaxVShift != 0)
         {
             JxlThrowHelper.ThrowNotSupportedException("Chroma subsampling");
         }
 
-        if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
+        // A departure from libjxl: a grey image's YCbCr frame keeps three planes until after its colour
+        // transform (JxlRenderPipeline.Finish), but grey reference slots and patches hold one. So such a
+        // frame cannot be saved before its colour transform, nor take patches, which libjxl allows with
+        // three planes. JPEG transcodes never write such a frame.
+        if (frameHeader.ColorTransform == JxlColorTransform.YCbCr && metadata.M.NumColorPlanes == 1)
         {
-            JxlThrowHelper.ThrowNotSupportedException("The YCbCr colour transform");
+            if (frameHeader.CanBeReferenced && frameHeader.SaveBeforeColorTransform)
+            {
+                JxlThrowHelper.ThrowNotSupportedException("A YCbCr frame of a grey image saved before its colour transform");
+            }
+
+            if ((frameHeader.Flags & JxlFrameFlags.Patches) != 0)
+            {
+                JxlThrowHelper.ThrowNotSupportedException("Patches on a YCbCr frame of a grey image");
+            }
         }
 
         if (frameHeader.FrameType == JxlFrameType.Dc)
