@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// OutputEncodingInfo (SetFromMetadata, SetColorEncoding) and CanOutputToColorEncoding in lib/jxl/dec_xyb.h
-// and lib/jxl/dec_xyb.cc, OpsinParams and InitSIMDInverseMatrix in lib/jxl/opsin_params.h and
+// OutputEncodingInfo (SetFromMetadata, SetColorEncoding, with inverse_gamma) and CanOutputToColorEncoding
+// in lib/jxl/dec_xyb.h and lib/jxl/dec_xyb.cc, OpsinParams and InitSIMDInverseMatrix in lib/jxl/opsin_params.h and
 // lib/jxl/opsin_params.cc, for an XYB image whose output colour encoding the caller does not choose.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -30,6 +30,12 @@ internal sealed class JxlOutputEncoding
         this.ColorEncodingIsOriginal = colorEncodingIsOriginal;
         this.Tf = tf;
         this.IsLinear = linear;
+
+        // Set the inverse gamma based on color space transfer function.
+        this.InverseGamma = tf is null ? 1.0f
+            : tf.HaveGamma ? (float)(tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul))
+            : tf.TransferFunction == JxlTransferFunction.Dci ? 1.0f / 2.6f
+            : 1.0f;
     }
 
     /// <summary>Gets a value indicating whether the output colour encoding is grey.</summary>
@@ -50,6 +56,12 @@ internal sealed class JxlOutputEncoding
 
     /// <summary>Gets a value indicating whether the output samples are linear.</summary>
     public bool IsLinear { get; }
+
+    /// <summary>
+    /// Gets the exponent that encodes a linear sample, libjxl's <c>inverse_gamma</c>: the gamma of the
+    /// transfer function if it has one (0.45455 for a 2.2 gamma), 1 / 2.6 for DCI, and 1 otherwise.
+    /// </summary>
+    public float InverseGamma { get; }
 
     /// <summary>
     /// Gets the inverse opsin matrix, row-major, scaled so that 1.0 is the original intensity target: the

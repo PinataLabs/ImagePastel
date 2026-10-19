@@ -19,7 +19,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// and D9e's: the files made with <c>cjxl -e 7 --gaborish=0 --epf=0</c>, which mix the DCT sizes from 2x2
 /// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
 /// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
-/// field and a non-zero chroma-from-luma map. The planes are compared with djxl's float output at the
+/// field and a non-zero chroma-from-luma map; and D11a's <c>vardct_xyb_bt709</c> and <c>vardct_xyb_dci</c>,
+/// which render to the BT.709 and DCI curves. The planes are compared with djxl's float output at the
 /// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
 /// measured when it was written.
 /// </summary>
@@ -43,6 +44,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_sizes_smooth", 3)] // RMSE 6.1e-7, peak 1.0e-5
     [InlineData("vardct_xyb_identity_afv", 4)] // RMSE 4.1e-7, peak 2.8e-5
     [InlineData("vardct_xyb_e7", 3)] // Gaborish, EPF (1 iteration) and other block sizes: RMSE 1.1e-6, peak 1.7e-5
+    [InlineData("vardct_xyb_bt709", 3)] // The BT.709 curve (Op709): RMSE 6.9e-7, peak 6.0e-6
+    [InlineData("vardct_xyb_dci", 3)] // The DCI curve (OpGamma, 1 / 2.6), steep near 0: RMSE 2.7e-6, peak 1.1e-4
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -65,6 +68,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_sizes_fine")]
     [InlineData("vardct_xyb_sizes_smooth")]
     [InlineData("vardct_xyb_identity_afv")]
+    [InlineData("vardct_xyb_bt709")]
+    [InlineData("vardct_xyb_dci")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -187,6 +192,8 @@ public class JxlXybVarDctTests
     [Theory]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
+    [InlineData("vardct_xyb_pq", "XYB output with the Pq transfer function")]
+    [InlineData("vardct_xyb_hlg", "XYB output with the Hlg transfer function")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
     {
         using FileStream stream = File.OpenRead(InputPath(name));

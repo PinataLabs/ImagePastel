@@ -53,6 +53,7 @@ public class JxlXybModularTests
     [Theory]
     [InlineData("xyb_modular_rgb")]
     [InlineData("xyb_modular_grey")]
+    [InlineData("xyb_modular_gamma22")]
     public void LoadRgb24_IsWithinOneStepOfDjxl(string name)
     {
         NpyArray expected = NpyArray.Load(ReferencePath(name));
@@ -98,15 +99,11 @@ public class JxlXybModularTests
         Assert.Contains("unsupported color space", ex.Message, StringComparison.Ordinal);
     }
 
+    // The image renders to its own encoding, a 2.2 gamma (libjxl's OpGamma).
+    // Measured: worst channel RMSE 5.8e-7, peak 6.6e-6.
     [Fact]
-    public void DecodeToPlanes_GammaTransferFunction_IsNotSupported()
-    {
-        // The from-linear stage for a gamma curve comes with the transfer functions slice (D11).
-        using FileStream stream = File.OpenRead(InputPath("xyb_modular_gamma22"));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains("gamma transfer function", ex.Message, StringComparison.Ordinal);
-    }
+    public void DecodeToPlanes_GammaTransferFunction_MatchesDjxl()
+        => AssertPlanesMatchDjxl("xyb_modular_gamma22").Dispose();
 
     // Compares each sample with the clamped reference, which reference(pixel, channel) gives.
     private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, Func<int, int, float> reference)

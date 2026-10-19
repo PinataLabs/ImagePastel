@@ -130,6 +130,38 @@ public class JxlColorEncodingTests
         AssertSameColour(image.Metadata.IccProfile, saved.Metadata.IccProfile);
     }
 
+    // An XYB image with a gamma or the DCI curve renders to its own encoding, so it gets that encoding's
+    // profile, as the lossless file with the same encoding does.
+    [Theory]
+    [InlineData("xyb_modular_gamma22", "gamma22")]
+    [InlineData("vardct_xyb_dci", "dci")]
+    public void Load_XybOtherEnumSpace_GivesTheProfileOfItsEncoding(string file, string reference)
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), Path.Combine(GeneratedDirectory, file + ".jxl"));
+
+        Assert.NotNull(image.Metadata.IccProfile);
+        AssertSameColour(DjxlProfile(reference), image.Metadata.IccProfile);
+    }
+
+    [Fact]
+    public void Load_XybBt709_GivesAProfileWithSrgbPrimariesAndTheBt709Curve()
+    {
+        // RGB_D65_SRG_Rel_709: colour_gamma22 has the same primaries and white point, and colour_rec2020
+        // the same curve and intent.
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "vardct_xyb_bt709.jxl"));
+        IccProfile profile = image.Metadata.IccProfile;
+
+        Assert.NotNull(profile);
+        IccProfile rec2020 = DjxlProfile("rec2020");
+        Assert.Equal(rec2020.Header.RenderingIntent, profile.Header.RenderingIntent);
+        AssertSameColour(DjxlProfile("gamma22"), profile, IccProfileTag.MediaWhitePoint, IccProfileTag.ChromaticAdaptation, IccProfileTag.RedMatrixColumn, IccProfileTag.GreenMatrixColumn, IccProfileTag.BlueMatrixColumn);
+        AssertSameColour(rec2020, profile, IccProfileTag.RedTrc, IccProfileTag.GreenTrc, IccProfileTag.BlueTrc);
+
+        // ITU-T H.273: BT.709 primaries (1) and transfer characteristics (1), RGB, full range.
+        Assert.True(profile.TryGetTag(IccProfileTag.Cicp, out IccTagDataEntry cicp));
+        Assert.Equal(new IccCicpTagDataEntry(1, 1, 0, 1), cicp);
+    }
+
     [Fact]
     public void Load_Hlg_DecodesWithNoPixelProfileUntilD11()
     {
@@ -175,8 +207,13 @@ public class JxlColorEncodingTests
         Assert.Equal(expected.Header.ProfileConnectionSpace, actual.Header.ProfileConnectionSpace);
         Assert.Equal(expected.Header.Class, actual.Header.Class);
         Assert.Equal(expected.Header.RenderingIntent, actual.Header.RenderingIntent);
+        AssertSameColour(expected, actual, ColourTags);
+    }
 
-        foreach (IccProfileTag tag in ColourTags)
+    // The given tags only, compared as above.
+    private static void AssertSameColour(IccProfile expected, IccProfile actual, params IccProfileTag[] tags)
+    {
+        foreach (IccProfileTag tag in tags)
         {
             if (!expected.TryGetTag(tag, out IccTagDataEntry e))
             {

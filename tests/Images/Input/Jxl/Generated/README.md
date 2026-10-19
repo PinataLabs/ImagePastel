@@ -183,7 +183,7 @@ cjxl depth_source.pam depth.jxl -d 0
 | `xyb_modular_icc.jxl` | Lossy Modular, 32 x 32 8-bit RGB with the embedded ICC profile of `custom_icc.jxl`. The XYB stage cannot output to an ICC profile, so the output is linear sRGB (ADR 0002). | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_icc.npy`, linear sRGB |
 | `xyb_modular_display_p3.jxl` | Lossy Modular, 32 x 32 8-bit RGB, `DisplayP3`: the inverse opsin matrix is adapted to the P3 primaries. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_display_p3.npy` |
 | `xyb_modular_intensity_target.jxl` | Lossy Modular, 32 x 32 8-bit RGB, sRGB, with an intensity target of 1000 nits, which scales the inverse opsin matrix. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_intensity_target.npy` |
-| `xyb_modular_gamma22.jxl` | Lossy Modular, 32 x 32 8-bit RGB, `RGB_D65_SRG_Per_g0.45455`: a gamma curve, which XYB output does not support until D11. | None: decoding throws `NotSupportedException` |
+| `xyb_modular_gamma22.jxl` | Lossy Modular, 32 x 32 8-bit RGB, `RGB_D65_SRG_Per_g0.45455`: XYB output to a gamma curve (libjxl's `OpGamma`, D11a), with the pixel profile of that encoding. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_gamma22.npy` |
 | `xyb_modular_icc_animation.jxl` | Lossy Modular, 24 x 16 8-bit RGBA animation with the ICC profile of `custom_icc.jxl`. Its second frame is blended, and libjxl does not blend in the linear sRGB fallback. | None: `djxl` fails on it, and decoding throws `InvalidImageContentException` |
 
 ```sh
@@ -202,6 +202,7 @@ djxl xyb_modular_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_
 djxl xyb_modular_icc.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_icc.npy
 djxl xyb_modular_display_p3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_display_p3.npy
 djxl xyb_modular_intensity_target.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_intensity_target.npy
+djxl xyb_modular_gamma22.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_gamma22.npy
 ```
 
 - `make_xyb_modular.py` writes `xyb_modular_source.ppm` and `xyb_modular_grey_source.pgm`, and, given the profile that `make_custom_icc.py` writes, the APNG `xyb_modular_icc_animation_source.png`. `make_colour_encodings.py` writes `colour_source.ppm`. None of the sources is committed; the scripts make them again.
@@ -320,6 +321,30 @@ djxl vardct_xyb_e7.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_
 - `djxl` writes float32 `.npy`, not clamped. The decoder cannot match it bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"): libjxl fuses multiplies and adds on AVX2 and approximates the reciprocal in the quantisation bias, and this port does neither (ADR 0004). Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.1e-6 and 1.2e-5 (`vardct_xyb_64`), 1.1e-6 and 2.6e-5 (`vardct_xyb_300x200_d05`), 1.3e-6 and 7.8e-5 (`vardct_xyb_600x400_d3`), 2.6e-7 and 1.6e-6 (`vardct_xyb_grey`), 3.0e-6 and 4.1e-5 (`vardct_xyb_alpha`), 1.4e-6 and 7.7e-6 (`vardct_xyb_icc`), 1.1e-7 and 7.8e-7 (`vardct_xyb_grey_d50`), 9.8e-7 and 1.3e-5 (`vardct_xyb_strategies`), 6.7e-7 and 2.5e-5 (`vardct_xyb_sizes_noisy`), 7.2e-7 and 3.0e-5 (`vardct_xyb_sizes_fine`), 6.1e-7 and 1.0e-5 (`vardct_xyb_sizes_smooth`), and 4.1e-7 and 2.8e-5 (`vardct_xyb_identity_afv`). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
 - `djxl` gives linear sRGB for `vardct_xyb_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.
 - `djxl` gives linear grey with sRGB's D65 white point for `vardct_xyb_grey_d50.jxl`: libjxl's `CanOutputToColorEncoding` rejects grey with any other white point.
+
+#### How the transfer-function files were made
+
+An XYB image renders to its own colour encoding, so its last stage encodes the linear samples with the encoding's transfer function (D11). `xyb_modular_gamma22.jxl` above has a gamma curve.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `vardct_xyb_bt709.jxl` | The 64 x 64 image of `vardct_xyb_64.jxl` at `cjxl -d 1` (default effort), `RGB_D65_SRG_Rel_709`: XYB output to the BT.709 curve (libjxl's `Op709`, D11a), with the pixel profile of that encoding. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_bt709.npy` |
+| `vardct_xyb_dci.jxl` | The same image, `RGB_DCI_DCI_Rel_DCI`: DCI white point, P3 primaries and the DCI curve, a gamma of 2.6 (libjxl's `OpGamma`, D11a). | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dci.npy` |
+| `vardct_xyb_pq.jxl` | The same image, `Rec2100PQ`, intensity target 10000 nits: XYB output to PQ (D11b). | None yet: decoding throws `NotSupportedException` |
+| `vardct_xyb_hlg.jxl` | The same image, `Rec2100HLG`, intensity target 1000 nits: XYB output to HLG (D11c). | None yet: decoding throws `NotSupportedException` |
+
+```sh
+py -3 make_vardct_xyb.py
+cjxl vardct_xyb_64_source.ppm vardct_xyb_bt709.jxl -d 1 -x "color_space=RGB_D65_SRG_Rel_709"
+cjxl vardct_xyb_64_source.ppm vardct_xyb_dci.jxl -d 1 -x "color_space=RGB_DCI_DCI_Rel_DCI"
+cjxl vardct_xyb_64_source.ppm vardct_xyb_pq.jxl -d 1 -x "color_space=Rec2100PQ"
+cjxl vardct_xyb_64_source.ppm vardct_xyb_hlg.jxl -d 1 -x "color_space=Rec2100HLG"
+djxl vardct_xyb_bt709.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_bt709.npy
+djxl vardct_xyb_dci.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dci.npy
+```
+
+- `make_vardct_xyb.py` writes `vardct_xyb_64_source.ppm`, which is not committed. A PPM carries no colour information, so `cjxl` takes the colour encoding from `-x color_space`, and the intensity target is `cjxl`'s default for it (`jxlinfo` shows 10000 nits for PQ and 1000 for HLG).
+- `djxl` writes float32 `.npy` in the image's own encoding, not clamped. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 5.8e-7 and 6.6e-6 (`xyb_modular_gamma22`), 6.9e-7 and 6.0e-6 (`vardct_xyb_bt709`), and 2.7e-6 and 1.1e-4 (`vardct_xyb_dci`). The DCI curve is steep near 0 (its slope is about 460 at 1e-5), so it magnifies the small differences of the linear samples, which come from libjxl's FMA (ADR 0004). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
 
 #### How the Gaborish files were made
 
