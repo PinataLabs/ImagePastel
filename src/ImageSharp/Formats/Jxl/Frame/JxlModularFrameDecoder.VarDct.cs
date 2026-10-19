@@ -150,20 +150,6 @@ internal sealed partial class JxlModularFrameDecoder
         }
 
         state.UsedAcs |= localUsedAcs;
-
-        // Identity and AFV come with D9f, which removes this check. It is made after the whole DC group,
-        // so that every libjxl bound above is checked first. It is the only place they are rejected:
-        // every block of the frame gets its strategy here, before any AC group is decoded.
-        const uint notYetSupported = (1u << (int)JxlAcStrategyType.Identity)
-            | (1u << (int)JxlAcStrategyType.Afv0)
-            | (1u << (int)JxlAcStrategyType.Afv1)
-            | (1u << (int)JxlAcStrategyType.Afv2)
-            | (1u << (int)JxlAcStrategyType.Afv3);
-        uint unsupported = localUsedAcs & notYetSupported;
-        if (unsupported != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)JxlBits.Num0BitsBelowLs1BitNonzero(unsupported)} AC strategy");
-        }
     }
 
     private static void ReplaceChannel(JxlModularImage image, int c, JxlModularChannel channel)
