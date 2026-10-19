@@ -40,6 +40,42 @@ internal static class JxlEncoderRoundTrip
     /// </summary>
     public static TheoryData<string, string, string> CorpusCases { get; } = AtEveryEffort(CreateCorpusCases());
 
+    /// <summary>Gets the cases of <see cref="Cases"/> at one effort.</summary>
+    /// <param name="effort">The effort.</param>
+    /// <returns>The cases.</returns>
+    public static TheoryData<string, string, string, int, int> CasesAt(JxlEffort effort)
+    {
+        TheoryData<string, string, string, int, int> result = new();
+        foreach (ITheoryDataRow row in Cases)
+        {
+            object[] data = row.GetData();
+            if ((string)data[0] == effort.ToString())
+            {
+                result.Add((string)data[0], (string)data[1], (string)data[2], (int)data[3], (int)data[4]);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Gets the cases of <see cref="CorpusCases"/> at one effort.</summary>
+    /// <param name="effort">The effort.</param>
+    /// <returns>The cases.</returns>
+    public static TheoryData<string, string, string> CorpusCasesAt(JxlEffort effort)
+    {
+        TheoryData<string, string, string> result = new();
+        foreach (ITheoryDataRow row in CorpusCases)
+        {
+            object[] data = row.GetData();
+            if ((string)data[0] == effort.ToString())
+            {
+                result.Add((string)data[0], (string)data[1], (string)data[2]);
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>Which decoder reads the encoded file back.</summary>
     public enum Reader
     {
@@ -62,7 +98,10 @@ internal static class JxlEncoderRoundTrip
     /// <param name="height">The height.</param>
     /// <returns>A task.</returns>
     public static Task AssertRoundTripAsync(Reader reader, string effort, string pixelType, string pattern, int width, int height)
-        => JxlPixelTypes.Verify(pixelType, new PatternCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), pattern, width, height));
+    {
+        SkipMagickUnderCoverage(reader);
+        return JxlPixelTypes.Verify(pixelType, new PatternCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), pattern, width, height));
+    }
 
     /// <summary>Asserts that one case of <see cref="CorpusCases"/> round-trips exactly through one reader.</summary>
     /// <param name="reader">The reader.</param>
@@ -72,6 +111,8 @@ internal static class JxlEncoderRoundTrip
     /// <returns>A task.</returns>
     public static Task AssertCorpusRoundTripAsync(Reader reader, string effort, string file, string pixelType)
     {
+        SkipMagickUnderCoverage(reader);
+
         // The largest 16-bit corpus image takes minutes at Thorough with coverage instrumentation; the
         // test jobs without coverage still run it.
         Assert.SkipWhen(
@@ -187,6 +228,12 @@ internal static class JxlEncoderRoundTrip
         configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
         return configuration;
     }
+
+    // A Magick round trip runs the same encoder code as its twin through our decoder, and coverage
+    // counts only the library, so under coverage it would add minutes and no coverage. The test jobs
+    // without coverage still run it.
+    private static void SkipMagickUnderCoverage(Reader reader)
+        => Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage && reader == Reader.Magick, "Adds no coverage: the same encode runs through our decoder.");
 
     // Each case of the slices below, once at each effort of Efforts; then each of fastestOnly, at Fastest.
     private static TheoryData<string, string, string, int, int> AtEveryEffort(TheoryData<string, string, int, int> cases, TheoryData<string, string, int, int> fastestOnly)
