@@ -246,7 +246,7 @@ djxl vardct_grey_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/var
 | `vardct_xyb_icc.jxl` | The same kind of frame, 32 x 32 8-bit RGB with the embedded ICC profile of `custom_icc.jxl`. The output is linear sRGB (ADR 0002). | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_icc.npy`, linear sRGB |
 | `vardct_xyb_grey_d50.jxl` | The same kind of frame, 70 x 50 8-bit grey (the image of `vardct_grey.jxl`) with a D50 white point, which the XYB stage cannot output for grey: the output is linear sRGB, and `Image<TPixel>` gets sRGB with no pixel profile (ADR 0002). | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_grey_d50.npy`, one channel, linear |
 | `vardct_xyb_e7.jxl` | The 64 x 64 image at `cjxl -d 1` and the default effort (7): Gaborish, EPF and other block sizes. | None: decoding throws `NotSupportedException` |
-| `vardct_xyb_gaborish.jxl`, `vardct_xyb_epf.jxl` | The 64 x 64 image at `-e 2` with Gaborish only, and with EPF only (D9). | None: decoding throws `NotSupportedException` |
+| `vardct_xyb_epf.jxl` | The 64 x 64 image at `-e 2` with EPF only (D9). `vardct_xyb_gaborish.jxl`, with Gaborish only, is in the Gaborish files below. | None: decoding throws `NotSupportedException` |
 | `vardct_xyb_strategies.jxl` | The 64 x 64 image at `-e 7` with no loop filters, which uses blocks other than DCT8 (D9). | None: decoding throws `NotSupportedException` |
 | `vardct_xyb_passes.jxl` | The 64 x 64 image at `-e 2 --progressive_ac`: three passes (D13). | None: decoding throws `NotSupportedException` |
 | `vardct_xyb_dc_frame.jxl` | The 64 x 64 image at `-e 2 --progressive_dc=1`: a Modular DC frame comes first (D13). | None: decoding throws `NotSupportedException` |
@@ -283,6 +283,35 @@ djxl vardct_xyb_grey_d50.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - `djxl` writes float32 `.npy`, not clamped. The decoder cannot match it bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"): libjxl fuses multiplies and adds on AVX2 and approximates the reciprocal in the quantisation bias, and this port does neither (ADR 0004). Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.1e-6 and 1.2e-5 (`vardct_xyb_64`), 1.1e-6 and 2.6e-5 (`vardct_xyb_300x200_d05`), 1.3e-6 and 7.8e-5 (`vardct_xyb_600x400_d3`), 2.6e-7 and 1.6e-6 (`vardct_xyb_grey`), 3.0e-6 and 4.1e-5 (`vardct_xyb_alpha`), 1.4e-6 and 7.7e-6 (`vardct_xyb_icc`), and 1.1e-7 and 7.8e-7 (`vardct_xyb_grey_d50`).
 - `djxl` gives linear sRGB for `vardct_xyb_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.
 - `djxl` gives linear grey with sRGB's D65 white point for `vardct_xyb_grey_d50.jxl`: libjxl's `CanOutputToColorEncoding` rejects grey with any other white point.
+
+#### How the Gaborish files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `vardct_xyb_gaborish.jxl` | The 64 x 64 image of `vardct_xyb_64.jxl` at `cjxl -e 2 --gaborish=1 --epf=0 -d 1`: Gaborish with the default weights and no EPF. One group. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish.npy` |
+| `vardct_xyb_gaborish_600x400.jxl` | The same at 600 x 400: three by two groups, so the filter reads across group edges. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_600x400.npy` |
+| `vardct_xyb_gaborish_grey.jxl` | The same, 300 x 200 8-bit grey: two groups. The filter runs on the three planes before the output drops to one. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_grey.npy`, one channel |
+| `vardct_xyb_gaborish_custom.jxl` | `vardct_xyb_gaborish.jxl` with custom Gaborish weights in its frame header (x 0.2 and 0.05, y 0.08 and 0.03, b 0.15 and -0.02). `cjxl` never writes custom weights, so `set_gaborish_weights.py` sets them; the coefficients are unchanged. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_custom.npy` |
+| `vardct_xyb_gaborish_zero_kernel.jxl` | `vardct_xyb_gaborish.jxl` with x weights of -0.125 and -0.125, whose kernel sums to 0 before it is scaled. | None: `djxl` fails on it, and decoding throws `InvalidImageContentException` |
+| `xyb_modular_gaborish.jxl` | The 64 x 64 image as lossy Modular (`-m 1 -d 1 --gaborish=1 --epf=0`): Gaborish on a Modular frame (D9d). | None: decoding throws `NotSupportedException` |
+
+```sh
+py -3 make_vardct_xyb.py
+cjxl vardct_xyb_64_source.ppm vardct_xyb_gaborish.jxl -e 2 --gaborish=1 --epf=0 -d 1
+cjxl vardct_xyb_600x400_source.ppm vardct_xyb_gaborish_600x400.jxl -e 2 --gaborish=1 --epf=0 -d 1
+cjxl vardct_xyb_grey_source.pgm vardct_xyb_gaborish_grey.jxl -e 2 --gaborish=1 --epf=0 -d 1
+py -3 set_gaborish_weights.py vardct_xyb_gaborish.jxl vardct_xyb_gaborish_custom.jxl 0.2 0.05 0.08 0.03 0.15 -0.02
+py -3 set_gaborish_weights.py vardct_xyb_gaborish.jxl vardct_xyb_gaborish_zero_kernel.jxl -0.125 -0.125 0.1 0.05 0.1 0.05
+cjxl vardct_xyb_64_source.ppm xyb_modular_gaborish.jxl -m 1 -d 1 --gaborish=1 --epf=0
+djxl vardct_xyb_gaborish.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish.npy
+djxl vardct_xyb_gaborish_600x400.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_600x400.npy
+djxl vardct_xyb_gaborish_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_grey.npy
+djxl vardct_xyb_gaborish_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_custom.npy
+```
+
+- `set_gaborish_weights.py` rewrites only the loop-filter bits of the frame header: it sets `gab_custom` and inserts the six weights as float16. The TOC and the sections are copied as they are. It handles only the simple files `cjxl` writes here (one frame, no ICC profile, no extra channels).
+- The custom weights move `djxl`'s output away from that of the default weights by an RMSE of 0.039, so a decoder that ignored them would fail the test.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.7e-5 (`vardct_xyb_gaborish`), 1.1e-6 and 3.8e-5 (`vardct_xyb_gaborish_600x400`), 1.9e-7 and 9.5e-7 (`vardct_xyb_gaborish_grey`), and 1.1e-6 and 2.0e-5 (`vardct_xyb_gaborish_custom`). libjxl fuses the filter's multiplies and adds on AVX2, and this port does not (ADR 0004).
 
 #### How `twelve_bit` was made
 
