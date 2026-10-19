@@ -33,9 +33,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // queues the frame, so the frame encoder always sees this.
     private const int LevelMaxBitdepth = 32;
 
-    // libjxl's CompressParams defaults (enc_params.h): channel_colors_pre_transform_percent, palette_colors
-    // and lossy_palette. Lossless keeps them.
+    // libjxl's CompressParams defaults (enc_params.h): channel_colors_pre_transform_percent,
+    // channel_colors_percent, palette_colors and lossy_palette. Lossless keeps them.
     private const float ChannelColorsPreTransformPercent = 95f;
+    private const float ChannelColorsPercent = 80f;
     private const int PaletteColors = 1 << 10;
     private const bool LossyPalette = false;
 
@@ -480,6 +481,18 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             if (gi.Channel.Count == 0)
             {
                 return;
+            }
+
+            // Do some per-group transforms
+
+            // Local palette transforms
+            // TODO(veluca): make this work with quantize-after-prediction in lossy mode.
+            if (!LossyPalette && this.speedTier < JxlSpeedTier.Cheetah)
+            {
+                // don't care about that here
+                int maxBitdepth = 0;
+                int maxval = 0;
+                this.TryPalettes(gi, ref maxBitdepth, ref maxval, ChannelColorsPercent);
             }
         }
 
