@@ -36,6 +36,24 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
 
+    // Sections from the smallest size of the third and fourth TOC size selectors: BitsOffset(22, 17408)
+    // and BitsOffset(30, 4211712). The decoder ignores the zeros after the Modular data, and the next
+    // frame starts only where the TOC says the long section ends.
+    [Theory]
+    [InlineData(17408)]
+    [InlineData(4211712)]
+    public void FrameWithALongSection_IsFollowedByTheNextFrame(int sectionLength)
+    {
+        byte[] section = new byte[sectionLength];
+        JxlTestLayers.ColourA.CopyTo(section, 0);
+        byte[] codestream = new JxlTestLayers(Width, Height)
+            .Add(new JxlTestFrame(section))
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
+            .ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
+    }
+
     [Fact]
     public void Add_SumsTheColourAndReplacesTheAlpha()
     {
@@ -286,14 +304,15 @@ public class JxlLayersTests
 
     [Theory]
     [InlineData(1)] // noise
-    [InlineData(2)] // patches
     [InlineData(16)] // splines
-    public void Decode_FrameWithNoisePatchesOrSplines_IsNotSupported(ulong flags)
+    [InlineData(3)] // patches and noise
+    [InlineData(18)] // patches and splines
+    public void Decode_FrameWithNoiseOrSplines_IsNotSupported(ulong flags)
     {
         byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }).ToArray();
 
         NotSupportedException ex = Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream));
-        Assert.Contains("Patches, splines, noise", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Splines, noise", ex.Message, StringComparison.Ordinal);
     }
 
     // Each allocation of a decode, in turn, fails. Whichever it is, the decode throws and every buffer it

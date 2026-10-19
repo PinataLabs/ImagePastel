@@ -23,6 +23,9 @@ internal sealed class JxlBlendingStage : IDisposable
     private readonly JxlFrameHeader frameHeader;
     private readonly List<JxlExtraChannelInfo> extraChannelInfo;
     private readonly int numColorPlanes;
+    private readonly bool hasAlpha;
+    private readonly JxlPatchBlending colorBlending;
+    private readonly JxlPatchBlending[] ecBlending;
     private readonly JxlReferenceFrame bg;
     private readonly JxlReferenceFrame[] ecBg;
     private readonly IMemoryOwner<float> zeros;
@@ -47,6 +50,7 @@ internal sealed class JxlBlendingStage : IDisposable
         this.ImageYSize = (int)frameHeader.NonserializedMetadata.YSize;
         this.extraChannelInfo = m.ExtraChannelInfo;
         this.numColorPlanes = m.NumColorPlanes;
+        this.hasAlpha = JxlBlending.HasAlpha(m.ExtraChannelInfo);
 
         List<JxlBlendingInfo> ecInfo = frameHeader.ExtraChannelBlendingInfo;
         this.bg = references[frameHeader.BlendingInfo.Source];
@@ -54,6 +58,13 @@ internal sealed class JxlBlendingStage : IDisposable
         for (int i = 0; i < ecInfo.Count; i++)
         {
             this.ecBg[i] = references[ecInfo[i].Source];
+        }
+
+        this.colorBlending = MakeBlending(frameHeader.BlendingInfo);
+        this.ecBlending = new JxlPatchBlending[ecInfo.Count];
+        for (int i = 0; i < ecInfo.Count; i++)
+        {
+            this.ecBlending[i] = MakeBlending(ecInfo[i]);
         }
 
         // An empty slot reads as zeros. libjxl checks the colour source for a frame saved before its
@@ -155,7 +166,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         this.fgRows.PointAt(offset, ypos, (int)size);
         this.bgRows.PointAt((int)bgXpos, (int)bgYpos, (int)size);
-        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.numColorPlanes, this.frameHeader.BlendingInfo, this.frameHeader.ExtraChannelBlendingInfo, this.extraChannelInfo, this.tmp, (int)size);
+        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.fgRows, this.numColorPlanes, this.colorBlending, this.ecBlending, this.extraChannelInfo, this.hasAlpha, this.tmp, (int)size);
     }
 
     /// <summary>Fills row <paramref name="ypos"/> of the image-sized planes from the background, or with zeros.</summary>
@@ -178,6 +189,22 @@ internal sealed class JxlBlendingStage : IDisposable
     {
         this.zeros?.Dispose();
         this.tmp.Dispose();
+    }
+
+    // make_blending: a frame blend mode as the patch blend mode that does the same. Frames never use
+    // None or the Below modes.
+    private static JxlPatchBlending MakeBlending(JxlBlendingInfo info)
+    {
+        JxlPatchBlendMode mode = info.Mode switch
+        {
+            JxlBlendMode.Add => JxlPatchBlendMode.Add,
+            JxlBlendMode.Mul => JxlPatchBlendMode.Mul,
+            JxlBlendMode.Blend => JxlPatchBlendMode.BlendAbove,
+            JxlBlendMode.AlphaWeightedAdd => JxlPatchBlendMode.AlphaWeightedAddAbove,
+            _ => JxlPatchBlendMode.Replace,
+        };
+
+        return new JxlPatchBlending(mode, info.AlphaChannel, info.Clamp);
     }
 
     // Copies row ypos of channel c from the background, or clears it when the slot is empty.

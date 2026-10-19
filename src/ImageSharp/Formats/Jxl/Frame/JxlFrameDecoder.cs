@@ -99,6 +99,11 @@ internal sealed class JxlFrameDecoder
         bool isLastOfStill = IsLastOfStill(frameHeader);
 
         // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
+        // The patch dictionary is read with the DC global section, and the patches stage uses it then.
+        JxlPatchDictionary patches = (frameHeader.Flags & JxlFrameFlags.Patches) != 0 ? new JxlPatchDictionary(this.references) : null;
+        using JxlPatchesStage patchesStage = patches != null
+            ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSizeUpsampled)
+            : null;
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
@@ -106,7 +111,7 @@ internal sealed class JxlFrameDecoder
         int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numChannels);
 
-        ProcessSections(frameHeader, frameDim, sections, modularFrameDecoder, pipeline, cancellationToken);
+        ProcessSections(frameHeader, frameDim, sections, patches, modularFrameDecoder, pipeline, cancellationToken);
 
         foreach (JxlBitReader section in sections)
         {
@@ -114,7 +119,7 @@ internal sealed class JxlFrameDecoder
         }
 
         modularFrameDecoder.FinalizeDecoding(frameHeader, pipeline);
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, blending, isLastOfStill ? sink : null);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, patchesStage, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -149,9 +154,9 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform");
         }
 
-        if (frameHeader.FrameType == JxlFrameType.Dc || frameHeader.Flags != JxlFrameFlags.None)
+        if (frameHeader.FrameType == JxlFrameType.Dc || (frameHeader.Flags & ~JxlFrameFlags.Patches) != JxlFrameFlags.None)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Patches, splines, noise or DC frames");
+            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames");
         }
 
         // An extra channel with a dim_shift has an upsampling of at least 2 here.
@@ -171,7 +176,7 @@ internal sealed class JxlFrameDecoder
         }
     }
 
-    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlModularFrameDecoder modularFrameDecoder, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
+    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlModularFrameDecoder modularFrameDecoder, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
     {
         int numPasses = (int)frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -183,7 +188,7 @@ internal sealed class JxlFrameDecoder
         JxlBitReader DcGroup(long i) => singleSection ? sections[0] : sections[1 + i];
         JxlBitReader AcGroup(long g, int p) => singleSection ? sections[0] : sections[JxlToc.AcGroupIndex(p, g, numGroups, numDcGroups)];
 
-        ProcessDcGlobal(DcGlobal(), frameHeader, modularFrameDecoder);
+        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, modularFrameDecoder, cancellationToken);
 
         for (long i = 0; i < numDcGroups; i++)
         {
@@ -202,9 +207,30 @@ internal sealed class JxlFrameDecoder
         }
     }
 
-    private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlModularFrameDecoder modularFrameDecoder)
+    private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlModularFrameDecoder modularFrameDecoder, CancellationToken cancellationToken)
     {
-        // Patches, splines and noise are rejected by CheckSupported.
+        // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
+        // frame without the flag has no dictionary, so the caller passes null.
+        if (patches != null)
+        {
+            patches.Decode(br, frameDim.XSizePadded, frameDim.YSizePadded, frameHeader.NonserializedMetadata.M.NumExtraChannels, cancellationToken);
+
+            // Unreachable until upsampling arrives (D10): CheckSupported rejects an upsampled frame first.
+            // The check is unconditional on purpose: libjxl's Decode reports uses_extra_channels, but at
+            // ef67fde2 ProcessDCGlobal never reads it, so this port does not compute it.
+            if (frameHeader.Upsampling != 1)
+            {
+                foreach (uint ecups in frameHeader.ExtraChannelUpsampling)
+                {
+                    if (ecups != frameHeader.Upsampling)
+                    {
+                        JxlThrowHelper.ThrowInvalidImageContentException("Cannot use extra channels in patches if color channels are subsampled differently from extra channels");
+                    }
+                }
+            }
+        }
+
+        // Splines and noise are rejected by CheckSupported.
         DecodeDcQuant(br);
         modularFrameDecoder.DecodeGlobalInfo(br, frameHeader);
     }

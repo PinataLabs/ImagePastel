@@ -8,6 +8,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Memory;
 
@@ -22,7 +23,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// Deliberate departures from libjxl: the planes carry no border padding, because no stage needs
 /// neighbours yet; stages are to run in place rather than allocate new planes each, as decided in
 /// issue #113; and the stages are fixed steps of <see cref="Finish"/> rather than a list built per
-/// frame, because the frames this port decodes need only the save, blending and output stages.
+/// frame, because the frames this port decodes need only the patches, save, blending and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
@@ -84,21 +85,33 @@ internal sealed class JxlRenderPipeline : IDisposable
     }
 
     /// <summary>
-    /// Runs the stages over the whole frame, in libjxl's order: the save before the colour transform,
-    /// the blending, the save after blending, and the output. Returns the frame to keep in its
+    /// Runs the stages over the whole frame, in libjxl's order: the patches, the save before the colour
+    /// transform, the blending, the save after blending, and the output. Returns the frame to keep in its
     /// reference slot, if it can be referenced; the caller saves it once the frame is done, as libjxl's
     /// <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
+    /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
+    /// <param name="cancellationToken">The cancellation token, checked on each row of the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlBlendingStage blending, IJxlRenderSink sink)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
         try
         {
+            if (patches != null)
+            {
+                // One row may take every patch of the frame, so cancellation is checked row by row.
+                for (int y = 0; y < this.height; y++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    patches.ProcessRow(this.planes, this.width, y);
+                }
+            }
+
             // The colour transform is a later slice, so the planes before it are the decoded ones.
             if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
             {
