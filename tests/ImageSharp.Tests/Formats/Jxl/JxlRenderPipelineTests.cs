@@ -184,6 +184,8 @@ public class JxlRenderPipelineTests
 
         public int Height { get; private set; }
 
+        public bool DisplayEncoded => false;
+
         public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
         {
             this.Samples = FirstSamples(planes);

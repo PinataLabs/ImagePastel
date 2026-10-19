@@ -102,7 +102,7 @@ internal sealed class JxlFrameDecoder
         using JxlPatchesStage patchesStage = patches != null
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSizeUpsampled)
             : null;
-        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader);
+        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
