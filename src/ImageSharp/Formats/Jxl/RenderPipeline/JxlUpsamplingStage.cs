@@ -22,7 +22,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// multiply-add on AVX2, into three sums in a fixed order. This port keeps the order and rounds each
 /// product and each sum (ADR 0004), so its output can differ from libjxl's in the last bits.
 /// </remarks>
-internal sealed class JxlUpsamplingStage : IJxlLoopFilterStage
+internal sealed class JxlUpsamplingStage : IJxlNeighbourStage
 {
     private readonly int c;
     private readonly int shift;

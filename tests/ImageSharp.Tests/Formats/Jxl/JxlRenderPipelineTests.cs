@@ -67,7 +67,7 @@ public class JxlRenderPipelineTests
     [Fact]
     public void New_VarDctFrame_PadsOnlyTheColorPlanesToWholeBlocks()
     {
-        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, VarDctFrameDim, NumColorPlanes, NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, VarDctFrameDim, NumColorPlanes, new JxlChannelShift[NumColorPlanes + NumExtraChannels]);
 
         for (int c = 0; c < NumColorPlanes; c++)
         {
@@ -80,7 +80,7 @@ public class JxlRenderPipelineTests
     [Fact]
     public void New_ModularFrame_DoesNotPad()
     {
-        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, new JxlFrameDimensions(10, 13, 1, 0, 0, true, 1), NumColorPlanes, NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, new JxlFrameDimensions(10, 13, 1, 0, 0, true, 1), NumColorPlanes, new JxlChannelShift[NumColorPlanes + NumExtraChannels]);
 
         for (int c = 0; c < NumColorPlanes + NumExtraChannels; c++)
         {
@@ -119,7 +119,7 @@ public class JxlRenderPipelineTests
     // Fills the frame with Sample and any padding past it with Padding, then finishes the frame.
     private static JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, IJxlColorStage colorStage, IJxlRenderSink sink)
     {
-        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, frameDim, NumColorPlanes, NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, frameDim, NumColorPlanes, new JxlChannelShift[NumColorPlanes + NumExtraChannels]);
         for (int c = 0; c < pipeline.NumChannels; c++)
         {
             Buffer2D<float> plane = pipeline.GetPlane(c);
@@ -131,7 +131,7 @@ public class JxlRenderPipelineTests
         }
 
         IJxlColorStage[] colorStages = colorStage != null ? new[] { colorStage } : Array.Empty<IJxlColorStage>();
-        return pipeline.Finish(frameHeader, Array.Empty<IJxlLoopFilterStage>(), null, Array.Empty<IJxlLoopFilterStage>(), colorStages, null, sink, CancellationToken.None);
+        return pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, Array.Empty<IJxlNeighbourStage>(), colorStages, null, sink, CancellationToken.None);
     }
 
     // The planes may keep their padding, so only the frame's samples are checked.

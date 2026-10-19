@@ -1,9 +1,11 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.PixelFormats;
@@ -61,8 +63,47 @@ public class JxlRawQuantTableTests
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(Name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
 
-        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
+    }
+
+    // A raw table for a transform larger than one block, which no transcode has: a JPEG has only DCT8
+    // blocks, so its raw table is table 0. A hand-built 16 x 16 VarDCT frame whose varblocks all use one
+    // transform has a raw table for it with a different entry for each coefficient and channel, as
+    // JxlVarDctBoundsTests' raw_table_nonzeros has for DCT8, and its first varblock has its first 63 AC
+    // coefficients of Y at 1, so each weight scales its own coefficient. Table 4 (DCT16X16) is 16 x 16
+    // entries. Table 6 is 8 wide and 16 high: DCT16X8 (strategy 6, two blocks high) reads it as it is,
+    // and DCT8X16 (strategy 7, two blocks wide) transposed. Measured on x64 against djxl v0.12.0 (AVX2):
+    // worst channel RMSE 1.2e-6, peak 1.4e-5.
+    [Theory]
+    [InlineData(4, new[] { 4 })]
+    [InlineData(6, new[] { 6, 6 })]
+    [InlineData(6, new[] { 7, 7 })]
+    public async Task DecodeToPlanes_RawTableOfALargerTransform_MatchesDjxl(int table, int[] strategies)
+    {
+        int blocks = JxlDequantMatrices.RequiredSizeX[table] * JxlDequantMatrices.RequiredSizeY[table];
+        Assert.True(blocks > 1);
+        List<uint> tokens = new() { 63 };
+        tokens.AddRange(Enumerable.Repeat(2u, 63));
+        byte[] codestream = new JxlTestVarDct(16, 16)
+        {
+            Strategies = strategies,
+            DequantMatrices = w => JxlTestVarDct.WriteDequantMatrices(w, table, t => JxlTestVarDct.WriteRawTable(t, 0x1400, i => 1 + (i % 17), blocks)),
+            FirstBlockTokens = tokens.ToArray(),
+        }.ToArray();
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlRawQuantTableTests));
+        string input = Path.Combine(directory, $"raw_table_{table}_strategy_{strategies[0]}.jxl");
+        string output = Path.Combine(directory, $"raw_table_{table}_strategy_{strategies[0]}.npy");
+        await File.WriteAllBytesAsync(input, codestream, CancellationToken);
+
+        await JxlTools.RunAsync("djxl", CancellationToken, input, output);
+
+        using MemoryStream stream = new(codestream);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+        Assert.Single(JxlLossyComparer.AssertWithinThresholds(NpyArray.Load(output), actual));
+
+        // The coefficients reach the output, so the table is used.
+        Assert.True(actual.Data.Max() - actual.Data.Min() > 0.01f);
     }
 
     private static Configuration CreateConfiguration()

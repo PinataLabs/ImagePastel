@@ -18,10 +18,13 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// with a shift writes planes <c>2^ShiftX</c> times as wide and <c>2^ShiftY</c> times as high as its input.
 /// </summary>
 /// <remarks>
+/// libjxl has no such type: its stages all derive from <c>RenderPipelineStage</c>, and a stage's settings
+/// say whether it reads neighbours or upsamples. This port runs those stages apart from the others
+/// (<see cref="JxlRenderPipeline.Finish"/>), so they share this interface.
 /// The channels are numbered as libjxl numbers them: three colour channels, then the extra channels. The
 /// pipeline gives a grey image three colour planes for these stages, as libjxl does.
 /// </remarks>
-internal interface IJxlLoopFilterStage
+internal interface IJxlNeighbourStage
 {
     /// <summary>
     /// Gets how far the stage reads past the pixel it writes, in rows and in columns: libjxl's

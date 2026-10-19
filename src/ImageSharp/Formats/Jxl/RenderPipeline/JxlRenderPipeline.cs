@@ -3,13 +3,13 @@
 // Structure after libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/render_pipeline/simple_render_pipeline.h and simple_render_pipeline.cc (MakeChannelRect, the
 // channel sizes of PrepareForThreadsInternal, and ProcessBuffers with its SwitchToImageDimensions step),
-// the channel shifts of RenderPipeline::Builder::Finalize in lib/jxl/render_pipeline/render_pipeline.cc,
+// the channel shifts of RenderPipeline::Builder::Finalize in lib/jxl/render_pipeline/render_pipeline.cc
+// (summed over the upsampling stages only: see ChannelShifts),
 // RenderPipelineInput from lib/jxl/render_pipeline/render_pipeline.h, and the stage order of
 // PassesDecoderState::PreparePipeline in lib/jxl/dec_cache.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -27,7 +27,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// <para>
 /// Each channel has a shift, as in libjxl (<see cref="ChannelShifts"/>): log2 of how much the stages
 /// still to run will upsample it. At shift <c>s</c> a channel is the upsampled frame size divided by
-/// <c>2^s</c>, rounded up. A neighbour stage (<see cref="IJxlLoopFilterStage"/>) with a shift doubles the
+/// <c>2^s</c>, rounded up. A neighbour stage (<see cref="IJxlNeighbourStage"/>) with a shift doubles the
 /// planes it changes and lowers their shift; once the neighbour stages are done, every channel is at the
 /// upsampled frame size. So the loop filters and the patches run at the coded size, before the
 /// upsampling, and the saves, the colour transform, the blending and the sink at the upsampled size.
@@ -60,22 +60,6 @@ internal sealed class JxlRenderPipeline : IDisposable
     private JxlChannelShift[] shifts;
     private int width;
     private int height;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class for a frame with no
-    /// upsampling and no chroma subsampling, so with every channel at shift 0.
-    /// </summary>
-    /// <param name="allocator">The allocator.</param>
-    /// <param name="frameDim">The frame dimensions.</param>
-    /// <param name="numColorPlanes">
-    /// The number of colour planes: <see cref="Headers.JxlImageMetadata.NumColorPlanes"/>, or three for a
-    /// VarDCT frame, which always codes three.
-    /// </param>
-    /// <param name="numExtraChannels">The number of extra channels.</param>
-    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, int numExtraChannels)
-        : this(allocator, frameDim, numColorPlanes, new JxlChannelShift[numColorPlanes + numExtraChannels])
-    {
-    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per
@@ -128,29 +112,46 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     /// <summary>
     /// Returns the shift of each channel at the start of the pipeline, as libjxl's
-    /// <c>channel_shifts_[0]</c>: the sum of the shifts of the stages that change the channel. For a
-    /// colour channel that is its chroma shift (the chroma-upsampling stages) plus log2 of the
-    /// upsampling (the upsampling stage). For an extra channel it is log2 of its own upsampling, whether
-    /// its upsampling stage runs before the patches or with the colour channels after them.
+    /// <c>channel_shifts_[0]</c> in <c>RenderPipeline::Builder::Finalize</c>: the sum of the shifts of the
+    /// stages that change the channel. For a colour channel that is its chroma shift (the
+    /// chroma-upsampling stages) plus log2 of the upsampling (the upsampling stage). For an extra channel
+    /// it is log2 of its own upsampling, whether its upsampling stage runs before the patches or with the
+    /// colour channels after them.
     /// </summary>
-    /// <param name="frameHeader">The frame header.</param>
+    /// <remarks>
+    /// A departure from libjxl: <c>Finalize</c> sums over every stage of the pipeline, once it has them all.
+    /// Here the pipeline is built before the sections are decoded, so before its loop filters, which take
+    /// what the sections decode (<see cref="JxlLoopFilterStages.Create"/>). Only the stages that upsample
+    /// have a shift, and they depend on the frame header alone, so they are built first
+    /// (<see cref="JxlUpsamplingStages.Create"/>) and the shifts are summed over them.
+    /// </remarks>
     /// <param name="numColorPlanes">The number of colour planes the pipeline is given.</param>
+    /// <param name="numExtraChannels">The number of extra channels.</param>
+    /// <param name="stages">The stages with a shift, in any order.</param>
     /// <returns>The shifts: the colour planes, then the extra channels.</returns>
-    public static JxlChannelShift[] ChannelShifts(JxlFrameHeader frameHeader, int numColorPlanes)
+    public static JxlChannelShift[] ChannelShifts(int numColorPlanes, int numExtraChannels, params IJxlNeighbourStage[][] stages)
     {
-        List<uint> extraChannelUpsampling = frameHeader.ExtraChannelUpsampling;
-        JxlChannelShift[] shifts = new JxlChannelShift[numColorPlanes + extraChannelUpsampling.Count];
-        int upsamplingShift = JxlBits.CeilLog2Nonzero(frameHeader.Upsampling);
-        JxlYCbCrChromaSubsampling chroma = frameHeader.ChromaSubsampling;
-        for (int c = 0; c < numColorPlanes; c++)
+        JxlChannelShift[] shifts = new JxlChannelShift[numColorPlanes + numExtraChannels];
+        for (int c = 0; c < shifts.Length; c++)
         {
-            shifts[c] = new JxlChannelShift(chroma.HShift(c) + upsamplingShift, chroma.VShift(c) + upsamplingShift);
-        }
+            // The stages number the channels as libjxl: three colour channels, then the extra channels. A
+            // grey image's one colour plane is their channel 0 (RunNeighbourStages).
+            int stageChannel = c < numColorPlanes ? c : 3 + (c - numColorPlanes);
+            int x = 0;
+            int y = 0;
+            foreach (IJxlNeighbourStage[] list in stages)
+            {
+                foreach (IJxlNeighbourStage stage in list)
+                {
+                    if (stage.ChangesChannel(stageChannel))
+                    {
+                        x += stage.ShiftX;
+                        y += stage.ShiftY;
+                    }
+                }
+            }
 
-        for (int ec = 0; ec < extraChannelUpsampling.Count; ec++)
-        {
-            int shift = JxlBits.CeilLog2Nonzero(extraChannelUpsampling[ec]);
-            shifts[numColorPlanes + ec] = new JxlChannelShift(shift, shift);
+            shifts[c] = new JxlChannelShift(x, y);
         }
 
         return shifts;
@@ -210,7 +211,7 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
     /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages and the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] beforePatches, JxlPatchesStage patches, IJxlLoopFilterStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, IJxlNeighbourStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -226,12 +227,13 @@ internal sealed class JxlRenderPipeline : IDisposable
             // channels, so the loop filters run on all three before the drop; a Modular frame of such an
             // image is given three planes for them (RunNeighbourStages), and drops back to one here.
             // A YCbCr frame mixes the colour channels too, so it keeps three planes through the colour
-            // transform and drops to its first plane, R, after it. JxlFrameDecoder.CheckSupported rejects
-            // the grey YCbCr frames that would need three planes earlier: patches and a save before the
-            // colour transform, as grey patches and reference slots hold one plane.
+            // transform and drops to its first plane, R, after it (JxlFrameHeader.DropsToGreyAfterColorTransform).
+            // JxlFrameDecoder.CheckSupported rejects the grey YCbCr frames that would need three planes
+            // earlier: patches and a save before the colour transform, as grey patches and reference
+            // slots hold one plane.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
-            bool greyAfterColorTransform = frameHeader.ColorTransform == JxlColorTransform.YCbCr;
-            if (!greyAfterColorTransform)
+            bool dropsToGreyAfterColorTransform = frameHeader.DropsToGreyAfterColorTransform;
+            if (!dropsToGreyAfterColorTransform)
             {
                 this.DropToGreyIfGreyImage(metadata);
             }
@@ -252,7 +254,7 @@ internal sealed class JxlRenderPipeline : IDisposable
             }
 
             this.RunNeighbourStages(afterPatches, cancellationToken);
-            if (!greyAfterColorTransform)
+            if (!dropsToGreyAfterColorTransform)
             {
                 this.DropToGreyIfGreyImage(metadata);
             }
@@ -276,7 +278,7 @@ internal sealed class JxlRenderPipeline : IDisposable
                 }
             }
 
-            if (greyAfterColorTransform)
+            if (dropsToGreyAfterColorTransform)
             {
                 this.DropToGreyIfGreyImage(metadata);
             }
@@ -322,7 +324,7 @@ internal sealed class JxlRenderPipeline : IDisposable
     // then takes their place. The planes it replaced are the next stage's output, so two sets ping-pong.
     // A stage with a shift writes planes 2^shift times the size of its input, and the channels it
     // changes then shrink to their size at the shift they have left.
-    private void RunNeighbourStages(IJxlLoopFilterStage[] stages, CancellationToken cancellationToken)
+    private void RunNeighbourStages(IJxlNeighbourStage[] stages, CancellationToken cancellationToken)
     {
         if (stages.Length == 0)
         {
@@ -343,7 +345,7 @@ internal sealed class JxlRenderPipeline : IDisposable
         Buffer2D<float>[] spare = new Buffer2D<float>[this.planes.Length];
         try
         {
-            foreach (IJxlLoopFilterStage stage in stages)
+            foreach (IJxlNeighbourStage stage in stages)
             {
                 // libjxl runs a stage over the largest of its channels. Every stage here changes channels
                 // of one size, at which JxlNeighbourRows mirrors them.

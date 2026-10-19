@@ -4,11 +4,10 @@
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
 // ProcessDCGroup, FinalizeDC, AllocateOutput, ProcessACGlobal, ProcessACGroup, ProcessSections, FinalizeFrame), the
 // per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc), and the
-// chroma-upsampling and upsampling stages of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc).
+// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -62,7 +61,7 @@ internal sealed class JxlFrameDecoder
         JxlFrameHeader frameHeader = new(this.metadata);
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        CheckSupported(frameHeader, this.metadata);
+        CheckSupported(frameHeader);
 
         // The pixel cap is checked before anything is allocated for the frame. It also covers libjxl's
         // CheckSizeLimit in decode.cc, which only guards against size_t overflow.
@@ -114,10 +113,12 @@ internal sealed class JxlFrameDecoder
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
 
-        // A VarDCT frame always codes three colour planes, grey or not, as libjxl's. So does a Modular
-        // frame with a colour transform (libjxl's nb_chans in ModularFrameDecoder::DecodeGlobalInfo).
-        int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct || frameHeader.ColorTransform != JxlColorTransform.None ? 3 : this.metadata.M.NumColorPlanes;
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, JxlRenderPipeline.ChannelShifts(frameHeader, numColorPlanes));
+        // The upsampling stages give the channel shifts, so they are built with the pipeline; the loop
+        // filters come once the sections are decoded.
+        JxlUpsamplingStages upsampling = JxlUpsamplingStages.Create(frameHeader);
+        int numColorPlanes = frameHeader.NumDecodedColorPlanes;
+        JxlChannelShift[] channelShifts = JxlRenderPipeline.ChannelShifts(numColorPlanes, frameHeader.ExtraChannelUpsampling.Count, upsampling.Chroma, upsampling.BeforePatches, upsampling.AfterPatches);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, channelShifts);
         using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
@@ -132,9 +133,8 @@ internal sealed class JxlFrameDecoder
         // PreparePipeline adds the loop-filter stages before the sections are decoded, and they read
         // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
         // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
-        IJxlLoopFilterStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
-        UpsamplingStages(frameHeader, ChromaUpsamplingStages(frameHeader, loopFilters), out IJxlLoopFilterStage[] beforePatches, out IJxlLoopFilterStage[] afterPatches);
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, beforePatches, patchesStage, afterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+        IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, upsampling.AfterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -154,78 +154,6 @@ internal sealed class JxlFrameDecoder
     /// <returns><see langword="true"/> if the frame is displayed.</returns>
     public static bool IsLastOfStill(JxlFrameHeader frameHeader)
         => frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
-
-    // The chroma-upsampling stages of PassesDecoderState::PreparePipeline (dec_cache.cc), then the loop
-    // filters: for each subsampled colour channel, in the order 0, 1, 2, a horizontal stage and then a
-    // vertical one, each of which takes one of the channel's chroma shifts. The channels the frame codes at
-    // full size have none.
-    private static IJxlLoopFilterStage[] ChromaUpsamplingStages(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] loopFilters)
-    {
-        JxlYCbCrChromaSubsampling chroma = frameHeader.ChromaSubsampling;
-        if (chroma.MaxHShift == 0 && chroma.MaxVShift == 0)
-        {
-            return loopFilters;
-        }
-
-        List<IJxlLoopFilterStage> stages = new();
-        for (int c = 0; c < 3; c++)
-        {
-            if (chroma.HShift(c) != 0)
-            {
-                stages.Add(new JxlChromaUpsamplingStage(c, horizontal: true));
-            }
-
-            if (chroma.VShift(c) != 0)
-            {
-                stages.Add(new JxlChromaUpsamplingStage(c, horizontal: false));
-            }
-        }
-
-        stages.AddRange(loopFilters);
-        return stages.ToArray();
-    }
-
-    // The upsampling stages of PassesDecoderState::PreparePipeline (dec_cache.cc), with the neighbour
-    // stages around them: the chroma-upsampling stages and the loop filters come first, in
-    // neighbourStages. Each upsampled channel gets one stage, which takes the shift its chroma-upsampling
-    // stages leave, so every channel leaves the neighbour stages at the upsampled frame size. When every
-    // extra channel has the frame's upsampling, the extra channels go through the patches at the coded
-    // size, as the colour does, and are upsampled with it after them ("late"). Otherwise each upsampled extra channel has its own
-    // stage before the patches ("early"). A frame with patches takes that path only when its colour is
-    // not upsampled: the patches check in ProcessDcGlobal rejects the rest. The channels are numbered as
-    // libjxl's: three colour channels, then the extra channels.
-    private static void UpsamplingStages(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] neighbourStages, out IJxlLoopFilterStage[] beforePatches, out IJxlLoopFilterStage[] afterPatches)
-    {
-        JxlCustomTransformData transformData = frameHeader.NonserializedMetadata.TransformData;
-        List<uint> extraChannelUpsampling = frameHeader.ExtraChannelUpsampling;
-        uint upsampling = frameHeader.Upsampling;
-        bool lateExtraChannelUpsampling = upsampling != 1 && extraChannelUpsampling.TrueForAll(ecups => ecups == upsampling);
-
-        List<IJxlLoopFilterStage> before = new(neighbourStages);
-        if (!lateExtraChannelUpsampling)
-        {
-            for (int ec = 0; ec < extraChannelUpsampling.Count; ec++)
-            {
-                if (extraChannelUpsampling[ec] != 1)
-                {
-                    before.Add(new JxlUpsamplingStage(transformData, 3 + ec, JxlBits.CeilLog2Nonzero(extraChannelUpsampling[ec])));
-                }
-            }
-        }
-
-        List<IJxlLoopFilterStage> after = new();
-        if (upsampling != 1)
-        {
-            int numChannels = 3 + (lateExtraChannelUpsampling ? extraChannelUpsampling.Count : 0);
-            for (int c = 0; c < numChannels; c++)
-            {
-                after.Add(new JxlUpsamplingStage(transformData, c, JxlBits.CeilLog2Nonzero(upsampling)));
-            }
-        }
-
-        beforePatches = before.ToArray();
-        afterPatches = after.ToArray();
-    }
 
     // Internal, as ProcessDcGroup, so that tests can read the state the DC sections fill (the AC
     // metadata, the quant field and the chroma-from-luma maps), which no output shows on its own.
@@ -280,13 +208,13 @@ internal sealed class JxlFrameDecoder
 
     // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
-    private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
+    private static void CheckSupported(JxlFrameHeader frameHeader)
     {
         // A departure from libjxl: a grey image's YCbCr frame keeps three planes until after its colour
-        // transform (JxlRenderPipeline.Finish), but grey reference slots and patches hold one. So such a
-        // frame cannot be saved before its colour transform, nor take patches, which libjxl allows with
-        // three planes. JPEG transcodes never write such a frame.
-        if (frameHeader.ColorTransform == JxlColorTransform.YCbCr && metadata.M.NumColorPlanes == 1)
+        // transform (JxlFrameHeader.DropsToGreyAfterColorTransform), but grey reference slots and patches
+        // hold one. So such a frame cannot be saved before its colour transform, nor take patches, which
+        // libjxl allows with three planes. JPEG transcodes never write such a frame.
+        if (frameHeader.DropsToGreyAfterColorTransform)
         {
             if (frameHeader.CanBeReferenced && frameHeader.SaveBeforeColorTransform)
             {

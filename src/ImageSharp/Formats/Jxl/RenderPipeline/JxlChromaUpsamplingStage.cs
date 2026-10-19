@@ -30,7 +30,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// and the sum (ADR 0004), so its output can differ from libjxl's in the last bit.
 /// </para>
 /// </remarks>
-internal sealed class JxlChromaUpsamplingStage : IJxlLoopFilterStage
+internal sealed class JxlChromaUpsamplingStage : IJxlNeighbourStage
 {
     private const float ThreeFour = 0.75f;
     private const float OneFour = 0.25f;

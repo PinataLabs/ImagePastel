@@ -82,13 +82,13 @@ public class JxlLoopFilterSlotTests
     private static JxlFrameHeader FrameHeader(JxlTestFrame frame)
         => JxlTestLayers.ReadFirstFrameHeader(new JxlTestLayers(16, 16).Add(frame).ToArray());
 
-    private static void Finish(JxlFrameDimensions frameDim, RecordingSink sink, params IJxlLoopFilterStage[] loopFilters)
+    private static void Finish(JxlFrameDimensions frameDim, RecordingSink sink, params IJxlNeighbourStage[] loopFilters)
         => Finish(FrameHeader(JxlTestFrame.Last(JxlTestLayers.ColourA)), frameDim, sink, loopFilters)?.Dispose();
 
     // Fills the frame with Sample and the padding past it with Padding, then finishes the frame.
-    private static JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, RecordingSink sink, params IJxlLoopFilterStage[] loopFilters)
+    private static JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, RecordingSink sink, params IJxlNeighbourStage[] loopFilters)
     {
-        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, frameDim, NumColorPlanes, NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(Configuration.Default.MemoryAllocator, frameDim, NumColorPlanes, new JxlChannelShift[NumColorPlanes + NumExtraChannels]);
         for (int c = 0; c < pipeline.NumChannels; c++)
         {
             Buffer2D<float> plane = pipeline.GetPlane(c);
@@ -102,11 +102,11 @@ public class JxlLoopFilterSlotTests
             }
         }
 
-        return pipeline.Finish(frameHeader, loopFilters, null, Array.Empty<IJxlLoopFilterStage>(), Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None);
+        return pipeline.Finish(frameHeader, loopFilters, null, Array.Empty<IJxlNeighbourStage>(), Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None);
     }
 
     // Writes, to each pixel of the colour channels, the input pixel at (dx, dy) from it.
-    private sealed class CopyStage : IJxlLoopFilterStage
+    private sealed class CopyStage : IJxlNeighbourStage
     {
         private readonly int dx;
         private readonly int dy;

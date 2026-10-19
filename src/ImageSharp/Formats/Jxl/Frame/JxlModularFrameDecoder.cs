@@ -327,8 +327,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             // libjxl copies a grey channel into all three colour channels (rgb_from_gray); this port
             // renders it as one plane, so it is converted once. A grey image whose frame has a colour
             // transform codes three channels, which the pipeline is given as three planes.
-            bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
-            int numColorPlanes = rgbFromGray ? 1 : 3;
+            int numColorPlanes = frameHeader.NumDecodedColorPlanes;
             DebugGuard.IsTrue(numColorPlanes == pipeline.NumColorPlanes, "The pipeline has a plane for each colour channel");
 
             bool xyb = frameHeader.ColorTransform == JxlColorTransform.Xyb;

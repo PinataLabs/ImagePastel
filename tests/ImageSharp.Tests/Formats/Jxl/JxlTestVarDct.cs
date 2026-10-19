@@ -172,14 +172,16 @@ internal sealed class JxlTestVarDct
     }
 
     /// <summary>
-    /// Writes a kQuantModeRAW encoding of a table of one block: the F16 denominator, then a Modular stream on
-    /// the global tree of the 3 x 64 entries, channel by channel, entry i being <paramref name="entry"/>(i).
+    /// Writes a kQuantModeRAW encoding of a table of <paramref name="blocks"/> 8x8 blocks (libjxl's
+    /// <c>required_size_x * required_size_y</c>, one by default): the F16 denominator, then a Modular stream
+    /// on the global tree of the 3 x 64 x <paramref name="blocks"/> entries, channel by channel and row by
+    /// row, entry i being <paramref name="entry"/>(i).
     /// </summary>
-    public static void WriteRawTable(JxlTestBitWriter w, ushort denominator, Func<int, int> entry)
+    public static void WriteRawTable(JxlTestBitWriter w, ushort denominator, Func<int, int> entry, int blocks = 1)
     {
         w.Write(3, 7); // kQuantModeRAW
         w.Write(16, denominator);
-        WriteModularStream(w, Enumerable.Range(0, 3 * 64).Select(entry));
+        WriteModularStream(w, Enumerable.Range(0, 3 * 64 * blocks).Select(entry));
     }
 
     /// <summary>Writes the distance bands of one band, whose seed is an F16 for every channel.</summary>

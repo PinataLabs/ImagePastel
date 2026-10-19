@@ -163,9 +163,7 @@ public class JxlUpsamplingTests
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), InputPath(name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, expected.Shape[3]);
 
-        JxlConformanceFrameResult result = Assert.Single(JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange));
-        TestContext.Current.TestOutputHelper?.WriteLine($"Peak error {result.PeakError * 255:G3} of one 8-bit step");
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
     }
 
     // Patches on an upsampled frame: the patches are drawn at the coded size, before the upsampling, and

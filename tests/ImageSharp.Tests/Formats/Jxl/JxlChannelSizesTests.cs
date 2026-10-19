@@ -33,7 +33,7 @@ public class JxlChannelSizesTests
     [InlineData(true, new[] { 0, 1, 0 }, 1u, 0u, new[] { 1, 1, 0, 0, 1, 1, 0, 0 })]
     [InlineData(true, new[] { 0, 2, 0 }, 2u, 4u, new[] { 2, 1, 1, 1, 2, 1, 2, 2 })]
     [InlineData(true, new[] { 3, 0, 3 }, 4u, 0u, new[] { 2, 2, 2, 3, 2, 2, 2, 2 })]
-    public void ChannelShifts_FrameHeader_GivesEachChannelItsShift(bool yCbCr, int[] chromaModes, uint upsampling, uint extraChannelUpsampling, int[] expected)
+    public void ChannelShifts_UpsamplingStagesOfTheFrame_GiveEachChannelItsShift(bool yCbCr, int[] chromaModes, uint upsampling, uint extraChannelUpsampling, int[] expected)
     {
         JxlTestFrame frame = JxlTestFrame.Last(JxlTestLayers.ColourA) with
         {
@@ -44,7 +44,9 @@ public class JxlChannelSizesTests
         };
         JxlFrameHeader frameHeader = JxlTestLayers.ReadFirstFrameHeader(new JxlTestLayers(16, 16).Add(frame).ToArray());
 
-        JxlChannelShift[] shifts = JxlRenderPipeline.ChannelShifts(frameHeader, 3);
+        JxlUpsamplingStages stages = JxlUpsamplingStages.Create(frameHeader);
+
+        JxlChannelShift[] shifts = JxlRenderPipeline.ChannelShifts(3, 1, stages.Chroma, stages.BeforePatches, stages.AfterPatches);
 
         Assert.Equal(4, shifts.Length);
         for (int c = 0; c < shifts.Length; c++)
@@ -124,7 +126,7 @@ public class JxlChannelSizesTests
         DiagonalUpsamplingStage stage = new();
         using RecordingSink sink = new();
 
-        pipeline.Finish(frameHeader, Array.Empty<IJxlLoopFilterStage>(), null, new IJxlLoopFilterStage[] { stage }, Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None)?.Dispose();
+        pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, new IJxlNeighbourStage[] { stage }, Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None)?.Dispose();
 
         // The stage ran over the channel's 5x7, wrote 10x14, and the channel shrank to the frame's 10x13.
         Assert.Equal((5, 7), (stage.XSize, stage.Rows));
@@ -155,7 +157,7 @@ public class JxlChannelSizesTests
     }
 
     // A 2x upsampling stage of the colour channels: see Finish_StageWithShift1.
-    private sealed class DiagonalUpsamplingStage : IJxlLoopFilterStage
+    private sealed class DiagonalUpsamplingStage : IJxlNeighbourStage
     {
         public int Border => 1;
 

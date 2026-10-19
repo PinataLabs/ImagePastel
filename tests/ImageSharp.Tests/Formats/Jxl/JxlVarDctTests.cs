@@ -65,8 +65,7 @@ public class JxlVarDctTests
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
 
-        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
     }
 
     // A grey image that is not XYB still codes three colour planes in a VarDCT frame, as libjxl's
@@ -87,8 +86,7 @@ public class JxlVarDctTests
         using Image<La16> image = Image.Load<La16>(CreateConfiguration(), codestream);
         NpyArray actual = JxlConformanceImages.ToNpy(image, channels);
 
-        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
     }
 
     // The djxl match above covers an adaptive quant field and non-zero chroma-from-luma maps only if the

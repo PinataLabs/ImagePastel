@@ -158,6 +158,14 @@ internal sealed partial class JxlModularFrameDecoder
     /// Reads a raw quantization table: its F16 denominator, then its entries as a Modular stream of three
     /// channels that uses the frame's global tree, histograms and context map.
     /// </summary>
+    /// <remarks>
+    /// libjxl's <c>DecodeQuantTable</c> is static and takes the frame's Modular decoder, which may be
+    /// <see langword="null"/>: then the stream has id 0 and a tree of its own. Only the encoder passes
+    /// <see langword="null"/>, when it round-trips its tables through the decoder
+    /// (<c>DequantMatricesRoundtrip</c> in lib/jxl/enc_quant_weights.cc); the decoder always passes its
+    /// own (<c>FrameDecoder::ProcessACGlobal</c>). This port's encoder writes no VarDCT frames, so the
+    /// branch is left out, and the method is an instance method of that decoder.
+    /// </remarks>
     /// <param name="requiredSizeX">The width of the table in coefficients.</param>
     /// <param name="requiredSizeY">The height of the table in coefficients.</param>
     /// <param name="br">The reader.</param>
