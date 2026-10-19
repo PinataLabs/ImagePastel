@@ -4,7 +4,7 @@
 // lib/jxl/dct-inl.h (CoeffBundle, DCT1DImpl, IDCT1DImpl, DCT1D, IDCT1D, ComputeScaledDCT,
 // ComputeScaledIDCT), lib/jxl/dct_scales.h (kSqrt2, DCTTotalResampleScale), lib/jxl/transpose-inl.h
 // (the generic transpose) and lib/jxl/dec_transforms-inl.h (ReinterpretingDCT, IDCT2TopBlock, and the
-// DCT cases of TransformToPixels and LowestFrequenciesFromDC).
+// cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -12,15 +12,15 @@ using System;
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
 /// <summary>
-/// The inverse transforms of the DCT strategies: libjxl's "Lowest Complexity Self Recursive Radix-2 DCT
-/// II/III" (Perera and Liu), unscaled, after the transposed coefficient layout of JPEG XL, for every
-/// size from 2x2 to 256x256; and the lowest frequencies a block takes from the DC image.
+/// The inverse transforms of the AC strategies: for the DCTs, libjxl's "Lowest Complexity Self Recursive
+/// Radix-2 DCT II/III" (Perera and Liu), unscaled, after the transposed coefficient layout of JPEG XL, for
+/// every size from 2x2 to 256x256; Identity; and AFV0 to AFV3. Also the lowest frequencies a block takes
+/// from the DC image.
 /// </summary>
 /// <remarks>
 /// libjxl runs the 1D transform on a vector of columns at once with Highway. Each lane does the same
 /// arithmetic, so this scalar port runs it one column at a time. libjxl's <c>MulAdd</c> and
 /// <c>NegMulAdd</c> are fused on AVX2; here the multiply and the add are separate (ADR 0004).
-/// The Identity and AFV strategies are not here: they come with D9f.
 /// </remarks>
 internal static partial class JxlDct
 {
@@ -39,7 +39,7 @@ internal static partial class JxlDct
     /// Transforms the coefficients of a DCT block into its pixels (libjxl's <c>TransformToPixels</c>).
     /// The coefficients are overwritten.
     /// </summary>
-    /// <param name="strategy">The strategy; any but Identity and AFV.</param>
+    /// <param name="strategy">The strategy.</param>
     /// <param name="coefficients">The coefficients, 64 per 8x8 block the strategy covers; used as scratch space.</param>
     /// <param name="pixels">The first pixel of the block.</param>
     /// <param name="pixelsStride">The distance between pixel rows.</param>
@@ -159,13 +159,66 @@ internal static partial class JxlDct
             }
 
             case JxlAcStrategyType.Identity:
+            {
+                // Four 4x4 squares of residuals about the pixel at (1, 1) of each, whose DCs are a 2x2
+                // Hadamard of the top-left coefficients. Slot (1, 1)'s residual belongs to pixel (0, 0).
+                Span<float> dcs = stackalloc float[4];
+                float block00 = coefficients[0];
+                float block01 = coefficients[1];
+                float block10 = coefficients[8];
+                float block11 = coefficients[9];
+                dcs[0] = block00 + block01 + block10 + block11;
+                dcs[1] = block00 + block01 - block10 - block11;
+                dcs[2] = block00 - block01 + block10 - block11;
+                dcs[3] = block00 - block01 - block10 + block11;
+                for (int y = 0; y < 2; y++)
+                {
+                    for (int x = 0; x < 2; x++)
+                    {
+                        float blockDc = dcs[(y * 2) + x];
+                        float residualSum = 0;
+                        for (int iy = 0; iy < 4; iy++)
+                        {
+                            for (int ix = 0; ix < 4; ix++)
+                            {
+                                if (ix == 0 && iy == 0)
+                                {
+                                    continue;
+                                }
+
+                                residualSum += coefficients[((y + (iy * 2)) * 8) + x + (ix * 2)];
+                            }
+                        }
+
+                        int centre = (((4 * y) + 1) * pixelsStride) + (4 * x) + 1;
+                        pixels[centre] = blockDc - (residualSum * (1.0f / 16));
+                        for (int iy = 0; iy < 4; iy++)
+                        {
+                            for (int ix = 0; ix < 4; ix++)
+                            {
+                                if (ix == 1 && iy == 1)
+                                {
+                                    continue;
+                                }
+
+                                pixels[(((y * 4) + iy) * pixelsStride) + (x * 4) + ix] =
+                                    coefficients[((y + (iy * 2)) * 8) + x + (ix * 2)] + pixels[centre];
+                            }
+                        }
+
+                        pixels[(y * 4 * pixelsStride) + (x * 4)] = coefficients[((y + 2) * 8) + x + 2] + pixels[centre];
+                    }
+                }
+
+                break;
+            }
+
             case JxlAcStrategyType.Afv0:
             case JxlAcStrategyType.Afv1:
             case JxlAcStrategyType.Afv2:
             case JxlAcStrategyType.Afv3:
             {
-                // D9f ports these; until then the AC metadata rejects them.
-                JxlThrowHelper.ThrowNotSupportedException($"The {strategy} AC strategy");
+                AfvTransformToPixels(strategy - JxlAcStrategyType.Afv0, coefficients, pixels, pixelsStride, scratch);
                 break;
             }
 

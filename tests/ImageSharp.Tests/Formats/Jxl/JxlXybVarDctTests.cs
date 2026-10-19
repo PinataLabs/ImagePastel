@@ -16,8 +16,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// XYB VarDCT frames, D8's done-check: the files made with <c>cjxl -e 2 --gaborish=0 --epf=0</c>
 /// (tests/Images/Input/Jxl/Generated/README.md), whose blocks are all DCT8 with the default quant tables;
 /// and D9e's: the files made with <c>cjxl -e 7 --gaborish=0 --epf=0</c>, which mix the DCT sizes from 2x2
-/// to 64x64, with their library quant tables and custom coefficient orders, but have no Identity or AFV
-/// blocks. The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
+/// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
+/// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
+/// field and a non-zero chroma-from-luma map. The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
 /// for lossy output"), and each case records the error measured when it was written.
 /// </summary>
 [Trait("Format", "Jxl")]
@@ -38,6 +39,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_sizes_noisy", 3)] // RMSE 6.7e-7, peak 2.5e-5
     [InlineData("vardct_xyb_sizes_fine", 3)] // RMSE 7.2e-7, peak 3.0e-5
     [InlineData("vardct_xyb_sizes_smooth", 3)] // RMSE 6.1e-7, peak 1.0e-5
+    [InlineData("vardct_xyb_identity_afv", 4)] // RMSE 4.1e-7, peak 2.8e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -59,6 +61,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_sizes_noisy")]
     [InlineData("vardct_xyb_sizes_fine")]
     [InlineData("vardct_xyb_sizes_smooth")]
+    [InlineData("vardct_xyb_identity_afv")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -70,11 +73,13 @@ public class JxlXybVarDctTests
     }
 
     // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
-    [Fact]
-    public void LoadRgba32_Alpha_IsWithinOneStepOfTheClampedReference()
+    [Theory]
+    [InlineData("vardct_xyb_alpha")]
+    [InlineData("vardct_xyb_identity_afv")]
+    public void LoadRgba32_Alpha_IsWithinOneStepOfTheClampedReference(string name)
     {
-        NpyArray expected = LoadReference("vardct_xyb_alpha");
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), InputPath("vardct_xyb_alpha"));
+        NpyArray expected = LoadReference(name);
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), InputPath(name));
 
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 4), 4, (i, c) => expected.Data[(i * 4) + c]);
     }
@@ -160,14 +165,12 @@ public class JxlXybVarDctTests
         Assert.Null(info.Metadata.IccProfile);
     }
 
-    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF (D9). vardct_xyb_identity_afv has
-    // Identity and AFV blocks (D9f). The others are the 64 x 64 image with one of the features of a later
-    // slice each.
+    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF (D9). The others are the 64 x 64 image
+    // with one of the features of a later slice each.
     [Theory]
     [InlineData("vardct_xyb_gaborish", "Loop filters")]
     [InlineData("vardct_xyb_e7", "Loop filters")]
     [InlineData("vardct_xyb_epf", "Loop filters")]
-    [InlineData("vardct_xyb_identity_afv", "AC strategy")]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)

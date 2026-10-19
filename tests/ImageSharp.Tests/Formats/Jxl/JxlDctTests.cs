@@ -190,6 +190,186 @@ public class JxlDctTests
         AssertClose(current, Transform(JxlAcStrategyType.Dct2X2, coefficients, 8, 8), 1e-6);
     }
 
+    // Identity holds the pixels of four 4x4 squares, interleaved like the coefficients of DCT4X4: square
+    // (qx, qy) takes slot (i, j) from coefficient row qy + 2i and column qx + 2j. Its mean is a 2x2
+    // Hadamard of coefficients 0, 1, 8 and 9, and its other slots hold residuals about the pixel at (1, 1),
+    // which is the mean less a sixteenth of the residuals. Each pixel is that pixel plus its own residual,
+    // but slot (1, 1)'s residual belongs to pixel (0, 0), whose slot holds the mean. Measured on x64: the
+    // largest error relative to the largest pixel is 1.1e-7.
+    [Fact]
+    public void TransformToPixels_Identity_MatchesTheDoublePrecisionDefinition()
+    {
+        double[] coefficients = RandomCoefficients(64, 1);
+        double[] expected = new double[64];
+        for (int qy = 0; qy < 2; qy++)
+        {
+            for (int qx = 0; qx < 2; qx++)
+            {
+                double residuals = 0;
+                for (int i = 0; i < 4; i++)
+                {
+                    for (int j = 0; j < 4; j++)
+                    {
+                        residuals += i == 0 && j == 0 ? 0 : IdentitySlot(coefficients, qx, qy, i, j);
+                    }
+                }
+
+                double centre = IdentityMean(coefficients, qx, qy) - (residuals / 16);
+                for (int i = 0; i < 4; i++)
+                {
+                    for (int j = 0; j < 4; j++)
+                    {
+                        double residual = (i, j) switch
+                        {
+                            (0, 0) => IdentitySlot(coefficients, qx, qy, 1, 1),
+                            (1, 1) => 0,
+                            _ => IdentitySlot(coefficients, qx, qy, i, j),
+                        };
+                        expected[((((qy * 4) + i) * 8) + (qx * 4)) + j] = centre + residual;
+                    }
+                }
+            }
+        }
+
+        AssertClose(expected, Transform(JxlAcStrategyType.Identity, coefficients, 8, 8), 1e-6);
+    }
+
+    // Each square of an Identity block has the mean that its Hadamard input gives it.
+    [Fact]
+    public void TransformToPixels_Identity_EachSquareHasItsMean()
+    {
+        double[] coefficients = RandomCoefficients(64, 11);
+        float[] pixels = Transform(JxlAcStrategyType.Identity, coefficients, 8, 8);
+        for (int qy = 0; qy < 2; qy++)
+        {
+            for (int qx = 0; qx < 2; qx++)
+            {
+                double sum = 0;
+                for (int y = 0; y < 4; y++)
+                {
+                    for (int x = 0; x < 4; x++)
+                    {
+                        sum += pixels[((((qy * 4) + y) * 8) + (qx * 4)) + x];
+                    }
+                }
+
+                Assert.Equal(IdentityMean(coefficients, qx, qy), sum / 16, 1e-6);
+            }
+        }
+    }
+
+    // The 4x4 corner of an AFV block has a basis of its own: 16 patterns that must be orthonormal, the
+    // first a constant 1/4. Pattern j is the corner of an AFV0 block whose only input is coefficient
+    // (2 (j / 4), 2 (j % 4)); pattern 0 comes from coefficients 0, 1 and 8, mixed to give the corner a
+    // DC of 1 and the two DCT parts none. Measured on x64: the largest error of a dot product is 8.2e-8.
+    [Fact]
+    public void TransformToPixels_AfvCorner_IsAnOrthonormalBasisWithAConstantFirstPattern()
+    {
+        double[][] basis = AfvCornerBasis();
+
+        for (int i = 0; i < 16; i++)
+        {
+            Assert.Equal(0.25, basis[0][i], 1e-7);
+        }
+
+        double worst = 0;
+        for (int j = 0; j < 16; j++)
+        {
+            for (int k = 0; k < 16; k++)
+            {
+                double dot = 0;
+                for (int i = 0; i < 16; i++)
+                {
+                    dot += basis[j][i] * basis[k][i];
+                }
+
+                worst = Math.Max(worst, Math.Abs(dot - (j == k ? 1 : 0)));
+            }
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest error {worst:G3}");
+        Assert.True(worst < 1e-6, $"Largest error {worst:G4}");
+    }
+
+    // An AFV block is three parts. The 4x4 corner at (4 (kind % 2), 4 (kind / 2)) takes the even rows and
+    // even columns of the coefficients in a basis of its own, mirrored in x for kinds 1 and 3 and in y for
+    // kinds 2 and 3. The 4x4 square beside it takes the even rows and odd columns as a DCT. The other four
+    // rows take the odd rows as an 8-wide, 4-tall DCT. Their DCs are 4 (c0 + c1 + c8), c0 - c1 + c8 and
+    // c0 - c8. Measured on x64: the largest error relative to the largest pixel is 2.0e-7.
+    [Theory]
+    [InlineData((int)JxlAcStrategyType.Afv0)]
+    [InlineData((int)JxlAcStrategyType.Afv1)]
+    [InlineData((int)JxlAcStrategyType.Afv2)]
+    [InlineData((int)JxlAcStrategyType.Afv3)]
+    public void TransformToPixels_Afv_MatchesItsThreeDoublePrecisionParts(int rawStrategy)
+    {
+        int kind = rawStrategy - (int)JxlAcStrategyType.Afv0;
+        int afvX = kind & 1;
+        int afvY = kind / 2;
+        double[][] basis = AfvCornerBasis();
+        double[] coefficients = RandomCoefficients(64, rawStrategy);
+        double c0 = coefficients[0];
+        double c1 = coefficients[1];
+        double c8 = coefficients[8];
+        double[] expected = new double[64];
+
+        // The corner.
+        double[] corner = new double[16];
+        for (int j = 0; j < 16; j++)
+        {
+            double c = j == 0 ? 4 * (c0 + c1 + c8) : coefficients[(2 * (j / 4) * 8) + (2 * (j % 4))];
+            for (int i = 0; i < 16; i++)
+            {
+                corner[i] += c * basis[j][i];
+            }
+        }
+
+        for (int y = 0; y < 4; y++)
+        {
+            for (int x = 0; x < 4; x++)
+            {
+                int cy = afvY == 1 ? 3 - y : y;
+                int cx = afvX == 1 ? 3 - x : x;
+                expected[(((afvY * 4) + y) * 8) + (afvX * 4) + x] = corner[(cy * 4) + cx];
+            }
+        }
+
+        // The square beside it.
+        double[] square = new double[16];
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                square[(i * 4) + j] = coefficients[(2 * i * 8) + (2 * j) + 1];
+            }
+        }
+
+        square[0] = c0 - c1 + c8;
+        double[] squarePixels = InverseDct(square, 4, 4);
+        for (int y = 0; y < 4; y++)
+        {
+            for (int x = 0; x < 4; x++)
+            {
+                expected[(((afvY * 4) + y) * 8) + (afvX == 1 ? 0 : 4) + x] = squarePixels[(y * 4) + x];
+            }
+        }
+
+        // The other four rows.
+        double[] rows = new double[32];
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 8; j++)
+            {
+                rows[(i * 8) + j] = coefficients[(((2 * i) + 1) * 8) + j];
+            }
+        }
+
+        rows[0] = c0 - c8;
+        Array.Copy(InverseDct(rows, 8, 4), 0, expected, (afvY == 1 ? 0 : 4) * 8, 32);
+
+        AssertClose(expected, Transform((JxlAcStrategyType)rawStrategy, coefficients, 8, 8), 1e-6);
+    }
+
     // The lowest frequencies that a block takes from the DC image must give each 8x8 block of its pixels
     // the mean that the DC image holds for it, when no other coefficient is set. The DC values are in
     // [-1, 1]. Measured on x64: the largest error is 0 for one 8x8 block, 1.1e-7 up to 32x32, 2.3e-7 at
@@ -241,6 +421,53 @@ public class JxlDctTests
 
         TestContext.Current.TestOutputHelper?.WriteLine($"Largest error {worst:G3}");
         Assert.True(worst < 4e-6, $"Largest error {worst:G4}");
+    }
+
+    // Slot (i, j) of square (qx, qy) of an Identity block.
+    private static double IdentitySlot(double[] coefficients, int qx, int qy, int i, int j)
+        => coefficients[((qy + (2 * i)) * 8) + qx + (2 * j)];
+
+    // The mean of square (qx, qy) of an Identity block: a 2x2 Hadamard of coefficients 0, 1, 8 and 9, in
+    // which coefficient 1 changes sign along y and coefficient 8 along x.
+    private static double IdentityMean(double[] coefficients, int qx, int qy)
+        => coefficients[0] + ((qy == 0 ? 1 : -1) * coefficients[1]) + ((qx == 0 ? 1 : -1) * coefficients[8]) + ((qx == qy ? 1 : -1) * coefficients[9]);
+
+    // The 16 patterns of the AFV corner, each as 16 pixels, read from AFV0 blocks with one input each.
+    private static double[][] AfvCornerBasis()
+    {
+        double[][] basis = new double[16][];
+        for (int j = 0; j < 16; j++)
+        {
+            double[] coefficients = new double[64];
+            if (j == 0)
+            {
+                coefficients[0] = 1.0 / 16;
+                coefficients[1] = 1.0 / 8;
+                coefficients[8] = 1.0 / 16;
+            }
+            else
+            {
+                coefficients[(2 * (j / 4) * 8) + (2 * (j % 4))] = 1;
+            }
+
+            float[] pixels = Transform(JxlAcStrategyType.Afv0, coefficients, 8, 8);
+            basis[j] = new double[16];
+            for (int i = 0; i < 16; i++)
+            {
+                basis[j][i] = pixels[((i / 4) * 8) + (i % 4)];
+            }
+
+            // Only the corner is set.
+            for (int i = 0; i < 64; i++)
+            {
+                if (i / 8 >= 4 || i % 8 >= 4)
+                {
+                    Assert.Equal(0, pixels[i], 1e-7);
+                }
+            }
+        }
+
+        return basis;
     }
 
     private static float[] Transform(JxlAcStrategyType type, double[] coefficients, int width, int height)

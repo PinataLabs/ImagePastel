@@ -252,12 +252,12 @@ public class JxlVarDctBoundsTests
         => AssertOutcome(new JxlTestVarDct(8, 8) { Sharpness = sharpness }.ToArray(), outcome, "Corrupted sharpness field");
 
     // dec_modular.cc DecodeAcMetadata: the raw strategy is in [0, 27). Strategy 26 (DCT128X256, 32 x 16
-    // blocks) fills a 256 x 128 frame. Identity (1) and AFV (14 to 17) are not supported until D9f.
+    // blocks) fills a 256 x 128 frame. Identity (1), AFV0 (14) and AFV3 (17) decode too.
     [Theory]
     [InlineData(8, 8, 0, Outcome.Decodes)]
-    [InlineData(8, 8, 1, Outcome.NotSupported)]
-    [InlineData(8, 8, 14, Outcome.NotSupported)]
-    [InlineData(8, 8, 17, Outcome.NotSupported)]
+    [InlineData(8, 8, 1, Outcome.Decodes)]
+    [InlineData(8, 8, 14, Outcome.Decodes)]
+    [InlineData(8, 8, 17, Outcome.Decodes)]
     [InlineData(256, 128, 26, Outcome.Decodes)]
     [InlineData(8, 8, 27, Outcome.Invalid)]
     [InlineData(8, 8, -1, Outcome.Invalid)]
