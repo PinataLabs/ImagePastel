@@ -113,31 +113,9 @@ internal static class JxlTreeLearner
         int i = 0;
         int y = 0;
         ulong x = 0;
-        void Advance(ulong amount)
-        {
-            x += amount;
-
-            // Detect row overflow (rare).
-            while (x >= (ulong)image.Channel[channelIds[i]].W)
-            {
-                x -= (ulong)image.Channel[channelIds[i]].W;
-                y++;
-
-                // Detect end-of-channel (even rarer).
-                if (y == image.Channel[channelIds[i]].H)
-                {
-                    i++;
-                    y = 0;
-                    if (i >= channelIds.Count)
-                    {
-                        return;
-                    }
-                }
-            }
-        }
-
-        Advance(rng.Geometric(dist));
-        for (; i < channelIds.Count; Advance(unchecked(rng.Geometric(dist) + 1u)))
+        for (bool more = Advance(image, channelIds, rng.Geometric(dist), ref i, ref y, ref x);
+             more;
+             more = Advance(image, channelIds, unchecked(rng.Geometric(dist) + 1u), ref i, ref y, ref x))
         {
             Span<int> row = image.Channel[channelIds[i]].Row(y);
             int xi = (int)x;
@@ -145,6 +123,33 @@ internal static class JxlTreeLearner
             int xp = xi == 0 ? 1 : xi - 1;
             diffSamples.Add(unchecked((int)((long)row[xi] - row[xp])));
         }
+    }
+
+    // libjxl's advance lambda in CollectPixelSamples: moves the sample position (channel i, row y,
+    // column x) on by amount pixels. Returns false once it runs past the last channel.
+    private static bool Advance(JxlModularImage image, List<int> channelIds, ulong amount, ref int i, ref int y, ref ulong x)
+    {
+        x += amount;
+
+        // Detect row overflow (rare).
+        while (x >= (ulong)image.Channel[channelIds[i]].W)
+        {
+            x -= (ulong)image.Channel[channelIds[i]].W;
+            y++;
+
+            // Detect end-of-channel (even rarer).
+            if (y == image.Channel[channelIds[i]].H)
+            {
+                i++;
+                y = 0;
+                if (i >= channelIds.Count)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
