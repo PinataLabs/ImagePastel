@@ -121,8 +121,8 @@ internal static class JxlConformanceComparer
 }
 
 /// <summary>
-/// The lossy check of the generated files (docs/jxl/spec.md, "Tolerance for lossy output"): XYB output
-/// cannot match djxl bit for bit, because libjxl uses FMA and this port does not, so each frame's worst
+/// The lossy check of the generated files (docs/jxl/spec.md, "Tolerance for lossy output"): XYB and VarDCT
+/// output cannot match djxl bit for bit, because libjxl uses FMA and this port does not, so each frame's worst
 /// channel RMSE must be at most 1e-4 and its peak error at most 4e-3.
 /// </summary>
 internal static class JxlLossyComparer

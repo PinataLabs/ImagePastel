@@ -22,7 +22,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Decodes the Modular parts of a frame: the global stream with the tree, histograms and global
 /// channels, then each group, and finally undoes the global transforms and converts to float.
 /// </summary>
-internal sealed class JxlModularFrameDecoder : IDisposable
+internal sealed partial class JxlModularFrameDecoder : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
