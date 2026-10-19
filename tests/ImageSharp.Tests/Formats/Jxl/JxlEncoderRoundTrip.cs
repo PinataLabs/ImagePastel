@@ -125,6 +125,7 @@ internal static class JxlEncoderRoundTrip
     {
         TheoryData<string, string, int, int> cases = new();
         AddSingleGroup8BitCases(cases);
+        AddMultiGroup8BitCases(cases);
         return cases;
     }
 
@@ -141,6 +142,26 @@ internal static class JxlEncoderRoundTrip
                 }
             }
         }
+    }
+
+    // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to
+    // 400 pixels on each side, so 257x1 and 1x257 are still one group; the others cross the 256-pixel
+    // group and the 2048-pixel LF group boundaries, or are exact multiples of them.
+    private static void AddMultiGroup8BitCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pixelType in new[] { nameof(L8), nameof(Rgb24) })
+        {
+            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (300, 513), (2049, 3), (256, 512) })
+            {
+                cases.Add(pixelType, "noise", width, height);
+                cases.Add(pixelType, "gradient", width, height);
+            }
+        }
+
+        // The large cases are slow to encode, so each runs once: an exact multiple of the LF group,
+        // and four LF groups with partial groups at both edges.
+        cases.Add(nameof(L8), "gradient", 2048, 2048);
+        cases.Add(nameof(Rgb24), "noise", 2051, 2309);
     }
 
     private static async Task RunAsync<TPixel>(Reader reader, string pattern, int width, int height)

@@ -100,21 +100,6 @@ public class JxlEncoderTests
     }
 
     [Theory]
-    [InlineData(401, 1)]
-    [InlineData(1, 401)]
-    [InlineData(512, 512)]
-    public void Encode_LargerThanOneGroup_ThrowsNotSupportedNamingE1c(int width, int height)
-    {
-        using Image<L8> image = new(width, height);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
-
-        Assert.Contains("E1c", ex.Message);
-        Assert.Equal(0, stream.Length);
-    }
-
-    [Theory]
     [InlineData(400, 400)]
     [InlineData(257, 3)]
     public void Encode_OneLargerGroup_RoundTripsThroughOurDecoder(int width, int height)
