@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -33,6 +34,18 @@ public class JxlSupportedFeaturesTests
     [InlineData(256, "frame flags")]
     public void Decode_FrameFlag_IsNotSupported(ulong flags, string feature)
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }, feature);
+
+    // Upsampling comes with D10.
+    [Theory]
+    [InlineData(2)]
+    [InlineData(8)]
+    public void Decode_UpsampledFrame_IsNotSupported(uint upsampling)
+        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling }, "Upsampling");
+
+    // Patches on a VarDCT frame come with D12; on a Modular frame they decode (JxlLayersTests).
+    [Fact]
+    public void Decode_VarDctFrameWithPatches_IsNotSupported()
+        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Encoding = JxlFrameEncoding.VarDct, Flags = 2 }, "Patches on VarDCT frames");
 
     [Fact]
     public void Decode_SkipAdaptiveDcSmoothingOnModularFrame_Decodes()

@@ -1,0 +1,142 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.PixelFormats;
+using Xunit;
+
+namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+
+/// <summary>
+/// The lossy conformance vectors through the public entry points: <c>Image.Load</c> picks the pixel type and
+/// gives pixels within one quantisation step of the clamped reference (docs/jxl/spec.md, "Tolerance for lossy
+/// output"), and <c>Identify</c> reports the size, channels and colour encoding.
+/// </summary>
+[Trait("Format", "Jxl")]
+public class JxlConformanceLoadTests
+{
+    private static CancellationToken CancellationToken => TestContext.Current.CancellationToken;
+
+    /// <summary>How the reference planes relate to the pixels of an <see cref="Image{TPixel}"/>.</summary>
+    public enum ReferenceSpace
+    {
+        /// <summary>The planes hold the pixels' encoding.</summary>
+        AsCoded,
+
+        /// <summary>
+        /// The planes are linear sRGB, as djxl renders an XYB image with an ICC profile; the pixels are sRGB (ADR 0002).
+        /// </summary>
+        LinearSrgb,
+
+        /// <summary>
+        /// The colour planes are premultiplied by alpha; the pixels hold straight alpha. Dividing by a small alpha
+        /// magnifies any error without bound, so the pixels are premultiplied again by the reference alpha, and
+        /// compared with the reference colour clamped to [0, alpha].
+        /// </summary>
+        Premultiplied,
+    }
+
+    // Measured: opsin_inverse, animation_icos4d and grayscale_public_university are within 0.50 of one
+    // step, which is the rounding. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
+    // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
+    // light, and the sRGB curve magnifies that in the shadows.
+    [Theory]
+    [InlineData("opsin_inverse", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("grayscale", typeof(L8), ReferenceSpace.LinearSrgb)]
+    [InlineData("alpha_premultiplied", typeof(Rgba64), ReferenceSpace.Premultiplied)]
+    [InlineData("animation_icos4d", typeof(Rgba32), ReferenceSpace.AsCoded)]
+    [InlineData("grayscale_public_university", typeof(L8), ReferenceSpace.AsCoded)]
+    public async Task Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference(string id, Type pixelType, ReferenceSpace space)
+    {
+        JxlConformanceVector vector = JxlConformanceVector.Load(id);
+        NpyArray expected = await JxlConformanceData.LoadReferenceImageAsync(vector, CancellationToken);
+        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
+
+        using Image image = Image.Load(CreateConfiguration(), input);
+
+        Assert.Equal(typeof(Image<>).MakeGenericType(pixelType), image.GetType());
+        Assert.Equal(expected.Shape[0], image.Frames.Count);
+        int channels = expected.Shape[3];
+        using Image<RgbaVector> pixels = image.CloneAs<RgbaVector>();
+        NpyArray actual = JxlConformanceImages.ToNpy(pixels, channels);
+        Assert.Equal(expected.Shape, actual.Shape);
+
+        double step = 1.0 / ((1 << (image.PixelType.BitsPerPixel / channels)) - 1);
+        double worst = 0;
+        for (int i = 0; i < expected.Data.Length; i++)
+        {
+            (double a, double e) = Compared(expected.Data, actual.Data, i, channels, space);
+            worst = Math.Max(worst, Math.Abs(a - e) / step);
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one step");
+        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} steps");
+    }
+
+    // The colour space and transfer function are named as strings, because their enums are internal.
+    // A null colour space means an ICC profile.
+    [Theory]
+    [InlineData("opsin_inverse", 500, 606, 24, "Rgb", "Srgb", 0, true)]
+    [InlineData("grayscale", 200, 200, 8, null, null, 0, true)]
+    [InlineData("alpha_premultiplied", 1024, 1024, 52, "Rgb", "Srgb", 1, true)] // 12-bit RGB, 16-bit alpha
+    [InlineData("animation_icos4d", 128, 128, 32, "Rgb", "Srgb", 1, true)]
+    [InlineData("bike", 2048, 2560, 24, "Rgb", "Bt709", 0, true)]
+    [InlineData("grayscale_public_university", 2880, 1620, 8, "Gray", "Srgb", 0, false)]
+    public async Task Identify_ReportsSizeChannelsAndColourEncoding(string id, int width, int height, int bitsPerPixel, string colorSpace, string transferFunction, int extraChannels, bool xyb)
+    {
+        string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
+
+        await using FileStream stream = File.OpenRead(input);
+        IImageInfo info = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken);
+
+        Assert.Equal(width, info.Width);
+        Assert.Equal(height, info.Height);
+        Assert.Equal(bitsPerPixel, info.PixelType.BitsPerPixel);
+        JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.Equal(xyb, metadata.IsXybEncoded);
+        Assert.Equal(extraChannels, metadata.ExtraChannels.Count);
+        if (colorSpace is null)
+        {
+            Assert.Null(metadata.ColorEncoding);
+            Assert.NotNull(metadata.OriginalIccProfile);
+        }
+        else
+        {
+            Assert.Equal(colorSpace, metadata.ColorEncoding.ColorSpace.ToString());
+            Assert.Equal(transferFunction, metadata.ColorEncoding.Tf.TransferFunction.ToString());
+            Assert.Null(metadata.OriginalIccProfile);
+        }
+    }
+
+    // Sample i of the pixels and of the reference, in the space where they are compared.
+    private static (double Actual, double Expected) Compared(float[] expected, float[] actual, int i, int channels, ReferenceSpace space)
+    {
+        int c = i % channels;
+        double reference = Math.Clamp(expected[i], 0F, 1F);
+        switch (space)
+        {
+            case ReferenceSpace.LinearSrgb:
+                return (actual[i], LinearToSrgb(reference));
+            case ReferenceSpace.Premultiplied when c < channels - 1:
+                double alpha = Math.Clamp(expected[i - c + channels - 1], 0F, 1F);
+                return (actual[i] * alpha, Math.Min(reference, alpha));
+            default:
+                return (actual[i], reference);
+        }
+    }
+
+    // The sRGB encoding of IEC 61966-2-1, in double precision.
+    private static double LinearToSrgb(double v) => v <= 0.0031308 ? 12.92 * v : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
+
+    private static Configuration CreateConfiguration()
+    {
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
+        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
+        return configuration;
+    }
+}

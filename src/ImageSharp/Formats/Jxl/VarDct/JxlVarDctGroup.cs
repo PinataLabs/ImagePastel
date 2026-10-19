@@ -214,9 +214,15 @@ internal static class JxlVarDctGroup
                     DequantBlock(invGlobalScale, rowQuant[bx], state.XDmMultiplier, state.BDmMultiplier, xCcMul, bCcMul, acs.Strategy, size, state.Matrices, acs.CoveredBlocksY * acs.CoveredBlocksX, state.QuantBiases, qblock, block);
                     for (int c = 0; c < 3; c++)
                     {
-                        // LowestFrequenciesFromDC: the DC of this block.
-                        float dc = state.Dc[c].DangerousGetRowSpan(ry0[c] + sby[c])[rx0[c] + sbx[c]];
-                        JxlDct.LowestFrequenciesFromDcDct8(dc, block.AsSpan(c * size, size));
+                        // LowestFrequenciesFromDC reads the DC values of the blocks the varblock covers,
+                        // from a copy whose rows are CoveredBlocksX apart.
+                        int dcStride = acs.CoveredBlocksX;
+                        for (int iy = 0; iy < acs.CoveredBlocksY; iy++)
+                        {
+                            state.Dc[c].DangerousGetRowSpan(ry0[c] + sby[c] + iy).Slice(rx0[c] + sbx[c], dcStride).CopyTo(cache.Dc.AsSpan(iy * dcStride));
+                        }
+
+                        JxlDct.LowestFrequenciesFromDc(acs, cache.Dc, dcStride, block.AsSpan(c * size, size), cache.Scratch);
                     }
 
                     foreach (int c in ChannelOrder)
@@ -230,7 +236,7 @@ internal static class JxlVarDctGroup
                         Buffer2D<float> plane = planes[c];
                         int x = (px0 >> hshift[c]) + (sbx[c] * BlockDim);
                         int y = (py0 >> vshift[c]) + (sby[c] * BlockDim);
-                        TransformToPixels(block.AsSpan(c * size, size), plane, x, y);
+                        TransformToPixels(acs, block.AsSpan(c * size, size), plane, x, y, cache);
                     }
 
                     bx += llfX;
@@ -239,14 +245,16 @@ internal static class JxlVarDctGroup
         }
     }
 
-    // TransformToPixels for DCT8, into the 8x8 pixels at (x, y) of the plane.
-    private static void TransformToPixels(Span<float> coefficients, Buffer2D<float> plane, int x, int y)
+    // TransformToPixels, into the pixels of the varblock at (x, y) of the plane.
+    private static void TransformToPixels(JxlAcStrategy acs, Span<float> coefficients, Buffer2D<float> plane, int x, int y, JxlVarDctGroupCache cache)
     {
-        Span<float> pixels = stackalloc float[DctBlockSize];
-        JxlDct.TransformToPixelsDct8(coefficients, pixels, BlockDim);
-        for (int iy = 0; iy < BlockDim; iy++)
+        int width = acs.CoveredBlocksX * BlockDim;
+        int height = acs.CoveredBlocksY * BlockDim;
+        Span<float> pixels = cache.Pixels.AsSpan(0, width * height);
+        JxlDct.TransformToPixels(acs, coefficients, pixels, width, cache.Scratch);
+        for (int iy = 0; iy < height; iy++)
         {
-            pixels.Slice(iy * BlockDim, BlockDim).CopyTo(plane.DangerousGetRowSpan(y + iy).Slice(x, BlockDim));
+            pixels.Slice(iy * width, width).CopyTo(plane.DangerousGetRowSpan(y + iy).Slice(x, width));
         }
     }
 

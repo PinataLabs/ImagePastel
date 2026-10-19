@@ -353,10 +353,12 @@ internal sealed class JxlTestLayers
 
         if (!useDcFrame)
         {
-            w.Write(2, 0); // upsampling 1
+            // U32(Val(1), Val(2), Val(4), Val(8)): the selector is log2 of the upsampling.
+            ulong upsampling = (ulong)JxlBits.FloorLog2Nonzero(frame.Upsampling);
+            w.Write(2, upsampling);
             for (int i = 0; i < this.numExtraChannels; i++)
             {
-                w.Write(2, 0); // extra channel upsampling 1
+                w.Write(2, upsampling); // the extra channels are upsampled as the colour channels
             }
         }
 
@@ -498,6 +500,9 @@ internal sealed record JxlTestFrame(byte[] Section)
 
     /// <summary>Gets a value indicating whether the frame has the YCbCr colour transform, with no chroma subsampling; not for XYB images.</summary>
     public bool YCbCr { get; init; }
+
+    /// <summary>Gets the upsampling of the colour and extra channels: 1, 2, 4 or 8.</summary>
+    public uint Upsampling { get; init; } = 1;
 
     public bool Crop { get; init; }
 

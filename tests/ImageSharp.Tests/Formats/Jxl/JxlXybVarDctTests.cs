@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
@@ -14,9 +15,13 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// XYB VarDCT frames, D8's done-check: the files made with <c>cjxl -e 2 --gaborish=0 --epf=0</c>
-/// (tests/Images/Input/Jxl/Generated/README.md), whose blocks are all DCT8 with the default quant tables.
-/// The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
-/// for lossy output"), and each case records the error measured when it was written.
+/// (tests/Images/Input/Jxl/Generated/README.md), whose blocks are all DCT8 with the default quant tables;
+/// and D9e's: the files made with <c>cjxl -e 7 --gaborish=0 --epf=0</c>, which mix the DCT sizes from 2x2
+/// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
+/// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
+/// field and a non-zero chroma-from-luma map. The planes are compared with djxl's float output at the
+/// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
+/// measured when it was written.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlXybVarDctTests
@@ -32,6 +37,12 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_alpha", 4)] // RMSE 3.0e-6, peak 4.1e-5
     [InlineData("vardct_xyb_icc", 3)] // RMSE 1.4e-6, peak 7.7e-6
     [InlineData("vardct_xyb_grey_d50", 1)] // RMSE 1.1e-7, peak 7.8e-7
+    [InlineData("vardct_xyb_strategies", 3)] // RMSE 9.8e-7, peak 1.3e-5
+    [InlineData("vardct_xyb_sizes_noisy", 3)] // RMSE 6.7e-7, peak 2.5e-5
+    [InlineData("vardct_xyb_sizes_fine", 3)] // RMSE 7.2e-7, peak 3.0e-5
+    [InlineData("vardct_xyb_sizes_smooth", 3)] // RMSE 6.1e-7, peak 1.0e-5
+    [InlineData("vardct_xyb_identity_afv", 4)] // RMSE 4.1e-7, peak 2.8e-5
+    [InlineData("vardct_xyb_e7", 3)] // Gaborish, EPF (1 iteration) and other block sizes: RMSE 1.1e-6, peak 1.7e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -49,6 +60,11 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_300x200_d05")]
     [InlineData("vardct_xyb_600x400_d3")]
     [InlineData("vardct_xyb_grey")]
+    [InlineData("vardct_xyb_strategies")]
+    [InlineData("vardct_xyb_sizes_noisy")]
+    [InlineData("vardct_xyb_sizes_fine")]
+    [InlineData("vardct_xyb_sizes_smooth")]
+    [InlineData("vardct_xyb_identity_afv")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -60,11 +76,13 @@ public class JxlXybVarDctTests
     }
 
     // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
-    [Fact]
-    public void LoadRgba32_Alpha_IsWithinOneStepOfTheClampedReference()
+    [Theory]
+    [InlineData("vardct_xyb_alpha")]
+    [InlineData("vardct_xyb_identity_afv")]
+    public void LoadRgba32_Alpha_IsWithinOneStepOfTheClampedReference(string name)
     {
-        NpyArray expected = LoadReference("vardct_xyb_alpha");
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), InputPath("vardct_xyb_alpha"));
+        NpyArray expected = LoadReference(name);
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), InputPath(name));
 
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 4), 4, (i, c) => expected.Data[(i * 4) + c]);
     }
@@ -150,13 +168,23 @@ public class JxlXybVarDctTests
         Assert.Null(info.Metadata.IccProfile);
     }
 
-    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF and uses other block sizes (D9).
-    // The others are the 64 x 64 image with one of the features of a later slice each.
+    // The djxl match above covers an adaptive quant field and a non-zero chroma-from-luma map only if the
+    // file has them. Read from the decoder's state after the DC groups: the quant field over the first
+    // blocks of the varblocks, and how many tiles of each map are not 0.
     [Theory]
-    [InlineData("vardct_xyb_e7", "Loop filters")]
-    [InlineData("vardct_xyb_gaborish", "Loop filters")]
-    [InlineData("vardct_xyb_epf", "Loop filters")]
-    [InlineData("vardct_xyb_strategies", "AC strategy")]
+    [InlineData("vardct_xyb_identity_afv", 5, 18, 1, 0)] // 5 x 3 tiles
+    [InlineData("vardct_xyb_strategies", 6, 8, 0, 0)] // one tile
+    public void DecodeDcGroups_QuantFieldAndChromaFromLuma(string name, int minQuant, int maxQuant, int nonZeroYtoX, int nonZeroYtoB)
+    {
+        using JxlDecodedDcGroups dc = JxlDecodedDcGroups.Decode(File.ReadAllBytes(InputPath(name)));
+
+        Assert.Equal((minQuant, maxQuant), dc.QuantFieldRange());
+        Assert.Equal(nonZeroYtoX, dc.State.Cmap.YtoXMap.Count(v => v != 0));
+        Assert.Equal(nonZeroYtoB, dc.State.Cmap.YtoBMap.Count(v => v != 0));
+    }
+
+    // The 64 x 64 image with one of the features of a later slice each.
+    [Theory]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
