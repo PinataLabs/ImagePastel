@@ -293,6 +293,23 @@ internal static class JxlEncoderRoundTrip
         {
             cases.Add(pixelType, "translucent-icon", 64, 64);
         }
+
+        // The other pixel types: the 8-bit orders and unsigned packed types, stored as 8-bit or 16-bit
+        // integers, and the signed types, stored as float32 of their scaled values. The patterns give
+        // signed types negative values. Halves are checked in JxlEncoderSampleFormatTests, because the
+        // decoders clamp what f16 stores of them.
+        foreach (string pixelType in new[]
+        {
+            nameof(A8), nameof(Bgr24), nameof(Bgra32), nameof(Argb32), nameof(Abgr32), nameof(Byte4),
+            nameof(Rg32), nameof(Bgr565), nameof(Bgra4444), nameof(Bgra5551), nameof(Rgba1010102),
+            nameof(NormalizedByte4), nameof(NormalizedShort2), nameof(NormalizedShort4), nameof(Short2), nameof(Short4),
+        })
+        {
+            foreach (string pattern in new[] { "noise", "translucent" })
+            {
+                cases.Add(pixelType, pattern, 17, 23);
+            }
+        }
     }
 
     private static Rgba64 WithAlpha(Rgba64 colour, ushort alpha)
@@ -394,7 +411,12 @@ internal static class JxlEncoderRoundTrip
 
         using MemoryStream stream = new(encoded);
         using Image<TPixel> actual = MagickReferenceDecoder.HighBitDepthInstance.Decode<TPixel>(Configuration.Default, stream, CancellationToken.None);
-        ImageComparer.Exact.VerifySimilarity(expected, actual);
+
+        // Magick rounds float samples to 16 bits itself, and a float between two 16-bit steps can round
+        // the other way than ImageSharp rounds it. Our decoder checks the float samples exactly.
+        bool floatSamples = Image.Identify(CreateConfiguration(), new MemoryStream(encoded)).Metadata.GetFormatMetadata(JxlFormat.Instance).ExponentBitsPerSample != 0;
+        ImageComparer comparer = floatSamples ? ImageComparer.Tolerant(0, perPixelManhattanThreshold: 4) : ImageComparer.Exact;
+        comparer.VerifySimilarity(expected, actual);
     }
 
     public static async Task AssertDjxlExactAsync<TPixel>(Image<TPixel> expected, byte[] encoded, string name, CancellationToken cancellationToken)
@@ -411,7 +433,7 @@ internal static class JxlEncoderRoundTrip
         await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
 
         await JxlTools.RunAsync("djxl", cancellationToken, jxlPath, pngPath);
-        if (typeof(TPixel) == typeof(RgbaVector))
+        if (Image.Identify(CreateConfiguration(), new MemoryStream(encoded)).Metadata.GetFormatMetadata(JxlFormat.Instance).ExponentBitsPerSample != 0)
         {
             // djxl writes float samples to a PNG at 16 bits, so only its acceptance of the file is checked.
             return;

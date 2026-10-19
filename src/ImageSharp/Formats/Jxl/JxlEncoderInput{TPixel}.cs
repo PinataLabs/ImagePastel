@@ -29,51 +29,45 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 internal static class JxlEncoderInput<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>
 {
-    private static readonly SampleKind Kind = GetSampleKind();
+    // The sample layout of the pixel type, from the table in GetLayout.
+    private static readonly PixelLayout Layout = GetLayout();
 
-    // How the samples of a pixel type are read: as 8-bit or 16-bit integers through La32 (grey) or
-    // Rgba64 (colour), or as floats through Vector4.
+    // How the samples of a pixel type are read and stored. Integers are read through La32 (grey) or
+    // Rgba64 (colour) and stored at 8 or 16 bits. A half is read through ToVector4 and stored as f16
+    // (16 bits, 5 exponent bits), which holds it exactly. A float is read through ToVector4 and stored
+    // as float32. A signed sample, or one outside [0, 1], is read through its scaled vector (the mapping
+    // that ImageSharp's other encoders and the decoder use), which float32 holds exactly but 16-bit
+    // integers clamp, and stored as float32.
     private enum SampleKind
     {
         Integer8,
         Integer16,
+        Half,
         Float,
+        ScaledFloat,
     }
 
     /// <summary>
     /// Gets a value indicating whether the pixel type is greyscale, which gives one colour channel
     /// and a grey colour encoding.
     /// </summary>
-    public static bool IsGray { get; } = typeof(TPixel) == typeof(L8) || typeof(TPixel) == typeof(L16) || typeof(TPixel) == typeof(La16) || typeof(TPixel) == typeof(La32);
+    public static bool IsGray => Layout.IsGray;
 
     /// <summary>
     /// Gets a value indicating whether the pixel type has alpha, which gives one straight alpha extra
     /// channel at the colour depth.
     /// </summary>
-    public static bool HasAlpha { get; } = GetHasAlpha();
-
-    /// <summary>
-    /// Gets the bits per sample the pixel type holds: 8 for 8-bit types, 32 for float types, and 16 for
-    /// 16-bit types and every other type.
-    /// </summary>
-    public static uint BitsPerSample => Kind switch
-    {
-        SampleKind.Integer8 => 8,
-        SampleKind.Float => 32,
-        _ => 16,
-    };
-
-    /// <summary>Gets the exponent bits per sample the pixel type holds: 8 for float types, otherwise 0.</summary>
-    public static uint ExponentBitsPerSample => Kind == SampleKind.Float ? 8u : 0u;
+    public static bool HasAlpha => Layout.HasAlpha;
 
     /// <summary>
     /// Checks that a bit depth can be written, as libjxl's <c>CheckValidBitdepth</c>: 1 to 24 bits for
     /// integer samples, and for floats at most 8 exponent bits and between 3 and 24 mantissa bits.
     /// </summary>
-    /// <param name="bits">The bits per sample.</param>
-    /// <param name="exponentBits">The exponent bits per sample.</param>
-    public static void CheckValidBitdepth(uint bits, uint exponentBits)
+    /// <param name="bitDepth">The bit depth.</param>
+    public static void CheckValidBitdepth(JxlBitDepth bitDepth)
     {
+        uint bits = bitDepth.BitsPerSample;
+        uint exponentBits = bitDepth.ExponentBitsPerSample;
         if (exponentBits == 0)
         {
             if (bits is < 1 or > 24)
@@ -86,6 +80,43 @@ internal static class JxlEncoderInput<TPixel>
             JxlThrowHelper.ThrowImageFormatException($"Invalid JPEG XL bit depth: {bits} bits with {exponentBits} exponent bits per float sample.");
         }
     }
+
+    /// <summary>
+    /// Chooses the stored depth of the samples of <paramref name="image"/>. A requested depth (from
+    /// <see cref="JxlMetadata"/>, as cjxl keeps the depth of the file it reads) must be valid, and is the
+    /// stored depth when it holds every sample losslessly: an integer depth holds integer samples that
+    /// each convert to it and back unchanged, as those of a file decoded at that depth do, and a float
+    /// layout holds float samples whose own layout has no more exponent or mantissa bits. Otherwise the
+    /// stored depth is the depth of the pixel type: 8 or 16 bits for integer types, f16 for halves, and
+    /// float32 for other float and signed types.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <param name="requested">The requested depth, or <see langword="null"/> when none is set.</param>
+    /// <returns>The stored depth.</returns>
+    public static JxlBitDepth ChooseBitDepth(Image<TPixel> image, JxlBitDepth requested)
+    {
+        if (requested is not null)
+        {
+            CheckValidBitdepth(requested);
+            if (HoldsSamples(image, requested))
+            {
+                return requested;
+            }
+        }
+
+        return CreateBitDepth(Layout.BitsPerSample, Layout.ExponentBitsPerSample);
+    }
+
+    /// <summary>Creates a bit depth.</summary>
+    /// <param name="bits">The bits per sample.</param>
+    /// <param name="exponentBits">The exponent bits per sample, 0 for integers.</param>
+    /// <returns>The bit depth.</returns>
+    public static JxlBitDepth CreateBitDepth(uint bits, uint exponentBits) => new()
+    {
+        BitsPerSample = bits,
+        ExponentBitsPerSample = exponentBits,
+        FloatingPointSample = exponentBits != 0,
+    };
 
     /// <summary>
     /// Copies the colour samples of <paramref name="image"/> into the first channels of
@@ -222,88 +253,131 @@ internal static class JxlEncoderInput<TPixel>
         }
     }
 
+    // Whether the stored depth `bitDepth` holds every sample of the image losslessly (see ChooseBitDepth).
+    private static bool HoldsSamples(Image<TPixel> image, JxlBitDepth bitDepth)
+    {
+        bool integerSamples = Layout.ExponentBitsPerSample == 0;
+        if (bitDepth.FloatingPointSample)
+        {
+            uint mantissaBits = bitDepth.BitsPerSample - bitDepth.ExponentBitsPerSample - 1;
+            uint ownMantissaBits = Layout.BitsPerSample - Layout.ExponentBitsPerSample - 1;
+            return !integerSamples && bitDepth.ExponentBitsPerSample >= Layout.ExponentBitsPerSample && mantissaBits >= ownMantissaBits;
+        }
+
+        if (!integerSamples)
+        {
+            return false;
+        }
+
+        int bits = (int)bitDepth.BitsPerSample;
+        if (bits >= Layout.BitsPerSample)
+        {
+            return true;
+        }
+
+        // Each row is stored as CopyChannels stores it, then turned back into pixels as the decoder
+        // does: the integers scaled to [0, 1] in float (libjxl's SingleFromSingle below 23 bits), a grey
+        // plane in every colour component, then the scaled conversion to the pixel type. The depth holds
+        // the samples when that gives every pixel back.
+        int width = image.Width;
+        int components = IsGray ? 1 : 3;
+        double max = (1u << bits) - 1;
+        float inverse = (float)(1.0 / max);
+        float scale = Layout.Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
+        Configuration configuration = image.GetConfiguration();
+        using RowReader reader = new(image);
+        using IMemoryOwner<Vector4> decodedOwner = configuration.MemoryAllocator.Allocate<Vector4>(width);
+        using IMemoryOwner<TPixel> pixelsOwner = configuration.MemoryAllocator.Allocate<TPixel>(width);
+        Span<Vector4> decoded = decodedOwner.Memory.Span.Slice(0, width);
+        Span<TPixel> pixels = pixelsOwner.Memory.Span.Slice(0, width);
+        Span<int> samples = reader.Samples;
+        Span<float> floats = reader.Floats;
+        for (int y = 0; y < image.Height; y++)
+        {
+            reader.Read(y);
+            decoded.Fill(new Vector4(0, 0, 0, 1));
+            for (int i = 0; i < components + (HasAlpha ? 1 : 0); i++)
+            {
+                int component = i < components ? i : 3;
+                reader.GetIntegers(component, samples);
+                for (int x = 0; x < width; x++)
+                {
+                    floats[x] = samples[x] * scale;
+                }
+
+                FloatToInt(floats, samples, bits, 0, false, max);
+                for (int x = 0; x < width; x++)
+                {
+                    float value = samples[x] * inverse;
+                    ref Vector4 v = ref decoded[x];
+                    if (IsGray && component == 0)
+                    {
+                        v.X = value;
+                        v.Y = value;
+                        v.Z = value;
+                    }
+                    else
+                    {
+                        SetComponent(ref v, component, value);
+                    }
+                }
+            }
+
+            PixelOperations<TPixel>.Instance.FromVector4Destructive(configuration, decoded, pixels, PixelConversionModifiers.Scale);
+            Span<TPixel> row = image.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
+            for (int x = 0; x < width; x++)
+            {
+                if (!pixels[x].Equals(row[x]))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     // Copies `count` components of each pixel, from component `first` (R, G, B, A; grey is R and its
     // alpha A), into the channels of gi from `c`.
     private static void CopyChannels(Image<TPixel> image, int first, int count, JxlBitDepth bitDepth, JxlModularImage gi, int c)
     {
-        Configuration configuration = image.GetConfiguration();
-        MemoryAllocator allocator = configuration.MemoryAllocator;
-        Buffer2D<TPixel> pixels = image.Frames.RootFrame.PixelBuffer;
-        int width = image.Width;
         int bits = (int)bitDepth.BitsPerSample;
         int expBits = (int)bitDepth.ExponentBitsPerSample;
         bool fp = bitDepth.FloatingPointSample;
         double factor = fp ? 1 : (1u << bits) - 1;
 
         // The integer samples go through float only when the stored depth is not the depth they have.
-        bool copyIntegers = Kind != SampleKind.Float && !fp && bits == BitsPerSample;
-        float scale = Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
+        bool integerSamples = Layout.ExponentBitsPerSample == 0;
+        bool copyIntegers = integerSamples && !fp && bits == Layout.BitsPerSample;
+        float scale = Layout.Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
 
-        using IMemoryOwner<Vector4> vectorsOwner = allocator.Allocate<Vector4>(width);
-        using IMemoryOwner<La32> greyOwner = allocator.Allocate<La32>(width);
-        using IMemoryOwner<Rgba64> colorOwner = allocator.Allocate<Rgba64>(width);
-        using IMemoryOwner<int> samplesOwner = allocator.Allocate<int>(width);
-        using IMemoryOwner<float> floatsOwner = allocator.Allocate<float>(width);
-        Span<Vector4> vectors = vectorsOwner.Memory.Span.Slice(0, width);
-        Span<La32> grey = greyOwner.Memory.Span.Slice(0, width);
-        Span<Rgba64> color = colorOwner.Memory.Span.Slice(0, width);
-        Span<int> samples = samplesOwner.Memory.Span.Slice(0, width);
-        Span<float> floats = floatsOwner.Memory.Span.Slice(0, width);
+        using RowReader reader = new(image);
+        Span<int> samples = reader.Samples;
+        Span<float> floats = reader.Floats;
         for (int y = 0; y < image.Height; y++)
         {
-            Span<TPixel> row = pixels.DangerousGetRowSpan(y);
-            if (Kind == SampleKind.Float)
-            {
-                PixelOperations<TPixel>.Instance.ToVector4(configuration, row, vectors, PixelConversionModifiers.None);
-            }
-            else if (IsGray)
-            {
-                PixelOperations<TPixel>.Instance.To(configuration, row, grey);
-            }
-            else
-            {
-                PixelOperations<TPixel>.Instance.To(configuration, row, color);
-            }
-
+            reader.Read(y);
             for (int i = 0; i < count; i++)
             {
                 int component = first + i;
                 Span<int> output = gi.Channel[c + i].Row(y);
-                if (Kind == SampleKind.Float)
+                if (!integerSamples)
                 {
-                    for (int x = 0; x < width; x++)
-                    {
-                        floats[x] = GetComponent(vectors[x], component);
-                    }
-
-                    if (!fp)
-                    {
-                        // Departure (ADR 0001): libjxl converts floats outside [0, 1] to integers outside the
-                        // stored range, and a float too large for an int has no defined conversion in
-                        // C#. The decoder clamps to [0, 1], so clamping first gives the same pixels.
-                        for (int x = 0; x < width; x++)
-                        {
-                            floats[x] = Math.Clamp(floats[x], 0F, 1F);
-                        }
-                    }
-
+                    // ChooseBitDepth stores float samples only in a float layout that holds them.
+                    DebugGuard.IsTrue(fp, "Float samples have a float layout");
+                    reader.GetFloats(component, floats);
                     FloatToInt(floats, output, bits, expBits, fp, factor);
                     continue;
                 }
 
-                for (int x = 0; x < width; x++)
-                {
-                    int v16 = IsGray ? (component == 3 ? grey[x].A : grey[x].L) : GetComponent(color[x], component);
-                    samples[x] = Kind == SampleKind.Integer8 ? v16 / 257 : v16;
-                }
-
+                reader.GetIntegers(component, samples);
                 if (copyIntegers)
                 {
                     samples.CopyTo(output);
                     continue;
                 }
 
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < samples.Length; x++)
                 {
                     floats[x] = samples[x] * scale;
                 }
@@ -311,6 +385,56 @@ internal static class JxlEncoderInput<TPixel>
                 FloatToInt(floats, output, bits, expBits, fp, factor);
             }
         }
+    }
+
+    // One row per pixel type: how its samples are read, whether it is grey, and whether it has alpha.
+    // Another pixel type is read as 16-bit colour (no other type has more than 16 bits per unsigned
+    // integer component), with alpha unless its pixel type info says it has none.
+    private static PixelLayout GetLayout()
+    {
+        (Type Type, SampleKind Kind, bool IsGray, bool HasAlpha)[] table =
+        {
+            (typeof(L8), SampleKind.Integer8, true, false),
+            (typeof(La16), SampleKind.Integer8, true, true),
+            (typeof(L16), SampleKind.Integer16, true, false),
+            (typeof(La32), SampleKind.Integer16, true, true),
+            (typeof(A8), SampleKind.Integer8, false, true),
+            (typeof(Rgb24), SampleKind.Integer8, false, false),
+            (typeof(Bgr24), SampleKind.Integer8, false, false),
+            (typeof(Rgba32), SampleKind.Integer8, false, true),
+            (typeof(Bgra32), SampleKind.Integer8, false, true),
+            (typeof(Argb32), SampleKind.Integer8, false, true),
+            (typeof(Abgr32), SampleKind.Integer8, false, true),
+            (typeof(Byte4), SampleKind.Integer8, false, true),
+            (typeof(Rgb48), SampleKind.Integer16, false, false),
+            (typeof(Rgba64), SampleKind.Integer16, false, true),
+            (typeof(Rg32), SampleKind.Integer16, false, false),
+            (typeof(Bgr565), SampleKind.Integer16, false, false),
+            (typeof(Bgra4444), SampleKind.Integer16, false, true),
+            (typeof(Bgra5551), SampleKind.Integer16, false, true),
+            (typeof(Rgba1010102), SampleKind.Integer16, false, true),
+            (typeof(HalfSingle), SampleKind.Half, false, false),
+            (typeof(HalfVector2), SampleKind.Half, false, false),
+            (typeof(HalfVector4), SampleKind.Half, false, true),
+            (typeof(RgbaVector), SampleKind.Float, false, true),
+            (typeof(NormalizedByte2), SampleKind.ScaledFloat, false, false),
+            (typeof(NormalizedByte4), SampleKind.ScaledFloat, false, true),
+            (typeof(NormalizedShort2), SampleKind.ScaledFloat, false, false),
+            (typeof(NormalizedShort4), SampleKind.ScaledFloat, false, true),
+            (typeof(Short2), SampleKind.ScaledFloat, false, false),
+            (typeof(Short4), SampleKind.ScaledFloat, false, true),
+        };
+
+        foreach ((Type type, SampleKind kind, bool isGray, bool hasAlpha) in table)
+        {
+            if (type == typeof(TPixel))
+            {
+                return new PixelLayout(kind, isGray, hasAlpha);
+            }
+        }
+
+        PixelAlphaRepresentation? alpha = PixelOperations<TPixel>.Instance.GetPixelTypeInfo()?.AlphaRepresentation;
+        return new PixelLayout(SampleKind.Integer16, false, alpha != PixelAlphaRepresentation.None);
     }
 
     private static float GetComponent(Vector4 v, int component) => component switch
@@ -329,41 +453,146 @@ internal static class JxlEncoderInput<TPixel>
         _ => v.A,
     };
 
-    private static SampleKind GetSampleKind()
+    private static void SetComponent(ref Vector4 v, int component, float value)
     {
-        Type type = typeof(TPixel);
-        if (type == typeof(L8) || type == typeof(La16) || type == typeof(Rgb24) || type == typeof(Bgr24)
-            || type == typeof(Rgba32) || type == typeof(Bgra32) || type == typeof(Argb32) || type == typeof(Abgr32))
+        switch (component)
         {
-            return SampleKind.Integer8;
+            case 0:
+                v.X = value;
+                break;
+            case 1:
+                v.Y = value;
+                break;
+            case 2:
+                v.Z = value;
+                break;
+            default:
+                v.W = value;
+                break;
         }
-
-        if (type == typeof(RgbaVector))
-        {
-            return SampleKind.Float;
-        }
-
-        // L16, La32, Rgb48 and Rgba64, and every other pixel type: no other type has more than 16 bits
-        // per integer component, so 16 bits keep it.
-        return SampleKind.Integer16;
     }
 
-    private static bool GetHasAlpha()
+    // The sample layout of a pixel type and its own bit depth.
+    private readonly struct PixelLayout
     {
-        Type type = typeof(TPixel);
-        if (type == typeof(La16) || type == typeof(La32) || type == typeof(Rgba32) || type == typeof(Bgra32)
-            || type == typeof(Argb32) || type == typeof(Abgr32) || type == typeof(Rgba64) || type == typeof(RgbaVector))
+        public PixelLayout(SampleKind kind, bool isGray, bool hasAlpha)
         {
-            return true;
+            this.Kind = kind;
+            this.IsGray = isGray;
+            this.HasAlpha = hasAlpha;
+            (this.BitsPerSample, this.ExponentBitsPerSample) = kind switch
+            {
+                SampleKind.Integer8 => (8u, 0u),
+                SampleKind.Integer16 => (16u, 0u),
+                SampleKind.Half => (16u, 5u),
+                _ => (32u, 8u),
+            };
         }
 
-        if (type == typeof(L8) || type == typeof(L16) || type == typeof(Rgb24) || type == typeof(Bgr24) || type == typeof(Rgb48))
+        public SampleKind Kind { get; }
+
+        public bool IsGray { get; }
+
+        public bool HasAlpha { get; }
+
+        public uint BitsPerSample { get; }
+
+        public uint ExponentBitsPerSample { get; }
+    }
+
+    // Reads the rows of an image as integers or floats, one row at a time, into buffers it owns.
+    private sealed class RowReader : IDisposable
+    {
+        private readonly Image<TPixel> image;
+        private readonly Configuration configuration;
+        private readonly IMemoryOwner<Vector4> vectorsOwner;
+        private readonly IMemoryOwner<La32> greyOwner;
+        private readonly IMemoryOwner<Rgba64> colorOwner;
+        private readonly IMemoryOwner<int> samplesOwner;
+        private readonly IMemoryOwner<float> floatsOwner;
+
+        public RowReader(Image<TPixel> image)
         {
-            return false;
+            this.image = image;
+            this.configuration = image.GetConfiguration();
+            MemoryAllocator allocator = this.configuration.MemoryAllocator;
+            int width = image.Width;
+            this.vectorsOwner = allocator.Allocate<Vector4>(width);
+            this.greyOwner = allocator.Allocate<La32>(width);
+            this.colorOwner = allocator.Allocate<Rgba64>(width);
+            this.samplesOwner = allocator.Allocate<int>(width);
+            this.floatsOwner = allocator.Allocate<float>(width);
         }
 
-        // Another pixel type keeps an alpha channel unless it says it has none.
-        PixelAlphaRepresentation? alpha = PixelOperations<TPixel>.Instance.GetPixelTypeInfo()?.AlphaRepresentation;
-        return alpha != PixelAlphaRepresentation.None;
+        // A row of samples for the caller to fill.
+        public Span<int> Samples => this.samplesOwner.Memory.Span.Slice(0, this.image.Width);
+
+        // A row of floats for the caller to fill.
+        public Span<float> Floats => this.floatsOwner.Memory.Span.Slice(0, this.image.Width);
+
+        private Span<Vector4> Vectors => this.vectorsOwner.Memory.Span.Slice(0, this.image.Width);
+
+        private Span<La32> Grey => this.greyOwner.Memory.Span.Slice(0, this.image.Width);
+
+        private Span<Rgba64> Color => this.colorOwner.Memory.Span.Slice(0, this.image.Width);
+
+        // Converts row y to the form that the pixel type's samples are read in.
+        public void Read(int y)
+        {
+            Span<TPixel> row = this.image.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
+            PixelOperations<TPixel> operations = PixelOperations<TPixel>.Instance;
+            switch (Layout.Kind)
+            {
+                case SampleKind.Half:
+                case SampleKind.Float:
+                    operations.ToVector4(this.configuration, row, this.Vectors, PixelConversionModifiers.None);
+                    break;
+                case SampleKind.ScaledFloat:
+                    operations.ToVector4(this.configuration, row, this.Vectors, PixelConversionModifiers.Scale);
+                    break;
+                default:
+                    if (IsGray)
+                    {
+                        operations.To(this.configuration, row, this.Grey);
+                    }
+                    else
+                    {
+                        operations.To(this.configuration, row, this.Color);
+                    }
+
+                    break;
+            }
+        }
+
+        // The integer samples of one component of the row read last, at the pixel type's depth.
+        public void GetIntegers(int component, Span<int> samples)
+        {
+            Span<La32> grey = this.Grey;
+            Span<Rgba64> color = this.Color;
+            for (int x = 0; x < samples.Length; x++)
+            {
+                int v16 = IsGray ? (component == 3 ? grey[x].A : grey[x].L) : GetComponent(color[x], component);
+                samples[x] = Layout.Kind == SampleKind.Integer8 ? v16 / 257 : v16;
+            }
+        }
+
+        // The float samples of one component of the row read last.
+        public void GetFloats(int component, Span<float> floats)
+        {
+            Span<Vector4> vectors = this.Vectors;
+            for (int x = 0; x < floats.Length; x++)
+            {
+                floats[x] = GetComponent(vectors[x], component);
+            }
+        }
+
+        public void Dispose()
+        {
+            this.vectorsOwner.Dispose();
+            this.greyOwner.Dispose();
+            this.colorOwner.Dispose();
+            this.samplesOwner.Dispose();
+            this.floatsOwner.Dispose();
+        }
     }
 }

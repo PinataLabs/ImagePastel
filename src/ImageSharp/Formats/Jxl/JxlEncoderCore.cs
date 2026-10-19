@@ -70,9 +70,10 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding for a lossless image: the
-    // image's own colour space (not XYB-encoded), the sample depth, and straight alpha at the colour depth when the
-    // pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the depth of the file
-    // it reads, or else the depth of the pixel type.
+    // image's own colour space (not XYB-encoded), the sample depth, and straight alpha at the colour
+    // depth when the pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the
+    // depth of the file it reads, when it holds every sample losslessly; otherwise it is the depth of
+    // the pixel type (see JxlEncoderInput.ChooseBitDepth).
     private static JxlCodecMetadata CreateMetadata<TPixel>(Image<TPixel> image)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -80,22 +81,17 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         metadata.Size.Set((ulong)image.Width, (ulong)image.Height);
 
         JxlMetadata jxlMetadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        uint bitsPerSample = JxlEncoderInput<TPixel>.BitsPerSample;
-        uint exponentBitsPerSample = JxlEncoderInput<TPixel>.ExponentBitsPerSample;
-        if (jxlMetadata.BitsPerSample != 0)
-        {
-            bitsPerSample = jxlMetadata.BitsPerSample;
-            exponentBitsPerSample = jxlMetadata.ExponentBitsPerSample;
-        }
-
-        JxlEncoderInput<TPixel>.CheckValidBitdepth(bitsPerSample, exponentBitsPerSample);
+        JxlBitDepth requested = jxlMetadata.BitsPerSample == 0
+            ? null
+            : JxlEncoderInput<TPixel>.CreateBitDepth(jxlMetadata.BitsPerSample, jxlMetadata.ExponentBitsPerSample);
+        JxlBitDepth bitDepth = JxlEncoderInput<TPixel>.ChooseBitDepth(image, requested);
 
         JxlImageMetadata m = metadata.M;
-        SetBitDepth(m.BitDepth, bitsPerSample, exponentBitsPerSample);
+        SetBitDepth(m.BitDepth, bitDepth);
 
         // Lossless sets libjxl's uses_original_profile (the samples are not XYB-encoded), so a 16-bit
         // buffer is enough up to 12 bits.
-        m.Modular16BitBufferSufficient = bitsPerSample <= 12;
+        m.Modular16BitBufferSufficient = bitDepth.BitsPerSample <= 12;
         if (JxlEncoderInput<TPixel>.HasAlpha)
         {
             JxlExtraChannelInfo alpha = new()
@@ -103,9 +99,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
                 Type = JxlExtraChannelType.Alpha,
                 AlphaAssociated = false,
             };
-            SetBitDepth(alpha.BitDepth, bitsPerSample, exponentBitsPerSample);
+            SetBitDepth(alpha.BitDepth, bitDepth);
             m.ExtraChannelInfo.Add(alpha);
-            m.Modular16BitBufferSufficient &= bitsPerSample <= 12;
+            m.Modular16BitBufferSufficient &= bitDepth.BitsPerSample <= 12;
         }
 
         m.XybEncoded = false;
@@ -113,11 +109,11 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         return metadata;
     }
 
-    private static void SetBitDepth(JxlBitDepth bitDepth, uint bitsPerSample, uint exponentBitsPerSample)
+    private static void SetBitDepth(JxlBitDepth bitDepth, JxlBitDepth source)
     {
-        bitDepth.BitsPerSample = bitsPerSample;
-        bitDepth.ExponentBitsPerSample = exponentBitsPerSample;
-        bitDepth.FloatingPointSample = exponentBitsPerSample != 0;
+        bitDepth.BitsPerSample = source.BitsPerSample;
+        bitDepth.ExponentBitsPerSample = source.ExponentBitsPerSample;
+        bitDepth.FloatingPointSample = source.FloatingPointSample;
     }
 
     // The pixel profile, as libjxl's JxlEncoderSetICCProfile: the only colour input on encode (#115),

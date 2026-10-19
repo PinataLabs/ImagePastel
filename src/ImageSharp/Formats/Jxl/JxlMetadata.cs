@@ -50,8 +50,9 @@ internal sealed class JxlMetadata : IDeepCloneable
 
     /// <summary>
     /// Gets or sets the bits per colour sample, including the sign and exponent bits of float samples.
-    /// The decoder sets it from the image header. The encoder writes this depth when it is not 0, and
-    /// otherwise takes the depth of the pixel type.
+    /// The decoder sets it from the image header. When it is not 0, the encoder checks that it is a
+    /// valid depth, and writes it if it holds every sample of the pixel type losslessly; otherwise the
+    /// encoder takes the depth of the pixel type.
     /// </summary>
     public uint BitsPerSample { get; set; }
 
