@@ -32,10 +32,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// is only reached by a permuted TOC, which is not supported until D13.</item>
 /// <item>Dequantization matrices: the mode has 3 bits and all 8 modes exist, so "Invalid quantization
 /// table encoding" cannot happen; the predefined table has 0 bits, so "Invalid predefined table" cannot
-/// either; and the number of distance bands has 4 bits, at most 16 of the 17 libjxl allows. A table out of
-/// range with more than one distance band needs <c>FastPowf</c> first, so this file reaches "Invalid
-/// quantization table" through the one-band and parameter modes instead. Interpolate's position check is
-/// a JXL_ENSURE that the band geometry keeps.</item>
+/// either; and the number of distance bands has 4 bits, at most 16 of the 17 libjxl allows. Interpolate's
+/// position check is a JXL_ENSURE that the band geometry keeps.</item>
 /// <item>AC metadata: "AC strategy not compatible with chroma subsampling" needs YCbCr, which is not
 /// supported until D10.</item>
 /// <item>AC groups: "Frame dimensions are too big for the image." needs chroma subsampling as well, and
@@ -55,13 +53,6 @@ public class JxlVarDctBoundsTests
 
         /// <summary>The stream passes the bounds and needs a later slice: <see cref="NotSupportedException"/>.</summary>
         NotSupported,
-
-        /// <summary>
-        /// The stream passes the bounds and needs a quantization table of several distance bands, whose
-        /// <c>FastPowf</c> comes with D8d: it decodes, or throws <see cref="NotSupportedException"/>
-        /// before D8d.
-        /// </summary>
-        NotRejected,
     }
 
     // F16 values.
@@ -222,15 +213,23 @@ public class JxlVarDctBoundsTests
     // least 1e-8. From a seed of 2^-24 (3.8e-6 after the factor of 64), a second band of -256 gives
     // 1.5e-8 and one of -512 gives 7.4e-9.
     [Theory]
-    [InlineData((ushort)0xDC00, Outcome.NotRejected)]
+    [InlineData((ushort)0xDC00, Outcome.Decodes)]
     [InlineData((ushort)0xE000, Outcome.Invalid)]
     public void DequantMatrices_DistanceBandBelow1e8_Throws(ushort secondBand, Outcome outcome)
         => AssertOutcome(Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), SmallestSubnormal, secondBand)), outcome, "Invalid distance bands");
 
+    // quant_weights.cc ComputeQuantTable: the same range for a table of two distance bands, whose second
+    // band is the first times Mult(value): 65504 x 64 x 2 is 8.4e6, and 65504 x 64 x 65505 is 2.7e11.
+    [Theory]
+    [InlineData(One, Outcome.Decodes)]
+    [InlineData(Largest, Outcome.Invalid)]
+    public void DequantMatrices_DistanceBandOver1e8_Throws(ushort secondBand, Outcome outcome)
+        => AssertOutcome(Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), Largest, secondBand)), outcome, "Invalid quantization table");
+
     // quant_weights.cc ComputeQuantTable (AFV): the AFV bands, from the weight at index 5, stay at least
     // 1e-8.
     [Theory]
-    [InlineData(One, Outcome.NotRejected)]
+    [InlineData(One, Outcome.Decodes)]
     [InlineData(Zero, Outcome.Invalid)]
     [InlineData(MinusOne, Outcome.Invalid)]
     public void DequantMatrices_AfvBandBelow1e8_Throws(ushort band, Outcome outcome)
@@ -393,6 +392,7 @@ public class JxlVarDctBoundsTests
     [InlineData("dequant_id_negative", Outcome.Invalid)]
     [InlineData("dequant_band_minus_256", Outcome.Decodes)]
     [InlineData("dequant_band_minus_512", Outcome.Invalid)]
+    [InlineData("dequant_band_over_1e8", Outcome.Invalid)]
     [InlineData("dequant_afv_band_one", Outcome.Decodes)]
     [InlineData("dequant_afv_band_zero", Outcome.Invalid)]
     [InlineData("ac_metadata_count_1", Outcome.Invalid)]
@@ -439,6 +439,7 @@ public class JxlVarDctBoundsTests
             "dequant_id_negative" => DequantEncoding(0, 1, MinusOne),
             "dequant_band_minus_256" => Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), SmallestSubnormal, 0xDC00)),
             "dequant_band_minus_512" => Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), SmallestSubnormal, 0xE000)),
+            "dequant_band_over_1e8" => Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), Largest, Largest)),
             "dequant_afv_band_one" => Dequant(0, w => WriteAfv(w, One)),
             "dequant_afv_band_zero" => Dequant(0, w => WriteAfv(w, Zero)),
             "ac_metadata_count_1" => new JxlTestVarDct(16, 8) { Strategies = new[] { 0, 0 }, AcMetadataCount = 1 }.ToArray(),
@@ -665,18 +666,8 @@ public class JxlVarDctBoundsTests
                 InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Decode(codestream));
                 Assert.Contains(message, ex.Message, StringComparison.Ordinal);
                 break;
-            case Outcome.NotSupported:
-                Assert.Throws<NotSupportedException>(() => Decode(codestream));
-                break;
             default:
-                try
-                {
-                    Decode(codestream).Dispose();
-                }
-                catch (NotSupportedException)
-                {
-                }
-
+                Assert.Throws<NotSupportedException>(() => Decode(codestream));
                 break;
         }
     }
