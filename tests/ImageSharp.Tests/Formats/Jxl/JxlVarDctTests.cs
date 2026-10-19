@@ -17,8 +17,10 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// VarDCT frames whose blocks are all DCT8, with no XYB: the generated files made with
-/// <c>benchmark_xl --codec=jxl:thunder:d1:gab0:epf0:noperc</c>, against djxl's float output.
+/// VarDCT frames with no XYB: the generated files made with
+/// <c>benchmark_xl --codec=jxl:thunder:d1:gab0:epf0:noperc</c>, whose blocks are all DCT8, and
+/// <c>vardct_strategies</c>, made at a slower effort with 4x8, 8x4 and 32x32 blocks, against djxl's
+/// float output.
 /// </summary>
 /// <remarks>
 /// VarDCT output cannot match djxl bit for bit: libjxl fuses multiplies and adds on AVX2 and
@@ -38,6 +40,7 @@ public class JxlVarDctTests
     [InlineData("vardct_alpha")] // RMSE 8.1e-8, peak 4.2e-7
     [InlineData("vardct_grey")] // RMSE 6.4e-8, peak 3.0e-7
     [InlineData("vardct_grey_alpha")] // RMSE 6.4e-8, peak 3.0e-7
+    [InlineData("vardct_strategies")] // RMSE 2.7e-7, peak 1.7e-6
     public void DecodeToPlanes_MatchesDjxl(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -53,6 +56,7 @@ public class JxlVarDctTests
     [InlineData("vardct_small")]
     [InlineData("vardct_groups")]
     [InlineData("vardct_alpha")]
+    [InlineData("vardct_strategies")]
     public void Load_Rgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray reference = LoadReference(name);
@@ -86,10 +90,6 @@ public class JxlVarDctTests
         JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
     }
-
-    [Fact]
-    public void Decode_StrategyOtherThanDct8_IsNotSupported()
-        => AssertNotSupported(File.ReadAllBytes(InputPath("vardct_strategies")), "AC strategy");
 
     [Fact]
     public void Decode_XybVarDct_Decodes()

@@ -14,8 +14,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// XYB VarDCT frames, D8's done-check: the files made with <c>cjxl -e 2 --gaborish=0 --epf=0</c>
-/// (tests/Images/Input/Jxl/Generated/README.md), whose blocks are all DCT8 with the default quant tables.
-/// The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
+/// (tests/Images/Input/Jxl/Generated/README.md), whose blocks are all DCT8 with the default quant tables;
+/// and D9e's: the files made with <c>cjxl -e 7 --gaborish=0 --epf=0</c>, which mix the DCT sizes from 2x2
+/// to 64x64, with their library quant tables and custom coefficient orders, but have no Identity or AFV
+/// blocks. The planes are compared with djxl's float output at the lossy thresholds (docs/jxl/spec.md, "Tolerance
 /// for lossy output"), and each case records the error measured when it was written.
 /// </summary>
 [Trait("Format", "Jxl")]
@@ -32,6 +34,10 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_alpha", 4)] // RMSE 3.0e-6, peak 4.1e-5
     [InlineData("vardct_xyb_icc", 3)] // RMSE 1.4e-6, peak 7.7e-6
     [InlineData("vardct_xyb_grey_d50", 1)] // RMSE 1.1e-7, peak 7.8e-7
+    [InlineData("vardct_xyb_strategies", 3)] // RMSE 9.8e-7, peak 1.3e-5
+    [InlineData("vardct_xyb_sizes_noisy", 3)] // RMSE 6.7e-7, peak 2.5e-5
+    [InlineData("vardct_xyb_sizes_fine", 3)] // RMSE 7.2e-7, peak 3.0e-5
+    [InlineData("vardct_xyb_sizes_smooth", 3)] // RMSE 6.1e-7, peak 1.0e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -49,6 +55,10 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_300x200_d05")]
     [InlineData("vardct_xyb_600x400_d3")]
     [InlineData("vardct_xyb_grey")]
+    [InlineData("vardct_xyb_strategies")]
+    [InlineData("vardct_xyb_sizes_noisy")]
+    [InlineData("vardct_xyb_sizes_fine")]
+    [InlineData("vardct_xyb_sizes_smooth")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -150,13 +160,14 @@ public class JxlXybVarDctTests
         Assert.Null(info.Metadata.IccProfile);
     }
 
-    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF and uses other block sizes (D9).
-    // The others are the 64 x 64 image with one of the features of a later slice each.
+    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF (D9). vardct_xyb_identity_afv has
+    // Identity and AFV blocks (D9f). The others are the 64 x 64 image with one of the features of a later
+    // slice each.
     [Theory]
     [InlineData("vardct_xyb_e7", "Loop filters")]
     [InlineData("vardct_xyb_gaborish", "Loop filters")]
     [InlineData("vardct_xyb_epf", "Loop filters")]
-    [InlineData("vardct_xyb_strategies", "AC strategy")]
+    [InlineData("vardct_xyb_identity_afv", "AC strategy")]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
