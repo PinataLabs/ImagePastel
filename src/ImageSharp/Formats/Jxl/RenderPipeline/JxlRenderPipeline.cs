@@ -32,6 +32,7 @@ internal sealed class JxlRenderPipeline : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
+    private readonly int numColorPlanes;
     private Buffer2D<float>[] planes;
     private int width;
     private int height;
@@ -49,6 +50,7 @@ internal sealed class JxlRenderPipeline : IDisposable
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
+        this.numColorPlanes = numColorPlanes;
         this.width = (int)frameDim.XSizeUpsampled;
         this.height = (int)frameDim.YSizeUpsampled;
         this.planes = new Buffer2D<float>[numColorPlanes + numExtraChannels];
@@ -150,6 +152,13 @@ internal sealed class JxlRenderPipeline : IDisposable
             {
                 // A frame that is not displayed hands its planes over rather than copying them.
                 saved = sink == null ? this.TakePlanes() : this.CopyPlanes(isInXyb: false);
+            }
+
+            // The output of a grey image takes the first colour channel: an XYB grey image has three
+            // equal colour planes until here, as libjxl's pipeline always has, and its sink gets one.
+            if (sink != null && this.numColorPlanes == 3 && frameHeader.NonserializedMetadata.M.NumOutputColorPlanes == 1)
+            {
+                this.DropToGrey();
             }
 
             if (sink != null && sink.ConsumeFrame(this.planes, this.width, this.height))
@@ -271,6 +280,17 @@ internal sealed class JxlRenderPipeline : IDisposable
             plane.Dispose();
             this.planes[c] = cropped;
         }
+    }
+
+    // Disposes the second and third colour planes, so the planes are grey, then the extra channels.
+    private void DropToGrey()
+    {
+        Buffer2D<float>[] grey = new Buffer2D<float>[this.planes.Length - 2];
+        grey[0] = this.planes[0];
+        Array.Copy(this.planes, 3, grey, 1, this.planes.Length - 3);
+        this.planes[1].Dispose();
+        this.planes[2].Dispose();
+        this.planes = grey;
     }
 
     // WriteToImageBundleStage into frame_storage_for_referencing.

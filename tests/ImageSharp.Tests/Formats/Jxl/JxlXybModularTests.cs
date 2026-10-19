@@ -4,6 +4,7 @@
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
@@ -22,17 +23,50 @@ public class JxlXybModularTests
     // Measured: worst channel RMSE 3.6e-7, peak 7.2e-6.
     [Fact]
     public void DecodeToPlanes_Rgb_MatchesDjxl()
-        => AssertPlanesMatchDjxl("xyb_modular_rgb");
+        => AssertPlanesMatchDjxl("xyb_modular_rgb").Dispose();
 
-    private static void AssertPlanesMatchDjxl(string name)
+    // Measured: worst channel RMSE 9.6e-8, peak 3.6e-7.
+    [Fact]
+    public void DecodeToPlanes_Grey_GivesOnePlaneMatchingDjxl()
+    {
+        // djxl's reference has one channel: an XYB grey image drops to one plane after the XYB stage.
+        using JxlDecodedImage decoded = AssertPlanesMatchDjxl("xyb_modular_grey");
+
+        Assert.Single(decoded.Frames[0].Planes);
+    }
+
+    [Fact]
+    public void Load_Grey_GivesAGreyscalePixelType()
+    {
+        using Image image = Image.Load(CreateConfiguration(), InputPath("xyb_modular_grey"));
+
+        Assert.IsType<Image<L8>>(image);
+    }
+
+    private static JxlDecodedImage AssertPlanesMatchDjxl(string name)
     {
         NpyArray expected = NpyArray.Load(ReferencePath(name));
 
         using FileStream stream = File.OpenRead(InputPath(name));
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
-        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+        JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        try
+        {
+            JxlLossyComparer.AssertWithinThresholds(expected, JxlConformanceImages.ToNpy(decoded));
+            return decoded;
+        }
+        catch
+        {
+            decoded.Dispose();
+            throw;
+        }
+    }
 
-        JxlLossyComparer.AssertWithinThresholds(expected, actual);
+    private static Configuration CreateConfiguration()
+    {
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
+        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
+        return configuration;
     }
 
     private static string InputPath(string name) => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", name + ".jxl");

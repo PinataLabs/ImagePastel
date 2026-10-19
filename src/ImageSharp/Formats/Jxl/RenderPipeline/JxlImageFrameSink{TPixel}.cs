@@ -57,7 +57,7 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     {
         this.configuration = configuration;
         this.image = image;
-        int colorPlanes = metadata.NumColorPlanes;
+        int colorPlanes = metadata.NumOutputColorPlanes;
         this.gray = colorPlanes == 1;
         this.greenPlane = this.gray ? 0 : 1;
         this.bluePlane = this.gray ? 0 : 2;
