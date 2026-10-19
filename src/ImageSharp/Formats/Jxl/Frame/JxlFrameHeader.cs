@@ -293,6 +293,17 @@ internal sealed class JxlFrameHeader : JxlFields
                     this.ExtraChannelBlendingInfo.Add(new JxlBlendingInfo());
                 }
             }
+            else
+            {
+                // libjxl resizes only when reading, so a writer with the wrong count writes a stream
+                // the reader cannot parse. Resize for every visitor, as for the upsampling above.
+                while (this.ExtraChannelBlendingInfo.Count < numExtraChannels)
+                {
+                    this.ExtraChannelBlendingInfo.Add(new JxlBlendingInfo());
+                }
+
+                this.ExtraChannelBlendingInfo.RemoveRange(numExtraChannels, this.ExtraChannelBlendingInfo.Count - numExtraChannels);
+            }
 
             foreach (JxlBlendingInfo ecBlendingInfo in this.ExtraChannelBlendingInfo)
             {

@@ -48,7 +48,11 @@ internal sealed class JxlBlendingInfo : JxlFields
         if (visitor.Conditional(usesAlpha))
         {
             this.AlphaChannel = visitor.U32(Val(0), Val(1), Val(2), BitsOffset(3, 3), 0, this.AlphaChannel);
-            if (visitor.IsReading && this.AlphaChannel >= this.NonserializedNumExtraChannels)
+
+            // libjxl checks this only when reading. Checking it whenever the field is used also stops
+            // the writer writing a channel the reader rejects. The default visitors visit the field
+            // even when it is unused, so they skip the check.
+            if (usesAlpha && this.AlphaChannel >= this.NonserializedNumExtraChannels)
             {
                 JxlThrowHelper.ThrowInvalidImageContentException("Invalid alpha channel for blending");
             }

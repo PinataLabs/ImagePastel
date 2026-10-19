@@ -2,8 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -226,10 +230,215 @@ public class JxlBundleWriteTests
         Assert.Equal(data.Upsampling4Weights, read.Upsampling4Weights);
     }
 
+    [Fact]
+    public void FrameHeader_AllDefault_WritesOneBit()
+    {
+        JxlBitWriter writer = new();
+
+        JxlBundle.Write(new JxlFrameHeader(null), writer);
+
+        Assert.Equal(1, writer.BitsWritten);
+    }
+
+    [Fact]
+    public void FrameHeader_NonDefaultWithLoopFilterAndBlending_RoundTrips()
+    {
+        JxlCodecMetadata metadata = CreateMetadata();
+        JxlFrameHeader header = new(metadata)
+        {
+            Encoding = JxlFrameEncoding.Modular,
+            Flags = JxlFrameFlags.Noise | JxlFrameFlags.Patches,
+            ColorTransform = JxlColorTransform.None,
+            Upsampling = 2,
+            GroupSizeShift = 3,
+            CustomSizeOrOrigin = true,
+            FrameOriginX0 = -5,
+            FrameOriginY0 = 300,
+            FrameSizeX = 3000,
+            FrameSizeY = 20000,
+            IsLast = false,
+            SaveAsReference = 3,
+            Name = "frame"u8,
+            Extensions = 2,
+        };
+        header.ExtraChannelUpsampling[0] = 4;
+        header.Passes.NumPasses = 3;
+        header.Passes.NumDownsample = 2;
+        header.Passes.Shift[0] = 1;
+        header.Passes.Shift[1] = 2;
+        header.Passes.Downsample[0] = 4;
+        header.Passes.Downsample[1] = 2;
+        header.Passes.LastPass[0] = 0;
+        header.Passes.LastPass[1] = 1;
+        header.BlendingInfo.Mode = JxlBlendMode.Blend;
+        header.BlendingInfo.Clamp = true;
+        header.BlendingInfo.Source = 2;
+        header.ExtraChannelBlendingInfo[0].Mode = JxlBlendMode.Mul;
+        header.ExtraChannelBlendingInfo[0].Clamp = true;
+        header.ExtraChannelBlendingInfo[0].Source = 1;
+        header.AnimationFrame.Duration = 1000;
+        header.AnimationFrame.Timecode = 0x01020304;
+        SetLoopFilter(header.LoopFilter);
+
+        JxlFrameHeader read = RoundTrip(header, new JxlFrameHeader(metadata));
+
+        Assert.Equal(JxlFrameEncoding.Modular, read.Encoding);
+        Assert.Equal(-5, read.FrameOriginX0);
+        Assert.Equal(20000u, read.FrameSizeY);
+        Assert.Equal(4u, read.ExtraChannelUpsampling[0]);
+        Assert.Equal(2u, read.Passes.Downsample[1]);
+        Assert.Equal(JxlBlendMode.Blend, read.BlendingInfo.Mode);
+        Assert.Equal(JxlBlendMode.Mul, read.ExtraChannelBlendingInfo[0].Mode);
+        Assert.Equal(0x01020304u, read.AnimationFrame.Timecode);
+        Assert.Equal(3u, read.SaveAsReference);
+        Assert.Equal("frame"u8.ToArray(), read.Name.ToArray());
+        Assert.Equal(0.0625f, read.LoopFilter.GabYWeight2);
+        Assert.Equal(2.0f, read.LoopFilter.EpfSigmaForModular);
+        Assert.Equal(1UL, read.LoopFilter.Extensions);
+        Assert.Equal(2UL, read.Extensions);
+        Assert.Equal(JxlFieldRecorder.Record(header), JxlFieldRecorder.Record(read));
+    }
+
+    [Theory]
+    [InlineData(1)] // DC frame
+    [InlineData(2)] // reference only
+    [InlineData(3)] // skip progressive
+    public void FrameHeader_FrameType_RoundTrips(int frameType)
+    {
+        JxlCodecMetadata metadata = CreateMetadata();
+        JxlFrameHeader header = new(metadata)
+        {
+            FrameType = (JxlFrameType)frameType,
+            Encoding = JxlFrameEncoding.Modular,
+            DcLevel = 2,
+            SaveBeforeColorTransform = true,
+        };
+
+        JxlFrameHeader read = RoundTrip(header, new JxlFrameHeader(metadata));
+
+        Assert.Equal((JxlFrameType)frameType, read.FrameType);
+        Assert.Equal(JxlFieldRecorder.Record(header), JxlFieldRecorder.Record(read));
+    }
+
+    [Fact]
+    public void FrameHeader_ExtraChannelBlendingInfo_FollowsTheExtraChannels()
+    {
+        JxlCodecMetadata metadata = CreateMetadata();
+        metadata.M.ExtraChannelInfo.Add(new JxlExtraChannelInfo());
+        JxlFrameHeader header = new(metadata) { Encoding = JxlFrameEncoding.Modular };
+
+        JxlFrameHeader read = RoundTrip(header, new JxlFrameHeader(metadata));
+
+        Assert.Equal(2, header.ExtraChannelBlendingInfo.Count);
+        Assert.Equal(2, read.ExtraChannelBlendingInfo.Count);
+    }
+
+    [Fact]
+    public void FrameHeader_BlendAlphaChannelOutOfRange_ThrowsBeforeWriting()
+    {
+        JxlCodecMetadata metadata = CreateMetadata();
+        JxlFrameHeader header = new(metadata);
+        header.BlendingInfo.Mode = JxlBlendMode.Blend;
+        header.BlendingInfo.AlphaChannel = 1;
+
+        AssertRejected(header);
+    }
+
+    [Fact]
+    public void GroupHeader_WithTransforms_RoundTrips()
+    {
+        JxlGroupHeader header = new() { UseGlobalTree = true };
+        header.WpHeader.P1C = 3;
+        header.WpHeader.P3Ce = 31;
+        header.WpHeader.W[2] = 5;
+        header.Transforms.Add(new JxlTransform { Id = JxlTransformId.Rct, BeginC = 8, RctType = 10 });
+        header.Transforms.Add(new JxlTransform { Id = JxlTransformId.Palette, NumC = 1, NbColors = 300, NbDeltas = 5, Predictor = JxlPredictor.Gradient });
+        JxlTransform squeeze = new() { Id = JxlTransformId.Squeeze };
+        squeeze.Squeezes.Add(new JxlSqueezeParams { Horizontal = true, BeginC = 100, NumC = 7 });
+        squeeze.Squeezes.Add(new JxlSqueezeParams { InPlace = true, BeginC = 2000 });
+        header.Transforms.Add(squeeze);
+
+        JxlGroupHeader read = RoundTrip(header, new JxlGroupHeader());
+
+        Assert.True(read.UseGlobalTree);
+        Assert.Equal(31, read.WpHeader.P3Ce);
+        Assert.Equal(3, read.Transforms.Count);
+        Assert.Equal(10u, read.Transforms[0].RctType);
+        Assert.Equal(JxlPredictor.Gradient, read.Transforms[1].Predictor);
+        Assert.Equal(2000u, read.Transforms[2].Squeezes[1].BeginC);
+        Assert.Equal(JxlFieldRecorder.Record(header), JxlFieldRecorder.Record(read));
+    }
+
+    [Fact]
+    public void GroupHeader_Default_RoundTrips()
+    {
+        JxlGroupHeader read = RoundTrip(new JxlGroupHeader(), new JxlGroupHeader());
+
+        Assert.Equal(JxlFieldRecorder.Record(new JxlGroupHeader()), JxlFieldRecorder.Record(read));
+    }
+
+    [Fact]
+    public void Lz77Params_Enabled_RoundTrips()
+    {
+        JxlLz77Params lz77 = new() { Enabled = true, MinSymbol = 600, MinLength = 7 };
+
+        JxlLz77Params read = RoundTrip(lz77, new JxlLz77Params());
+
+        Assert.Equal(JxlFieldRecorder.Record(lz77), JxlFieldRecorder.Record(read));
+    }
+
+    private static JxlCodecMetadata CreateMetadata()
+    {
+        JxlCodecMetadata metadata = new();
+        metadata.Size.Set(4000, 30000);
+        metadata.M.XybEncoded = false;
+        metadata.M.HaveAnimation = true;
+        metadata.M.Animation.HaveTimecodes = true;
+        metadata.M.ExtraChannelInfo.Add(new JxlExtraChannelInfo());
+        return metadata;
+    }
+
+    private static void SetLoopFilter(JxlLoopFilter filter)
+    {
+        // Values that F16 holds exactly, so the fields read back equal.
+        filter.Gab = true;
+        filter.GabCustom = true;
+        filter.GabXWeight1 = 0.125f;
+        filter.GabXWeight2 = 0.0625f;
+        filter.GabYWeight1 = 0.25f;
+        filter.GabYWeight2 = 0.0625f;
+        filter.GabBWeight1 = 0.5f;
+        filter.GabBWeight2 = -0.03125f;
+        filter.EpfIters = 1;
+        filter.EpfWeightCustom = true;
+        filter.EpfChannelScale[0] = 40;
+        filter.EpfChannelScale[1] = 5;
+        filter.EpfChannelScale[2] = 3.5f;
+        filter.EpfPass1Zeroflush = 0.5f;
+        filter.EpfPass2Zeroflush = 0.625f;
+        filter.EpfSigmaCustom = true;
+        filter.EpfPass0SigmaScale = 0.875f;
+        filter.EpfPass2SigmaScale = 6.5f;
+        filter.EpfBorderSadMul = 0.75f;
+        filter.EpfSigmaForModular = 2.0f;
+        filter.Extensions = 1;
+    }
+
     private static void SetXy(JxlCustomXy xy, int x, int y)
     {
         xy.X = x;
         xy.Y = y;
+    }
+
+    private static void AssertRejected(JxlFields fields)
+    {
+        JxlBitWriter writer = new();
+        writer.Write(3, 0b101);
+
+        Assert.Throws<ImageFormatException>(() => JxlBundle.Write(fields, writer));
+
+        Assert.Equal(3, writer.BitsWritten);
+        Assert.False(JxlBundle.CanEncode(fields, out _));
     }
 
     private static byte[] Write(JxlFields fields)
