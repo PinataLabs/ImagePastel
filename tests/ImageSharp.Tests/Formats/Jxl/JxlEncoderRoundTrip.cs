@@ -81,6 +81,10 @@ internal static class JxlEncoderRoundTrip
         {
             nameof(L8) => RunCorpusAsync<L8>(reader, file),
             nameof(Rgb24) => RunCorpusAsync<Rgb24>(reader, file),
+            nameof(L16) => RunCorpusAsync<L16>(reader, file),
+            nameof(La32) => RunCorpusAsync<La32>(reader, file),
+            nameof(Rgb48) => RunCorpusAsync<Rgb48>(reader, file),
+            nameof(Rgba64) => RunCorpusAsync<Rgba64>(reader, file),
             _ => throw new ArgumentException($"No corpus round trip for {pixelType}", nameof(pixelType)),
         };
 
@@ -222,6 +226,7 @@ internal static class JxlEncoderRoundTrip
     {
         TheoryData<string, string> cases = new();
         AddCorpus8BitCases(cases);
+        AddCorpus16BitCases(cases);
         return cases;
     }
 
@@ -237,6 +242,21 @@ internal static class JxlEncoderRoundTrip
         cases.Add(TestImages.Tiff.Calliphora_GrayscaleUncompressed, nameof(L8));
         cases.Add(TestImages.Tiff.FlowerRgb888Contiguous, nameof(Rgb24));
         cases.Add(TestImages.Tiff.Flower8BitGray, nameof(L8));
+    }
+
+    // E1d: 16-bit grey, grey with alpha, RGB and RGBA repo PNGs and TIFFs. rgb-48bpp.png is 896x896, so
+    // it also crosses group boundaries; rgb-16-tRNS.png has its alpha from a tRNS colour.
+    private static void AddCorpus16BitCases(TheoryData<string, string> cases)
+    {
+        cases.Add(TestImages.Png.L16Bit, nameof(L16));
+        cases.Add(TestImages.Png.GrayAlpha16Bit, nameof(La32));
+        cases.Add(TestImages.Png.Rgb48Bpp, nameof(Rgb48));
+        cases.Add(TestImages.Png.Rgb48BppTrans, nameof(Rgba64));
+        cases.Add(TestImages.Png.Rgba64Bpp, nameof(Rgba64));
+        cases.Add(TestImages.Tiff.Flower16BitGray, nameof(L16));
+        cases.Add(TestImages.Tiff.FlowerRgb161616Contiguous, nameof(Rgb48));
+        cases.Add(TestImages.Tiff.Issues1716Rgb161616BitLittleEndian, nameof(Rgb48));
+        cases.Add(TestImages.Tiff.Rgba16BitUnassociatedAlphaLittleEndian, nameof(Rgba64));
     }
 
     // E1d: 16-bit, float32 and alpha, grey and colour, each pattern at 1x1 and an odd size, and the
