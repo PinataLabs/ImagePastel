@@ -17,9 +17,19 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 internal interface IJxlRenderSink
 {
     /// <summary>
+    /// Gets a value indicating whether the sink takes display-encoded samples. An XYB image that cannot
+    /// render to its own colour encoding then reaches the sink as sRGB, as libjxl's output when it is
+    /// asked for sRGB; otherwise it stays linear sRGB, as djxl's default output (<see cref="JxlOutputEncoding"/>).
+    /// </summary>
+    bool DisplayEncoded { get; }
+
+    /// <summary>
     /// Consumes a rendered frame: one plane per channel (colour channels, then extra channels).
     /// </summary>
-    /// <param name="planes">The planes, <paramref name="width"/> by <paramref name="height"/>.</param>
+    /// <param name="planes">
+    /// The planes, at least <paramref name="width"/> by <paramref name="height"/>: the colour planes of a
+    /// VarDCT frame keep the padding to whole blocks past the frame.
+    /// </param>
     /// <param name="width">The frame width.</param>
     /// <param name="height">The frame height.</param>
     /// <returns><see langword="true"/> if the sink keeps the planes and will dispose them.</returns>

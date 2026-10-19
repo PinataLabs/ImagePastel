@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/coeff_order.h and lib/jxl/coeff_order.cc (kCoeffOrderOffset, kStrategyOrder, CoeffOrderContext,
-// ReadPermutation, DecodePermutation, DecodeCoeffOrder, DecodeCoeffOrders) and lib/jxl/lehmer_code.h
+// ReadPermutation, DecodeCoeffOrder, DecodeCoeffOrders) and lib/jxl/lehmer_code.h
 // (DecodeLehmerCode).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -154,26 +154,6 @@ internal static class JxlCoeffOrder
         }
 
         if (usedOrders != 0 && !reader.CheckAnsFinalState)
-        {
-            JxlThrowHelper.ThrowInvalidImageContentException("Invalid ANS stream");
-        }
-    }
-
-    /// <summary>
-    /// Reads a permutation of [0, <paramref name="size"/>) whose first <paramref name="skip"/> entries
-    /// are fixed, with its own histograms.
-    /// </summary>
-    /// <param name="skip">The number of leading entries that are not permuted.</param>
-    /// <param name="size">The size of the permutation.</param>
-    /// <param name="order">The permutation, or empty to read and drop it.</param>
-    /// <param name="br">The reader.</param>
-    public static void DecodePermutation(int skip, int size, Span<uint> order, JxlBitReader br)
-    {
-        JxlAnsCode code = new();
-        byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, PermutationContexts, code);
-        JxlAnsSymbolReader reader = new(code, br);
-        ReadPermutation(skip, size, order, br, reader, contextMap);
-        if (!reader.CheckAnsFinalState)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Invalid ANS stream");
         }

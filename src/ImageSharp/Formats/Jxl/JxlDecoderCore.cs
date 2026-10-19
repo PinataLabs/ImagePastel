@@ -165,7 +165,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
         try
         {
-            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M, this.isCmyk, !JxlOutputEncoding.IsOriginalOutput(this.metadata.M));
+            JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M, this.isCmyk);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
             List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
 
@@ -364,12 +364,15 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // The rest of #105's rules: sRGB, and grey with the sRGB curve, get no pixel profile; every other
     // colour encoding gets a built one. libjxl builds a profile for every colour encoding as it reads the header and
     // rejects the image when it cannot, so the profile is built, and checked, even when it is not kept.
+    // An XYB image whose encoding the XYB stage cannot output renders to linear sRGB, which the image
+    // sink encodes as sRGB, so its pixels get no profile either: as for an ICC profile, the pixel profile
+    // only ever describes the pixels (ADR 0002).
     private void SetColorEncodingProfile(JxlColorEncoding c)
     {
         IccProfile profile = JxlIccBuilder.Create(c);
         bool srgbCurve = !c.Tf.HaveGamma && c.Tf.TransferFunction == JxlTransferFunction.Srgb && c.WhitePoint == JxlWhitePoint.D65;
         bool srgb = srgbCurve && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
-        if (!this.ignoreMetadata && !srgb)
+        if (!this.ignoreMetadata && !srgb && JxlOutputEncoding.IsOriginalOutput(this.metadata.M))
         {
             this.imageMetadata.IccProfile = profile;
         }

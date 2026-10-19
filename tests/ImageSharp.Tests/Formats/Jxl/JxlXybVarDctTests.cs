@@ -31,6 +31,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_grey", 1)] // RMSE 2.6e-7, peak 1.6e-6
     [InlineData("vardct_xyb_alpha", 4)] // RMSE 3.0e-6, peak 4.1e-5
     [InlineData("vardct_xyb_icc", 3)] // RMSE 1.4e-6, peak 7.7e-6
+    [InlineData("vardct_xyb_grey_d50", 1)] // RMSE 1.1e-7, peak 7.8e-7
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -79,6 +80,31 @@ public class JxlXybVarDctTests
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 3), 3, (i, c) => (float)LinearToSrgb(Math.Clamp(expected.Data[(i * 3) + c], 0F, 1F)));
         Assert.Null(image.Metadata.IccProfile);
         Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+    }
+
+    // A grey image with a D50 white point is one the XYB stage cannot output, so it renders to linear
+    // sRGB like an ICC profile, and the pixels are sRGB: no pixel profile describes the D50 encoding
+    // (ADR 0002), which JxlMetadata still reports.
+    // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
+    [Fact]
+    public void Load_GreyWithAWhitePointTheXybStageCannotOutput_IsSrgbWithNoPixelProfile()
+    {
+        NpyArray expected = LoadReference("vardct_xyb_grey_d50");
+        using Image<L8> image = Image.Load<L8>(CreateConfiguration(), InputPath("vardct_xyb_grey_d50"));
+
+        AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 1), 1, (i, _) => (float)LinearToSrgb(Math.Clamp(expected.Data[i], 0F, 1F)));
+        Assert.Null(image.Metadata.IccProfile);
+        JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.Equal(JxlWhitePoint.Custom, metadata.ColorEncoding.WhitePoint);
+        Assert.Null(metadata.OriginalIccProfile);
+    }
+
+    [Fact]
+    public void Identify_GreyWithAWhitePointTheXybStageCannotOutput_HasNoPixelProfile()
+    {
+        IImageInfo info = Image.Identify(CreateConfiguration(), InputPath("vardct_xyb_grey_d50"), out _);
+
+        Assert.Null(info.Metadata.IccProfile);
     }
 
     [Fact]

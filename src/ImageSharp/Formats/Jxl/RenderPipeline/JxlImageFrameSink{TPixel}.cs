@@ -11,7 +11,6 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -45,9 +44,6 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     // The plane of the Black channel of a CMYK image, or -1.
     private readonly int blackPlane;
-
-    // Whether the planes are linear sRGB, which the sink encodes with the sRGB curve.
-    private readonly bool linearSrgb;
     private int framesWritten;
 
     /// <summary>
@@ -57,13 +53,8 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     /// <param name="image">The image whose frames are written.</param>
     /// <param name="metadata">The image metadata, which gives the colour planes and the extra channels.</param>
     /// <param name="cmyk">Whether the image is CMYK: its colour planes are C, M and Y, with K in its Black channel.</param>
-    /// <param name="linearSrgb">
-    /// Whether the planes are linear sRGB, as an XYB image renders when the XYB stage cannot output its
-    /// own colour encoding, such as an ICC profile. The pixels are then sRGB, with no pixel profile (ADR 0002).
-    /// </param>
-    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, JxlImageMetadata metadata, bool cmyk, bool linearSrgb)
+    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, JxlImageMetadata metadata, bool cmyk)
     {
-        this.linearSrgb = linearSrgb;
         this.configuration = configuration;
         this.image = image;
         int colorPlanes = metadata.NumOutputColorPlanes;
@@ -90,11 +81,17 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         this.blackPlane = cmyk ? colorPlanes + metadata.Find(JxlExtraChannelType.Black) : -1;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the sink takes display-encoded samples. It does: an XYB image that
+    /// cannot render to its own colour encoding, such as one with an ICC profile, reaches it as sRGB,
+    /// and its pixels get no pixel profile (ADR 0002).
+    /// </summary>
+    public bool DisplayEncoded => true;
+
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
-        // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, apply the sRGB
-        // curve to linear sRGB, clamp, then quantise. libjxl renders the spot colours of linear output
-        // before its from-linear stage too.
+        // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, clamp, then
+        // quantise. The output transfer function is the from-linear stage's (JxlColorStages).
         ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
         this.framesWritten++;
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
@@ -111,11 +108,6 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
             if (this.blackPlane >= 0)
             {
                 ConvertCmyk(planes[this.blackPlane].DangerousGetRowSpan(y), row);
-            }
-
-            if (this.linearSrgb)
-            {
-                EncodeSrgb(row);
             }
 
             for (int x = 0; x < row.Length; x++)
@@ -161,18 +153,6 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
                 float multiplier = 1F / MathF.Max(SmallAlpha, a[x]);
                 row[x] = new Vector4(r[x] * multiplier, g[x] * multiplier, b[x] * multiplier, a[x]);
             }
-        }
-    }
-
-    // libjxl's sRGB output: its from-linear stage with OpRgb, which uses TF_SRGB().EncodedFromDisplay.
-    private static void EncodeSrgb(Span<Vector4> row)
-    {
-        for (int x = 0; x < row.Length; x++)
-        {
-            ref Vector4 p = ref row[x];
-            p.X = JxlTransferFunctions.SrgbEncodedFromDisplay(p.X);
-            p.Y = JxlTransferFunctions.SrgbEncodedFromDisplay(p.Y);
-            p.Z = JxlTransferFunctions.SrgbEncodedFromDisplay(p.Z);
         }
     }
 

@@ -3,7 +3,7 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_group.cc (DequantLane, DequantBlock, DecodeGroupImpl, DecodeACVarBlock,
 // GetBlockFromBitstream, DecodeGroup), without the JPEG reconstruction branches and the encoder's
-// GetBlockFromEncoder, and FrameDimensions::BlockGroupRect from lib/jxl/frame_dimensions.h.
+// GetBlockFromEncoder.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -48,11 +48,12 @@ internal static class JxlVarDctGroup
         }
 
         int histoSelectorBits = JxlBits.CeilLog2Nonzero((uint)state.NumHistograms);
-        JxlRect blockRect = BlockGroupRect(state.FrameDim, groupIdx);
+        JxlRect blockRect = state.FrameDim.BlockGroupRect(groupIdx);
 
         // GetBlockFromBitstream::Init.
-        int[] ctxOffset = new int[numPasses];
-        JxlAnsSymbolReader[] decoders = new JxlAnsSymbolReader[numPasses];
+        JxlVarDctGroupCache cache = state.GroupCache;
+        int[] ctxOffset = cache.CtxOffset;
+        JxlAnsSymbolReader[] decoders = cache.Decoders;
         for (int pass = 0; pass < numPasses; pass++)
         {
             // Select which histogram set to use among those of the current pass.
@@ -71,7 +72,7 @@ internal static class JxlVarDctGroup
             decoders[pass] = new JxlAnsSymbolReader(state.Code[pass], readers[pass]);
         }
 
-        DecodeGroupImpl(frameHeader, readers, numPasses, blockRect, state, pipeline, ctxOffset, decoders);
+        DecodeGroupImpl(frameHeader, readers, numPasses, blockRect, state, pipeline, cache);
 
         for (int pass = 0; pass < numPasses; pass++)
         {
@@ -82,31 +83,23 @@ internal static class JxlVarDctGroup
         }
     }
 
-    // FrameDimensions::BlockGroupRect: the AC group, in blocks, clipped to the frame.
-    private static JxlRect BlockGroupRect(in JxlFrameDimensions frameDim, long groupIndex)
+    private static void DecodeGroupImpl(JxlFrameHeader frameHeader, JxlBitReader[] readers, int numPasses, JxlRect blockRect, JxlVarDctFrameState state, JxlRenderPipeline pipeline, JxlVarDctGroupCache cache)
     {
-        long gx = groupIndex % frameDim.XSizeGroups;
-        long gy = groupIndex / frameDim.XSizeGroups;
-        int dim = frameDim.GroupDimension >> 3;
-        return new JxlRect(gx * dim, gy * dim, dim, dim, frameDim.XSizeBlocks, frameDim.YSizeBlocks);
-    }
-
-    private static void DecodeGroupImpl(JxlFrameHeader frameHeader, JxlBitReader[] readers, int numPasses, JxlRect blockRect, JxlVarDctFrameState state, JxlRenderPipeline pipeline, int[] ctxOffset, JxlAnsSymbolReader[] decoders)
-    {
+        int[] ctxOffset = cache.CtxOffset;
+        JxlAnsSymbolReader[] decoders = cache.Decoders;
         int bx0 = (int)blockRect.X0;
         int by0 = (int)blockRect.Y0;
         int xsizeBlocks = (int)blockRect.XSize;
         int ysizeBlocks = (int)blockRect.YSize;
-        int stride = state.XSizeBlocks;
         float invGlobalScale = state.Quantizer.InvGlobalScale;
         JxlYCbCrChromaSubsampling cs = frameHeader.ChromaSubsampling;
         JxlColorCorrelation colorCorrelation = state.Cmap;
         JxlBlockCtxMap blockCtxMap = state.BlockCtxMap;
 
-        int[] hshift = { cs.HShift(0), cs.HShift(1), cs.HShift(2) };
-        int[] vshift = { cs.VShift(0), cs.VShift(1), cs.VShift(2) };
-        int[] rx0 = new int[3];
-        int[] ry0 = new int[3];
+        Span<int> hshift = stackalloc int[] { cs.HShift(0), cs.HShift(1), cs.HShift(2) };
+        Span<int> vshift = stackalloc int[] { cs.VShift(0), cs.VShift(1), cs.VShift(2) };
+        Span<int> rx0 = stackalloc int[3];
+        Span<int> ry0 = stackalloc int[3];
         for (int i = 0; i < 3; i++)
         {
             rx0[i] = bx0 >> hshift[i];
@@ -121,28 +114,26 @@ internal static class JxlVarDctGroup
             }
         }
 
-        // GroupDecCache: the non-zero counts of each pass and channel.
-        int nzerosStride = state.FrameDim.GroupDimension >> 3;
-        int[][][] numNzeroes = new int[numPasses][][];
-        for (int pass = 0; pass < numPasses; pass++)
-        {
-            numNzeroes[pass] = new[] { new int[nzerosStride * nzerosStride], new int[nzerosStride * nzerosStride], new int[nzerosStride * nzerosStride] };
-        }
-
-        int[][] qblock = { new int[DctBlockSize], new int[DctBlockSize], new int[DctBlockSize] };
-        float[] block = new float[3 * DctBlockSize];
+        // GroupDecCache: the non-zero counts of each pass and channel, and the block scratch space.
+        int nzerosStride = cache.NzerosStride;
+        int[][][] numNzeroes = cache.NumNzeroes;
+        int[][] qblock = cache.QBlock;
+        float[] block = cache.Block;
 
         // The pixel origin of the group in the padded colour planes.
         int px0 = bx0 * BlockDim;
         int py0 = by0 * BlockDim;
         Buffer2D<float>[] planes = { pipeline.GetPlane(0), pipeline.GetPlane(1), pipeline.GetPlane(2) };
 
-        int[] sbx = new int[3];
+        Span<int> sbx = stackalloc int[3];
+        Span<int> sby = stackalloc int[3];
         for (int by = 0; by < ysizeBlocks; ++by)
         {
-            int[] sby = { by >> vshift[0], by >> vshift[1], by >> vshift[2] };
-            ReadOnlySpan<int> rowQuant = state.RawQuantField.AsSpan(((by0 + by) * stride) + bx0, xsizeBlocks);
-            ReadOnlySpan<byte> quantDcRow = state.QuantDc.AsSpan(((by0 + by) * stride) + bx0, xsizeBlocks);
+            sby[0] = by >> vshift[0];
+            sby[1] = by >> vshift[1];
+            sby[2] = by >> vshift[2];
+            ReadOnlySpan<int> rowQuant = state.RawQuantField.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
+            ReadOnlySpan<byte> quantDcRow = state.QuantDc.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
 
             int ty = (by0 + by) / JxlColorCorrelation.ColorTileDimInBlocks;
             ReadOnlySpan<sbyte> rowCmapX = colorCorrelation.YtoXMap.AsSpan(ty * colorCorrelation.XSizeTiles, colorCorrelation.XSizeTiles);
@@ -170,12 +161,6 @@ internal static class JxlVarDctGroup
                     {
                         bx += llfX;
                         continue;
-                    }
-
-                    // The other strategies are rejected with the AC metadata (D9).
-                    if (acs.Strategy != JxlAcStrategyType.Dct)
-                    {
-                        JxlThrowHelper.ThrowNotSupportedException($"The {acs.Strategy} AC strategy");
                     }
 
                     int log2CoveredBlocks = acs.Log2CoveredBlocks;
@@ -230,7 +215,7 @@ internal static class JxlVarDctGroup
                     for (int c = 0; c < 3; c++)
                     {
                         // LowestFrequenciesFromDC: the DC of this block.
-                        float dc = state.Dc[c][((ry0[c] + sby[c]) * stride) + rx0[c] + sbx[c]];
+                        float dc = state.Dc[c].DangerousGetRowSpan(ry0[c] + sby[c])[rx0[c] + sbx[c]];
                         JxlDct.LowestFrequenciesFromDcDct8(dc, block.AsSpan(c * size, size));
                     }
 

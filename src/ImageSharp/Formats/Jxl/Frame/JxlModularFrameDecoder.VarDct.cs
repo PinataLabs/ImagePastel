@@ -2,8 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_modular.cc (ModularFrameDecoder: DecodeVarDCTDC, DecodeAcMetadata), with
-// FrameDimensions::DCGroupRect from lib/jxl/frame_dimensions.h and ConvertPlaneAndClamp from
-// lib/jxl/image_ops.h.
+// ConvertPlaneAndClamp from lib/jxl/image_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -31,7 +30,7 @@ internal sealed partial class JxlModularFrameDecoder
     /// <param name="state">The frame's VarDCT state.</param>
     public void DecodeVarDctDc(JxlFrameHeader frameHeader, long groupId, JxlBitReader reader, JxlVarDctFrameState state)
     {
-        JxlRect r = DcGroupRect(this.frameDim, groupId);
+        JxlRect r = this.frameDim.DcGroupRect(groupId);
 
         using JxlModularImage image = JxlModularImage.Create(this.allocator, (int)r.XSize, (int)r.YSize, this.fullImage.BitDepth, 3);
         long streamId = JxlModularStreamId.VarDctDc(this.frameDim, groupId);
@@ -46,7 +45,7 @@ internal sealed partial class JxlModularFrameDecoder
 
         JxlModularOptions options = new();
         JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
-        JxlCompressedDc.DequantDc(r, state.Dc, state.QuantDc, state.XSizeBlocks, image, state.Quantizer.MulDc, mul, state.Cmap.DcFactors, frameHeader.ChromaSubsampling, state.BlockCtxMap);
+        JxlCompressedDc.DequantDc(r, state.Dc, state.QuantDc, image, state.Quantizer.MulDc, mul, state.Cmap.DcFactors, frameHeader.ChromaSubsampling, state.BlockCtxMap);
     }
 
     /// <summary>
@@ -59,7 +58,7 @@ internal sealed partial class JxlModularFrameDecoder
     /// <param name="state">The frame's VarDCT state.</param>
     public void DecodeAcMetadata(JxlFrameHeader frameHeader, long groupId, JxlBitReader reader, JxlVarDctFrameState state)
     {
-        JxlRect r = DcGroupRect(this.frameDim, groupId);
+        JxlRect r = this.frameDim.DcGroupRect(groupId);
         int rx0 = (int)r.X0;
         int ry0 = (int)r.Y0;
         int rxsize = (int)r.XSize;
@@ -88,14 +87,13 @@ internal sealed partial class JxlModularFrameDecoder
         int xlim = Math.Min(acStrategy.XSize, rx0 + rxsize);
         int ylim = Math.Min(acStrategy.YSize, ry0 + rysize);
         uint localUsedAcs = 0;
-        int stride = state.XSizeBlocks;
         ReadOnlySpan<int> rowIn1 = image.Channel[2].Row(0);
         ReadOnlySpan<int> rowIn2 = image.Channel[2].Row(1);
         for (int iy = 0; iy < rysize; iy++)
         {
             int y = ry0 + iy;
-            Span<int> rowQf = state.RawQuantField.AsSpan((y * stride) + rx0, rxsize);
-            Span<byte> rowEpf = state.EpfSharpness.AsSpan((y * stride) + rx0, rxsize);
+            Span<int> rowQf = state.RawQuantField.DangerousGetRowSpan(y).Slice(rx0, rxsize);
+            Span<byte> rowEpf = state.EpfSharpness.DangerousGetRowSpan(y).Slice(rx0, rxsize);
             ReadOnlySpan<int> rowIn3 = image.Channel[3].Row(iy);
             for (int ix = 0; ix < rxsize; ix++)
             {
@@ -154,26 +152,13 @@ internal sealed partial class JxlModularFrameDecoder
         state.UsedAcs |= localUsedAcs;
 
         // The other strategies come with D9. This is checked after the whole DC group, so that every
-        // libjxl bound above is checked first.
+        // libjxl bound above is checked first. It is the only place they are rejected: every block of the
+        // frame gets its strategy here, before any AC group is decoded.
         uint unsupported = localUsedAcs & ~(1u << (int)JxlAcStrategyType.Dct);
         if (unsupported != 0)
         {
-            int first = 0;
-            while ((unsupported & (1u << first)) == 0)
-            {
-                first++;
-            }
-
-            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)first} AC strategy");
+            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)JxlBits.Num0BitsBelowLs1BitNonzero(unsupported)} AC strategy");
         }
-    }
-
-    // FrameDimensions::DCGroupRect: the DC group, in blocks, clipped to the frame.
-    private static JxlRect DcGroupRect(in JxlFrameDimensions frameDim, long groupIndex)
-    {
-        long gx = groupIndex % frameDim.XSizeDcGroups;
-        long gy = groupIndex / frameDim.XSizeDcGroups;
-        return new JxlRect(gx * frameDim.GroupDimension, gy * frameDim.GroupDimension, frameDim.GroupDimension, frameDim.GroupDimension, frameDim.XSizeBlocks, frameDim.YSizeBlocks);
     }
 
     private static void ReplaceChannel(JxlModularImage image, int c, JxlModularChannel channel)

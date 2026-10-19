@@ -102,7 +102,7 @@ internal sealed class JxlFrameDecoder
         using JxlPatchesStage patchesStage = patches != null
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSizeUpsampled)
             : null;
-        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader);
+        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
@@ -110,8 +110,11 @@ internal sealed class JxlFrameDecoder
         // InitFrame resets the dequantization matrices to their defaults for each frame.
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes, this.metadata.M.NumExtraChannels);
-        JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(frameHeader, frameDim, matrices) : null;
+
+        // A VarDCT frame always codes three colour planes, grey or not, as libjxl's.
+        int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct ? 3 : this.metadata.M.NumColorPlanes;
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, this.metadata.M.NumExtraChannels);
+        using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
 
@@ -289,7 +292,7 @@ internal sealed class JxlFrameDecoder
         long gy = acGroupId / frameDim.XSizeGroups;
         if (varDct != null)
         {
-            JxlBitReader[] passReaders = new JxlBitReader[numPasses];
+            JxlBitReader[] passReaders = varDct.GroupCache.Readers;
             for (int i = 0; i < numPasses; i++)
             {
                 passReaders[i] = readers(acGroupId, i);

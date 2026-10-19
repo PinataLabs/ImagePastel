@@ -15,8 +15,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// <summary>
 /// The colour encoding that the decoder renders an image to, and for an XYB image the opsin parameters
 /// that turn XYB into linear samples of that encoding. libjxl's decoder API can ask for another output
-/// encoding; this port always takes libjxl's default: the image's own encoding if the XYB stage can
-/// output it, and linear sRGB otherwise (issue #105, ADR 0002).
+/// encoding; this port takes the image's own encoding if the XYB stage can output it, and otherwise
+/// libjxl's default, linear sRGB, or sRGB for a sink that takes display-encoded samples
+/// (<see cref="IJxlRenderSink.DisplayEncoded"/>; issue #105, ADR 0002).
 /// </summary>
 internal sealed class JxlOutputEncoding
 {
@@ -37,7 +38,7 @@ internal sealed class JxlOutputEncoding
     /// <summary>
     /// Gets a value indicating whether the output colour encoding is the image's own, libjxl's
     /// <c>color_encoding_is_original</c>. It is not for an XYB image with an ICC profile, or with an
-    /// encoding the XYB stage cannot output: those render to linear sRGB.
+    /// encoding the XYB stage cannot output: those render to linear sRGB, or sRGB.
     /// </summary>
     public bool ColorEncodingIsOriginal { get; }
 
@@ -64,12 +65,15 @@ internal sealed class JxlOutputEncoding
     public float[] OpsinBiasesCbrt { get; } = new float[3];
 
     /// <summary>
-    /// Returns the output encoding of an image, as libjxl's <c>SetFromMetadata</c>. Throws
-    /// <see cref="InvalidImageContentException"/> if the white point or primaries cannot be inverted.
+    /// Returns the output encoding of an image, as libjxl's <c>SetFromMetadata</c>, then for an XYB
+    /// image that cannot render to its own encoding and a sink that takes display-encoded samples, as
+    /// libjxl's <c>SetColorEncoding</c> asked for sRGB. Throws <see cref="InvalidImageContentException"/>
+    /// if the white point or primaries cannot be inverted.
     /// </summary>
     /// <param name="metadata">The image metadata.</param>
+    /// <param name="displayEncoded">Whether the sink takes display-encoded samples (<see cref="IJxlRenderSink.DisplayEncoded"/>).</param>
     /// <returns>The output encoding.</returns>
-    public static JxlOutputEncoding Create(JxlCodecMetadata metadata)
+    public static JxlOutputEncoding Create(JxlCodecMetadata metadata, bool displayEncoded)
     {
         JxlImageMetadata m = metadata.M;
         JxlColorEncoding orig = m.ColorEncoding;
@@ -79,10 +83,13 @@ internal sealed class JxlOutputEncoding
             return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf));
         }
 
+        // The fallback has sRGB primaries and a D65 white point, with the sRGB curve or none.
         bool origOk = IsOriginalOutput(m);
         JxlOutputEncoding output = origOk
             ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf))
-            : new JxlOutputEncoding(orig.IsGray, false, null, true);
+            : displayEncoded
+                ? new JxlOutputEncoding(orig.IsGray, false, new JxlCustomTransferFunction(), false)
+                : new JxlOutputEncoding(orig.IsGray, false, null, true);
 
         JxlOpsinInverseMatrix im = metadata.TransformData.OpsinInverseMatrix;
         for (int i = 0; i < 3; ++i)
@@ -100,7 +107,7 @@ internal sealed class JxlOutputEncoding
             }
         }
 
-        // SetColorEncoding: the linear sRGB fallback has sRGB primaries and a D65 white point.
+        // SetColorEncoding: the fallback has sRGB primaries and a D65 white point.
         if (origOk && (orig.Primaries != JxlPrimaries.Srgb || orig.WhitePoint != JxlWhitePoint.D65) && !orig.IsGray)
         {
             try
@@ -142,7 +149,7 @@ internal sealed class JxlOutputEncoding
 
     /// <summary>
     /// Returns whether the image renders to its own colour encoding: it is not XYB, or the XYB stage can
-    /// output that encoding. Otherwise it renders to linear sRGB.
+    /// output that encoding. Otherwise it renders to linear sRGB, or sRGB.
     /// </summary>
     /// <param name="m">The image metadata.</param>
     /// <returns><see langword="true"/> if the output colour encoding is the image's own.</returns>

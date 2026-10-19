@@ -55,9 +55,6 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     /// <summary>Gets a value indicating whether the frame keeps a full-frame Modular image until the end.</summary>
     public bool UsesFullImage => this.useFullImage;
 
-    /// <summary>Gets the frame's dequantization matrices, whose DC factors scale the XYB channels.</summary>
-    public JxlDequantMatrices Matrices => this.matrices;
-
     /// <summary>Reads the global Modular stream from the DC global section.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="frameHeader">The frame header.</param>
@@ -425,7 +422,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             for (int y = 0; y < r.YSize; y++)
             {
                 ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, numColorPlanes + ec, r, y));
+                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, pipeline.NumColorPlanes + ec, r, y));
             }
         }
     }

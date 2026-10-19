@@ -93,13 +93,13 @@ internal sealed class JxlColorCorrelation
         }
 
         this.SetColorFactor(JxlFieldCoders.ReadU32(ColorFactorDist, br));
-        this.baseCorrelationX = ReadF16(br);
+        this.baseCorrelationX = JxlFieldCoders.ReadF16OrThrow(br);
         if (MathF.Abs(this.baseCorrelationX) > 4.0f)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Base X correlation is out of range");
         }
 
-        this.baseCorrelationB = ReadF16(br);
+        this.baseCorrelationB = JxlFieldCoders.ReadF16OrThrow(br);
         if (MathF.Abs(this.baseCorrelationB) > 4.0f)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Base B correlation is out of range");
@@ -108,16 +108,6 @@ internal sealed class JxlColorCorrelation
         this.ytoxDc = (int)br.ReadBits(8) + sbyte.MinValue;
         this.ytobDc = (int)br.ReadBits(8) + sbyte.MinValue;
         this.RecomputeDcFactors();
-    }
-
-    private static float ReadF16(JxlBitReader br)
-    {
-        if (!JxlFieldCoders.TryReadF16(br, out float value))
-        {
-            JxlThrowHelper.ThrowInvalidImageContentException("F16 infinity or NaN are not supported");
-        }
-
-        return value;
     }
 
     private void SetColorFactor(uint factor)

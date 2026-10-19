@@ -28,8 +28,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <item>Coefficient orders: a permutation cannot repeat an entry, because it is coded as a Lehmer code,
 /// whose every valid code is a permutation. <c>DecodeLehmerCode</c>'s own checks (n != 0,
 /// code[i] + i &lt; n) are behind ReadPermutation's checks, which these tests cover; the function is
-/// tested on its own in <see cref="JxlVarDctComponentsTests"/>. DecodePermutation's ANS check (coeff_order.cc:77)
-/// is only reached by a permuted TOC, which is not supported until D13.</item>
+/// tested on its own in <see cref="JxlVarDctComponentsTests"/>. libjxl's DecodePermutation, with its ANS check
+/// (coeff_order.cc:77), is only reached by a permuted TOC, which is not supported, nor ported, until D13.</item>
 /// <item>Dequantization matrices: the mode has 3 bits and all 8 modes exist, so "Invalid quantization
 /// table encoding" cannot happen; the predefined table has 0 bits, so "Invalid predefined table" cannot
 /// either; and the number of distance bands has 4 bits, at most 16 of the 17 libjxl allows. Interpolate's
