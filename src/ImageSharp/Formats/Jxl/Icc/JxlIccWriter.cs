@@ -4,6 +4,7 @@
 // lib/jxl/enc_icc_codec.h and lib/jxl/enc_icc_codec.cc (Unshuffle, PredictAndShuffle, EncodeVarInt, PredictICC, WriteICC).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
@@ -37,6 +38,7 @@ internal static class JxlIccWriter
 
         List<byte> enc = new();
         PredictIcc(icc, enc);
+        CheckPreamble(enc);
         List<JxlToken>[] tokens = { new(enc.Count) };
         JxlFieldCoders.WriteU64((ulong)enc.Count, writer);
 
@@ -446,6 +448,29 @@ internal static class JxlIccWriter
         EncodeVarInt((ulong)commands.Count, result);
         result.AddRange(commands);
         result.AddRange(data);
+    }
+
+    // Departure (ADR 0001): libjxl writes any profile that PredictICC encodes, but its reader
+    // (ICCReader::Init) checks the preamble against only the first 0x400 bytes it has decoded, so it
+    // rejects a profile whose commands do not end within them, such as one with hundreds of tags at
+    // unpredictable offsets. The encoder must not write a stream that the decoders reject, so it runs
+    // the reader's own check first and throws when it fails.
+    private static void CheckPreamble(List<byte> enc)
+    {
+        if (enc.Count <= JxlIccReader.PreambleSize)
+        {
+            return;
+        }
+
+        byte[] preamble = enc.GetRange(0, Math.Min(0x400, enc.Count)).ToArray();
+        try
+        {
+            JxlIccReader.CheckPreamble(preamble, preamble.Length, (ulong)enc.Count);
+        }
+        catch (InvalidImageContentException ex)
+        {
+            JxlThrowHelper.ThrowImageFormatException("The ICC profile cannot be embedded: libjxl's ICC reader would reject its encoded form.", ex);
+        }
     }
 
     // Unshuffles or de-interleaves bytes, for example with width 2, turns "AaBbCcDc" into "ABCDabcd",

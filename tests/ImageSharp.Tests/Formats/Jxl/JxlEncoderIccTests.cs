@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.IO;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -20,6 +21,11 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 [Trait("Format", "Jxl")]
 public class JxlEncoderIccTests
 {
+    private const int IccHeaderSize = 128;
+
+    // The end of the 11-tag table of LittleCms sRGB-v2.icc: the count, then 12 bytes per tag.
+    private const int IccTagTableEnd = IccHeaderSize + 4 + (11 * 12);
+
     /// <summary>
     /// Gets profiles whose colour space matches the pixels: pixel type and profile path. Between them
     /// they take each branch of the ICC predictor: XYZ and TRC triples, <c>curv</c> and <c>para</c>
@@ -84,6 +90,58 @@ public class JxlEncoderIccTests
         }
 
         return AssertDjxlExactAsync<Rgb24>(icc, name);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    public void Encode_ProfileWithArbitraryBytes_RoundTripsByteForByte(int seed, bool randomTagTable)
+    {
+        // The predictor must encode any bytes, not only a well-formed profile: the real tag table
+        // followed by noisy tag contents, or a few noisy tag entries followed by noise.
+        byte[] icc = ReadProfile(TestImages.Icc.LittleCmsSrgbV2);
+        Random random = new(seed);
+        if (randomTagTable)
+        {
+            random.NextBytes(icc.AsSpan(IccHeaderSize));
+            BinaryPrimitives.WriteUInt32BigEndian(icc.AsSpan(IccHeaderSize), (uint)(seed * 5));
+        }
+        else
+        {
+            random.NextBytes(icc.AsSpan(IccTagTableEnd));
+        }
+
+        AssertOurDecoderKeepsProfile<Rgb24>(icc);
+    }
+
+    [Fact]
+    public void Encode_ProfileWhoseTagListIsTooLargeForTheDecoder_ThrowsAndWritesNothing()
+    {
+        // libjxl's ICC reader checks that the commands of the encoded profile lie in its first 1024
+        // bytes. 200 tags whose offsets and sizes cannot be predicted take about 11 bytes each there.
+        const int numTags = 200;
+        byte[] icc = new byte[4000];
+        ReadProfile(TestImages.Icc.CompactDisplayP3V4).AsSpan(0, IccHeaderSize).CopyTo(icc);
+        BinaryPrimitives.WriteUInt32BigEndian(icc, (uint)icc.Length);
+        BinaryPrimitives.WriteUInt32BigEndian(icc.AsSpan(IccHeaderSize), numTags);
+        for (int i = 0; i < numTags; i++)
+        {
+            Span<byte> entry = icc.AsSpan(IccHeaderSize + 4 + (i * 12), 12);
+            BinaryPrimitives.WriteUInt32BigEndian(entry, 0x7A7A7A7A); // "zzzz"
+            BinaryPrimitives.WriteUInt32BigEndian(entry[4..], 0xF0000000u + (uint)(i * 977));
+            BinaryPrimitives.WriteUInt32BigEndian(entry[8..], 0x10000000u + (uint)(i * 131));
+        }
+
+        Assert.True(new IccProfile(icc).CheckIsValid());
+        using Image<Rgb24> image = CreateImage<Rgb24>(icc);
+        using MemoryStream stream = new();
+
+        Assert.Throws<ImageFormatException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
+        Assert.Equal(0, stream.Length);
     }
 
     [Theory]
