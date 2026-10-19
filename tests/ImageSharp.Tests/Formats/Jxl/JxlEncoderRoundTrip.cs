@@ -76,9 +76,22 @@ internal static class JxlEncoderRoundTrip
             _ => throw new ArgumentException($"No corpus round trip for {pixelType}", nameof(pixelType)),
         };
 
+    // Eight 8-bit colours (times 257) for the icon pattern, none of them in the palette's implicit colour cubes.
+    private static readonly Rgba64[] IconColours =
+    {
+        new Rgba64(51400, 7710, 10280, ushort.MaxValue),
+        new Rgba64(7710, 41120, 17990, ushort.MaxValue),
+        new Rgba64(5140, 10280, 46260, ushort.MaxValue),
+        new Rgba64(59110, 53970, 5140, ushort.MaxValue),
+        new Rgba64(30840, 5140, 35980, ushort.MaxValue),
+        new Rgba64(5140, 51400, 53970, ushort.MaxValue),
+        new Rgba64(61680, 61680, 59110, ushort.MaxValue),
+        new Rgba64(2570, 2570, 5140, ushort.MaxValue),
+    };
+
     /// <summary>
     /// Creates a deterministic test image: <c>solid</c> (one colour), <c>gradient</c> (a different ramp in
-    /// each channel) or <c>noise</c> (fixed-seed random samples).
+    /// each channel), <c>noise</c> (fixed-seed random samples) or <c>icon</c> (eight colours in 8x8 blocks).
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="pattern">The pattern.</param>
@@ -103,6 +116,7 @@ internal static class JxlEncoderRoundTrip
                         (ushort)((x + y) * 65535 / Math.Max(1, width + height - 2)),
                         ushort.MaxValue),
                     "noise" => new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), ushort.MaxValue),
+                    "icon" => IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length],
                     _ => throw new ArgumentException($"Unknown pattern {pattern}", nameof(pattern)),
                 };
 
@@ -146,6 +160,7 @@ internal static class JxlEncoderRoundTrip
         AddSingleGroup8BitCases(cases);
         AddMultiGroup8BitCases(cases);
         AddPrefixCodeCases(cases);
+        AddTransformCases(cases);
         return cases;
     }
 
@@ -178,6 +193,19 @@ internal static class JxlEncoderRoundTrip
                 {
                     cases.Add(pixelType, pattern, width, height);
                 }
+            }
+        }
+    }
+
+    // E1e: the icon pattern takes the global palette in RGB and a channel palette in grey; the other
+    // patterns already cover YCoCg and channel palettes.
+    private static void AddTransformCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pixelType in new[] { nameof(L8), nameof(Rgb24) })
+        {
+            foreach ((int width, int height) in new[] { (17, 23), (64, 64), (256, 256) })
+            {
+                cases.Add(pixelType, "icon", width, height);
             }
         }
     }

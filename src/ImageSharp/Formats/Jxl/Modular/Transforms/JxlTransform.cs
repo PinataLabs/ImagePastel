@@ -51,6 +51,18 @@ internal sealed class JxlTransform : JxlFields
     /// <summary>Gets the squeeze steps. Squeeze only; empty means the default steps.</summary>
     public List<JxlSqueezeParams> Squeezes { get; } = new();
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the encoder sorts the palette colours by luma. Encoder
+    /// only; not written.
+    /// </summary>
+    public bool OrderedPalette { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the encoder may make a lossy palette. Encoder only; not
+    /// written. Only lossy encoding sets it, and that path is not ported.
+    /// </summary>
+    public bool LossyPalette { get; set; }
+
     public override void VisitFields(JxlVisitor visitor)
     {
         this.id = visitor.U32(Val((uint)JxlTransformId.Rct), Val((uint)JxlTransformId.Palette), Val((uint)JxlTransformId.Squeeze), Val((uint)JxlTransformId.Invalid), (uint)JxlTransformId.Rct, this.id);
