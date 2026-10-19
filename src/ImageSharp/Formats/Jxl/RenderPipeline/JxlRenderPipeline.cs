@@ -8,6 +8,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Memory;
 
@@ -93,8 +94,9 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
+    /// <param name="cancellationToken">The cancellation token, checked on each row of the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, JxlBlendingStage blending, IJxlRenderSink sink)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -102,8 +104,10 @@ internal sealed class JxlRenderPipeline : IDisposable
         {
             if (patches != null)
             {
+                // One row may take every patch of the frame, so cancellation is checked row by row.
                 for (int y = 0; y < this.height; y++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     patches.ProcessRow(this.planes, this.width, y);
                 }
             }

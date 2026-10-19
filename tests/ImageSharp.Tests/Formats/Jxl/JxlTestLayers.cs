@@ -392,15 +392,25 @@ internal sealed class JxlTestLayers
             section = withPatches.ToArray();
         }
 
-        // TOC: one section, no permutation.
+        // TOC: one section, no permutation. The size is U32(Bits(10), BitsOffset(14, 1024),
+        // BitsOffset(22, 17408), BitsOffset(30, 4211712)).
         w.Bit(false).ZeroPadToByte();
-        if (section.Length < 1024)
+        ulong length = (ulong)section.Length;
+        if (length < 1024)
         {
-            w.Write(2, 0).Write(10, (ulong)section.Length);
+            w.Write(2, 0).Write(10, length);
+        }
+        else if (length < 17408)
+        {
+            w.Write(2, 1).Write(14, length - 1024);
+        }
+        else if (length < 4211712)
+        {
+            w.Write(2, 2).Write(22, length - 17408);
         }
         else
         {
-            w.Write(2, 1).Write(14, (ulong)section.Length - 1024);
+            w.Write(2, 3).Write(30, length - 4211712);
         }
 
         w.ZeroPadToByte();

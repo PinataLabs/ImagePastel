@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -535,6 +536,42 @@ public class JxlBoundsTests
         }
 
         AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatches.ToArray())), throws);
+    }
+
+    // A flood within libjxl's limits: 4 * (1024 + 256 * 256 / 4) = 69632 copies of a 256 x 256 patch at
+    // (0, 0), each alpha-blended over the whole frame, about 2^32 pixel blends from a 35 KB dictionary
+    // (a copy costs only the raw bits of its blend modes). The limits stay libjxl's; the decode stops
+    // soon after it is cancelled instead. Uncancelled, it takes over 30 s; the dictionary is read in well
+    // under the 2 s before the cancellation, so that lands in the patches pass, where a row takes about
+    // 0.15 s. A thread of its own cancels the decode, as a timer waits for a pool thread that a full,
+    // parallel test run can keep busy for seconds, and the bound is from the cancellation, not the start.
+    [Fact]
+    public void PatchDictionary_FloodWithinTheLimits_StopsWhenCancelled()
+    {
+        const int size = 256;
+        JxlTestPatchBlending blend = new(JxlPatchBlendMode.BlendAbove);
+        JxlTestRefPatch flood = new(3, 0, 0, size, size, Enumerable.Repeat(new JxlTestPatch(0, 0, blend, blend), 69632).ToArray());
+        byte[] codestream = new JxlTestLayers(size, size)
+            .Add(new JxlTestFrame(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Patches = new JxlTestPatchDictionary(flood) })
+            .ToArray();
+        using MemoryStream stream = new(codestream);
+        using CancellationTokenSource cancellation = new();
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        TimeSpan cancelledAt = TimeSpan.Zero;
+        Thread canceller = new(() =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(2));
+            cancelledAt = stopwatch.Elapsed;
+            cancellation.Cancel();
+        });
+        canceller.Start();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, cancellation.Token));
+
+        TimeSpan stoppedAt = stopwatch.Elapsed;
+        canceller.Join();
+        Assert.True(stoppedAt - cancelledAt < TimeSpan.FromSeconds(10), $"The decode stopped {stoppedAt - cancelledAt} after it was cancelled.");
     }
 
     // The reference frame is in slot 3; slot 2 is empty and there are only four slots.

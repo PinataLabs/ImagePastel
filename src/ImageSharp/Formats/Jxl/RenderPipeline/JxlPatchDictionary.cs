@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -41,13 +42,18 @@ internal sealed class JxlPatchDictionary
 
     private const int NumPatchBlendModes = (int)JxlPatchBlendMode.AlphaWeightedAddBelow + 1;
 
+    // Decode checks the cancellation token once every 4096 positions of a reference patch.
+    private const long CancellationCheckMask = 4095;
+
     private static readonly IComparer<PatchInterval> ByY0 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y0.CompareTo(i1.Y0));
     private static readonly IComparer<PatchInterval> ByY1 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y1.CompareTo(i1.Y1));
 
     private readonly JxlReferenceFrames referenceFrames;
     private readonly List<PatchPosition> positions = new();
     private readonly List<PatchReferencePosition> refPositions = new();
-    private readonly List<JxlPatchBlending> blendings = new();
+
+    // An array once decoded, so AddOneRow can hand out a span of each patch's extra channel blendings.
+    private JxlPatchBlending[] blendings = Array.Empty<JxlPatchBlending>();
     private int blendingsStride;
 
     // Interval tree on the y coordinates of the patches.
@@ -61,7 +67,7 @@ internal sealed class JxlPatchDictionary
     // Scratch for AddOneRow.
     private readonly List<int> rowPatches = new();
     private JxlBlendingRows fgRows;
-    private JxlPatchBlending[] ecBlendings;
+    private JxlReferenceFrame fgReference;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlPatchDictionary"/> class.
@@ -77,11 +83,13 @@ internal sealed class JxlPatchDictionary
     /// <param name="xsize">The padded width of the frame.</param>
     /// <param name="ysize">The padded height of the frame.</param>
     /// <param name="numExtraChannels">The number of extra channels of the image.</param>
-    public void Decode(JxlBitReader br, long xsize, long ysize, int numExtraChannels)
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public void Decode(JxlBitReader br, long xsize, long ysize, int numExtraChannels, CancellationToken cancellationToken)
     {
         this.positions.Clear();
         this.refPositions.Clear();
-        this.blendings.Clear();
+        this.blendings = Array.Empty<JxlPatchBlending>();
+        List<JxlPatchBlending> blendings = new();
         this.blendingsStride = numExtraChannels + 1;
         JxlAnsCode code = new();
         byte[] contextMap = JxlEntropyDecoder.DecodeHistograms(br, NumPatchDictionaryContexts, code);
@@ -92,6 +100,10 @@ internal sealed class JxlPatchDictionary
         long numRefPatch = ReadNum(NumRefPatchContext);
 
         // Limit max memory usage of patches to about 66 bytes per pixel (assuming 8 bytes per size_t).
+        // These are libjxl's limits, kept as they are so that every file libjxl accepts decodes. They
+        // bound the memory, not the time: a dictionary of a few bytes can place about one patch per pixel,
+        // each as large as the frame, so the patches pass may blend patches x pixels samples. The work is
+        // proportional to that and stops when the decode is cancelled; a time budget is D14's.
         long numPixels = xsize * ysize;
         long maxRefPatches = 1024 + (numPixels / 4);
         long maxPatches = maxRefPatches * 4;
@@ -106,6 +118,7 @@ internal sealed class JxlPatchDictionary
 
         for (long id = 0; id < numRefPatch; id++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             PatchReferencePosition refPos;
             refPos.Ref = ReadNum(ReferenceFrameContext);
             if (refPos.Ref >= JxlReferenceFrames.MaxNumReferenceFrames || this.referenceFrames[(uint)refPos.Ref] == null)
@@ -158,10 +171,15 @@ internal sealed class JxlPatchDictionary
             }
 
             Reserve(this.positions, (int)nextSize);
-            Reserve(this.blendings, (int)(nextSize * this.blendingsStride));
+            Reserve(blendings, (int)(nextSize * this.blendingsStride));
             bool chooseAlpha = numExtraChannels > 1;
             for (long i = 0; i < idCount; i++)
             {
+                if ((i & CancellationCheckMask) == CancellationCheckMask)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 PatchPosition pos;
                 pos.RefPosIdx = this.refPositions.Count;
                 if (i == 0)
@@ -222,7 +240,7 @@ internal sealed class JxlPatchDictionary
                     }
 
                     bool clamp = UsesClamp(mode) && ReadNum(PatchClampContext) != 0;
-                    this.blendings.Add(new JxlPatchBlending(mode, alphaChannel, clamp));
+                    blendings.Add(new JxlPatchBlending(mode, alphaChannel, clamp));
                 }
 
                 this.positions.Add(pos);
@@ -232,13 +250,14 @@ internal sealed class JxlPatchDictionary
         }
 
         this.positions.TrimExcess();
+        this.blendings = blendings.ToArray();
 
         if (!decoder.CheckAnsFinalState)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("ANS checksum failure.");
         }
 
-        this.ComputePatchTree();
+        this.ComputePatchTree(cancellationToken);
     }
 
     /// <summary>
@@ -303,14 +322,14 @@ internal sealed class JxlPatchDictionary
     /// <param name="xsize">The number of pixels of the segment.</param>
     /// <param name="numColorPlanes">The number of colour planes: 1 or 3.</param>
     /// <param name="extraChannelInfo">The extra channels of the image.</param>
+    /// <param name="hasAlpha">Whether any extra channel is an alpha channel: <see cref="JxlBlending.HasAlpha"/>.</param>
     /// <param name="tmp">Scratch rows for the blending: one per channel, each at least <paramref name="xsize"/> long.</param>
-    public void AddOneRow(JxlBlendingRows inout, long y, long x0, long xsize, int numColorPlanes, List<JxlExtraChannelInfo> extraChannelInfo, Buffer2D<float> tmp)
+    public void AddOneRow(JxlBlendingRows inout, long y, long x0, long xsize, int numColorPlanes, List<JxlExtraChannelInfo> extraChannelInfo, bool hasAlpha, Buffer2D<float> tmp)
     {
         int numEc = extraChannelInfo.Count;
         DebugGuard.MustBeLessThanOrEqualTo(numEc + 1, this.blendingsStride, nameof(extraChannelInfo));
         int numChannels = numColorPlanes + numEc;
         this.fgRows ??= new JxlBlendingRows(new Buffer2D<float>[numChannels], Memory<float>.Empty);
-        this.ecBlendings ??= new JxlPatchBlending[numEc];
         this.GetPatchesForRow(y, this.rowPatches);
         foreach (int posIdx in this.rowPatches)
         {
@@ -333,21 +352,25 @@ internal sealed class JxlPatchDictionary
 
             long patchX0 = Math.Max(bx, x0);
             long patchX1 = Math.Min(bx + patchXSize, x0 + xsize);
+
+            // The slots do not change while the frame decodes, so the planes are re-pointed only when
+            // the patch takes another slot.
             JxlReferenceFrame reference = this.referenceFrames[(uint)refPos.Ref];
-            for (int c = 0; c < numChannels; c++)
+            if (reference != this.fgReference)
             {
-                this.fgRows.SetPlane(c, reference.Planes[c]);
+                for (int c = 0; c < numChannels; c++)
+                {
+                    this.fgRows.SetPlane(c, reference.Planes[c]);
+                }
+
+                this.fgReference = reference;
             }
 
             int n = (int)(patchX1 - patchX0);
             this.fgRows.PointAt((int)(refPos.X0 + patchX0 - bx), (int)(refPos.Y0 + iy), n);
             inout.PointAt((int)patchX0, (int)y, n);
-            for (int i = 0; i < numEc; i++)
-            {
-                this.ecBlendings[i] = this.blendings[blendingIdx + 1 + i];
-            }
-
-            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], this.ecBlendings, extraChannelInfo, tmp, n);
+            ReadOnlySpan<JxlPatchBlending> ecBlendings = this.blendings.AsSpan(blendingIdx + 1, numEc);
+            JxlBlending.PerformBlending(inout, this.fgRows, inout, numColorPlanes, this.blendings[blendingIdx], ecBlendings, extraChannelInfo, hasAlpha, tmp, n);
         }
     }
 
@@ -365,7 +388,7 @@ internal sealed class JxlPatchDictionary
         }
     }
 
-    private void ComputePatchTree()
+    private void ComputePatchTree(CancellationToken cancellationToken)
     {
         this.patchTree.Clear();
         this.numPatches.Clear();
@@ -389,10 +412,16 @@ internal sealed class JxlPatchDictionary
         void SortByY0(int start, int end) => Array.Sort(intervals, start, end - start, ByY0);
         void SortByY1(int start, int end) => Array.Sort(intervals, start, end - start, ByY1);
 
-        // Count the number of patches for each row.
-        SortByY1(0, intervals.Length);
-        int rows = (int)intervals[^1].Y1;
-        Reserve(this.numPatches, rows);
+        // Count the number of patches for each row. libjxl adds one to every row of every patch, which
+        // takes the sum of the patch heights; here each patch adds one at its first row and takes one off
+        // after its last, and a running sum gives the same counts in the number of patches plus rows.
+        long rows = 0;
+        foreach (PatchInterval iv in intervals)
+        {
+            rows = Math.Max(rows, iv.Y1);
+        }
+
+        Reserve(this.numPatches, (int)rows);
         for (int y = 0; y < rows; y++)
         {
             this.numPatches.Add(0);
@@ -400,16 +429,23 @@ internal sealed class JxlPatchDictionary
 
         foreach (PatchInterval iv in intervals)
         {
-            for (long y = iv.Y0; y < iv.Y1; ++y)
+            this.numPatches[(int)iv.Y0]++;
+            if (iv.Y1 < rows)
             {
-                this.numPatches[(int)y]++;
+                this.numPatches[(int)iv.Y1]--;
             }
+        }
+
+        for (int y = 1; y < rows; y++)
+        {
+            this.numPatches[y] += this.numPatches[y - 1];
         }
 
         this.patchTree.Add(new PatchTreeNode { Start = 0, Num = intervals.Length });
         int next = 0;
         while (next < this.patchTree.Count)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             PatchTreeNode node = this.patchTree[next];
             int start = node.Start;
             int end = node.Start + node.Num;
