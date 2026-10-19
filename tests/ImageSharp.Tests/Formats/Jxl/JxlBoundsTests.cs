@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -13,6 +14,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -505,6 +507,198 @@ public class JxlBoundsTests
         AssertLayers(truncate ? codestream.AsSpan(0, firstFrameEnd).ToArray() : codestream, throws);
     }
 
+    // PatchDictionary::Decode: at most 1024 + 24 * 16 / 4 = 1120 reference patches, checked before any
+    // is read.
+    [Theory]
+    [InlineData(1120, false)]
+    [InlineData(1121, true)]
+    public void PatchDictionary_NumberOfReferencePatches(int count, bool throws)
+    {
+        JxlTestRefPatch[] refPatches = Enumerable.Repeat(OnePixelPatch(), count).ToArray();
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatches)), throws);
+    }
+
+    // At most 4 * 1120 = 4480 patches in all, checked as each reference patch's count is read.
+    [Theory]
+    [InlineData(4480, 0, false)]
+    [InlineData(4481, 0, true)]
+    [InlineData(4482, 0, true)] // the count itself is over the limit
+    [InlineData(4479, 1, false)]
+    [InlineData(4480, 1, true)] // the total is over the limit
+    public void PatchDictionary_NumberOfPatches(int first, int second, bool throws)
+    {
+        List<JxlTestRefPatch> refPatches = new() { OnePixelPatch(first) };
+        if (second > 0)
+        {
+            refPatches.Add(OnePixelPatch(second));
+        }
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatches.ToArray())), throws);
+    }
+
+    // The reference frame is in slot 3; slot 2 is empty and there are only four slots.
+    [Theory]
+    [InlineData(3u, false)]
+    [InlineData(2u, true)]
+    [InlineData(4u, true)]
+    public void PatchDictionary_ReferenceSlot(uint slot, bool throws)
+    {
+        JxlTestRefPatch refPatch = new(slot, 0, 0, 1, 1, new JxlTestPatch(0, 0, PatchReplace, PatchReplace));
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatch)), throws);
+    }
+
+    // Patches take only frames saved before their colour transform.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void PatchDictionary_ReferenceSavedBeforeColourTransform(bool saveBeforeColorTransform, bool throws)
+    {
+        JxlTestFrame reference = new(JxlTestLayers.Ramp) { SaveAsReference = 3, SaveBeforeColorTransform = saveBeforeColorTransform };
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(OnePixelPatch()), reference), throws);
+    }
+
+    // The rectangle lies inside the 10 x 6 reference frame.
+    [Theory]
+    [InlineData(8u, 0u, 2u, 1u, false)]
+    [InlineData(8u, 0u, 3u, 1u, true)]
+    [InlineData(9u, 0u, 2u, 1u, true)]
+    [InlineData(0u, 4u, 1u, 2u, false)]
+    [InlineData(0u, 4u, 1u, 3u, true)]
+    [InlineData(0u, 5u, 1u, 2u, true)]
+    public void PatchDictionary_RectangleInsideTheReferenceFrame(uint x0, uint y0, uint xsize, uint ysize, bool throws)
+    {
+        JxlTestFrame reference = new(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, XSize = 10, YSize = 6, SaveAsReference = 3, SaveBeforeColorTransform = true };
+        JxlTestRefPatch refPatch = new(3, x0, y0, xsize, ysize, new JxlTestPatch(0, 0, PatchReplace, PatchReplace));
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatch), reference), throws);
+    }
+
+    // Each position puts the patch inside the 24 x 16 frame.
+    [Theory]
+    [InlineData(22, 0, 2u, 1u, false)]
+    [InlineData(23, 0, 2u, 1u, true)]
+    [InlineData(0, 14, 1u, 2u, false)]
+    [InlineData(0, 15, 1u, 2u, true)]
+    public void PatchDictionary_PositionInsideTheFrame(int x, int y, uint xsize, uint ysize, bool throws)
+    {
+        JxlTestRefPatch first = new(3, 0, 0, xsize, ysize, new JxlTestPatch(x, y, PatchReplace, PatchReplace));
+
+        // The same bound for a position read as a delta.
+        JxlTestRefPatch delta = new(3, 0, 0, xsize, ysize, new JxlTestPatch(0, 0, PatchReplace, PatchReplace), new JxlTestPatch(x, y, PatchReplace, PatchReplace));
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(first)), throws);
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(delta)), throws);
+    }
+
+    // A delta from the previous position at (3, 3) stays at or above zero.
+    [Theory]
+    [InlineData(0, 3, false)]
+    [InlineData(-1, 3, true)]
+    [InlineData(3, 0, false)]
+    [InlineData(3, -1, true)]
+    public void PatchDictionary_DeltaPositionNotBelowZero(int x, int y, bool throws)
+    {
+        JxlTestRefPatch refPatch = new(3, 0, 0, 1, 1, new JxlTestPatch(3, 3, PatchReplace, PatchReplace), new JxlTestPatch(x, y, PatchReplace, PatchReplace));
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(refPatch)), throws);
+    }
+
+    // There are eight blend modes, for the colour and for each extra channel.
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(8, true)]
+    [InlineData(31, true)]
+    public void PatchDictionary_BlendMode(int mode, bool throws)
+    {
+        JxlTestPatchBlending blending = new((JxlPatchBlendMode)mode);
+        JxlTestRefPatch colour = new(3, 0, 0, 1, 1, new JxlTestPatch(0, 0, blending, PatchReplace));
+        JxlTestRefPatch extraChannel = new(3, 0, 0, 1, 1, new JxlTestPatch(0, 0, PatchReplace, blending));
+
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(colour)), throws);
+        AssertLayers(PatchLayers(new JxlTestPatchDictionary(extraChannel)), throws);
+    }
+
+    // With two extra channels, a blend mode that uses alpha names one of them. Alpha blending of patches
+    // arrives with D7c, so a valid alpha channel still fails, as not supported.
+    [Theory]
+    [InlineData(0u, false)]
+    [InlineData(1u, false)]
+    [InlineData(2u, true)]
+    public void PatchDictionary_AlphaChannel(uint alphaChannel, bool throws)
+    {
+        using MemoryStream stream = new(TwoAlphaPatchLayers(alphaChannel));
+        if (throws)
+        {
+            Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
+        }
+        else
+        {
+            Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
+        }
+    }
+
+    // The ANS state of the dictionary ends at its initial value. The one symbol of the histogram never
+    // changes the state, so the state read is the final one.
+    [Theory]
+    [InlineData(0x130000u, false)]
+    [InlineData(0x130001u, true)]
+    public void PatchDictionary_AnsFinalState(uint state, bool throws)
+        => AssertLayers(PatchLayers(new JxlTestPatchDictionary() { AnsState = state }), throws);
+
+    // libjxl rejects the same patch dictionaries.
+    [Theory]
+    [InlineData("1120_reference_patches", false)]
+    [InlineData("1121_reference_patches", true)]
+    [InlineData("4480_patches", false)]
+    [InlineData("4481_patches", true)]
+    [InlineData("4479_and_1_patches", false)]
+    [InlineData("4480_and_1_patches", true)]
+    [InlineData("empty_slot", true)]
+    [InlineData("slot_4", true)]
+    [InlineData("slot_saved_after_ct", true)]
+    [InlineData("rectangle_outside_reference", true)]
+    [InlineData("position_outside_frame", true)]
+    [InlineData("delta_below_zero", true)]
+    [InlineData("blend_mode_8", true)]
+    [InlineData("alpha_channel_1", false)]
+    [InlineData("alpha_channel_2", true)]
+    [InlineData("ans_final_state", true)]
+    public async Task Djxl_RejectsTheSamePatches(string name, bool throws)
+    {
+        JxlTestRefPatch Patch(uint slot, uint x0, uint y0, uint xsize, uint ysize, params (int X, int Y)[] at)
+            => new(slot, x0, y0, xsize, ysize, at.Select(p => new JxlTestPatch(p.X, p.Y, PatchReplace, PatchReplace)).ToArray());
+
+        JxlTestFrame cropped = new(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, XSize = 10, YSize = 6, SaveAsReference = 3, SaveBeforeColorTransform = true };
+        byte[] codestream = name switch
+        {
+            "1120_reference_patches" => PatchLayers(new JxlTestPatchDictionary(Enumerable.Repeat(OnePixelPatch(), 1120).ToArray())),
+            "1121_reference_patches" => PatchLayers(new JxlTestPatchDictionary(Enumerable.Repeat(OnePixelPatch(), 1121).ToArray())),
+            "4480_patches" => PatchLayers(new JxlTestPatchDictionary(OnePixelPatch(4480))),
+            "4481_patches" => PatchLayers(new JxlTestPatchDictionary(OnePixelPatch(4481))),
+            "4479_and_1_patches" => PatchLayers(new JxlTestPatchDictionary(OnePixelPatch(4479), OnePixelPatch())),
+            "4480_and_1_patches" => PatchLayers(new JxlTestPatchDictionary(OnePixelPatch(4480), OnePixelPatch())),
+            "empty_slot" => PatchLayers(new JxlTestPatchDictionary(Patch(2, 0, 0, 1, 1, (0, 0)))),
+            "slot_4" => PatchLayers(new JxlTestPatchDictionary(Patch(4, 0, 0, 1, 1, (0, 0)))),
+            "slot_saved_after_ct" => PatchLayers(new JxlTestPatchDictionary(OnePixelPatch()), new JxlTestFrame(JxlTestLayers.Ramp) { SaveAsReference = 3 }),
+            "rectangle_outside_reference" => PatchLayers(new JxlTestPatchDictionary(Patch(3, 8, 0, 3, 1, (0, 0))), cropped),
+            "position_outside_frame" => PatchLayers(new JxlTestPatchDictionary(Patch(3, 0, 0, 2, 1, (0, 0), (23, 0)))),
+            "delta_below_zero" => PatchLayers(new JxlTestPatchDictionary(Patch(3, 0, 0, 1, 1, (3, 3), (-1, 3)))),
+            "blend_mode_8" => PatchLayers(new JxlTestPatchDictionary(new JxlTestRefPatch(3, 0, 0, 1, 1, new JxlTestPatch(0, 0, new((JxlPatchBlendMode)8), PatchReplace)))),
+            "alpha_channel_1" => TwoAlphaPatchLayers(1),
+            "alpha_channel_2" => TwoAlphaPatchLayers(2),
+            _ => PatchLayers(new JxlTestPatchDictionary() { AnsState = 0x130001 }),
+        };
+        string input = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlBoundsTests)), name + ".jxl");
+        await File.WriteAllBytesAsync(input, codestream, TestContext.Current.CancellationToken);
+
+        (int exitCode, string output) = await JxlTools.RunForExitCodeAsync("djxl", TestContext.Current.CancellationToken, input, input + ".npy");
+
+        Assert.True(throws == (exitCode != 0), $"djxl exited with code {exitCode}.{Environment.NewLine}{output}");
+    }
+
     // libjxl rejects the same streams.
     [Theory]
     [InlineData("colour_onto_slot_saved_before_ct", true)]
@@ -555,6 +749,35 @@ public class JxlBoundsTests
             .Add(new JxlTestFrame(JxlTestLayers.ColourA))
             .Add(new JxlTestFrame(JxlTestLayers.ColourB) { IsLast = true, Crop = true, X0 = 2, Y0 = 2, XSize = xsize, YSize = 5 })
             .ToArray();
+
+    private static JxlTestPatchBlending PatchReplace => new(JxlPatchBlendMode.Replace);
+
+    // A 1 x 1 reference patch placed count times at (0, 0).
+    private static JxlTestRefPatch OnePixelPatch(int count = 1)
+        => new(3, 0, 0, 1, 1, Enumerable.Repeat(new JxlTestPatch(0, 0, PatchReplace, PatchReplace), count).ToArray());
+
+    // The Ramp layer in slot 3, saved before its colour transform, unless another reference frame is
+    // given, then a displayed frame with the patches.
+    private static byte[] PatchLayers(JxlTestPatchDictionary patches, JxlTestFrame reference = null)
+        => new JxlTestLayers(24, 16)
+            .Add(reference ?? new JxlTestFrame(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Patches = patches })
+            .ToArray();
+
+    // The generated 16 x 16 files with two alpha channels: two_alpha_a in slot 3, then two_alpha_b with
+    // a patch whose colour is alpha-blended with the alpha channel given.
+    private static byte[] TwoAlphaPatchLayers(uint alphaChannel)
+    {
+        string directory = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated");
+        JxlTestLayers layers = JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(directory, "two_alpha_a.jxl")), out byte[] bottom);
+        JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(directory, "two_alpha_b.jxl")), out byte[] top);
+        JxlTestPatchBlending blend = new(JxlPatchBlendMode.BlendAbove, alphaChannel);
+        JxlTestRefPatch refPatch = new(3, 0, 0, 2, 2, new JxlTestPatch(0, 0, blend, PatchReplace, PatchReplace));
+        return layers
+            .Add(new JxlTestFrame(bottom) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
+            .Add(JxlTestFrame.Last(top) with { Patches = new JxlTestPatchDictionary(refPatch) })
+            .ToArray();
+    }
 
     private static void AssertLayers(byte[] codestream, bool throws)
     {
