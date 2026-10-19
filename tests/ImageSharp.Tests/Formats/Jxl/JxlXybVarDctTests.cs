@@ -40,6 +40,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_sizes_fine", 3)] // RMSE 7.2e-7, peak 3.0e-5
     [InlineData("vardct_xyb_sizes_smooth", 3)] // RMSE 6.1e-7, peak 1.0e-5
     [InlineData("vardct_xyb_identity_afv", 4)] // RMSE 4.1e-7, peak 2.8e-5
+    [InlineData("vardct_xyb_e7", 3)] // Gaborish, EPF (1 iteration) and other block sizes: RMSE 1.1e-6, peak 1.7e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -165,12 +166,8 @@ public class JxlXybVarDctTests
         Assert.Null(info.Metadata.IccProfile);
     }
 
-    // cjxl -d 1 at its default effort (7) turns on Gaborish and EPF (D9). The others are the 64 x 64 image
-    // with one of the features of a later slice each.
+    // The 64 x 64 image with one of the features of a later slice each.
     [Theory]
-    [InlineData("vardct_xyb_gaborish", "Loop filters")]
-    [InlineData("vardct_xyb_e7", "Loop filters")]
-    [InlineData("vardct_xyb_epf", "Loop filters")]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)

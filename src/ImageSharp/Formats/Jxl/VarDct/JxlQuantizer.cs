@@ -46,6 +46,9 @@ internal sealed class JxlQuantizer
     /// <summary>Gets the reciprocal of the global scale.</summary>
     public float InvGlobalScale => this.invGlobalScale;
 
+    /// <summary>Gets the global scale as a fraction, libjxl's <c>Scale()</c>, which EPF's sigma uses.</summary>
+    public float Scale => this.globalScaleFloat;
+
     /// <summary>Gets the DC step of each channel.</summary>
     public float[] MulDc => this.mulDc;
 
