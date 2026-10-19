@@ -22,9 +22,11 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// <summary>
 /// Encodes the Modular streams of a frame: the global stream and one per LF group and per group,
 /// with one global MA tree and one set of histograms that every stream shares. The lossless paths of
-/// libjxl's efforts 3 and 5 are ported: the predefined <c>kWPFixedDC</c> tree with the Weighted
-/// predictor at effort 3, and a learned tree with the Gradient and Weighted predictors at effort 5,
-/// with effort 5's per-group RCT search and local palettes. Squeeze and quantisation are not ported.
+/// libjxl's efforts 3, 5 and 7 (Fastest, Default and Thorough) are ported: the predefined
+/// <c>kWPFixedDC</c> tree with the Weighted predictor at effort 3, and a learned tree with the
+/// Gradient and Weighted predictors at efforts 5 and 7, with the per-group RCT search and local
+/// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
+/// palette by the estimated cost. Squeeze and quantisation are not ported.
 /// It is the mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
@@ -230,8 +232,8 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     }
 
     /// <summary>
-    /// Builds the global tree and turns it into tokens: below effort 3 a tree learned from every
-    /// stream, and at effort 3 libjxl's predefined <c>kWPFixedDC</c> one. The tree is then kept as the
+    /// Builds the global tree and turns it into tokens: above effort 3 (below Falcon) a tree learned
+    /// from every stream, and at effort 3 libjxl's predefined <c>kWPFixedDC</c> one. The tree is then kept as the
     /// decoder will read it, so its leaf ids are the token contexts.
     /// </summary>
     public void ComputeTree()
@@ -593,8 +595,8 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
     // The tree-learning parameters of each speed tier, from libjxl's Init for a lossless, non-responsive
     // frame: the properties tree learning may split on, how many values each is quantised to, and the
-    // fraction of pixels sampled. Effort 3 and up use a fixed tree, so their row (the default) is not
-    // read; it is kept as libjxl has it.
+    // fraction of pixels sampled. Effort 3 and below (Falcon and faster) use a fixed tree, so their
+    // row (the default) is not read; it is kept as libjxl has it.
     private static void SetTreeLearningParameters(JxlModularOptions options, JxlSpeedTier speedTier, long numStreams, JxlImageMetadata metadata)
     {
         List<uint> propOrder = new(PropOrder);

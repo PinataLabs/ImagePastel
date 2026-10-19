@@ -31,6 +31,19 @@ public class JxlEncoderTests
         Assert.Contains("E3", ex.Message);
     }
 
+    [Theory]
+    [InlineData(nameof(JxlEffort.Default))]
+    [InlineData(nameof(JxlEffort.Thorough))]
+    public void Encode_LossyEffort_ThrowsNotSupportedNamingE3(string effort)
+    {
+        using Image<Rgb24> image = new(1, 1);
+        using MemoryStream stream = new();
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = Enum.Parse<JxlEffort>(effort) }));
+
+        Assert.Contains("E3", ex.Message);
+    }
+
     // No lossless effort throws.
     [Theory]
     [InlineData(nameof(JxlEffort.Fastest))]
@@ -46,28 +59,6 @@ public class JxlEncoderTests
 
         using Image<Rgb24> actual = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), stream.ToArray());
         Assert.Equal(image[0, 0], actual[0, 0]);
-    }
-
-    [Fact]
-    public void Encode_LossyThorough_ThrowsNotSupportedNamingE3()
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = JxlEffort.Thorough }));
-
-        Assert.Contains("E3", ex.Message);
-    }
-
-    [Fact]
-    public void Encode_LossyDefault_ThrowsNotSupportedNamingE3()
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = JxlEffort.Default }));
-
-        Assert.Contains("E3", ex.Message);
     }
 
     [Theory]

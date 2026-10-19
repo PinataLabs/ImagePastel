@@ -147,12 +147,23 @@ internal static class JxlTreeLearner
         }
     }
 
-    // Compute entropy of the histogram, taking into account the minimum probability for symbols with
-    // non-zero counts.
-    // libjxl pads the histogram to a multiple of the SIMD width and sums per lane; padding adds
-    // symbols with no count, which add no bits. This port sums in order, so the estimate can differ
-    // from libjxl's in the last bits of the float (ADR 0004).
-    private static float EstimateBits(int[] counts, int offset, int numSymbols)
+    /// <summary>
+    /// Computes the entropy of the histogram, taking into account the minimum probability for symbols
+    /// with non-zero counts.
+    /// </summary>
+    /// <remarks>
+    /// libjxl pads the histogram to a multiple of the SIMD width and sums per lane; padding adds
+    /// symbols with no count, which add no bits. This port sums in the order of the 8 float lanes of
+    /// AVX2, which cjxl runs on x64: symbol i goes to lane i % 8, and the lanes are added as Highway's
+    /// <c>SumOfLanes</c> adds them. The integer total does not depend on the order. The estimate can
+    /// still differ from cjxl's in the last bits, because <see cref="JxlFastMath.FastLog2f"/> does not
+    /// fuse its multiply-adds as libjxl's does on AVX2 (ADR 0004).
+    /// </remarks>
+    /// <param name="counts">The counts.</param>
+    /// <param name="offset">The index of the first symbol's count.</param>
+    /// <param name="numSymbols">The number of symbols.</param>
+    /// <returns>The estimate, in bits.</returns>
+    internal static float EstimateBits(int[] counts, int offset, int numSymbols)
     {
         int total = 0;
         for (int i = 0; i < numSymbols; i++)
@@ -162,7 +173,8 @@ internal static class JxlTreeLearner
 
         const float minprob = 1.0f / JxlAnsParams.AnsTabSize;
         float invTotal = 1.0f / total;
-        float bits = 0;
+        Span<float> bitsLanes = stackalloc float[8];
+        bitsLanes.Clear();
         for (int i = 0; i < numSymbols; i++)
         {
             int count = counts[offset + i];
@@ -170,10 +182,16 @@ internal static class JxlTreeLearner
             float probs = countF * invTotal;
             float mprobs = Math.Max(probs, minprob);
             float nbps = count == total ? 0 : JxlFastMath.FastLog2f(mprobs);
-            bits -= countF * nbps;
+            bitsLanes[i & 7] -= countF * nbps;
         }
 
-        return bits;
+        // SumOfLanes: each lane of the lower block plus its partner in the upper block, then lanes 0
+        // and 3 and lanes 1 and 2, then those two sums.
+        float l0 = bitsLanes[0] + bitsLanes[4];
+        float l1 = bitsLanes[1] + bitsLanes[5];
+        float l2 = bitsLanes[2] + bitsLanes[6];
+        float l3 = bitsLanes[3] + bitsLanes[7];
+        return (l0 + l3) + (l1 + l2);
     }
 
     private static JxlPropertyDecisionNode Leaf(JxlPredictor predictor) => new(-1, 0, 0, 0, predictor, 0, 1);
@@ -444,7 +462,7 @@ internal static class JxlTreeLearner
                         List<JxlTreeSamples.ResidualToken> rtokens = treeSamples.RTokens(pred);
                         CollectExtraBitsIncrease(treeSamples, isStatic, rtokens, countIncrease, extraBitsIncrease, begin, end, propIdx, maxSymbols);
                         Array.Copy(counts, pred * maxSymbols, countsAbove, 0, maxSymbols);
-                        Array.Clear(countsBelow);
+                        countsBelow.AsSpan().Clear();
                         ulong extraBitsBelow = 0;
 
                         // Exclude last used: this ensures neither counts_above nor counts_below is empty.

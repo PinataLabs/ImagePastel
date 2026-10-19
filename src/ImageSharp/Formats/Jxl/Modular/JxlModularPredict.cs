@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/modular/encoding/context_predict.h (FlatDecisionNode, MATreeLookup, ClampedGradient, Select,
-// PrecomputeReferences, InitPropsRow, PredictOne, Predict and its decoder wrappers).
+// PrecomputeReferences, InitPropsRow, PredictOne, Predict and its decoder wrappers, PredictLearnAll).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;

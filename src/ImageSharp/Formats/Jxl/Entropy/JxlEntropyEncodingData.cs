@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_ans.h and lib/jxl/enc_ans.cc (EntropyEncodingData, BuildAndStoreEntropyCodes,
-// BuildAndStoreANSEncodingData, ChooseUintConfigs).
+// BuildAndStoreANSEncodingData, ChooseUintConfigs, Histogram::ANSPopulationCost),
+// lib/jxl/enc_ans_params.h (Histogram::MaxSymbol) and lib/jxl/enc_ans_simd.cc (EstimateTokenCost).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;

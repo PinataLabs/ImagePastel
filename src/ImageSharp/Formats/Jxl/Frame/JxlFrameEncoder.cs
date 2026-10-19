@@ -16,8 +16,8 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <summary>
-/// Encodes one lossless Modular frame, as libjxl's <c>EncodeFrameOneShot</c> does at efforts 3 and 5:
-/// the frame header, the TOC, and the sections.
+/// Encodes one lossless Modular frame, as libjxl's <c>EncodeFrameOneShot</c> does at efforts 3, 5
+/// and 7 (Fastest, Default and Thorough): the frame header, the TOC, and the sections.
 /// </summary>
 /// <remarks>
 /// Departure (ADR 0001): for a frame of more than 8 groups, libjxl's lossless encoder takes its
