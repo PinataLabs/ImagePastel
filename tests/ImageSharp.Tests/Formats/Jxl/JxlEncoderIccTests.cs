@@ -18,7 +18,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// Slice E1f: the pixel profile is embedded verbatim when its colour space matches the pixels, and
-/// otherwise the sRGB enum is written (#115).
+/// otherwise the sRGB enum is written (#115). A profile that is not valid, or that libjxl's ICC reader
+/// would refuse, throws <see cref="ImageFormatException"/>.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlEncoderIccTests
@@ -151,13 +152,17 @@ public class JxlEncoderIccTests
         => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, null));
 
     [Fact]
-    public void Encode_ProfileThatIsNotValid_WritesTheSrgbEnum()
+    public void Encode_ProfileThatIsNotValid_ThrowsAndWritesNothing()
     {
-        // An RGB profile whose header claims more bytes than it has.
+        // An RGB profile whose header claims more bytes than it has. libjxl's JxlEncoderSetICCProfile
+        // rejects a profile its CMS cannot parse, as the encoder rejects one its ICC reader would refuse.
         byte[] icc = ReadProfile(TestImages.Icc.CompactDisplayP3V4)[..200];
         Assert.False(new IccProfile(icc).CheckIsValid());
+        using Image<Rgb24> image = CreateImage<Rgb24>(icc);
+        using MemoryStream stream = new();
 
-        AssertOurDecoderGetsSrgbEnum<Rgb24>(icc);
+        Assert.Throws<ImageFormatException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
+        Assert.Equal(0, stream.Length);
     }
 
     private static byte[] ReadProfile(string profile) => File.ReadAllBytes(TestFile.GetInputFileFullPath(profile));

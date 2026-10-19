@@ -124,14 +124,26 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // second: the fields keep the enum of SetColorEncoding, which already gives the colour space of a
     // matching profile, and the intensity target stays the SDR default that libjxl's SetIntensityTarget
     // gives those fields. Lossless never turns the profile back into an enum (DecideIfWantICC runs only
-    // without uses_original_profile). Departure (ADR 0001): libjxl returns an error for a profile
-    // that does not match the channel count, or that its CMS cannot parse; this port ignores such a
-    // profile and writes the enum (#115). A profile that fails IccProfile.CheckIsValid counts as one
-    // that does not parse.
+    // without uses_original_profile).
+    // A profile that is not valid throws ImageFormatException, the same as one that libjxl's ICC
+    // reader would refuse (JxlIccWriter): libjxl's JxlEncoderSetICCProfile returns an error for a
+    // profile its CMS cannot parse, and a profile that fails IccProfile.CheckIsValid counts as one.
+    // Departure (ADR 0001): libjxl also returns an error for a profile that does not match the channel
+    // count; this port ignores such a profile and writes the enum (#115).
     private static byte[] SetIccProfile(JxlColorEncoding colorEncoding, IccProfile profile)
     {
+        if (profile is null)
+        {
+            return null;
+        }
+
+        if (!profile.CheckIsValid())
+        {
+            JxlThrowHelper.ThrowImageFormatException("The ICC profile cannot be embedded: it is not a valid ICC profile.");
+        }
+
         IccColorSpaceType pixelColorSpace = colorEncoding.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
-        if (profile is null || !profile.CheckIsValid() || profile.Header.DataColorSpace != pixelColorSpace)
+        if (profile.Header.DataColorSpace != pixelColorSpace)
         {
             return null;
         }
