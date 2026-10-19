@@ -47,8 +47,8 @@ internal static class JxlContextMapEncoder
         }
 
         // Departure (ADR 0001): libjxl leaves these parameters' LZ77 method at its default, kRLE, so
-        // it can RLE-code a long context map. The encoder writes no LZ77 yet, so this is kNone; the
-        // output is still valid.
+        // it can RLE-code a long context map. This is kNone, which keeps the Fastest output
+        // byte-identical to E1's; the output is still valid, and only larger for long context maps.
         JxlHistogramParams parameters = new()
         {
             UintMethod = JxlHistogramParams.HybridUintMethod.ContextMap,
