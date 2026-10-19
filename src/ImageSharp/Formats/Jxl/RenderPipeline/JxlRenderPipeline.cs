@@ -23,7 +23,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// Deliberate departures from libjxl: the planes carry no border padding, because no stage needs
 /// neighbours yet; stages are to run in place rather than allocate new planes each, as decided in
 /// issue #113; and the stages are fixed steps of <see cref="Finish"/> rather than a list built per
-/// frame, because the frames this port decodes need only the patches, save, blending and output stages.
+/// frame, because the frames this port decodes need only the patches, save, colour-transform, blending
+/// and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
@@ -86,17 +87,18 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     /// <summary>
     /// Runs the stages over the whole frame, in libjxl's order: the patches, the save before the colour
-    /// transform, the blending, the save after blending, and the output. Returns the frame to keep in its
-    /// reference slot, if it can be referenced; the caller saves it once the frame is done, as libjxl's
-    /// <c>FinalizeFrame</c> does.
+    /// transform, the colour-transform stages, the blending, the save after blending, and the output.
+    /// Returns the frame to keep in its reference slot, if it can be referenced; the caller saves it once
+    /// the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
+    /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
     /// <param name="cancellationToken">The cancellation token, checked on each row of the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -112,10 +114,18 @@ internal sealed class JxlRenderPipeline : IDisposable
                 }
             }
 
-            // The colour transform is a later slice, so the planes before it are the decoded ones.
             if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
             {
                 saved = this.CopyPlanes(isInXyb: true);
+            }
+
+            // SimpleRenderPipeline runs each stage over the whole frame before the next.
+            foreach (IJxlColorStage stage in colorStages)
+            {
+                for (int y = 0; y < this.height; y++)
+                {
+                    stage.ProcessRow(this.planes, this.width, y);
+                }
             }
 
             if (blending != null)

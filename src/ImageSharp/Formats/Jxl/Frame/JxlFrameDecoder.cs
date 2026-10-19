@@ -101,6 +101,7 @@ internal sealed class JxlFrameDecoder
         using JxlPatchesStage patchesStage = patches != null
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSizeUpsampled)
             : null;
+        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
@@ -119,7 +120,7 @@ internal sealed class JxlFrameDecoder
         }
 
         modularFrameDecoder.FinalizeDecoding(frameHeader, pipeline);
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, patchesStage, blending, isLastOfStill ? sink : null, cancellationToken);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, patchesStage, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)

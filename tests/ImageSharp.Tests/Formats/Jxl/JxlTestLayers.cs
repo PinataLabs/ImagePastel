@@ -106,6 +106,15 @@ internal sealed class JxlTestLayers
         };
     }
 
+    /// <summary>Reads the header of the first frame of a single-group codestream.</summary>
+    /// <param name="codestream">The codestream.</param>
+    /// <returns>The frame header.</returns>
+    public static JxlFrameHeader ReadFirstFrameHeader(byte[] codestream)
+    {
+        FirstSection(codestream, out _, out JxlFrameHeader frameHeader, out _);
+        return frameHeader;
+    }
+
     public JxlTestLayers Add(JxlTestFrame frame)
     {
         this.frames.Add(frame);
