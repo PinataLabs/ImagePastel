@@ -50,6 +50,19 @@ public class JxlEntropyCoderTests
         Assert.Equal(tokens.Select(t => t.Value), Decode(encoded, tokens, 64));
     }
 
+    // libjxl picks its LZ77 match finders from Kitten (effort 8) down. They are not ported, so these
+    // tiers throw rather than code the streams with RLE.
+    [Theory]
+    [InlineData(nameof(JxlSpeedTier.Kitten))]
+    [InlineData(nameof(JxlSpeedTier.Tortoise))]
+    [InlineData(nameof(JxlSpeedTier.Glacier))]
+    public void ForModular_KittenAndSlower_ThrowsNotSupportedNamingEffort8(string speedTier)
+    {
+        System.NotSupportedException ex = Assert.Throws<System.NotSupportedException>(() => JxlHistogramParams.ForModular(System.Enum.Parse<JxlSpeedTier>(speedTier), modularMode: true, JxlPredictor.Best));
+
+        Assert.Contains("libjxl effort 8 and up", ex.Message);
+    }
+
     private static List<JxlToken> RepeatingRows(int rows, int width)
     {
         List<JxlToken> tokens = new();

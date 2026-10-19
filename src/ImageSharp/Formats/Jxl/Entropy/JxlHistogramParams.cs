@@ -121,9 +121,8 @@ internal sealed class JxlHistogramParams
         }
         else
         {
-            // Departure (ADR 0001): libjxl picks LZ77 match finders here (kOptc256 and kLZ77b3w3f). They
-            // are e8+ features, which are not ported, so these tiers keep RLE.
-            result.Lz77 = Lz77Method.Rle;
+            // libjxl picks its LZ77 match finders here (kOptc256 and kLZ77b3w3f), which are not ported.
+            JxlThrowHelper.ThrowNotSupportedException("The LZ77 match finders of Modular streams (libjxl effort 8 and up)");
         }
 
         if (decodingSpeedTier >= 2)
@@ -132,9 +131,9 @@ internal sealed class JxlHistogramParams
         }
 
         // No predictor requires LZ77 to compress residuals. Effort 3 and lower have forced predictors,
-        // so kNone is set. Departure (ADR 0001): libjxl picks the kLZ77b3w3f and kOptc256 match finders
-        // below Hare. The match finders are not ported, so RLE stands in for them; no effort sets the
-        // Zero predictor below Falcon, so this never runs.
+        // so kNone is set. Departure (ADR 0001): libjxl picks the kLZ77b3w3f match finder at Wombat and
+        // Squirrel (slower tiers threw above). The match finder is not ported, so RLE stands in for it;
+        // no effort sets the Zero predictor below Falcon, so this never runs.
         if (predictor == JxlPredictor.Zero && modularMode)
         {
             result.Lz77 = speedTier >= JxlSpeedTier.Falcon ? Lz77Method.None : Lz77Method.Rle;
