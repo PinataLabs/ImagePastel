@@ -400,10 +400,16 @@ internal sealed class JxlPatchDictionary
         void SortByY0(int start, int end) => Array.Sort(intervals, start, end - start, ByY0);
         void SortByY1(int start, int end) => Array.Sort(intervals, start, end - start, ByY1);
 
-        // Count the number of patches for each row.
-        SortByY1(0, intervals.Length);
-        int rows = (int)intervals[^1].Y1;
-        Reserve(this.numPatches, rows);
+        // Count the number of patches for each row. libjxl adds one to every row of every patch, which
+        // takes the sum of the patch heights; here each patch adds one at its first row and takes one off
+        // after its last, and a running sum gives the same counts in the number of patches plus rows.
+        long rows = 0;
+        foreach (PatchInterval iv in intervals)
+        {
+            rows = Math.Max(rows, iv.Y1);
+        }
+
+        Reserve(this.numPatches, (int)rows);
         for (int y = 0; y < rows; y++)
         {
             this.numPatches.Add(0);
@@ -411,10 +417,16 @@ internal sealed class JxlPatchDictionary
 
         foreach (PatchInterval iv in intervals)
         {
-            for (long y = iv.Y0; y < iv.Y1; ++y)
+            this.numPatches[(int)iv.Y0]++;
+            if (iv.Y1 < rows)
             {
-                this.numPatches[(int)y]++;
+                this.numPatches[(int)iv.Y1]--;
             }
+        }
+
+        for (int y = 1; y < rows; y++)
+        {
+            this.numPatches[y] += this.numPatches[y - 1];
         }
 
         this.patchTree.Add(new PatchTreeNode { Start = 0, Num = intervals.Length });
