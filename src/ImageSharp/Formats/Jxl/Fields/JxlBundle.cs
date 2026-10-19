@@ -152,6 +152,12 @@ internal static partial class JxlBundle
     /// keeps a size for each bundle with extensions instead, in visit order, which <see cref="WriteVisitor"/>
     /// writes in the same order. Each size still goes to the bundle's first extension, with zeros for
     /// the others, as in libjxl.
+    /// <para>
+    /// The reader, like libjxl's, keeps one running extension size for the whole visit, not one per
+    /// bundle, so it skips the right number of bits only when no bundle with extensions follows one
+    /// with a nonzero size. No bundle has extension fields yet, so every size the encoder writes for
+    /// a real bundle is zero.
+    /// </para>
     /// </summary>
     private sealed class CanEncodeVisitor : JxlVisitor
     {

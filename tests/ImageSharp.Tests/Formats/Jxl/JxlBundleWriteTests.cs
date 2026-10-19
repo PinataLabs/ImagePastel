@@ -9,6 +9,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using Xunit;
+using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
@@ -387,6 +388,141 @@ public class JxlBundleWriteTests
         Assert.Equal(JxlFieldRecorder.Record(lz77), JxlFieldRecorder.Record(read));
     }
 
+    [Theory]
+    [InlineData(7u, 2, 0)] // the direct value
+    [InlineData(5u, 6, 1)] // 4 bits, the shortest of three that hold it
+    [InlineData(100u, 10, 2)] // 8 bits
+    [InlineData(1000u, 34, 3)] // 32 bits
+    public void U32_ChoosesTheShortestSelector(uint value, int expectedBits, int expectedSelector)
+    {
+        U32Bundle bundle = new() { Value = value };
+        JxlBitWriter writer = new();
+
+        JxlBundle.Write(bundle, writer);
+        U32Bundle read = RoundTrip(bundle, new U32Bundle());
+
+        Assert.Equal(expectedBits, writer.BitsWritten);
+        Assert.Equal((byte)expectedSelector, (byte)(writer.ToArray()[0] & 3));
+        Assert.Equal(value, read.Value);
+    }
+
+    [Theory]
+    [InlineData(0f, 0x0000)]
+    [InlineData(1f, 0x3C00)]
+    [InlineData(-2.5f, 0xC100)]
+    [InlineData(65504f, 0x7BFF)] // the largest
+    [InlineData(-65504f, 0xFBFF)]
+    [InlineData(6.1035156E-05f, 0x0400)] // the smallest normal, 2^-14
+    [InlineData(3.0517578E-05f, 0x0200)] // subnormal, 2^-15
+    [InlineData(5.9604645E-08f, 0x0001)] // the smallest subnormal, 2^-24
+    [InlineData(0.0009765625f, 0x1400)] // 2^-10
+    public void F16_WritesHalfPrecisionAndRoundTrips(float value, int expectedBits)
+    {
+        F16Bundle bundle = new() { Value = value };
+
+        byte[] bytes = Write(bundle);
+        F16Bundle read = RoundTrip(bundle, new F16Bundle());
+
+        Assert.Equal(new JxlTestBitWriter().Write(16, (ulong)expectedBits).ToArray(), bytes);
+        Assert.Equal(value, read.Value);
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    [InlineData(65520f)]
+    [InlineData(-1e6f)]
+    public void F16_ValueF16CannotHold_ThrowsBeforeWriting(float value)
+        => AssertRejected(new F16Bundle { Value = value });
+
+    [Fact]
+    public void Bits_ValueTooLarge_ThrowsBeforeWriting()
+    {
+        JxlWeightedHeader header = new() { P1C = 32 };
+
+        AssertRejected(header);
+    }
+
+    [Fact]
+    public void U32_NoSelectorHoldsTheValue_ThrowsBeforeWriting()
+    {
+        JxlSizeHeader size = new();
+        size.Set(1, (1u << 30) + 1);
+
+        AssertRejected(size);
+    }
+
+    [Fact]
+    public void Enum_UndefinedValue_ThrowsBeforeWriting()
+        => AssertRejected(new JxlColorEncoding { ColorSpace = (JxlColorSpace)7 });
+
+    [Fact]
+    public void Name_TooLong_ThrowsBeforeWriting()
+        => AssertRejected(new JxlExtraChannelInfo { Name = new byte[1072] });
+
+    [Fact]
+    public void FieldCheck_InvalidToneMapping_ThrowsBeforeWriting()
+    {
+        JxlImageMetadata metadata = new();
+        metadata.ToneMapping.IntensityTarget = -1;
+
+        AssertRejected(metadata);
+    }
+
+    [Fact]
+    public void FieldCheck_InvalidBitDepth_ThrowsBeforeWriting()
+    {
+        JxlImageMetadata metadata = new();
+        metadata.BitDepth.BitsPerSample = 40;
+
+        AssertRejected(metadata);
+    }
+
+    [Fact]
+    public void SizeHeader_EmptySize_Throws()
+        => Assert.Throws<ImageFormatException>(() => new JxlSizeHeader().Set(0, 8));
+
+    [Fact]
+    public void Extensions_WriteTheirFieldsAndSizes()
+    {
+        // Bit 3 is an extension with no fields.
+        ExtendedBundle bundle = new() { Before = 9, Extensions = 0b1101, First = 1000, Second = 0.5f };
+        JxlBitWriter writer = new();
+
+        JxlBundle.Write(bundle, writer);
+        JxlBundle.CanEncode(bundle, out long totalBits);
+
+        Assert.Equal(totalBits, writer.BitsWritten);
+        ExtendedBundle read = RoundTrip(bundle, new ExtendedBundle());
+        Assert.Equal(0b1101UL, read.Extensions);
+        Assert.Equal(1000u, read.First);
+        Assert.Equal(0.5f, read.Second);
+        Assert.Equal(JxlFieldRecorder.Record(bundle), JxlFieldRecorder.Record(read));
+    }
+
+    [Fact]
+    public void Extensions_AnOlderReaderSkipsThem()
+    {
+        ExtendedBundle bundle = new() { Before = 9, Extensions = 0b1101, First = 1000, Second = 0.5f };
+        JxlSizeHeader after = new();
+        after.Set(123, 45);
+        JxlBitWriter writer = new();
+        JxlBundle.Write(bundle, writer);
+        JxlBundle.Write(after, writer);
+
+        JxlBitReader reader = new(writer.ToArray());
+        OldBundle old = new();
+        JxlSizeHeader readAfter = new();
+        JxlBundle.Read(reader, old);
+        JxlBundle.Read(reader, readAfter);
+
+        Assert.Equal(9u, old.Before);
+        Assert.Equal(0b1101UL, old.Extensions);
+        Assert.Equal(123UL, readAfter.XSize);
+        Assert.Equal(45UL, readAfter.YSize);
+    }
+
     private static JxlCodecMetadata CreateMetadata()
     {
         JxlCodecMetadata metadata = new();
@@ -455,5 +591,72 @@ public class JxlBundleWriteTests
         JxlBitReader reader = new(Write(fields));
         JxlBundle.Read(reader, target);
         return target;
+    }
+
+    private sealed class U32Bundle : JxlFields
+    {
+        public U32Bundle() => JxlBundle.Init(this);
+
+        public uint Value { get; set; }
+
+        public override void VisitFields(JxlVisitor visitor)
+            => this.Value = visitor.U32(Val(7), Bits(4), Bits(8), Bits(32), 0, this.Value);
+    }
+
+    private sealed class F16Bundle : JxlFields
+    {
+        public F16Bundle() => JxlBundle.Init(this);
+
+        public float Value { get; set; }
+
+        public override void VisitFields(JxlVisitor visitor) => this.Value = visitor.F16(0, this.Value);
+    }
+
+    /// <summary>A bundle with two extensions that have fields, a U32 and an F16.</summary>
+    private sealed class ExtendedBundle : JxlFields
+    {
+        public ExtendedBundle() => JxlBundle.Init(this);
+
+        public uint Before { get; set; }
+
+        public ulong Extensions { get; set; }
+
+        public uint First { get; set; }
+
+        public float Second { get; set; }
+
+        public override void VisitFields(JxlVisitor visitor)
+        {
+            this.Before = visitor.Bits(4, 0, this.Before);
+            this.Extensions = visitor.BeginExtensions(this.Extensions);
+            if (visitor.Conditional((this.Extensions & 1) != 0))
+            {
+                this.First = visitor.U32(Val(0), Bits(8), Bits(16), Bits(32), 0, this.First);
+            }
+
+            if (visitor.Conditional((this.Extensions & 4) != 0))
+            {
+                this.Second = visitor.F16(0, this.Second);
+            }
+
+            visitor.EndExtensions();
+        }
+    }
+
+    /// <summary>The fields of <see cref="ExtendedBundle"/> that a reader without its extensions knows.</summary>
+    private sealed class OldBundle : JxlFields
+    {
+        public OldBundle() => JxlBundle.Init(this);
+
+        public uint Before { get; set; }
+
+        public ulong Extensions { get; set; }
+
+        public override void VisitFields(JxlVisitor visitor)
+        {
+            this.Before = visitor.Bits(4, 0, this.Before);
+            this.Extensions = visitor.BeginExtensions(this.Extensions);
+            visitor.EndExtensions();
+        }
     }
 }
