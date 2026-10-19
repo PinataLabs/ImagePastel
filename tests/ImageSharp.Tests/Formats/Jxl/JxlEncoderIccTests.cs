@@ -11,13 +11,15 @@ using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// Slice E1f: the pixel profile is embedded verbatim when its colour space matches the pixels, and
-/// otherwise the sRGB enum is written (#115).
+/// otherwise the sRGB enum is written (#115). A profile that is not valid, or that libjxl's ICC reader
+/// would refuse, throws <see cref="ImageFormatException"/>.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlEncoderIccTests
@@ -49,49 +51,22 @@ public class JxlEncoderIccTests
 
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
-    public void Encode_MatchingProfile_OurDecoderGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
-    {
-        byte[] icc = ReadProfile(profile);
-        if (pixelType == nameof(L8))
-        {
-            AssertOurDecoderKeepsProfile<L8>(icc);
-        }
-        else
-        {
-            AssertOurDecoderKeepsProfile<Rgb24>(icc);
-        }
-    }
+    public Task Encode_MatchingProfile_OurDecoderGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
+        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderKeepsProfile, ReadProfile(profile)));
 
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
-    public void Encode_MatchingProfile_MagickGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
+    public Task Encode_MatchingProfile_MagickGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
     {
-        Assert.SkipUnless(ImageMagick.MagickFormatInfo.Create(ImageMagick.MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
-        byte[] icc = ReadProfile(profile);
-        if (pixelType == nameof(L8))
-        {
-            AssertMagickKeepsProfile<L8>(icc);
-        }
-        else
-        {
-            AssertMagickKeepsProfile<Rgb24>(icc);
-        }
+        return JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.MagickKeepsProfile, ReadProfile(profile)));
     }
 
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
     public Task Encode_MatchingProfile_DjxlGivesTheSamePixels(string pixelType, string profile)
-    {
-        byte[] icc = ReadProfile(profile);
-        string name = $"Icc_{pixelType}_{Path.GetFileNameWithoutExtension(profile)}";
-        if (pixelType == nameof(L8))
-        {
-            return AssertDjxlExactAsync<L8>(icc, name);
-        }
-
-        return AssertDjxlExactAsync<Rgb24>(icc, name);
-    }
+        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.DjxlExact, ReadProfile(profile), $"Icc_{pixelType}_{Path.GetFileNameWithoutExtension(profile)}"));
 
     [Theory]
     [InlineData(TestImages.Icc.CompactDisplayP3V4)]
@@ -162,43 +137,32 @@ public class JxlEncoderIccTests
     [InlineData(nameof(Rgb24), TestImages.Tiff.CmykTestIccProfile, IccColorSpaceType.Cmyk)]
     [InlineData(nameof(Rgb24), TestImages.Icc.CompactGrayV4, IccColorSpaceType.Gray)]
     [InlineData(nameof(L8), TestImages.Icc.CompactDisplayP3V4, IccColorSpaceType.Rgb)]
-    public void Encode_ProfileNotMatchingThePixels_WritesTheSrgbEnumAndNoProfile(string pixelType, string profile, IccColorSpaceType profileColorSpace)
+    public Task Encode_ProfileNotMatchingThePixels_WritesTheSrgbEnumAndNoProfile(string pixelType, string profile, IccColorSpaceType profileColorSpace)
     {
         byte[] icc = ReadProfile(profile);
         Assert.Equal(profileColorSpace, new IccProfile(icc).Header.DataColorSpace);
-        if (pixelType == nameof(L8))
-        {
-            AssertOurDecoderGetsSrgbEnum<L8>(icc);
-        }
-        else
-        {
-            AssertOurDecoderGetsSrgbEnum<Rgb24>(icc);
-        }
+
+        return JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, icc));
     }
 
     [Theory]
     [InlineData(nameof(Rgb24))]
     [InlineData(nameof(L8))]
-    public void Encode_NoProfile_WritesTheSrgbEnum(string pixelType)
-    {
-        if (pixelType == nameof(L8))
-        {
-            AssertOurDecoderGetsSrgbEnum<L8>(null);
-        }
-        else
-        {
-            AssertOurDecoderGetsSrgbEnum<Rgb24>(null);
-        }
-    }
+    public Task Encode_NoProfile_WritesTheSrgbEnum(string pixelType)
+        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, null));
 
     [Fact]
-    public void Encode_ProfileThatIsNotValid_WritesTheSrgbEnum()
+    public void Encode_ProfileThatIsNotValid_ThrowsAndWritesNothing()
     {
-        // An RGB profile whose header claims more bytes than it has.
+        // An RGB profile whose header claims more bytes than it has. libjxl's JxlEncoderSetICCProfile
+        // rejects a profile its CMS cannot parse, as the encoder rejects one its ICC reader would refuse.
         byte[] icc = ReadProfile(TestImages.Icc.CompactDisplayP3V4)[..200];
         Assert.False(new IccProfile(icc).CheckIsValid());
+        using Image<Rgb24> image = CreateImage<Rgb24>(icc);
+        using MemoryStream stream = new();
 
-        AssertOurDecoderGetsSrgbEnum<Rgb24>(icc);
+        Assert.Throws<ImageFormatException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
+        Assert.Equal(0, stream.Length);
     }
 
     private static byte[] ReadProfile(string profile) => File.ReadAllBytes(TestFile.GetInputFileFullPath(profile));
@@ -262,5 +226,38 @@ public class JxlEncoderIccTests
         Assert.False(colorEncoding.Tf.HaveGamma);
         Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.Tf.TransferFunction);
         ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    private enum Check
+    {
+        OurDecoderKeepsProfile,
+        MagickKeepsProfile,
+        DjxlExact,
+        OurDecoderGetsSrgbEnum,
+    }
+
+    // One check of a profile on an image of the pixel type that the theory data names.
+    private sealed record ProfileCheck(Check Check, byte[] Icc, string Name = null) : IJxlPixelTypeCall<Task>
+    {
+        public Task Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            switch (this.Check)
+            {
+                case Check.OurDecoderKeepsProfile:
+                    AssertOurDecoderKeepsProfile<TPixel>(this.Icc);
+                    break;
+                case Check.MagickKeepsProfile:
+                    AssertMagickKeepsProfile<TPixel>(this.Icc);
+                    break;
+                case Check.DjxlExact:
+                    return AssertDjxlExactAsync<TPixel>(this.Icc, this.Name);
+                default:
+                    AssertOurDecoderGetsSrgbEnum<TPixel>(this.Icc);
+                    break;
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }

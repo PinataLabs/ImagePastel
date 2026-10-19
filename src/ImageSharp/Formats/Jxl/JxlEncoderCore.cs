@@ -1,5 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
+// Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// lib/jxl/encode.cc (JxlEncoderSetBasicInfo, JxlEncoderSetColorEncoding, JxlEncoderSetICCProfile, and the
+// codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
+// (ColorEncoding::SetICCRaw) and lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB).
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using System.IO;
@@ -65,9 +70,10 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding for a lossless image: the
-    // original colour space (no XYB), the sample depth, and straight alpha at the colour depth when the
-    // pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the depth of the file
-    // it reads, or else the depth of the pixel type.
+    // image's own colour space (not XYB-encoded), the sample depth, and straight alpha at the colour
+    // depth when the pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the
+    // depth of the file it reads, when it holds every sample losslessly; otherwise it is the depth of
+    // the pixel type (see JxlEncoderInput.ChooseBitDepth).
     private static JxlCodecMetadata CreateMetadata<TPixel>(Image<TPixel> image)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -75,21 +81,17 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         metadata.Size.Set((ulong)image.Width, (ulong)image.Height);
 
         JxlMetadata jxlMetadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        uint bitsPerSample = JxlEncoderInput<TPixel>.BitsPerSample;
-        uint exponentBitsPerSample = JxlEncoderInput<TPixel>.ExponentBitsPerSample;
-        if (jxlMetadata.BitsPerSample != 0)
-        {
-            bitsPerSample = jxlMetadata.BitsPerSample;
-            exponentBitsPerSample = jxlMetadata.ExponentBitsPerSample;
-        }
-
-        JxlEncoderInput<TPixel>.CheckValidBitdepth(bitsPerSample, exponentBitsPerSample);
+        JxlBitDepth requested = jxlMetadata.BitsPerSample == 0
+            ? null
+            : JxlEncoderInput<TPixel>.CreateBitDepth(jxlMetadata.BitsPerSample, jxlMetadata.ExponentBitsPerSample);
+        JxlBitDepth bitDepth = JxlEncoderInput<TPixel>.ChooseBitDepth(image, requested);
 
         JxlImageMetadata m = metadata.M;
-        SetBitDepth(m.BitDepth, bitsPerSample, exponentBitsPerSample);
+        SetBitDepth(m.BitDepth, bitDepth);
 
-        // Lossless uses the original profile, so a 16-bit buffer is enough up to 12 bits.
-        m.Modular16BitBufferSufficient = bitsPerSample <= 12;
+        // Lossless sets libjxl's uses_original_profile (the samples are not XYB-encoded), so a 16-bit
+        // buffer is enough up to 12 bits.
+        m.Modular16BitBufferSufficient = bitDepth.BitsPerSample <= 12;
         if (JxlEncoderInput<TPixel>.HasAlpha)
         {
             JxlExtraChannelInfo alpha = new()
@@ -97,9 +99,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
                 Type = JxlExtraChannelType.Alpha,
                 AlphaAssociated = false,
             };
-            SetBitDepth(alpha.BitDepth, bitsPerSample, exponentBitsPerSample);
+            SetBitDepth(alpha.BitDepth, bitDepth);
             m.ExtraChannelInfo.Add(alpha);
-            m.Modular16BitBufferSufficient &= bitsPerSample <= 12;
+            m.Modular16BitBufferSufficient &= bitDepth.BitsPerSample <= 12;
         }
 
         m.XybEncoded = false;
@@ -107,11 +109,11 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         return metadata;
     }
 
-    private static void SetBitDepth(JxlBitDepth bitDepth, uint bitsPerSample, uint exponentBitsPerSample)
+    private static void SetBitDepth(JxlBitDepth bitDepth, JxlBitDepth source)
     {
-        bitDepth.BitsPerSample = bitsPerSample;
-        bitDepth.ExponentBitsPerSample = exponentBitsPerSample;
-        bitDepth.FloatingPointSample = exponentBitsPerSample != 0;
+        bitDepth.BitsPerSample = source.BitsPerSample;
+        bitDepth.ExponentBitsPerSample = source.ExponentBitsPerSample;
+        bitDepth.FloatingPointSample = source.FloatingPointSample;
     }
 
     // The pixel profile, as libjxl's JxlEncoderSetICCProfile: the only colour input on encode (#115),
@@ -122,14 +124,26 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // second: the fields keep the enum of SetColorEncoding, which already gives the colour space of a
     // matching profile, and the intensity target stays the SDR default that libjxl's SetIntensityTarget
     // gives those fields. Lossless never turns the profile back into an enum (DecideIfWantICC runs only
-    // without uses_original_profile). Departure (ADR 0001): libjxl returns an error for a profile
-    // that does not match the channel count, or that its CMS cannot parse; this port ignores such a
-    // profile and writes the enum (#115). A profile that fails IccProfile.CheckIsValid counts as one
-    // that does not parse.
+    // without uses_original_profile).
+    // A profile that is not valid throws ImageFormatException, the same as one that libjxl's ICC
+    // reader would refuse (JxlIccWriter): libjxl's JxlEncoderSetICCProfile returns an error for a
+    // profile its CMS cannot parse, and a profile that fails IccProfile.CheckIsValid counts as one.
+    // Departure (ADR 0001): libjxl also returns an error for a profile that does not match the channel
+    // count; this port ignores such a profile and writes the enum (#115).
     private static byte[] SetIccProfile(JxlColorEncoding colorEncoding, IccProfile profile)
     {
+        if (profile is null)
+        {
+            return null;
+        }
+
+        if (!profile.CheckIsValid())
+        {
+            JxlThrowHelper.ThrowImageFormatException("The ICC profile cannot be embedded: it is not a valid ICC profile.");
+        }
+
         IccColorSpaceType pixelColorSpace = colorEncoding.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
-        if (profile is null || !profile.CheckIsValid() || profile.Header.DataColorSpace != pixelColorSpace)
+        if (profile.Header.DataColorSpace != pixelColorSpace)
         {
             return null;
         }

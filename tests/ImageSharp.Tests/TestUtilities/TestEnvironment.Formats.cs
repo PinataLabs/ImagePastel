@@ -13,6 +13,7 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.Tests.Formats.Jxl;
 using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 
 namespace SixLabors.ImageSharp.Tests;
@@ -83,7 +84,7 @@ public static partial class TestEnvironment
         // Magick reads JPEG XL through 16-bit samples, so 9- to 16-bit images keep their precision. The
         // encoder is internal and writes only lossless at Fastest so far.
         cfg.ImageFormatsManager.SetDecoder(JxlFormat.Instance, MagickReferenceDecoder.HighBitDepthInstance);
-        cfg.ImageFormatsManager.SetEncoder(JxlFormat.Instance, new JxlEncoder { Distance = 0, Effort = JxlEffort.Fastest });
+        cfg.ImageFormatsManager.SetEncoder(JxlFormat.Instance, JxlEncoderRoundTrip.LosslessFastest);
         cfg.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
 
         return cfg;

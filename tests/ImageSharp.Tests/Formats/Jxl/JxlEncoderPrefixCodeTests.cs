@@ -63,14 +63,15 @@ public class JxlEncoderPrefixCodeTests
     }
 
     private static byte[] Encode(string pixelType, string pattern, int width, int height)
-    {
-        if (pixelType == nameof(L8))
-        {
-            using Image<L8> grey = JxlEncoderRoundTrip.CreateImage<L8>(pattern, width, height);
-            return JxlEncoderRoundTrip.Encode(grey);
-        }
+        => JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, width, height));
 
-        using Image<Rgb24> rgb = JxlEncoderRoundTrip.CreateImage<Rgb24>(pattern, width, height);
-        return JxlEncoderRoundTrip.Encode(rgb);
+    private sealed record EncodePattern(string Pattern, int Width, int Height) : IJxlPixelTypeCall<byte[]>
+    {
+        public byte[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>(this.Pattern, this.Width, this.Height);
+            return JxlEncoderRoundTrip.Encode(image);
+        }
     }
 }

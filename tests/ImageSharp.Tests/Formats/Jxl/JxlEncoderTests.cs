@@ -132,6 +132,8 @@ public class JxlEncoderTests
     }
 
     [Theory]
+    [InlineData(401, 1, 2, 1)]
+    [InlineData(1, 401, 2, 1)]
     [InlineData(256, 512, 2, 1)]
     [InlineData(300, 513, 6, 1)]
     [InlineData(2049, 2049, 81, 4)]

@@ -17,8 +17,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder round trip: encode an image, then check that our decoder, Magick.NET and djxl each give
-/// back exactly the same pixels. Each E1 slice adds its cases to <see cref="Cases"/> and, for a new
-/// pixel type, a branch to <see cref="RunAsync(Reader, string, string, int, int)"/>.
+/// back exactly the same pixels. Each E1 slice adds its cases to <see cref="Cases"/>; the pixel type
+/// names map to pixel types through <see cref="JxlPixelTypes"/>.
 /// </summary>
 internal static class JxlEncoderRoundTrip
 {
@@ -57,19 +57,7 @@ internal static class JxlEncoderRoundTrip
     /// <param name="height">The height.</param>
     /// <returns>A task.</returns>
     public static Task RunAsync(Reader reader, string pixelType, string pattern, int width, int height)
-        => pixelType switch
-        {
-            nameof(L8) => RunAsync<L8>(reader, pattern, width, height),
-            nameof(Rgb24) => RunAsync<Rgb24>(reader, pattern, width, height),
-            nameof(L16) => RunAsync<L16>(reader, pattern, width, height),
-            nameof(La16) => RunAsync<La16>(reader, pattern, width, height),
-            nameof(La32) => RunAsync<La32>(reader, pattern, width, height),
-            nameof(Rgb48) => RunAsync<Rgb48>(reader, pattern, width, height),
-            nameof(Rgba32) => RunAsync<Rgba32>(reader, pattern, width, height),
-            nameof(Rgba64) => RunAsync<Rgba64>(reader, pattern, width, height),
-            nameof(RgbaVector) => RunAsync<RgbaVector>(reader, pattern, width, height),
-            _ => throw new ArgumentException($"No round trip for {pixelType}", nameof(pixelType)),
-        };
+        => JxlPixelTypes.Call(pixelType, new PatternCase(reader, pattern, width, height));
 
     /// <summary>Runs one case of <see cref="CorpusCases"/> through one reader.</summary>
     /// <param name="reader">The reader.</param>
@@ -77,16 +65,7 @@ internal static class JxlEncoderRoundTrip
     /// <param name="pixelType">The pixel type name.</param>
     /// <returns>A task.</returns>
     public static Task RunCorpusAsync(Reader reader, string file, string pixelType)
-        => pixelType switch
-        {
-            nameof(L8) => RunCorpusAsync<L8>(reader, file),
-            nameof(Rgb24) => RunCorpusAsync<Rgb24>(reader, file),
-            nameof(L16) => RunCorpusAsync<L16>(reader, file),
-            nameof(La32) => RunCorpusAsync<La32>(reader, file),
-            nameof(Rgb48) => RunCorpusAsync<Rgb48>(reader, file),
-            nameof(Rgba64) => RunCorpusAsync<Rgba64>(reader, file),
-            _ => throw new ArgumentException($"No corpus round trip for {pixelType}", nameof(pixelType)),
-        };
+        => JxlPixelTypes.Call(pixelType, new CorpusCase(reader, file));
 
     // Eight 8-bit colours (times 257) for the icon pattern, none of them in the palette's implicit colour cubes.
     private static readonly Rgba64[] IconColours =
@@ -171,7 +150,7 @@ internal static class JxlEncoderRoundTrip
     {
         Configuration configuration = Configuration.CreateDefaultInstance();
         configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
-        configuration.ImageFormatsManager.SetEncoder(JxlFormat.Instance, new JxlEncoder { Distance = 0, Effort = JxlEffort.Fastest });
+        configuration.ImageFormatsManager.SetEncoder(JxlFormat.Instance, LosslessFastest);
         configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
         return configuration;
     }
@@ -235,13 +214,15 @@ internal static class JxlEncoderRoundTrip
     }
 
     // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to
-    // 400 pixels on each side, so 257x1 and 1x257 are still one group; the others cross the 256-pixel
-    // group and the 2048-pixel LF group boundaries, or are exact multiples of them.
+    // 400 pixels on each side, so #210's 257x1 and 1x257 are still one group, and 401x1 and 1x401 are
+    // the thin sizes that cross the 256-pixel group boundary, in width alone and in height alone
+    // (JxlEncoderTests checks their group count). The others cross the group and the 2048-pixel LF
+    // group boundaries, or are exact multiples of them.
     private static void AddMultiGroup8BitCases(TheoryData<string, string, int, int> cases)
     {
         foreach (string pixelType in new[] { nameof(L8), nameof(Rgb24) })
         {
-            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (300, 513), (2049, 3), (256, 512) })
+            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (401, 1), (1, 401), (300, 513), (2049, 3), (256, 512) })
             {
                 cases.Add(pixelType, "noise", width, height);
                 cases.Add(pixelType, "gradient", width, height);
@@ -313,6 +294,23 @@ internal static class JxlEncoderRoundTrip
         foreach (string pixelType in new[] { nameof(La16), nameof(Rgba32), nameof(Rgba64) })
         {
             cases.Add(pixelType, "translucent-icon", 64, 64);
+        }
+
+        // The other pixel types: the 8-bit orders and unsigned packed types, stored as 8-bit or 16-bit
+        // integers, and the signed types, stored as float32 of their scaled values. The patterns give
+        // signed types negative values. Halves are checked in JxlEncoderSampleFormatTests, because the
+        // decoders clamp what f16 stores of them.
+        foreach (string pixelType in new[]
+        {
+            nameof(A8), nameof(Bgr24), nameof(Bgra32), nameof(Argb32), nameof(Abgr32), nameof(Byte4),
+            nameof(Rg32), nameof(Bgr565), nameof(Bgra4444), nameof(Bgra5551), nameof(Rgba1010102),
+            nameof(NormalizedByte4), nameof(NormalizedShort2), nameof(NormalizedShort4), nameof(Short2), nameof(Short4),
+        })
+        {
+            foreach (string pattern in new[] { "noise", "translucent" })
+            {
+                cases.Add(pixelType, pattern, 17, 23);
+            }
         }
     }
 
@@ -411,11 +409,16 @@ internal static class JxlEncoderRoundTrip
     public static void AssertMagickExact<TPixel>(Image<TPixel> expected, byte[] encoded)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        Assert.SkipUnless(ImageMagick.MagickFormatInfo.Create(ImageMagick.MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
         using MemoryStream stream = new(encoded);
         using Image<TPixel> actual = MagickReferenceDecoder.HighBitDepthInstance.Decode<TPixel>(Configuration.Default, stream, CancellationToken.None);
-        ImageComparer.Exact.VerifySimilarity(expected, actual);
+
+        // Magick rounds float samples to 16 bits itself, and a float between two 16-bit steps can round
+        // the other way than ImageSharp rounds it. Our decoder checks the float samples exactly.
+        bool floatSamples = Image.Identify(CreateConfiguration(), new MemoryStream(encoded)).Metadata.GetFormatMetadata(JxlFormat.Instance).ExponentBitsPerSample != 0;
+        ImageComparer comparer = floatSamples ? ImageComparer.Tolerant(0, perPixelManhattanThreshold: 4) : ImageComparer.Exact;
+        comparer.VerifySimilarity(expected, actual);
     }
 
     public static async Task AssertDjxlExactAsync<TPixel>(Image<TPixel> expected, byte[] encoded, string name, CancellationToken cancellationToken)
@@ -432,7 +435,7 @@ internal static class JxlEncoderRoundTrip
         await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
 
         await JxlTools.RunAsync("djxl", cancellationToken, jxlPath, pngPath);
-        if (typeof(TPixel) == typeof(RgbaVector))
+        if (Image.Identify(CreateConfiguration(), new MemoryStream(encoded)).Metadata.GetFormatMetadata(JxlFormat.Instance).ExponentBitsPerSample != 0)
         {
             // djxl writes float samples to a PNG at 16 bits, so only its acceptance of the file is checked.
             return;
@@ -442,5 +445,19 @@ internal static class JxlEncoderRoundTrip
         // 16-bit PNGs for 9 to 16 bits.
         using Image<TPixel> actual = Image.Load<TPixel>(pngPath);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
+    }
+
+    private sealed record PatternCase(Reader Reader, string Pattern, int Width, int Height) : IJxlPixelTypeCall<Task>
+    {
+        public Task Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+            => RunAsync<TPixel>(this.Reader, this.Pattern, this.Width, this.Height);
+    }
+
+    private sealed record CorpusCase(Reader Reader, string File) : IJxlPixelTypeCall<Task>
+    {
+        public Task Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+            => RunCorpusAsync<TPixel>(this.Reader, this.File);
     }
 }

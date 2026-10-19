@@ -55,6 +55,10 @@ public class MagickReferenceDecoder : IImageDecoder
     /// <summary>Gets a decoder that reads every image through 16-bit samples, for JPEG XL.</summary>
     public static MagickReferenceDecoder HighBitDepthInstance { get; } = new MagickReferenceDecoder(true, true);
 
+    /// <summary>Skips the test when this Magick.NET build has no libjxl delegate to read JPEG XL.</summary>
+    public static void SkipUnlessJxlIsSupported()
+        => Xunit.Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
     /// <summary>
     /// Gets a decoder that removes the profiles of CMYK images and converts them to sRGB.
     /// Without a profile, ImageMagick converts with the formula R = (1 - C) * (1 - K), and so on for G and B.
