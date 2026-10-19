@@ -48,6 +48,17 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // Properties in order of their likelihood of being useful, for the non-Squeeze case.
     private static readonly uint[] PropOrder = { 0, 1, 15, 9, 10, 11, 12, 13, 14, 2, 3, 4, 5, 6, 7, 8 };
 
+    // The RCTs the per-group search tries, in libjxl's order; each speed tier tries the first
+    // NbRctsToTry of them. These should be 19 actually different transforms; the remaining ones are
+    // equivalent to one of these (note that the first two are do-nothing and YCoCg) modulo channel
+    // reordering (which only matters in the case of MA-with-prev-channels-properties) and/or sign
+    // (e.g. RmG vs GmR)
+    private static readonly int[] RctCandidates =
+    {
+        (0 * 7) + 0, (0 * 7) + 6, (0 * 7) + 5, (1 * 7) + 3, (3 * 7) + 5, (5 * 7) + 5, (1 * 7) + 5, (2 * 7) + 5, (1 * 7) + 1, (0 * 7) + 4,
+        (1 * 7) + 2, (2 * 7) + 1, (2 * 7) + 2, (2 * 7) + 3, (4 * 7) + 4, (4 * 7) + 5, (0 * 7) + 2, (0 * 7) + 1, (0 * 7) + 3,
+    };
+
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlSpeedTier speedTier;
@@ -60,6 +71,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private List<JxlPropertyDecisionNode> tree;
     private JxlGroupHeader[] streamHeaders;
     private List<JxlToken>[] tokens;
+
+    // libjxl's cparams_.colorspace: -1 lets the encoder choose the RCTs, 0 turns the per-group RCT
+    // search off. This encoder has no option to force an RCT.
+    private int colorspace = -1;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlModularFrameEncoder"/> class, as libjxl's
@@ -197,8 +212,13 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             }
         }
 
-        // libjxl's move-to-front and squeeze steps are not taken by lossless Fastest. When no spare
-        // bit is left, libjxl turns off the per-group RCT search, which only higher efforts run.
+        // libjxl's move-to-front and squeeze steps are not taken by lossless.
+        if (maxBitdepth + 1 > LevelMaxBitdepth)
+        {
+            // force no group RCTs if we don't have a spare bit
+            this.colorspace = 0;
+        }
+
         if (maxBitdepth > LevelMaxBitdepth)
         {
             JxlThrowHelper.ThrowImageFormatException($"Bitdepth {maxBitdepth} too high after the transforms");
@@ -415,9 +435,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
 
         JxlModularImage fullImage = this.streamImages[0];
+        JxlModularImage gi = this.streamImages[streamId];
         if (streamId > 0)
         {
-            JxlModularImage gi = JxlModularImage.Create(this.allocator, (int)rect.XSize, (int)rect.YSize, fullImage.BitDepth, 0);
+            gi = JxlModularImage.Create(this.allocator, (int)rect.XSize, (int)rect.YSize, fullImage.BitDepth, 0);
             this.streamImages[streamId].Dispose();
             this.streamImages[streamId] = gi;
 
@@ -462,9 +483,97 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             }
         }
 
-        // libjxl does some per-group transforms here: a local palette, the RCT search and the
-        // weighted predictor mode search. Effort 3 runs none of them.
+        // lossless and no specific color transform specified: try Nothing, YCoCg, and 17 RCTs
+        if (this.colorspace < 0 && gi.Channel.Count - gi.NbMetaChannels >= 3 && DoColor && this.speedTier <= JxlSpeedTier.Hare)
+        {
+            TryRcts(gi, NbRctsToTry(this.speedTier));
+        }
+
+        // libjxl searches the weighted predictor modes here from Kitten down.
     }
+
+    // The tail of libjxl's PrepareStreamParams RCT step: estimate the cost of the image with each of
+    // the first nbRctsToTry candidates on its first three non-meta channels, and apply the cheapest.
+    private static void TryRcts(JxlModularImage gi, int nbRctsToTry)
+    {
+        float bestCost = float.MaxValue;
+        int bestRct = 0;
+        bool needToRestore = nbRctsToTry > 1;
+        JxlModularChannel[] orig = new JxlModularChannel[3];
+        JxlModularChannel[] output = new JxlModularChannel[3];
+        for (int c = 0; c < 3; ++c)
+        {
+            output[c] = gi.Channel[gi.NbMetaChannels + c];
+        }
+
+        try
+        {
+            foreach (int rctType in RctCandidates)
+            {
+                if (nbRctsToTry == 0)
+                {
+                    break;
+                }
+
+                nbRctsToTry--;
+
+                // no-op rct_type; use as baseline cost
+                if (rctType == 0)
+                {
+                    bestCost = JxlModularCostEstimate.EstimateCost(gi);
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        JxlModularChannel genuine = output[c];
+                        orig[c] = JxlModularChannel.Create(genuine.Allocator, genuine.W, genuine.H, genuine.HShift, genuine.VShift);
+                        genuine.SwapPlane(orig[c]);
+                    }
+                }
+                else
+                {
+                    JxlRctEncoder.FwdRct(orig, output, rctType);
+                    float cost = JxlModularCostEstimate.EstimateCost(gi);
+                    if (cost < bestCost)
+                    {
+                        bestRct = rctType;
+                        bestCost = cost;
+                    }
+                }
+            }
+
+            if (needToRestore)
+            {
+                for (int c = 0; c < 3; ++c)
+                {
+                    output[c].SwapPlane(orig[c]);
+                }
+            }
+        }
+        finally
+        {
+            foreach (JxlModularChannel channel in orig)
+            {
+                channel?.Dispose();
+            }
+        }
+
+        // Apply the best RCT to the image for future encoding.
+        if (bestRct != 0)
+        {
+            DoTransform(gi, new JxlTransform { Id = JxlTransformId.Rct, BeginC = (uint)gi.NbMetaChannels, RctType = (uint)bestRct });
+        }
+    }
+
+    // How many of RctCandidates libjxl's per-group RCT search tries at each speed tier. The tiers from
+    // Cheetah up just do the global YCoCg.
+    private static int NbRctsToTry(JxlSpeedTier speedTier) => speedTier switch
+    {
+        JxlSpeedTier.Hare => 4,
+        JxlSpeedTier.Wombat => 5,
+        JxlSpeedTier.Squirrel => 7,
+        JxlSpeedTier.Kitten => 9,
+        JxlSpeedTier.TectonicPlate or JxlSpeedTier.Glacier or JxlSpeedTier.Tortoise => 19,
+        _ => 0,
+    };
 
     // The tree-learning parameters of each speed tier, from libjxl's Init for a lossless, non-responsive
     // frame: the properties tree learning may split on, how many values each is quantised to, and the
