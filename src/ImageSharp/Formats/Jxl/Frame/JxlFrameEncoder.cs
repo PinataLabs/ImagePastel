@@ -6,7 +6,6 @@
 // lib/jxl/enc_quant_weights.cc (DequantMatricesEncodeDC).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -39,11 +38,6 @@ internal static class JxlFrameEncoder
     {
         JxlFrameHeader frameHeader = MakeFrameHeader(image.Width, image.Height, metadata);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        if (frameDim.NumGroups > 1)
-        {
-            throw new NotSupportedException($"JPEG XL encoding of an image larger than one group ({image.Width}x{image.Height}, {frameDim.NumGroups} groups of {frameDim.GroupDimension} pixels) is not supported yet; slice E1c adds it.");
-        }
-
         using JxlModularFrameEncoder encModular = new(frameHeader, allocator);
         List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular);
 
