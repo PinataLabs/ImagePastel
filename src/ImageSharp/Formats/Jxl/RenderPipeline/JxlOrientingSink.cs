@@ -38,6 +38,8 @@ internal sealed class JxlOrientingSink : IJxlRenderSink
         this.transpose = ShouldTranspose(undoOrientation);
     }
 
+    public bool DisplayEncoded => this.next.DisplayEncoded;
+
     /// <summary>
     /// Returns a sink that undoes <paramref name="undoOrientation"/> before <paramref name="next"/>, or
     /// <paramref name="next"/> itself for the identity.

@@ -80,8 +80,11 @@ internal sealed class JxlBlendingStage : IDisposable
             this.VerifyBgSize(ecBackground);
         }
 
-        // libjxl also rejects blending an XYB image whose output colour encoding is not the original
-        // one ("Blending in unsupported color space"). XYB frames are a later slice.
+        // An XYB image that renders to linear sRGB, rather than its own encoding, is not blended.
+        if (m.XybEncoded && !JxlOutputEncoding.IsOriginalOutput(m))
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Blending in unsupported color space");
+        }
 
         // As libjxl, the zeros are allocated only when a slot the frame blends onto is empty.
         if (this.bg == null || Array.IndexOf(this.ecBg, null) >= 0)

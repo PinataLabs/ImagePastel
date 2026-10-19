@@ -31,6 +31,7 @@ public class JxlConformanceDecoderTests
     [InlineData("spot")]
     [InlineData("cmyk_layers")]
     [InlineData("patches_lossless")]
+    [InlineData("bicycles")] // Modular with XYB, in Levels 5 and 10. Measured: RMSE 2.5e-7, peak 8.4e-6.
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
@@ -40,6 +41,11 @@ public class JxlConformanceDecoderTests
         await using FileStream stream = File.OpenRead(input);
         using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
         NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+
+        foreach (JxlConformanceFrameResult result in JxlConformanceComparer.Measure(expected, actual))
+        {
+            TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: worst channel RMSE {result.WorstChannelRmse:G3}, peak {result.PeakError:G3}");
+        }
 
         JxlConformanceComparer.AssertWithinThresholds(vector, expected, actual);
     }

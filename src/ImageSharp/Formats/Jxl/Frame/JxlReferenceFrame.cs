@@ -24,7 +24,7 @@ internal sealed class JxlReferenceFrame : IDisposable
         this.IsInXyb = isInXyb;
     }
 
-    /// <summary>Gets the planes, <see cref="Width"/> by <see cref="Height"/>.</summary>
+    /// <summary>Gets the planes, at least <see cref="Width"/> by <see cref="Height"/>: padded VarDCT colour planes are larger.</summary>
     public Buffer2D<float>[] Planes { get; private set; }
 
     public int Width { get; }

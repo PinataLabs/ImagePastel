@@ -72,6 +72,22 @@ internal static class JxlFieldCoders
         return result;
     }
 
+    /// <summary>
+    /// Reads an IEEE 754 half-precision value outside a bundle, where libjxl's <c>F16Coder::Read</c>
+    /// fails at once: infinity and NaN throw <see cref="InvalidImageContentException"/>.
+    /// </summary>
+    /// <param name="reader">The reader.</param>
+    /// <returns>The value.</returns>
+    public static float ReadF16OrThrow(JxlBitReader reader)
+    {
+        if (!TryReadF16(reader, out float value))
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("F16 infinity or NaN are not supported");
+        }
+
+        return value;
+    }
+
     /// <summary>Reads an IEEE 754 half-precision value. Infinity and NaN are invalid.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="value">The value, if valid.</param>

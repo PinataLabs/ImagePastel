@@ -44,6 +44,8 @@ internal readonly struct JxlFrameDimensions
 
         this.XSizePadded = xsizePadded;
         this.YSizePadded = ysizePadded;
+        this.XSizeUpsampledPadded = xsizePadded * upsampling;
+        this.YSizeUpsampledPadded = ysizePadded * upsampling;
         this.XSizeGroups = JxlBits.DivCeil(this.XSize, this.GroupDimension);
         this.YSizeGroups = JxlBits.DivCeil(this.YSize, this.GroupDimension);
         this.XSizeDcGroups = JxlBits.DivCeil(this.XSizeBlocks, this.GroupDimension);
@@ -63,6 +65,11 @@ internal readonly struct JxlFrameDimensions
     public long YSizeUpsampled { get; }
 
     // Image size after upsampling the padded image.
+    public long XSizeUpsampledPadded { get; }
+
+    public long YSizeUpsampledPadded { get; }
+
+    // Image size after padding to a multiple of kBlockDim (if VarDCT mode).
     public long XSizePadded { get; }
 
     public long YSizePadded { get; }
@@ -100,5 +107,32 @@ internal readonly struct JxlFrameDimensions
         long gx = groupIndex % this.XSizeGroups;
         long gy = groupIndex / this.XSizeGroups;
         return new JxlRect(gx * this.GroupDimension, gy * this.GroupDimension, this.GroupDimension, this.GroupDimension, this.XSize, this.YSize);
+    }
+
+    /// <summary>
+    /// Returns the rectangle of AC group <paramref name="groupIndex"/> in blocks, clipped to the frame,
+    /// as libjxl's <c>BlockGroupRect</c>.
+    /// </summary>
+    /// <param name="groupIndex">The group.</param>
+    /// <returns>The rectangle, in blocks.</returns>
+    public JxlRect BlockGroupRect(long groupIndex)
+    {
+        long gx = groupIndex % this.XSizeGroups;
+        long gy = groupIndex / this.XSizeGroups;
+        int dim = this.GroupDimension >> 3;
+        return new JxlRect(gx * dim, gy * dim, dim, dim, this.XSizeBlocks, this.YSizeBlocks);
+    }
+
+    /// <summary>
+    /// Returns the rectangle of DC group <paramref name="groupIndex"/> in blocks, clipped to the frame,
+    /// as libjxl's <c>DCGroupRect</c>.
+    /// </summary>
+    /// <param name="groupIndex">The DC group.</param>
+    /// <returns>The rectangle, in blocks.</returns>
+    public JxlRect DcGroupRect(long groupIndex)
+    {
+        long gx = groupIndex % this.XSizeDcGroups;
+        long gy = groupIndex / this.XSizeDcGroups;
+        return new JxlRect(gx * this.GroupDimension, gy * this.GroupDimension, this.GroupDimension, this.GroupDimension, this.XSizeBlocks, this.YSizeBlocks);
     }
 }

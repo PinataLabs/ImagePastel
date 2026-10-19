@@ -93,7 +93,7 @@ internal static class JxlEncodedFrame
         // The DC global section: the all-default DC quantisation bit, then the global Modular stream.
         JxlBitReader section = new(codestream, sectionStart, (int)sizes[0]);
         Assert.Equal(1UL, section.ReadBits(1));
-        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameHeader.ToFrameDimensions());
+        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameHeader.ToFrameDimensions(), new JxlDequantMatrices());
         decoder.DecodeGlobalInfo(section, frameHeader);
         section.Close();
         return decoder;
