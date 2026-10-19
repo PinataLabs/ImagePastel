@@ -29,7 +29,19 @@ internal static class JxlRctEncoder
         }
 
         JxlModularChannel[] chs = { input.Channel[beginC], input.Channel[beginC + 1], input.Channel[beginC + 2] };
+        FwdRct(chs, chs, rctType);
+        return true;
+    }
 
+    /// <summary>
+    /// Applies RCT <paramref name="rctType"/> to the three channels of <paramref name="input"/> and
+    /// writes the result to the three channels of <paramref name="output"/>, which may be the same.
+    /// </summary>
+    /// <param name="input">The three input channels, all the same size.</param>
+    /// <param name="output">The three output channels, the size of the input ones.</param>
+    /// <param name="rctType">The RCT type: permutation * 7 + decorrelation.</param>
+    public static void FwdRct(JxlModularChannel[] input, JxlModularChannel[] output, int rctType)
+    {
         // Permutation: 0=RGB, 1=GBR, 2=BRG, 3=RBG, 4=GRB, 5=BGR
         int permutation = rctType / 7;
 
@@ -40,18 +52,16 @@ internal static class JxlRctEncoder
         //
         // Third: 0=nop, 1=SubtractFirst
         int transform = rctType % 7;
-        JxlModularChannel[] inp = RctPermute(chs, permutation);
-        int w = chs[0].W;
-        int h = chs[0].H;
+        JxlModularChannel[] inp = RctPermute(input, permutation);
+        int w = input[0].W;
+        int h = input[0].H;
 
         // libjxl processes rows with Highway vectors; this is its scalar row, which gives the same
         // result. Each sample reads all three inputs before it writes, so the rows can be the same.
         for (int y = 0; y < h; y++)
         {
-            FwdRctRow(transform, w, inp[0].Row(y), inp[1].Row(y), inp[2].Row(y), chs[0].Row(y), chs[1].Row(y), chs[2].Row(y));
+            FwdRctRow(transform, w, inp[0].Row(y), inp[1].Row(y), inp[2].Row(y), output[0].Row(y), output[1].Row(y), output[2].Row(y));
         }
-
-        return true;
     }
 
     private static JxlModularChannel[] RctPermute(JxlModularChannel[] input, int permutation)
