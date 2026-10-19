@@ -164,7 +164,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         this.fgRows.PointAt(offset, ypos, (int)size);
         this.bgRows.PointAt((int)bgXpos, (int)bgYpos, (int)size);
-        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.numColorPlanes, this.colorBlending, this.ecBlending, this.extraChannelInfo, this.tmp, (int)size);
+        JxlBlending.PerformBlending(this.bgRows, this.fgRows, this.fgRows, this.numColorPlanes, this.colorBlending, this.ecBlending, this.extraChannelInfo, this.tmp, (int)size);
     }
 
     /// <summary>Fills row <paramref name="ypos"/> of the image-sized planes from the background, or with zeros.</summary>

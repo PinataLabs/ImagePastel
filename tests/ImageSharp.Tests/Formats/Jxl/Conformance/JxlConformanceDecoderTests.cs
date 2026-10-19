@@ -30,6 +30,7 @@ public class JxlConformanceDecoderTests
     [InlineData("animation_newtons_cradle")]
     [InlineData("spot")]
     [InlineData("cmyk_layers")]
+    [InlineData("patches_lossless")]
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

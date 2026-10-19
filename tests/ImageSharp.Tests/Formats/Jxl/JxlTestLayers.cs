@@ -298,15 +298,20 @@ internal sealed class JxlTestLayers
     private void WriteFrame(JxlTestBitWriter w, JxlTestFrame frame)
     {
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
+        ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(true); // Modular
-        if (frame.Flags == 0)
+        if (flags == 0)
         {
             w.Write(2, 0);
         }
+        else if (flags <= 16)
+        {
+            w.Write(2, 1).Write(4, flags - 1); // U64: 1 to 16
+        }
         else
         {
-            w.Write(2, 1).Write(4, frame.Flags - 1); // U64: 1 to 16
+            w.Write(2, 2).Write(8, flags - 17); // U64: 17 to 272
         }
 
         w.Bit(false); // no YCbCr
@@ -372,10 +377,34 @@ internal sealed class JxlTestLayers
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
+        // The patch dictionary comes first in the DC global section, which a single group and pass puts
+        // at the start of the frame's only section.
+        byte[] section = frame.Section;
+        if (frame.Patches != null)
+        {
+            JxlTestBitWriter withPatches = new();
+            frame.Patches.Write(withPatches, this.numExtraChannels);
+            foreach (byte b in frame.Section)
+            {
+                withPatches.Write(8, b);
+            }
+
+            section = withPatches.ToArray();
+        }
+
         // TOC: one section, no permutation.
         w.Bit(false).ZeroPadToByte();
-        w.Write(2, 0).Write(10, (ulong)frame.Section.Length).ZeroPadToByte();
-        foreach (byte b in frame.Section)
+        if (section.Length < 1024)
+        {
+            w.Write(2, 0).Write(10, (ulong)section.Length);
+        }
+        else
+        {
+            w.Write(2, 1).Write(14, (ulong)section.Length - 1024);
+        }
+
+        w.ZeroPadToByte();
+        foreach (byte b in section)
         {
             w.Write(8, b);
         }
@@ -393,7 +422,7 @@ internal sealed record JxlTestFrame(byte[] Section)
 {
     public JxlFrameType Type { get; init; } = JxlFrameType.Regular;
 
-    /// <summary>Gets the frame flags, up to 16, which must not change the rest of the header (no LF frame).</summary>
+    /// <summary>Gets the frame flags, up to 272, which must not change the rest of the header (no LF frame).</summary>
     public ulong Flags { get; init; }
 
     public bool Crop { get; init; }
@@ -423,6 +452,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public uint SaveAsReference { get; init; }
 
     public bool SaveBeforeColorTransform { get; init; }
+
+    /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
+    public JxlTestPatchDictionary Patches { get; init; }
 
     /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
     /// <param name="section">The frame's section.</param>
