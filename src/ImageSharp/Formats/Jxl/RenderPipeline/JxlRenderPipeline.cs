@@ -23,10 +23,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// Deliberate departures from libjxl: the planes carry no border, because no stage needs neighbours
 /// yet. Instead of the border, which in libjxl takes the whole 8x8 blocks that VarDCT writes past the
 /// right and bottom edges, the colour planes are padded to the frame's padded size; the stages see the
-/// frame size, and the padding is cropped before the planes are handed over. Stages are to run in place rather than allocate new planes each, as decided in
-/// issue #113; and the stages are fixed steps of <see cref="Finish"/> rather than a list built per
-/// frame, because the frames this port decodes need only the patches, save, colour-transform, blending
-/// and output stages.
+/// frame size, and the padding is cropped before the planes are handed over. Stages are to run in place
+/// rather than allocate new planes each, as decided in issue #113. And the stages are fixed steps of
+/// <see cref="Finish"/> rather than a list built per frame, because the frames this port decodes need
+/// only the patches, save, colour-transform, blending and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
