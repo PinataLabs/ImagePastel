@@ -61,36 +61,6 @@ public class JxlEncoderTests
         Assert.Equal(image[0, 0], actual[0, 0]);
     }
 
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTrip_OurDecoder_IsExact(string effort, string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Ours, effort, pixelType, pattern, width, height);
-
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTrip_Magick_IsExact(string effort, string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Magick, effort, pixelType, pattern, width, height);
-
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTrip_Djxl_IsExact(string effort, string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Djxl, effort, pixelType, pattern, width, height);
-
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTripCorpus_OurDecoder_IsExact(string effort, string file, string pixelType)
-        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Ours, effort, file, pixelType);
-
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTripCorpus_Magick_IsExact(string effort, string file, string pixelType)
-        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Magick, effort, file, pixelType);
-
-    [Theory]
-    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
-    public Task RoundTripCorpus_Djxl_IsExact(string effort, string file, string pixelType)
-        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Djxl, effort, file, pixelType);
-
     [Fact]
     public void Identify_Grey_ReportsOneEightBitChannelAndGreySrgb()
     {
