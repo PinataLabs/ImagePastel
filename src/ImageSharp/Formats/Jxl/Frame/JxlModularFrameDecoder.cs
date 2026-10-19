@@ -26,6 +26,7 @@ internal sealed class JxlModularFrameDecoder : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
+    private readonly JxlDequantMatrices matrices;
     private readonly JxlGroupHeader globalHeader = new();
     private JxlModularImage fullImage;
     private List<JxlTransform> globalTransform = new();
@@ -37,14 +38,25 @@ internal sealed class JxlModularFrameDecoder : IDisposable
     private JxlAnsCode code = new();
     private byte[] contextMap = Array.Empty<byte>();
 
-    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim)
+    /// <summary>Initializes a new instance of the <see cref="JxlModularFrameDecoder"/> class.</summary>
+    /// <param name="allocator">The allocator.</param>
+    /// <param name="frameDim">The frame dimensions.</param>
+    /// <param name="matrices">
+    /// The frame's dequantization matrices, libjxl's <c>shared->matrices</c>. The DC global section fills
+    /// in their DC factors before any group is converted.
+    /// </param>
+    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
+        this.matrices = matrices;
     }
 
     /// <summary>Gets a value indicating whether the frame keeps a full-frame Modular image until the end.</summary>
     public bool UsesFullImage => this.useFullImage;
+
+    /// <summary>Gets the frame's dequantization matrices, whose DC factors scale the XYB channels.</summary>
+    public JxlDequantMatrices Matrices => this.matrices;
 
     /// <summary>Reads the global Modular stream from the DC global section.</summary>
     /// <param name="reader">The reader.</param>
@@ -329,8 +341,8 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             int expBits = (int)metadata.BitDepth.ExponentBitsPerSample;
             for (; c < numColorPlanes; c++)
             {
-                // libjxl's XYB conversion comes with a later slice; the frame decoder rejects XYB
-                // images, so it is not reached.
+                // libjxl's XYB conversion, which scales by this.matrices.DcQuant(c), comes with a later
+                // slice; the frame decoder rejects XYB images, so it is not reached.
                 double factor = this.fullImage.BitDepth < 32 ? 1.0 / ((1u << this.fullImage.BitDepth) - 1) : 0;
                 if (c >= gi.Channel.Count)
                 {
