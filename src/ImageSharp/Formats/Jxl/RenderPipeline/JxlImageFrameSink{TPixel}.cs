@@ -57,7 +57,7 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     {
         this.configuration = configuration;
         this.image = image;
-        int colorPlanes = metadata.NumColorPlanes;
+        int colorPlanes = metadata.NumOutputColorPlanes;
         this.gray = colorPlanes == 1;
         this.greenPlane = this.gray ? 0 : 1;
         this.bluePlane = this.gray ? 0 : 2;
@@ -81,10 +81,17 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
         this.blackPlane = cmyk ? colorPlanes + metadata.Find(JxlExtraChannelType.Black) : -1;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the sink takes display-encoded samples. It does: an XYB image that
+    /// cannot render to its own colour encoding, such as one with an ICC profile, reaches it as sRGB,
+    /// and its pixels get no pixel profile (ADR 0002).
+    /// </summary>
+    public bool DisplayEncoded => true;
+
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
         // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, clamp, then
-        // quantise. The sRGB transfer for XYB arrives with a later slice.
+        // quantise. The output transfer function is the from-linear stage's (JxlColorStages).
         ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
         this.framesWritten++;
         Buffer2D<TPixel> pixels = frame.PixelBuffer;

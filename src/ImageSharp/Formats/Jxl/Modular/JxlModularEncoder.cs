@@ -69,7 +69,7 @@ internal static class JxlModularEncoder
             {
                 tokens.Add(new JxlToken(JxlMaTree.PredictorContext, (uint)node.Predictor));
                 tokens.Add(new JxlToken(JxlMaTree.OffsetContext, JxlBits.PackSigned((int)node.PredictorOffset)));
-                uint mulLog = (uint)Num0BitsBelowLS1BitNonzero(node.Multiplier);
+                uint mulLog = (uint)JxlBits.Num0BitsBelowLs1BitNonzero(node.Multiplier);
                 uint mulBits = (node.Multiplier >> (int)mulLog) - 1;
                 tokens.Add(new JxlToken(JxlMaTree.MultiplierLogContext, mulLog));
                 tokens.Add(new JxlToken(JxlMaTree.MultiplierBitsContext, mulBits));
@@ -216,18 +216,6 @@ internal static class JxlModularEncoder
     }
 
     private static JxlPropertyDecisionNode Leaf(JxlPredictor predictor) => new(-1, 0, 0, 0, predictor, 0, 1);
-
-    private static int Num0BitsBelowLS1BitNonzero(uint x)
-    {
-        int n = 0;
-        while ((x & 1) == 0)
-        {
-            x >>= 1;
-            n++;
-        }
-
-        return n;
-    }
 
     // libjxl takes a fast path here when the tree only uses the weighted predictor and its property
     // within a small range, which kWPFixedDC does. The port always takes the general path: it gives

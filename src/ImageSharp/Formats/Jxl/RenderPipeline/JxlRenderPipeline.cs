@@ -10,6 +10,7 @@
 using System;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
@@ -20,37 +21,50 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// group is in, the stages run over the whole frame and the sink receives the planes.
 /// </summary>
 /// <remarks>
-/// Deliberate departures from libjxl: the planes carry no border padding, because no stage needs
-/// neighbours yet; stages are to run in place rather than allocate new planes each, as decided in
-/// issue #113; and the stages are fixed steps of <see cref="Finish"/> rather than a list built per
-/// frame, because the frames this port decodes need only the patches, save, blending and output stages.
+/// Deliberate departures from libjxl: the planes carry no border, because no stage needs neighbours
+/// yet. Instead of the border, which in libjxl takes the whole 8x8 blocks that VarDCT writes past the
+/// right and bottom edges, the colour planes are padded to the frame's padded size. The stages, the
+/// reference slots and the sink are given the frame size, and the planes keep the padding past it.
+/// Stages are to run in place rather than allocate new planes each, as decided in issue #113. And the
+/// stages are fixed steps of <see cref="Finish"/> rather than a list built per frame, because the
+/// frames this port decodes need only the patches, save, colour-transform, blending and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
+    private int numColorPlanes;
     private Buffer2D<float>[] planes;
     private int width;
     private int height;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per channel.
+    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per
+    /// channel: the colour planes at the frame's padded size, which is the frame size for a Modular frame
+    /// and whole 8x8 blocks for a VarDCT frame, and the extra channels at the frame size.
     /// </summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="frameDim">The frame dimensions.</param>
-    /// <param name="numChannels">The number of channels: the colour planes (<see cref="Headers.JxlImageMetadata.NumColorPlanes"/>) plus the extra channels.</param>
-    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numChannels)
+    /// <param name="numColorPlanes">
+    /// The number of colour planes: <see cref="Headers.JxlImageMetadata.NumColorPlanes"/>, or three for a
+    /// VarDCT frame, which always codes three.
+    /// </param>
+    /// <param name="numExtraChannels">The number of extra channels.</param>
+    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, int numExtraChannels)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
+        this.numColorPlanes = numColorPlanes;
         this.width = (int)frameDim.XSizeUpsampled;
         this.height = (int)frameDim.YSizeUpsampled;
-        this.planes = new Buffer2D<float>[numChannels];
+        this.planes = new Buffer2D<float>[numColorPlanes + numExtraChannels];
         try
         {
-            for (int c = 0; c < numChannels; c++)
+            for (int c = 0; c < this.planes.Length; c++)
             {
-                this.planes[c] = allocator.Allocate2D<float>((int)frameDim.XSizeUpsampled, (int)frameDim.YSizeUpsampled);
+                this.planes[c] = c < numColorPlanes
+                    ? allocator.Allocate2D<float>((int)frameDim.XSizeUpsampledPadded, (int)frameDim.YSizeUpsampledPadded)
+                    : allocator.Allocate2D<float>(this.width, this.height);
             }
         }
         catch
@@ -64,7 +78,13 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <summary>Gets the number of channels.</summary>
     public int NumChannels => this.planes.Length;
 
-    /// <summary>Returns the plane of channel <paramref name="c"/>.</summary>
+    /// <summary>Gets the number of colour planes, which come before the extra channels.</summary>
+    public int NumColorPlanes => this.numColorPlanes;
+
+    /// <summary>
+    /// Returns the plane of channel <paramref name="c"/>. A colour plane may be larger than the frame:
+    /// a VarDCT group writes whole blocks into it, past the frame's right and bottom edges.
+    /// </summary>
     /// <param name="c">The channel.</param>
     /// <returns>The plane.</returns>
     public Buffer2D<float> GetPlane(int c) => this.planes[c];
@@ -86,22 +106,34 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     /// <summary>
     /// Runs the stages over the whole frame, in libjxl's order: the patches, the save before the colour
-    /// transform, the blending, the save after blending, and the output. Returns the frame to keep in its
-    /// reference slot, if it can be referenced; the caller saves it once the frame is done, as libjxl's
-    /// <c>FinalizeFrame</c> does.
+    /// transform, the colour-transform stages, the blending, the save after blending, and the output.
+    /// Returns the frame to keep in its reference slot, if it can be referenced; the caller saves it once
+    /// the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
+    /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
     /// <param name="cancellationToken">The cancellation token, checked on each row of the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
         try
         {
+            // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
+            // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its patches,
+            // reference frames and blending. So the frame drops to grey before them, where libjxl keeps
+            // three planes to the output, which takes the first. Every stage before the output works on
+            // each colour channel alone, so the first plane comes out the same.
+            JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
+            if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
+            {
+                this.DropToGrey();
+            }
+
             if (patches != null)
             {
                 // One row may take every patch of the frame, so cancellation is checked row by row.
@@ -112,10 +144,18 @@ internal sealed class JxlRenderPipeline : IDisposable
                 }
             }
 
-            // The colour transform is a later slice, so the planes before it are the decoded ones.
             if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
             {
                 saved = this.CopyPlanes(isInXyb: true);
+            }
+
+            // SimpleRenderPipeline runs each stage over the whole frame before the next.
+            foreach (IJxlColorStage stage in colorStages)
+            {
+                for (int y = 0; y < this.height; y++)
+                {
+                    stage.ProcessRow(this.planes, this.width, y);
+                }
             }
 
             if (blending != null)
@@ -123,10 +163,19 @@ internal sealed class JxlRenderPipeline : IDisposable
                 this.Blend(blending);
             }
 
+            // The save after blending and the sink take the planes as they are, padding and all, with
+            // the frame size.
             if (canBeReferenced && !frameHeader.SaveBeforeColorTransform)
             {
                 // A frame that is not displayed hands its planes over rather than copying them.
                 saved = sink == null ? this.TakePlanes() : this.CopyPlanes(isInXyb: false);
+            }
+
+            // The output of a grey image takes the first colour channel: an XYB grey image has three
+            // equal colour planes until here, as libjxl's pipeline always has, and its sink gets one.
+            if (sink != null && this.numColorPlanes == 3 && metadata.NumOutputColorPlanes == 1)
+            {
+                this.DropToGrey();
             }
 
             if (sink != null && sink.ConsumeFrame(this.planes, this.width, this.height))
@@ -225,6 +274,18 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes = imagePlanes;
         this.width = imageXSize;
         this.height = imageYSize;
+    }
+
+    // Disposes the second and third colour planes, so the planes are grey, then the extra channels.
+    private void DropToGrey()
+    {
+        Buffer2D<float>[] grey = new Buffer2D<float>[this.planes.Length - 2];
+        grey[0] = this.planes[0];
+        Array.Copy(this.planes, 3, grey, 1, this.planes.Length - 3);
+        this.planes[1].Dispose();
+        this.planes[2].Dispose();
+        this.planes = grey;
+        this.numColorPlanes = 1;
     }
 
     // WriteToImageBundleStage into frame_storage_for_referencing.
