@@ -89,7 +89,7 @@ public class JxlRenderPipelineTests
     }
 
     [Fact]
-    public void Finish_PaddedFrame_SinkReceivesFrameSizedPlanes()
+    public void Finish_PaddedFrame_SinkReceivesTheFrameSizeAndItsSamples()
     {
         JxlFrameHeader frameHeader = FrameHeader(JxlTestFrame.Last(JxlTestLayers.ColourA));
         using RecordingSink sink = new();
@@ -97,20 +97,20 @@ public class JxlRenderPipelineTests
         Finish(frameHeader, VarDctFrameDim, null, sink)?.Dispose();
 
         Assert.Equal((10, 13), (sink.Width, sink.Height));
-        AssertFrameSized(sink.Planes, 10, 13);
+        AssertFrameSamples(sink.Planes, 10, 13);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void Finish_PaddedFrame_SavesFrameSizedPlanes(bool saveBeforeColorTransform)
+    public void Finish_PaddedFrame_SavesTheFrameSizeAndItsSamples(bool saveBeforeColorTransform)
     {
         JxlFrameHeader frameHeader = FrameHeader(new JxlTestFrame(JxlTestLayers.ColourA) { SaveAsReference = 1, SaveBeforeColorTransform = saveBeforeColorTransform });
 
         using JxlReferenceFrame saved = Finish(frameHeader, VarDctFrameDim, null, null);
 
         Assert.Equal((10, 13), (saved.Width, saved.Height));
-        AssertFrameSized(saved.Planes, 10, 13);
+        AssertFrameSamples(saved.Planes, 10, 13);
     }
 
     private static JxlFrameHeader FrameHeader(JxlTestFrame frame)
@@ -134,15 +134,16 @@ public class JxlRenderPipelineTests
         return pipeline.Finish(frameHeader, null, colorStages, null, sink, CancellationToken.None);
     }
 
-    private static void AssertFrameSized(Buffer2D<float>[] planes, int width, int height)
+    // The planes may keep their padding, so only the frame's samples are checked.
+    private static void AssertFrameSamples(Buffer2D<float>[] planes, int width, int height)
     {
         Assert.Equal(NumColorPlanes + NumExtraChannels, planes.Length);
         foreach (Buffer2D<float> plane in planes)
         {
-            Assert.Equal((width, height), (plane.Width, plane.Height));
+            Assert.True(plane.Width >= width && plane.Height >= height, $"The plane is {plane.Width}x{plane.Height}");
             for (int y = 0; y < height; y++)
             {
-                Assert.All(plane.DangerousGetRowSpan(y).ToArray(), s => Assert.Equal(Sample, s));
+                Assert.All(plane.DangerousGetRowSpan(y).Slice(0, width).ToArray(), s => Assert.Equal(Sample, s));
             }
         }
     }

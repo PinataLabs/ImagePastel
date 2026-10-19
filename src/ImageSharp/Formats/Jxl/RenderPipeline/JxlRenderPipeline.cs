@@ -23,11 +23,11 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// <remarks>
 /// Deliberate departures from libjxl: the planes carry no border, because no stage needs neighbours
 /// yet. Instead of the border, which in libjxl takes the whole 8x8 blocks that VarDCT writes past the
-/// right and bottom edges, the colour planes are padded to the frame's padded size; the stages see the
-/// frame size, and the padding is cropped before the planes are handed over. Stages are to run in place
-/// rather than allocate new planes each, as decided in issue #113. And the stages are fixed steps of
-/// <see cref="Finish"/> rather than a list built per frame, because the frames this port decodes need
-/// only the patches, save, colour-transform, blending and output stages.
+/// right and bottom edges, the colour planes are padded to the frame's padded size. The stages, the
+/// reference slots and the sink are given the frame size, and the planes keep the padding past it.
+/// Stages are to run in place rather than allocate new planes each, as decided in issue #113. And the
+/// stages are fixed steps of <see cref="Finish"/> rather than a list built per frame, because the
+/// frames this port decodes need only the patches, save, colour-transform, blending and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
@@ -163,9 +163,8 @@ internal sealed class JxlRenderPipeline : IDisposable
                 this.Blend(blending);
             }
 
-            // The save after blending and the sink take the planes over, at the size they are given.
-            this.CropPadding();
-
+            // The save after blending and the sink take the planes as they are, padding and all, with
+            // the frame size.
             if (canBeReferenced && !frameHeader.SaveBeforeColorTransform)
             {
                 // A frame that is not displayed hands its planes over rather than copying them.
@@ -275,29 +274,6 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes = imagePlanes;
         this.width = imageXSize;
         this.height = imageYSize;
-    }
-
-    // Replaces each plane that is larger than the frame, which only padded colour planes are, with a
-    // frame-sized copy. Blending leaves image-sized planes, so then there is nothing to crop.
-    private void CropPadding()
-    {
-        for (int c = 0; c < this.planes.Length; c++)
-        {
-            Buffer2D<float> plane = this.planes[c];
-            if (plane.Width == this.width && plane.Height == this.height)
-            {
-                continue;
-            }
-
-            Buffer2D<float> cropped = this.allocator.Allocate2D<float>(this.width, this.height);
-            for (int y = 0; y < this.height; y++)
-            {
-                plane.DangerousGetRowSpan(y).Slice(0, this.width).CopyTo(cropped.DangerousGetRowSpan(y));
-            }
-
-            plane.Dispose();
-            this.planes[c] = cropped;
-        }
     }
 
     // Disposes the second and third colour planes, so the planes are grey, then the extra channels.

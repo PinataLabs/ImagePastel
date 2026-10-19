@@ -26,7 +26,10 @@ internal interface IJxlRenderSink
     /// <summary>
     /// Consumes a rendered frame: one plane per channel (colour channels, then extra channels).
     /// </summary>
-    /// <param name="planes">The planes, <paramref name="width"/> by <paramref name="height"/>.</param>
+    /// <param name="planes">
+    /// The planes, at least <paramref name="width"/> by <paramref name="height"/>: the colour planes of a
+    /// VarDCT frame keep the padding to whole blocks past the frame.
+    /// </param>
     /// <param name="width">The frame width.</param>
     /// <param name="height">The frame height.</param>
     /// <returns><see langword="true"/> if the sink keeps the planes and will dispose them.</returns>
