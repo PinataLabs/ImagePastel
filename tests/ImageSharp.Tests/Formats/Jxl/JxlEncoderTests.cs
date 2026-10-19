@@ -5,6 +5,9 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -56,6 +59,21 @@ public class JxlEncoderTests
     public Task RoundTrip_Djxl_IsExact(string pixelType, string pattern, int width, int height)
         => JxlEncoderRoundTrip.RunAsync(JxlEncoderRoundTrip.Reader.Djxl, pixelType, pattern, width, height);
 
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_OurDecoder_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Ours, file, pixelType);
+
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_Magick_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Magick, file, pixelType);
+
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_Djxl_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Djxl, file, pixelType);
+
     [Fact]
     public void Identify_Grey_ReportsOneEightBitChannelAndGreySrgb()
     {
@@ -100,21 +118,6 @@ public class JxlEncoderTests
     }
 
     [Theory]
-    [InlineData(401, 1)]
-    [InlineData(1, 401)]
-    [InlineData(512, 512)]
-    public void Encode_LargerThanOneGroup_ThrowsNotSupportedNamingE1c(int width, int height)
-    {
-        using Image<L8> image = new(width, height);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
-
-        Assert.Contains("E1c", ex.Message);
-        Assert.Equal(0, stream.Length);
-    }
-
-    [Theory]
     [InlineData(400, 400)]
     [InlineData(257, 3)]
     public void Encode_OneLargerGroup_RoundTripsThroughOurDecoder(int width, int height)
@@ -126,6 +129,49 @@ public class JxlEncoderTests
         using Image<L8> decoded = Image.Load<L8>(JxlEncoderRoundTrip.CreateConfiguration(), JxlEncoderRoundTrip.Encode(image));
 
         ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    [Theory]
+    [InlineData(256, 512, 2, 1)]
+    [InlineData(300, 513, 6, 1)]
+    [InlineData(2049, 2049, 81, 4)]
+    public void Encode_MultiGroup_TocHasOneEntryPerSectionCoveringTheFrame(int width, int height, int expectedGroups, int expectedLfGroups)
+    {
+        using Image<L8> image = JxlEncoderRoundTrip.CreateImage<L8>("gradient", width, height);
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image);
+
+        // Parse the frame header and TOC as the decoder does.
+        JxlBitReader reader = new(encoded, 2, encoded.Length - 2);
+        JxlCodecMetadata metadata = new();
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        JxlBundle.Read(reader, metadata.TransformData);
+        reader.JumpToByteBoundary();
+        JxlFrameHeader frameHeader = new(metadata);
+        JxlBundle.Read(reader, frameHeader);
+        JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
+        Assert.Equal(expectedGroups, frameDim.NumGroups);
+        Assert.Equal(expectedLfGroups, frameDim.NumDcGroups);
+        uint[] sizes = JxlToc.ReadToc(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, 1), reader);
+        long frameDataStart = 2 + (reader.TotalBitsConsumed / 8);
+        reader.Close();
+
+        // LF global, then each LF group, HF global and each group, as the decoder reads them.
+        Assert.Equal(2 + expectedLfGroups + expectedGroups, sizes.Length);
+        Assert.NotEqual(0u, sizes[0]);
+
+        // Lossless with no squeeze leaves the LF groups and HF global empty; every group has pixels.
+        Assert.All(sizes[1..(2 + expectedLfGroups)], size => Assert.Equal(0u, size));
+        Assert.All(sizes[(2 + expectedLfGroups)..], size => Assert.NotEqual(0u, size));
+
+        // The sections fill the rest of the codestream, with nothing left over.
+        long total = 0;
+        foreach (uint size in sizes)
+        {
+            total += size;
+        }
+
+        Assert.Equal(encoded.Length, frameDataStart + total);
     }
 
     [Fact]

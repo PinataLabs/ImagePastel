@@ -30,6 +30,12 @@ internal static class JxlEncoderRoundTrip
     /// </summary>
     public static TheoryData<string, string, int, int> Cases { get; } = CreateCases();
 
+    /// <summary>
+    /// Gets the lossless corpus cases: a repo test image (relative to the input images folder) and the
+    /// pixel type to load it as.
+    /// </summary>
+    public static TheoryData<string, string> CorpusCases { get; } = CreateCorpusCases();
+
     /// <summary>Which decoder reads the encoded file back.</summary>
     public enum Reader
     {
@@ -63,6 +69,19 @@ internal static class JxlEncoderRoundTrip
             nameof(Rgba64) => RunAsync<Rgba64>(reader, pattern, width, height),
             nameof(RgbaVector) => RunAsync<RgbaVector>(reader, pattern, width, height),
             _ => throw new ArgumentException($"No round trip for {pixelType}", nameof(pixelType)),
+        };
+
+    /// <summary>Runs one case of <see cref="CorpusCases"/> through one reader.</summary>
+    /// <param name="reader">The reader.</param>
+    /// <param name="file">The test image, relative to the input images folder.</param>
+    /// <param name="pixelType">The pixel type name.</param>
+    /// <returns>A task.</returns>
+    public static Task RunCorpusAsync(Reader reader, string file, string pixelType)
+        => pixelType switch
+        {
+            nameof(L8) => RunCorpusAsync<L8>(reader, file),
+            nameof(Rgb24) => RunCorpusAsync<Rgb24>(reader, file),
+            _ => throw new ArgumentException($"No corpus round trip for {pixelType}", nameof(pixelType)),
         };
 
     /// <summary>
@@ -139,8 +158,28 @@ internal static class JxlEncoderRoundTrip
     {
         TheoryData<string, string, int, int> cases = new();
         AddSingleGroup8BitCases(cases);
+        AddMultiGroup8BitCases(cases);
+        AddPrefixCodeCases(cases);
         AddSampleFormatCases(cases);
         return cases;
+    }
+
+    // E1g: small images whose streams use prefix codes (fewer than 100 tokens), and the first sizes
+    // past that, which use ANS.
+    private static void AddPrefixCodeCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pattern in new[] { "gradient", "noise" })
+        {
+            foreach ((int width, int height) in new[] { (2, 3), (4, 4), (10, 9), (10, 10) })
+            {
+                cases.Add(nameof(L8), pattern, width, height);
+            }
+
+            foreach ((int width, int height) in new[] { (4, 4), (5, 6), (6, 6) })
+            {
+                cases.Add(nameof(Rgb24), pattern, width, height);
+            }
+        }
     }
 
     // E1b: 8-bit grey and RGB in one group, each pattern at 1x1, an odd size and the largest default group.
@@ -158,8 +197,50 @@ internal static class JxlEncoderRoundTrip
         }
     }
 
-    // E1d: 16-bit, float32 and alpha, grey and colour, each pattern at 1x1 and an odd size, and noise
-    // filling the largest default group.
+    // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to
+    // 400 pixels on each side, so 257x1 and 1x257 are still one group; the others cross the 256-pixel
+    // group and the 2048-pixel LF group boundaries, or are exact multiples of them.
+    private static void AddMultiGroup8BitCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pixelType in new[] { nameof(L8), nameof(Rgb24) })
+        {
+            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (300, 513), (2049, 3), (256, 512) })
+            {
+                cases.Add(pixelType, "noise", width, height);
+                cases.Add(pixelType, "gradient", width, height);
+            }
+        }
+
+        // The large cases are slow to encode, so each runs once: an exact multiple of the LF group,
+        // and four LF groups with partial groups at both edges.
+        cases.Add(nameof(L8), "gradient", 2048, 2048);
+        cases.Add(nameof(Rgb24), "noise", 2051, 2309);
+    }
+
+    // Each slice adds its corpus files with one call here and its own Add method below.
+    private static TheoryData<string, string> CreateCorpusCases()
+    {
+        TheoryData<string, string> cases = new();
+        AddCorpus8BitCases(cases);
+        return cases;
+    }
+
+    // E1c: 8-bit grey and RGB repo PNGs and TIFFs, in one group and in several (Bike has 6 groups and
+    // ColorsSaturationLightness 9, more than the 8 above which libjxl would stream).
+    private static void AddCorpus8BitCases(TheoryData<string, string> cases)
+    {
+        cases.Add(TestImages.Png.Bike, nameof(Rgb24));
+        cases.Add(TestImages.Png.ColorsSaturationLightness, nameof(Rgb24));
+        cases.Add(TestImages.Png.Pd, nameof(Rgb24));
+        cases.Add(TestImages.Png.Bradley02, nameof(L8));
+        cases.Add(TestImages.Tiff.Calliphora_RgbLzwPredictor, nameof(Rgb24));
+        cases.Add(TestImages.Tiff.Calliphora_GrayscaleUncompressed, nameof(L8));
+        cases.Add(TestImages.Tiff.FlowerRgb888Contiguous, nameof(Rgb24));
+        cases.Add(TestImages.Tiff.Flower8BitGray, nameof(L8));
+    }
+
+    // E1d: 16-bit, float32 and alpha, grey and colour, each pattern at 1x1 and an odd size, and the
+    // translucent pattern filling the largest default group.
     private static void AddSampleFormatCases(TheoryData<string, string, int, int> cases)
     {
         foreach (string pixelType in new[] { nameof(L16), nameof(La16), nameof(La32), nameof(Rgb48), nameof(Rgba32), nameof(Rgba64), nameof(RgbaVector) })
@@ -173,6 +254,31 @@ internal static class JxlEncoderRoundTrip
             }
 
             cases.Add(pixelType, "translucent", 256, 256);
+        }
+    }
+
+    private static async Task RunCorpusAsync<TPixel>(Reader reader, string file)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = Image.Load<TPixel>(TestFile.GetInputFileFullPath(file));
+        await RunAsync(reader, image, Path.GetFileNameWithoutExtension(file) + "_" + typeof(TPixel).Name);
+    }
+
+    private static async Task RunAsync<TPixel>(Reader reader, Image<TPixel> image, string name)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        byte[] encoded = Encode(image);
+        switch (reader)
+        {
+            case Reader.Ours:
+                AssertOurDecoderExact(image, encoded);
+                break;
+            case Reader.Magick:
+                AssertMagickExact(image, encoded);
+                break;
+            case Reader.Djxl:
+                await AssertDjxlExactAsync(image, encoded, name, TestContext.Current.CancellationToken);
+                break;
         }
     }
 
