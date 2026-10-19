@@ -252,11 +252,13 @@ public class JxlVarDctBoundsTests
         => AssertOutcome(new JxlTestVarDct(8, 8) { Sharpness = sharpness }.ToArray(), outcome, "Corrupted sharpness field");
 
     // dec_modular.cc DecodeAcMetadata: the raw strategy is in [0, 27). Strategy 26 (DCT128X256, 32 x 16
-    // blocks) fills a 256 x 128 frame, and only DCT8 is supported until D9.
+    // blocks) fills a 256 x 128 frame. Identity (1) and AFV (14 to 17) are not supported until D9f.
     [Theory]
     [InlineData(8, 8, 0, Outcome.Decodes)]
     [InlineData(8, 8, 1, Outcome.NotSupported)]
-    [InlineData(256, 128, 26, Outcome.NotSupported)]
+    [InlineData(8, 8, 14, Outcome.NotSupported)]
+    [InlineData(8, 8, 17, Outcome.NotSupported)]
+    [InlineData(256, 128, 26, Outcome.Decodes)]
     [InlineData(8, 8, 27, Outcome.Invalid)]
     [InlineData(8, 8, -1, Outcome.Invalid)]
     public void AcMetadata_UnknownStrategy_Throws(int width, int height, int strategy, Outcome outcome)
@@ -265,8 +267,8 @@ public class JxlVarDctBoundsTests
     // dec_modular.cc DecodeAcMetadata: a varblock ends inside the frame. DCT8X16 (raw 7) is 2 x 1 blocks
     // and DCT16X8 (raw 6) 1 x 2.
     [Theory]
-    [InlineData(16, 8, 7, Outcome.NotSupported)]
-    [InlineData(8, 16, 6, Outcome.NotSupported)]
+    [InlineData(16, 8, 7, Outcome.Decodes)]
+    [InlineData(8, 16, 6, Outcome.Decodes)]
     [InlineData(8, 8, 7, Outcome.Invalid)]
     [InlineData(8, 8, 6, Outcome.Invalid)]
     public void AcMetadata_VarblockPastTheFrame_Throws(int width, int height, int strategy, Outcome outcome)
@@ -275,8 +277,8 @@ public class JxlVarDctBoundsTests
     // dec_modular.cc DecodeAcMetadata: a varblock ends inside its AC group of 32 x 32 blocks, here in a
     // frame of 33 blocks.
     [Theory]
-    [InlineData(true, 30, Outcome.NotSupported)]
-    [InlineData(false, 30, Outcome.NotSupported)]
+    [InlineData(true, 30, Outcome.Decodes)]
+    [InlineData(false, 30, Outcome.Decodes)]
     [InlineData(true, 31, Outcome.Invalid)]
     [InlineData(false, 31, Outcome.Invalid)]
     public void AcMetadata_VarblockPastItsAcGroup_Throws(bool horizontal, int position, Outcome outcome)
@@ -285,7 +287,7 @@ public class JxlVarDctBoundsTests
     // ac_strategy.h SetNoBoundsCheck: varblocks do not overlap. In 3 x 2 blocks, a DCT16X16 at (1, 0)
     // covers (1, 1), and a DCT8X16 at (0, 1) would cover it too.
     [Theory]
-    [InlineData(0, Outcome.NotSupported)]
+    [InlineData(0, Outcome.Decodes)]
     [InlineData(7, Outcome.Invalid)]
     public void AcMetadata_OverlappingVarblocks_Throw(int secondRow, Outcome outcome)
         => AssertOutcome(new JxlTestVarDct(24, 16) { Strategies = new[] { 0, 4, secondRow } }.ToArray(), outcome, "block overlap");

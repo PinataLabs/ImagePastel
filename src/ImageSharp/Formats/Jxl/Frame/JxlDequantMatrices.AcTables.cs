@@ -4,7 +4,7 @@
 // lib/jxl/quant_weights.h and lib/jxl/quant_weights.cc (DctQuantWeightParams, QuantEncoding, QuantTable,
 // kAcStrategyToQuantTableMap, DequantMatrices: Decode, EnsureComputed, Matrix, required_size_x/y;
 // GetQuantWeightsDCT2, GetQuantWeightsIdentity, Interpolate, Mult, GetQuantWeights, ComputeQuantTable,
-// DecodeDctParams, Decode, and the library entry of the DCT8 table).
+// DecodeDctParams and Decode). The library tables are in JxlDequantMatrices.Library.cs.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -157,31 +157,6 @@ internal sealed partial class JxlDequantMatrices
         }
 
         return result;
-    }
-
-    // The library tables. Only the DCT8 table is ported; the others come with the strategies that use
-    // them (D9), and until then no frame reaches them, as only DCT8 blocks are accepted.
-    private static JxlQuantEncoding LibraryEncoding(int table)
-    {
-        if (table != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException($"The library quantization table {table}");
-        }
-
-        JxlQuantEncoding dct = new(QuantMode.Dct);
-        dct.DctParams.NumDistanceBands = 6;
-        float[][] bands =
-        {
-            new[] { 3150.0f, 0.0f, -0.4f, -0.4f, -0.4f, -2.0f },
-            new[] { 560.0f, 0.0f, -0.3f, -0.3f, -0.3f, -0.3f },
-            new[] { 512.0f, -2.0f, -1.0f, 0.0f, -1.0f, -2.0f },
-        };
-        for (int c = 0; c < 3; c++)
-        {
-            bands[c].CopyTo(dct.DctParams.DistanceBands[c], 0);
-        }
-
-        return dct;
     }
 
     private static void DecodeDctParams(JxlBitReader br, JxlDctQuantWeightParams parameters)
