@@ -28,40 +28,40 @@ internal sealed class JxlFrameHeader : JxlFields
         JxlBundle.Init(this);
     }
 
-    public JxlFrameEncoding Encoding { get; private set; } = JxlFrameEncoding.Modular;
+    public JxlFrameEncoding Encoding { get; set; } = JxlFrameEncoding.Modular;
 
-    public JxlFrameType FrameType { get; private set; } = JxlFrameType.Regular;
+    public JxlFrameType FrameType { get; set; } = JxlFrameType.Regular;
 
-    public JxlFrameFlags Flags { get; private set; }
+    public JxlFrameFlags Flags { get; set; }
 
-    public JxlColorTransform ColorTransform { get; private set; } = JxlColorTransform.Xyb;
+    public JxlColorTransform ColorTransform { get; set; } = JxlColorTransform.Xyb;
 
     public JxlYCbCrChromaSubsampling ChromaSubsampling { get; } = new();
 
-    /// <summary>Gets the group size shift. Modular only.</summary>
-    public uint GroupSizeShift { get; private set; }
+    /// <summary>Gets or sets the group size shift. Modular only.</summary>
+    public uint GroupSizeShift { get; set; }
 
-    /// <summary>Gets the X quantization matrix scale. VarDCT with XYB only.</summary>
-    public uint XQmScale { get; private set; }
+    /// <summary>Gets or sets the X quantization matrix scale. VarDCT with XYB only.</summary>
+    public uint XQmScale { get; set; }
 
-    /// <summary>Gets the B quantization matrix scale. VarDCT with XYB only.</summary>
-    public uint BQmScale { get; private set; }
+    /// <summary>Gets or sets the B quantization matrix scale. VarDCT with XYB only.</summary>
+    public uint BQmScale { get; set; }
 
     public JxlPasses Passes { get; } = new();
 
-    /// <summary>Gets a value indicating whether the frame has its own size or origin.</summary>
-    public bool CustomSizeOrOrigin { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the frame has its own size or origin.</summary>
+    public bool CustomSizeOrOrigin { get; set; }
 
-    public uint FrameSizeX { get; private set; }
+    public uint FrameSizeX { get; set; }
 
-    public uint FrameSizeY { get; private set; }
+    public uint FrameSizeY { get; set; }
 
-    public int FrameOriginX0 { get; private set; }
+    public int FrameOriginX0 { get; set; }
 
-    public int FrameOriginY0 { get; private set; }
+    public int FrameOriginY0 { get; set; }
 
-    /// <summary>Gets the upsampling of the colour channels: 1, 2, 4 or 8.</summary>
-    public uint Upsampling { get; private set; }
+    /// <summary>Gets or sets the upsampling of the colour channels: 1, 2, 4 or 8.</summary>
+    public uint Upsampling { get; set; }
 
     /// <summary>Gets the upsampling of each extra channel.</summary>
     public List<uint> ExtraChannelUpsampling { get; } = new();
@@ -72,26 +72,30 @@ internal sealed class JxlFrameHeader : JxlFields
 
     public JxlAnimationFrame AnimationFrame { get; }
 
-    public bool IsLast { get; private set; }
+    public bool IsLast { get; set; }
 
-    /// <summary>Gets the reference slot the frame is saved to.</summary>
-    public uint SaveAsReference { get; private set; }
+    /// <summary>Gets or sets the reference slot the frame is saved to.</summary>
+    public uint SaveAsReference { get; set; }
 
-    /// <summary>Gets a value indicating whether the frame is saved before its colour transform.</summary>
-    public bool SaveBeforeColorTransform { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the frame is saved before its colour transform.</summary>
+    public bool SaveBeforeColorTransform { get; set; }
 
-    /// <summary>Gets the DC level, 1 to 4 for a DC frame; 0 otherwise.</summary>
-    public uint DcLevel { get; private set; }
+    /// <summary>Gets or sets the DC level, 1 to 4 for a DC frame; 0 otherwise.</summary>
+    public uint DcLevel { get; set; }
 
     public JxlLoopFilter LoopFilter { get; } = new();
 
-    public ulong Extensions { get; private set; }
+    public ulong Extensions { get; set; }
 
     /// <summary>Gets or sets the codestream metadata, which is not serialized here.</summary>
     public JxlCodecMetadata NonserializedMetadata { get; set; }
 
-    /// <summary>Gets the frame name, UTF-8.</summary>
-    public ReadOnlySpan<byte> Name => this.name;
+    /// <summary>Gets or sets the frame name, UTF-8.</summary>
+    public ReadOnlySpan<byte> Name
+    {
+        get => this.name;
+        set => this.name = value.ToArray();
+    }
 
     /// <summary>Gets a value indicating whether the frame can be saved as a reference.</summary>
     public bool CanBeReferenced
@@ -288,6 +292,17 @@ internal sealed class JxlFrameHeader : JxlFields
                 {
                     this.ExtraChannelBlendingInfo.Add(new JxlBlendingInfo());
                 }
+            }
+            else
+            {
+                // libjxl resizes only when reading, so a writer with the wrong count writes a stream
+                // the reader cannot parse. Resize for every visitor, as for the upsampling above.
+                while (this.ExtraChannelBlendingInfo.Count < numExtraChannels)
+                {
+                    this.ExtraChannelBlendingInfo.Add(new JxlBlendingInfo());
+                }
+
+                this.ExtraChannelBlendingInfo.RemoveRange(numExtraChannels, this.ExtraChannelBlendingInfo.Count - numExtraChannels);
             }
 
             foreach (JxlBlendingInfo ecBlendingInfo in this.ExtraChannelBlendingInfo)

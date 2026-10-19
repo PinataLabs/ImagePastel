@@ -27,14 +27,14 @@ internal sealed class JxlCustomTransferFunction : JxlFields
     /// <summary>Gets or sets the colour space of the encoding, which is not serialized here.</summary>
     public JxlColorSpace NonserializedColorSpace { get; set; } = JxlColorSpace.Rgb;
 
-    /// <summary>Gets a value indicating whether the transfer function is a gamma value.</summary>
-    public bool HaveGamma { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the transfer function is a gamma value.</summary>
+    public bool HaveGamma { get; set; }
 
-    /// <summary>Gets the gamma value times <see cref="GammaMul"/>, in (0, 1]. Only valid if <see cref="HaveGamma"/>.</summary>
-    public uint Gamma { get; private set; }
+    /// <summary>Gets or sets the gamma value times <see cref="GammaMul"/>, in (0, 1]. Only valid if <see cref="HaveGamma"/>.</summary>
+    public uint Gamma { get; set; }
 
-    /// <summary>Gets the transfer function. Only valid if not <see cref="HaveGamma"/>.</summary>
-    public JxlTransferFunction TransferFunction { get; private set; } = JxlTransferFunction.Srgb;
+    /// <summary>Gets or sets the transfer function. Only valid if not <see cref="HaveGamma"/>.</summary>
+    public JxlTransferFunction TransferFunction { get; set; } = JxlTransferFunction.Srgb;
 
     /// <summary>Gets a value indicating whether the transfer function is unknown.</summary>
     public bool IsUnknown => !this.HaveGamma && this.TransferFunction == JxlTransferFunction.Unknown;

@@ -16,19 +16,19 @@ internal sealed class JxlWeightedHeader : JxlFields
 {
     public JxlWeightedHeader() => JxlBundle.Init(this);
 
-    public int P1C { get; private set; }
+    public int P1C { get; set; }
 
-    public int P2C { get; private set; }
+    public int P2C { get; set; }
 
-    public int P3Ca { get; private set; }
+    public int P3Ca { get; set; }
 
-    public int P3Cb { get; private set; }
+    public int P3Cb { get; set; }
 
-    public int P3Cc { get; private set; }
+    public int P3Cc { get; set; }
 
-    public int P3Cd { get; private set; }
+    public int P3Cd { get; set; }
 
-    public int P3Ce { get; private set; }
+    public int P3Ce { get; set; }
 
     /// <summary>Gets the maximum weight of each of the four sub-predictors.</summary>
     public uint[] W { get; } = new uint[JxlWeightedState.NumPredictors];

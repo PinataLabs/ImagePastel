@@ -1,8 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/dec_ans.cc (ReadHistogram, DecodeANSCodes, DecodeUintConfig(s), DecodeHistograms) and
-// CreateFlatHistogram and GetPopulationCountPrecision from lib/jxl/ans_common.h.
+// lib/jxl/dec_ans.cc (ReadHistogram, DecodeANSCodes, DecodeUintConfig(s), DecodeHistograms).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -116,30 +115,6 @@ internal static class JxlEntropyDecoder
         return 0;
     }
 
-    private static int GetPopulationCountPrecision(int logCount, int shift)
-    {
-        int r = Math.Min(logCount, shift - ((JxlAnsParams.AnsLogTabSize - logCount) >> 1));
-        return r < 0 ? 0 : r;
-    }
-
-    private static List<int> CreateFlatHistogram(int length, int totalCount)
-    {
-        int count = totalCount / length;
-        List<int> result = new(length);
-        for (int i = 0; i < length; i++)
-        {
-            result.Add(count);
-        }
-
-        int remCounts = totalCount % length;
-        for (int i = 0; i < remCounts; ++i)
-        {
-            ++result[i];
-        }
-
-        return result;
-    }
-
     // Returns false for an invalid histogram.
     private static bool ReadHistogram(int precisionBits, out List<int> counts, JxlBitReader input)
     {
@@ -190,7 +165,7 @@ internal static class JxlEntropyDecoder
                 return false;
             }
 
-            counts = CreateFlatHistogram(alphabetSize, range);
+            counts = JxlAnsCommon.CreateFlatHistogram(alphabetSize, range);
             return true;
         }
 
@@ -291,7 +266,7 @@ internal static class JxlEntropyDecoder
                 }
                 else
                 {
-                    int bitCount = GetPopulationCountPrecision(code, shift);
+                    int bitCount = JxlAnsCommon.GetPopulationCountPrecision(code, shift);
                     counts[i] = (1 << code) + ((int)input.ReadBits(bitCount) << (code - bitCount));
                 }
             }

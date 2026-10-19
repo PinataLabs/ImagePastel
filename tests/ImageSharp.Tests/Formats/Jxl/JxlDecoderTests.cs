@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using ImageMagick;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
@@ -59,7 +58,7 @@ public class JxlDecoderTests
     [InlineData("lz77_flower")]
     public void Load_Rgb24_MatchesMagickExactly(string id)
     {
-        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
         string path = JxlConformanceVector.Load(id).CommittedInputPath;
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), path);
@@ -74,7 +73,7 @@ public class JxlDecoderTests
     [InlineData("alpha_triangles")]
     public void Load_Rgba64_MatchesMagickExactly(string id)
     {
-        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
         string path = JxlConformanceVector.Load(id).CommittedInputPath;
         using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
@@ -87,7 +86,7 @@ public class JxlDecoderTests
     [Fact]
     public void Load_Float32_MatchesMagickAt16Bits()
     {
-        Assert.SkipUnless(MagickFormatInfo.Create(MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
         // Magick returns 16-bit samples, so both sides are clamped to [0, 1] and compared at 16 bits.
         string path = JxlConformanceVector.Load("lossless_pfm").CommittedInputPath;

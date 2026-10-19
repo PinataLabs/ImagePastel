@@ -19,29 +19,49 @@ internal sealed class JxlTransform : JxlFields
 
     public JxlTransform() => JxlBundle.Init(this);
 
-    /// <summary>Gets the transform.</summary>
-    public JxlTransformId Id => (JxlTransformId)this.id;
+    /// <summary>Gets or sets the transform.</summary>
+    public JxlTransformId Id
+    {
+        get => (JxlTransformId)this.id;
+        set => this.id = (uint)value;
+    }
 
-    /// <summary>Gets the first channel the transform applies to. RCT and palette.</summary>
-    public uint BeginC { get; private set; }
+    /// <summary>Gets or sets the first channel the transform applies to. RCT and palette.</summary>
+    public uint BeginC { get; set; }
 
-    /// <summary>Gets the RCT type: permutation * 7 + decorrelation. RCT only.</summary>
-    public uint RctType { get; private set; }
+    /// <summary>Gets or sets the RCT type: permutation * 7 + decorrelation. RCT only.</summary>
+    public uint RctType { get; set; }
 
-    /// <summary>Gets the number of channels the palette replaces. Palette only.</summary>
-    public uint NumC { get; private set; }
+    /// <summary>Gets or sets the number of channels the palette replaces. Palette only.</summary>
+    public uint NumC { get; set; }
 
-    /// <summary>Gets the number of palette colours. Palette only.</summary>
-    public uint NbColors { get; private set; }
+    /// <summary>Gets or sets the number of palette colours. Palette only.</summary>
+    public uint NbColors { get; set; }
 
-    /// <summary>Gets the number of delta palette entries, which are added to a prediction. Palette only.</summary>
-    public uint NbDeltas { get; private set; }
+    /// <summary>Gets or sets the number of delta palette entries, which are added to a prediction. Palette only.</summary>
+    public uint NbDeltas { get; set; }
 
-    /// <summary>Gets the predictor of delta palette entries. Palette only.</summary>
-    public JxlPredictor Predictor => (JxlPredictor)this.predictor;
+    /// <summary>Gets or sets the predictor of delta palette entries. Palette only.</summary>
+    public JxlPredictor Predictor
+    {
+        get => (JxlPredictor)this.predictor;
+        set => this.predictor = (uint)value;
+    }
 
     /// <summary>Gets the squeeze steps. Squeeze only; empty means the default steps.</summary>
     public List<JxlSqueezeParams> Squeezes { get; } = new();
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the encoder sorts the palette colours by luma. Encoder
+    /// only; not written.
+    /// </summary>
+    public bool OrderedPalette { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the encoder may make a lossy palette. Encoder only; not
+    /// written. Only lossy encoding sets it, and that path is not ported.
+    /// </summary>
+    public bool LossyPalette { get; set; }
 
     public override void VisitFields(JxlVisitor visitor)
     {

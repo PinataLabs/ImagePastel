@@ -28,6 +28,7 @@ These files cover features that no conformance vector checks. They were made for
 | `two_alpha_a.jxl`, `two_alpha_b.jxl` | Lossless Modular, 16 x 16 8-bit RGB with two alpha extra channels, one colour each: (200, 100, 50) with alphas 128 and 255, and (40, 220, 160) with alphas 64 and 192. Their image headers are equal, so the layer tests stack the frame of one on the other and blend the second alpha channel with the first as its alpha. | `djxl` on each layered codestream, in `JxlLayersTests` |
 | `depth.jxl` | Lossless Modular, 16 x 16 8-bit RGB with a depth extra channel. The colour is (200, 100, 50) and the depth 7. `Image<TPixel>` drops the depth. | None: the colour is known |
 | `animation_from_apng.jxl` | Lossless Modular, 30 x 20 8-bit RGBA animation made from a four-frame APNG. The APNG's second frame has a delay of 0, so it becomes a frame with no duration that is blended into the next one: the animation shows three frames, of 120, 250 and 80 ticks at 1000 ticks per second. The later frames are cropped, and one blends over the canvas. | `External/ReferenceOutput/JxlDecoderTests/animation_from_apng.npy`: every displayed frame, as float32 (frames, height, width, channels) |
+| `twelve_bit.jxl` | Lossless Modular, 45 x 33 12-bit RGBA: ramps and noise, with alpha 0, 4095 and noise in turn. The encoder tests decode it, encode it again and check that it stays 12-bit with the same samples. | `External/ReferenceOutput/JxlDecoderTests/twelve_bit.png` (16-bit) |
 
 #### How `premultiplied_alpha` was made
 
@@ -161,3 +162,14 @@ cjxl depth_source.pam depth.jxl -d 0
 - `make_extra_channels.py` writes the source PAMs. They are not committed; the script makes them again.
 - In a PAM header, `cjxl` reads each `TUPLTYPE` line after the first as one more extra channel: `TUPLTYPE RGB_ALPHA` then `TUPLTYPE Alpha` gives two alpha channels, and `TUPLTYPE RGB` then `TUPLTYPE Depth` a depth channel.
 - `jxlinfo -v` lists the channels as "RGB+Alpha+Alpha" and "RGB+Depth".
+
+#### How `twelve_bit` was made
+
+```sh
+py -3 make_twelve_bit.py
+cjxl twelve_bit_source.png twelve_bit.jxl -d 0 --override_bitdepth=12
+djxl twelve_bit.jxl ../../../External/ReferenceOutput/JxlDecoderTests/twelve_bit.png
+```
+
+- `make_twelve_bit.py` writes `twelve_bit_source.png`, a 16-bit PNG whose samples are 12-bit values scaled to 16 bits, with an `sBIT` chunk of 12. The source PNG is not committed; the script makes it again.
+- `--override_bitdepth=12` stores 12 bits per sample, for alpha too; `jxlinfo` reports "12-bit RGB+Alpha".

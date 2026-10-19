@@ -24,7 +24,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
 internal static class JxlIccReader
 {
     // Two base-128 varints at up to 10 bytes each.
-    private const int PreambleSize = 20;
+    public const int PreambleSize = 20;
 
     // ANSSymbolReader::kMaxCheckpointInterval.
     private const int MaxCheckpointInterval = 512;
@@ -121,7 +121,7 @@ internal static class JxlIccReader
 
     // Mimics the beginning of UnpredictICC for quick validity check. At least PreambleSize bytes of data
     // should be valid at invocation time; size is the size of the buffer so far.
-    private static void CheckPreamble(byte[] data, int size, ulong encSize)
+    public static void CheckPreamble(byte[] data, int size, ulong encSize)
     {
         int pos = 0;
         ulong osize = DecodeVarInt(data, size, ref pos);

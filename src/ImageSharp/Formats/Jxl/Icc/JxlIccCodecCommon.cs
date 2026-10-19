@@ -38,12 +38,18 @@ internal static class JxlIccCodecCommon
     public const uint BkptTag = 0x626B7074; // bkpt
     public const uint BtrcTag = 0x62545243; // bTRC
     public const uint BxyzTag = 0x6258595A; // bXYZ
+    public const uint CurvTag = 0x63757276; // curv
+    public const uint GbdTag = 0x67626420; // "gbd "
     public const uint GtrcTag = 0x67545243; // gTRC
     public const uint GxyzTag = 0x6758595A; // gXYZ
     public const uint KxyzTag = 0x6B58595A; // kXYZ
     public const uint LumiTag = 0x6C756D69; // lumi
+    public const uint MabTag = 0x6D414220; // "mAB "
+    public const uint MbaTag = 0x6D424120; // "mBA "
+    public const uint MlucTag = 0x6D6C7563; // mluc
     public const uint RtrcTag = 0x72545243; // rTRC
     public const uint RxyzTag = 0x7258595A; // rXYZ
+    public const uint VcgtTag = 0x76636774; // vcgt
     public const uint WtptTag = 0x77747074; // wtpt
     public const uint XyzTypeTag = 0x58595A20; // "XYZ "
 

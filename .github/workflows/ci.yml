@@ -244,9 +244,10 @@ jobs:
           # MinVer computes the version from tags.
           fetch-depth: 0
 
-      # Only the JPEG XL test data is needed from LFS: the inputs, and the djxl references.
+      # Only the JPEG XL test data is needed from LFS: the inputs, the djxl references, the PNG and
+      # TIFF inputs of the encoder's lossless corpus, and the ICC profiles that the encoder tests embed.
       - name: Pull LFS JPEG XL test data
-        run: git lfs pull --include "tests/Images/Input/Jxl/**,tests/Images/External/ReferenceOutput/JxlDecoderTests/**"
+        run: git lfs pull --include "tests/Images/Input/Jxl/**,tests/Images/External/ReferenceOutput/JxlDecoderTests/**,tests/Images/Input/Png/**,tests/Images/Input/Tiff/**,tests/Images/Input/Icc/**"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

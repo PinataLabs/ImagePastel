@@ -16,51 +16,51 @@ internal sealed class JxlLoopFilter : JxlFields
 
     public JxlLoopFilter() => JxlBundle.Init(this);
 
-    /// <summary>Gets a value indicating whether the Gaborish filter is on.</summary>
-    public bool Gab { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the Gaborish filter is on.</summary>
+    public bool Gab { get; set; }
 
-    public bool GabCustom { get; private set; }
+    public bool GabCustom { get; set; }
 
-    public float GabXWeight1 { get; private set; }
+    public float GabXWeight1 { get; set; }
 
-    public float GabXWeight2 { get; private set; }
+    public float GabXWeight2 { get; set; }
 
-    public float GabYWeight1 { get; private set; }
+    public float GabYWeight1 { get; set; }
 
-    public float GabYWeight2 { get; private set; }
+    public float GabYWeight2 { get; set; }
 
-    public float GabBWeight1 { get; private set; }
+    public float GabBWeight1 { get; set; }
 
-    public float GabBWeight2 { get; private set; }
+    public float GabBWeight2 { get; set; }
 
-    /// <summary>Gets the number of EPF iterations, 0 to 3.</summary>
-    public uint EpfIters { get; private set; }
+    /// <summary>Gets or sets the number of EPF iterations, 0 to 3.</summary>
+    public uint EpfIters { get; set; }
 
-    public bool EpfSharpCustom { get; private set; }
+    public bool EpfSharpCustom { get; set; }
 
     public float[] EpfSharpLut { get; } = new float[EpfSharpEntries];
 
-    public bool EpfWeightCustom { get; private set; }
+    public bool EpfWeightCustom { get; set; }
 
     public float[] EpfChannelScale { get; } = new float[3];
 
-    public float EpfPass1Zeroflush { get; private set; }
+    public float EpfPass1Zeroflush { get; set; }
 
-    public float EpfPass2Zeroflush { get; private set; }
+    public float EpfPass2Zeroflush { get; set; }
 
-    public bool EpfSigmaCustom { get; private set; }
+    public bool EpfSigmaCustom { get; set; }
 
-    public float EpfQuantMul { get; private set; }
+    public float EpfQuantMul { get; set; }
 
-    public float EpfPass0SigmaScale { get; private set; }
+    public float EpfPass0SigmaScale { get; set; }
 
-    public float EpfPass2SigmaScale { get; private set; }
+    public float EpfPass2SigmaScale { get; set; }
 
-    public float EpfBorderSadMul { get; private set; }
+    public float EpfBorderSadMul { get; set; }
 
-    public float EpfSigmaForModular { get; private set; }
+    public float EpfSigmaForModular { get; set; }
 
-    public ulong Extensions { get; private set; }
+    public ulong Extensions { get; set; }
 
     /// <summary>Gets or sets a value indicating whether the frame is Modular, which is not serialized here.</summary>
     public bool NonserializedIsModular { get; set; }
