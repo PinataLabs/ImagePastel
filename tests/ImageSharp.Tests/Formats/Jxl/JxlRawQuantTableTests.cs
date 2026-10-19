@@ -1,7 +1,6 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -64,18 +63,6 @@ public class JxlRawQuantTableTests
 
         JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
-    }
-
-    // A JPEG coded in YCbCr transcodes to a YCbCr frame, which still throws: the YCbCr stage and chroma
-    // upsampling come with later D10 tickets. bench_oriented_brg is a 4:4:4 transcode whose DCT8 table is
-    // raw too.
-    [Fact]
-    public void Decode_YCbCrTranscode_IsNotSupported()
-    {
-        using FileStream stream = File.OpenRead(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Conformance", "bench_oriented_brg", "input.jxl"));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains("YCbCr", ex.Message, StringComparison.Ordinal);
     }
 
     private static Configuration CreateConfiguration()

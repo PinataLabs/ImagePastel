@@ -321,19 +321,15 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
         }
 
         bool accurate = this.fullImage.BitDepth >= 23;
-        int numColorPlanes = metadata.NumColorPlanes;
         int c = 0;
         if (this.doColor)
         {
             // libjxl copies a grey channel into all three colour channels (rgb_from_gray); this port
-            // renders grey as one plane (JxlImageMetadata.NumColorPlanes), so it is converted once. A
-            // grey image whose frame has a colour transform has three channels but one plane; libjxl
-            // allows it with YCbCr, which comes with a later slice.
+            // renders it as one plane, so it is converted once. A grey image whose frame has a colour
+            // transform codes three channels, which the pipeline is given as three planes.
             bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
-            if ((rgbFromGray ? 1 : 3) != numColorPlanes)
-            {
-                JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform on a grey image");
-            }
+            int numColorPlanes = rgbFromGray ? 1 : 3;
+            DebugGuard.IsTrue(numColorPlanes == pipeline.NumColorPlanes, "The pipeline has a plane for each colour channel");
 
             bool xyb = frameHeader.ColorTransform == JxlColorTransform.Xyb;
             bool fp = metadata.BitDepth.FloatingPointSample && !xyb;

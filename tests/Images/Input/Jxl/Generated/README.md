@@ -504,3 +504,22 @@ djxl jpeg_rgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy
 - The frame is VarDCT with no colour transform, because the JPEG's components are R, G and B. Its DC quantization factors are all 1/255, and its DCT8 quantization table is raw: before D10d, decoding it threw `NotSupportedException` ("RAW quantization tables") in the AC global section.
 - `djxl` decodes the frame to pixels; the `jbrd` box only matters when rebuilding the JPEG, which this decoder does not do.
 - The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlRawQuantTableTests` holds this file to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 8.4e-8 and the peak error 2.0e-6. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.
+
+#### How the YCbCr files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `modular_ycbcr.jxl` | A 67 x 45 8-bit Modular frame with the YCbCr colour transform, 4:4:4, written by `jxl_from_tree` from `modular_ycbcr.tree`. Cb, Y and Cr each vary across the image, so it checks the YCbCr stage (D10c) on its own, with no VarDCT and no chroma upsampling. | `External/ReferenceOutput/JxlDecoderTests/modular_ycbcr.npy` |
+| `modular_ycbcr_alpha.jxl` | The same kind of frame from `modular_ycbcr_alpha.tree`, 150 x 70 with alpha and 128 x 128 groups (`GroupShift 0`): two groups, and an extra channel that the YCbCr stage leaves alone. | `External/ReferenceOutput/JxlDecoderTests/modular_ycbcr_alpha.npy` |
+
+```sh
+jxl_from_tree modular_ycbcr.tree modular_ycbcr.jxl
+jxl_from_tree modular_ycbcr_alpha.tree modular_ycbcr_alpha.jxl
+djxl modular_ycbcr.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_ycbcr.npy
+djxl modular_ycbcr_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_ycbcr_alpha.npy
+```
+
+- The `CbYCr` token makes `jxl_from_tree` write a YCbCr frame, always 4:4:4. `cjxl` never writes Modular YCbCr: its YCbCr frames are JPEG transcodes, which are VarDCT.
+- The trees predict every sample exactly, so the files are 33 and 50 bytes. Channels 0, 1 and 2 are Cb, Y and Cr, and channel 3 is alpha. `Alpha` must come after `Width` and `Height` in a tree, or `jxl_from_tree` fails.
+- Cb and Cr are signed, so some samples convert to RGB below 0 or above 1. The planes are not clamped; `Image<TPixel>` clamps them.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 1.6e-8 and the peak error 1.2e-7. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.

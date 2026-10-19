@@ -224,8 +224,16 @@ internal sealed class JxlRenderPipeline : IDisposable
             // on each colour channel alone, so the first plane comes out the same. EPF mixes the colour
             // channels, so the loop filters run on all three before the drop; a Modular frame of such an
             // image is given three planes for them (RunNeighbourStages), and drops back to one here.
+            // A YCbCr frame mixes the colour channels too, so it keeps three planes through the colour
+            // transform and drops to its first plane, R, after it. JxlFrameDecoder.CheckSupported rejects
+            // the grey YCbCr frames that would need three planes earlier: patches and a save before the
+            // colour transform, as grey patches and reference slots hold one plane.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
-            this.DropToGreyIfGreyImage(metadata);
+            bool greyAfterColorTransform = frameHeader.ColorTransform == JxlColorTransform.YCbCr;
+            if (!greyAfterColorTransform)
+            {
+                this.DropToGreyIfGreyImage(metadata);
+            }
 
             if (patches != null)
             {
@@ -243,7 +251,11 @@ internal sealed class JxlRenderPipeline : IDisposable
             }
 
             this.RunNeighbourStages(afterPatches, cancellationToken);
-            this.DropToGreyIfGreyImage(metadata);
+            if (!greyAfterColorTransform)
+            {
+                this.DropToGreyIfGreyImage(metadata);
+            }
+
             foreach (JxlChannelShift shift in this.shifts)
             {
                 DebugGuard.IsTrue(shift.X == 0 && shift.Y == 0, "The neighbour stages upsample every channel to the frame size");
@@ -261,6 +273,11 @@ internal sealed class JxlRenderPipeline : IDisposable
                 {
                     stage.ProcessRow(this.planes, this.width, y);
                 }
+            }
+
+            if (greyAfterColorTransform)
+            {
+                this.DropToGreyIfGreyImage(metadata);
             }
 
             if (blending != null)
