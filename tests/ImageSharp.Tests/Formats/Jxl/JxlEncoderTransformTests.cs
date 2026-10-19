@@ -22,6 +22,10 @@ public class JxlEncoderTransformTests
     private const int IconSizeWithoutTransforms = 2981;
     private const int PhotoSizeWithoutTransforms = 129520;
 
+    // The size this encoder (feat/jxl-e1-review at 1d1002ced) writes for the full-range photo with its
+    // YCoCg step turned off, the only transform it takes there.
+    private const int FullRangePhotoSizeWithoutYCoCg = 140588;
+
     [Fact]
     public void Encode_EightColourIcon_WritesAGlobalPaletteOfEightColours()
     {
@@ -70,6 +74,24 @@ public class JxlEncoderTransformTests
         int size = JxlEncoderRoundTrip.Encode(image).Length;
 
         Assert.True(size < PhotoSizeWithoutTransforms, $"{size} bytes, E1b wrote {PhotoSizeWithoutTransforms}");
+    }
+
+    // The photo test above measures channel palettes and YCoCg together. In this crop neither the
+    // global palette nor a channel palette applies (the test checks that YCoCg is the only
+    // transform), so the whole gain over the size without YCoCg is YCoCg's.
+    [Fact]
+    public void Encode_FullRangePhoto_WritesOnlyYCoCgAndIsSmallerThanWithoutIt()
+    {
+        using Image<Rgb24> image = LoadFullRangePhoto();
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image);
+
+        JxlTransform rct = Assert.Single(JxlEncodedFrame.ReadGlobalTransforms(encoded));
+        Assert.Equal(JxlTransformId.Rct, rct.Id);
+        Assert.Equal(6u, rct.RctType);
+        Assert.True(encoded.Length < FullRangePhotoSizeWithoutYCoCg, $"{encoded.Length} bytes, {FullRangePhotoSizeWithoutYCoCg} without YCoCg");
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
 
     [Fact]
@@ -136,10 +158,15 @@ public class JxlEncoderTransformTests
     }
 
     // A photo in one group: the middle 384x244 of the conformance flower, which the jxl-oracle job also has.
-    private static Image<Rgb24> LoadPhoto()
+    private static Image<Rgb24> LoadPhoto() => LoadFlower(x => (x - 384) / 2, 384);
+
+    // Another photo in one group: the left 400x244 of the same flower.
+    private static Image<Rgb24> LoadFullRangePhoto() => LoadFlower(_ => 0, 400);
+
+    private static Image<Rgb24> LoadFlower(System.Func<int, int> left, int width)
     {
         Image<Rgb24> image = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), JxlConformanceVector.Load("lz77_flower").CommittedInputPath);
-        image.Mutate(x => x.Crop(new Rectangle((image.Width - 384) / 2, 0, 384, image.Height)));
+        image.Mutate(x => x.Crop(new Rectangle(left(image.Width), 0, width, image.Height)));
         image.Metadata.IccProfile = null;
         return image;
     }
