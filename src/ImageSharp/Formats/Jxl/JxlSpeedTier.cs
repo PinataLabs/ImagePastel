@@ -8,7 +8,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
 /// libjxl's encoder speed tiers, which its code branches on. libjxl's effort <c>e</c> is tier
-/// <c>10 - e</c>; <see cref="JxlEffort.Fastest"/> is effort 3, <see cref="Falcon"/>.
+/// <c>10 - e</c>; <see cref="JxlEffort.Fastest"/> is effort 3 (<see cref="Falcon"/>), <see cref="JxlEffort.Default"/>
+/// effort 5 (<see cref="Hare"/>) and <see cref="JxlEffort.Thorough"/> effort 7 (<see cref="Squirrel"/>).
 /// </summary>
 internal enum JxlSpeedTier
 {

@@ -12,9 +12,9 @@ internal enum JxlEffort
     /// <summary>The least search, as libjxl's effort 3 (<c>SpeedTier::kFalcon</c>).</summary>
     Fastest,
 
-    /// <summary>The usual trade-off between encode time and file size.</summary>
+    /// <summary>The usual trade-off between encode time and file size, as libjxl's effort 5 (<c>SpeedTier::kHare</c>).</summary>
     Default,
 
-    /// <summary>More search for smaller files.</summary>
+    /// <summary>More search for smaller files, as libjxl's effort 7 (<c>SpeedTier::kSquirrel</c>).</summary>
     Thorough,
 }
