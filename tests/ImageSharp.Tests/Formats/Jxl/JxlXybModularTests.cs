@@ -77,6 +77,27 @@ public class JxlXybModularTests
         Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
     }
 
+    // Measured: worst channel RMSE 4.2e-7, peak 3.8e-6.
+    [Fact]
+    public void DecodeToPlanes_DisplayP3_AdaptsTheOpsinMatrixToItsPrimaries()
+        => AssertPlanesMatchDjxl("xyb_modular_display_p3").Dispose();
+
+    // Measured: worst channel RMSE 8.2e-7, peak 7.2e-6.
+    [Fact]
+    public void DecodeToPlanes_IntensityTarget_ScalesToRelativeLuminance()
+        => AssertPlanesMatchDjxl("xyb_modular_intensity_target").Dispose();
+
+    [Fact]
+    public void DecodeToPlanes_BlendingWithAnIccProfile_IsInvalid()
+    {
+        // An XYB image with an ICC profile renders to linear sRGB, and libjxl does not blend there
+        // ("Blending in unsupported color space"); djxl fails on this file too.
+        using FileStream stream = File.OpenRead(InputPath("xyb_modular_icc_animation"));
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
+        Assert.Contains("unsupported color space", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DecodeToPlanes_GammaTransferFunction_IsNotSupported()
     {
