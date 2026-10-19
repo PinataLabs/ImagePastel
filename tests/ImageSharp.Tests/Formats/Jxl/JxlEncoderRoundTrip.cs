@@ -22,6 +22,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// </summary>
 internal static class JxlEncoderRoundTrip
 {
+    // Under code coverage, the largest pattern case that runs above Fastest: 64 x 64 pixels.
+    private const long MaxPixelsAboveFastestUnderCoverage = 4096;
+
     // The efforts every round-trip case runs at. Each E2 slice that adds an effort adds it here.
     private static readonly JxlEffort[] Efforts = { JxlEffort.Fastest, JxlEffort.Default, JxlEffort.Thorough };
 
@@ -100,6 +103,13 @@ internal static class JxlEncoderRoundTrip
     public static Task AssertRoundTripAsync(Reader reader, string effort, string pixelType, string pattern, int width, int height)
     {
         SkipMagickUnderCoverage(reader);
+
+        // Above Fastest, the instrumented tree learning makes each larger image take many seconds. The
+        // small cases run the same code paths, and JxlEncoderGroupTransformTests and
+        // JxlEncoderEffortTests cover the several-group paths of the higher efforts.
+        Assert.SkipWhen(
+            TestEnvironment.RunsWithCodeCoverage && effort != nameof(JxlEffort.Fastest) && (long)width * height > MaxPixelsAboveFastestUnderCoverage,
+            "Too slow under code coverage; the small cases cover the same code.");
         return JxlPixelTypes.Verify(pixelType, new PatternCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), pattern, width, height));
     }
 
@@ -113,11 +123,11 @@ internal static class JxlEncoderRoundTrip
     {
         SkipMagickUnderCoverage(reader);
 
-        // The largest 16-bit corpus image takes minutes at Thorough with coverage instrumentation; the
-        // test jobs without coverage still run it.
+        // The corpus photos take minutes above Fastest with coverage instrumentation, and the pattern
+        // cases cover the same code. The test jobs without coverage still run them.
         Assert.SkipWhen(
-            TestEnvironment.RunsWithCodeCoverage && effort == nameof(JxlEffort.Thorough) && file == TestImages.Tiff.Issues1716Rgb161616BitLittleEndian,
-            "Too slow under code coverage.");
+            TestEnvironment.RunsWithCodeCoverage && effort != nameof(JxlEffort.Fastest),
+            "Too slow under code coverage; the pattern cases cover the same code.");
         return JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), file));
     }
 
