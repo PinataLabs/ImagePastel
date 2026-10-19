@@ -21,13 +21,16 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// group is in, the stages run over the whole frame and the sink receives the planes.
 /// </summary>
 /// <remarks>
-/// Deliberate departures from libjxl: the planes carry no border, because no stage needs neighbours
-/// yet. Instead of the border, which in libjxl takes the whole 8x8 blocks that VarDCT writes past the
-/// right and bottom edges, the colour planes are padded to the frame's padded size. The stages, the
-/// reference slots and the sink are given the frame size, and the planes keep the padding past it.
-/// Stages are to run in place rather than allocate new planes each, as decided in issue #113. And the
-/// stages are fixed steps of <see cref="Finish"/> rather than a list built per frame, because the
-/// frames this port decodes need only the patches, save, colour-transform, blending and output stages.
+/// Deliberate departures from libjxl: the planes carry no border. Instead of the border, which in libjxl
+/// takes the whole 8x8 blocks that VarDCT writes past the right and bottom edges, the colour planes are
+/// padded to the frame's padded size. The stages, the reference slots and the sink are given the frame
+/// size, and the planes keep the padding past it. Only the loop-filter stages (Gaborish and EPF) read
+/// neighbouring pixels: they get them through <see cref="JxlNeighbourRows"/>, which mirrors the pixels
+/// past the frame edges in from inside the frame, as libjxl fills its border, so the padding is never
+/// read. Stages run in place, or ping-pong between two sets of planes where they read neighbours, rather
+/// than allocate new planes each, as decided in issue #113. And the stages are fixed steps of
+/// <see cref="Finish"/> rather than a list built per frame, because the frames this port decodes need
+/// only the loop-filter, patches, save, colour-transform, blending and output stages.
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
@@ -105,29 +108,38 @@ internal sealed class JxlRenderPipeline : IDisposable
     }
 
     /// <summary>
-    /// Runs the stages over the whole frame, in libjxl's order: the patches, the save before the colour
-    /// transform, the colour-transform stages, the blending, the save after blending, and the output.
-    /// Returns the frame to keep in its reference slot, if it can be referenced; the caller saves it once
-    /// the frame is done, as libjxl's <c>FinalizeFrame</c> does.
+    /// Runs the stages over the whole frame, in libjxl's order: the loop filters, the patches, the save
+    /// before the colour transform, the colour-transform stages, the blending, the save after blending,
+    /// and the output. Returns the frame to keep in its reference slot, if it can be referenced; the
+    /// caller saves it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
+    /// <param name="loopFilters">
+    /// The loop-filter stages (<see cref="JxlLoopFilterStages.Create"/>), in the order they run: Gaborish,
+    /// then the EPF passes. Possibly none.
+    /// </param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
     /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
-    /// <param name="cancellationToken">The cancellation token, checked on each row of the patches.</param>
+    /// <param name="cancellationToken">The cancellation token, checked on each row of the loop filters and the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, JxlPatchesStage patches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] loopFilters, JxlPatchesStage patches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
         try
         {
+            // The loop-filter slot: libjxl adds Gaborish and the EPF passes after the chroma upsampling,
+            // which comes in D10, and before the patches.
+            this.RunLoopFilters(loopFilters, cancellationToken);
+
             // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
             // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its patches,
             // reference frames and blending. So the frame drops to grey before them, where libjxl keeps
-            // three planes to the output, which takes the first. Every stage before the output works on
-            // each colour channel alone, so the first plane comes out the same.
+            // three planes to the output, which takes the first. Every stage from here to the output works
+            // on each colour channel alone, so the first plane comes out the same. EPF mixes the colour
+            // channels, so the loop filters run on all three before the drop.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
             if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
             {
@@ -193,6 +205,59 @@ internal sealed class JxlRenderPipeline : IDisposable
     }
 
     public void Dispose() => this.DisposePlanes();
+
+    // SimpleRenderPipeline::ProcessBuffers for stages with kInOut channels: each stage reads the planes,
+    // with its border mirrored in at the frame edges, and writes a second set, which then takes their
+    // place. The planes it replaced are the next stage's output, so two sets ping-pong.
+    private void RunLoopFilters(IJxlLoopFilterStage[] loopFilters, CancellationToken cancellationToken)
+    {
+        if (loopFilters.Length == 0)
+        {
+            return;
+        }
+
+        Buffer2D<float>[] spare = new Buffer2D<float>[this.planes.Length];
+        try
+        {
+            foreach (IJxlLoopFilterStage stage in loopFilters)
+            {
+                Buffer2D<float>[] output = new Buffer2D<float>[this.planes.Length];
+                for (int c = 0; c < this.planes.Length; c++)
+                {
+                    if (stage.ChangesChannel(c))
+                    {
+                        // The same size as the plane it replaces. The stages write only the frame, so
+                        // the padding past it holds whatever the plane held before; nothing reads it.
+                        spare[c] ??= this.allocator.Allocate2D<float>(this.planes[c].Width, this.planes[c].Height, AllocationOptions.Clean);
+                        output[c] = spare[c];
+                    }
+                }
+
+                using (JxlNeighbourRows input = new(this.allocator, this.planes, stage, this.width, this.height))
+                {
+                    for (int y = 0; y < this.height; y++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        input.MoveTo(y);
+                        stage.ProcessRow(input, output, this.width, y);
+                    }
+                }
+
+                for (int c = 0; c < this.planes.Length; c++)
+                {
+                    if (output[c] != null)
+                    {
+                        spare[c] = this.planes[c];
+                        this.planes[c] = output[c];
+                    }
+                }
+            }
+        }
+        finally
+        {
+            JxlPlanes.DisposeAll(spare);
+        }
+    }
 
     // The blending stage, then SimpleRenderPipeline's switch to the image dimensions: the frame rows
     // are blended in place, the image-sized planes are filled from the background, and the part of

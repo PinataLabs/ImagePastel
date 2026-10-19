@@ -164,8 +164,8 @@ public class JxlXybVarDctTests
     // Identity and AFV blocks (D9f). The others are the 64 x 64 image with one of the features of a later
     // slice each.
     [Theory]
-    [InlineData("vardct_xyb_e7", "Loop filters")]
     [InlineData("vardct_xyb_gaborish", "Loop filters")]
+    [InlineData("vardct_xyb_e7", "Loop filters")]
     [InlineData("vardct_xyb_epf", "Loop filters")]
     [InlineData("vardct_xyb_identity_afv", "AC strategy")]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
