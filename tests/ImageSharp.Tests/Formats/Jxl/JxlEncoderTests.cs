@@ -175,17 +175,6 @@ public class JxlEncoderTests
     }
 
     [Fact]
-    public void Encode_UnsupportedPixelType_ThrowsNotSupportedNamingE1d()
-    {
-        using Image<Rgba32> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, JxlEncoderRoundTrip.LosslessFastest));
-
-        Assert.Contains("E1d", ex.Message);
-    }
-
-    [Fact]
     public void Encoder_Defaults_AreDistanceOneAndEffortDefault()
     {
         JxlEncoder encoder = new();

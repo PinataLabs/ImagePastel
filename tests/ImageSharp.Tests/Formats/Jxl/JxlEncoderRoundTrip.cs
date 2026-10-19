@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,6 +61,13 @@ internal static class JxlEncoderRoundTrip
         {
             nameof(L8) => RunAsync<L8>(reader, pattern, width, height),
             nameof(Rgb24) => RunAsync<Rgb24>(reader, pattern, width, height),
+            nameof(L16) => RunAsync<L16>(reader, pattern, width, height),
+            nameof(La16) => RunAsync<La16>(reader, pattern, width, height),
+            nameof(La32) => RunAsync<La32>(reader, pattern, width, height),
+            nameof(Rgb48) => RunAsync<Rgb48>(reader, pattern, width, height),
+            nameof(Rgba32) => RunAsync<Rgba32>(reader, pattern, width, height),
+            nameof(Rgba64) => RunAsync<Rgba64>(reader, pattern, width, height),
+            nameof(RgbaVector) => RunAsync<RgbaVector>(reader, pattern, width, height),
             _ => throw new ArgumentException($"No round trip for {pixelType}", nameof(pixelType)),
         };
 
@@ -73,6 +81,10 @@ internal static class JxlEncoderRoundTrip
         {
             nameof(L8) => RunCorpusAsync<L8>(reader, file),
             nameof(Rgb24) => RunCorpusAsync<Rgb24>(reader, file),
+            nameof(L16) => RunCorpusAsync<L16>(reader, file),
+            nameof(La32) => RunCorpusAsync<La32>(reader, file),
+            nameof(Rgb48) => RunCorpusAsync<Rgb48>(reader, file),
+            nameof(Rgba64) => RunCorpusAsync<Rgba64>(reader, file),
             _ => throw new ArgumentException($"No corpus round trip for {pixelType}", nameof(pixelType)),
         };
 
@@ -89,9 +101,14 @@ internal static class JxlEncoderRoundTrip
         new Rgba64(2570, 2570, 5140, ushort.MaxValue),
     };
 
+    // The alpha of each icon colour in the translucent-icon pattern, so that it still has eight colours.
+    private static readonly ushort[] IconAlphas = { 0, 65535, 257 * 64, 257 * 128, 257 * 32, 257 * 192, 257 * 16, 257 * 240 };
+
     /// <summary>
     /// Creates a deterministic test image: <c>solid</c> (one colour), <c>gradient</c> (a different ramp in
-    /// each channel), <c>noise</c> (fixed-seed random samples) or <c>icon</c> (eight colours in 8x8 blocks).
+    /// each channel), <c>noise</c> (fixed-seed random samples), <c>icon</c> (eight colours in 8x8 blocks),
+    /// <c>translucent</c> (the gradient, with random alpha that is 0 or 65535 in places) or
+    /// <c>translucent-icon</c> (the icon, with a different alpha for each colour, 0 and 65535 included).
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="pattern">The pattern.</param>
@@ -117,6 +134,12 @@ internal static class JxlEncoderRoundTrip
                         ushort.MaxValue),
                     "noise" => new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), ushort.MaxValue),
                     "icon" => IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length],
+                    "translucent-icon" => WithAlpha(IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length], IconAlphas[((x / 8) + (3 * (y / 8))) % IconAlphas.Length]),
+                    "translucent" => new Rgba64(
+                        (ushort)(x * 65535 / Math.Max(1, width - 1)),
+                        (ushort)(y * 65535 / Math.Max(1, height - 1)),
+                        (ushort)((x + y) * 65535 / Math.Max(1, width + height - 2)),
+                        (ushort)((x % 7) switch { 0 => 0, 1 => 65535, _ => random.Next(65536) })),
                     _ => throw new ArgumentException($"Unknown pattern {pattern}", nameof(pattern)),
                 };
 
@@ -160,6 +183,7 @@ internal static class JxlEncoderRoundTrip
         AddSingleGroup8BitCases(cases);
         AddMultiGroup8BitCases(cases);
         AddPrefixCodeCases(cases);
+        AddSampleFormatCases(cases);
         AddTransformCases(cases);
         return cases;
     }
@@ -235,6 +259,7 @@ internal static class JxlEncoderRoundTrip
     {
         TheoryData<string, string> cases = new();
         AddCorpus8BitCases(cases);
+        AddCorpus16BitCases(cases);
         return cases;
     }
 
@@ -250,6 +275,51 @@ internal static class JxlEncoderRoundTrip
         cases.Add(TestImages.Tiff.Calliphora_GrayscaleUncompressed, nameof(L8));
         cases.Add(TestImages.Tiff.FlowerRgb888Contiguous, nameof(Rgb24));
         cases.Add(TestImages.Tiff.Flower8BitGray, nameof(L8));
+    }
+
+    // E1d: 16-bit grey, grey with alpha, RGB and RGBA repo PNGs and TIFFs. rgb-48bpp.png is 896x896, so
+    // it also crosses group boundaries; rgb-16-tRNS.png has its alpha from a tRNS colour.
+    private static void AddCorpus16BitCases(TheoryData<string, string> cases)
+    {
+        cases.Add(TestImages.Png.L16Bit, nameof(L16));
+        cases.Add(TestImages.Png.GrayAlpha16Bit, nameof(La32));
+        cases.Add(TestImages.Png.Rgb48Bpp, nameof(Rgb48));
+        cases.Add(TestImages.Png.Rgb48BppTrans, nameof(Rgba64));
+        cases.Add(TestImages.Png.Rgba64Bpp, nameof(Rgba64));
+        cases.Add(TestImages.Tiff.Flower16BitGray, nameof(L16));
+        cases.Add(TestImages.Tiff.FlowerRgb161616Contiguous, nameof(Rgb48));
+        cases.Add(TestImages.Tiff.Issues1716Rgb161616BitLittleEndian, nameof(Rgb48));
+        cases.Add(TestImages.Tiff.Rgba16BitUnassociatedAlphaLittleEndian, nameof(Rgba64));
+    }
+
+    // E1d: 16-bit, float32 and alpha, grey and colour, each pattern at 1x1 and an odd size, and the
+    // translucent pattern filling the largest default group.
+    private static void AddSampleFormatCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pixelType in new[] { nameof(L16), nameof(La16), nameof(La32), nameof(Rgb48), nameof(Rgba32), nameof(Rgba64), nameof(RgbaVector) })
+        {
+            foreach (string pattern in new[] { "solid", "gradient", "noise", "translucent" })
+            {
+                foreach ((int width, int height) in new[] { (1, 1), (17, 23) })
+                {
+                    cases.Add(pixelType, pattern, width, height);
+                }
+            }
+
+            cases.Add(pixelType, "translucent", 256, 256);
+        }
+
+        // E1e's palette with alpha: the palette covers the alpha channel too.
+        foreach (string pixelType in new[] { nameof(La16), nameof(Rgba32), nameof(Rgba64) })
+        {
+            cases.Add(pixelType, "translucent-icon", 64, 64);
+        }
+    }
+
+    private static Rgba64 WithAlpha(Rgba64 colour, ushort alpha)
+    {
+        colour.A = alpha;
+        return colour;
     }
 
     private static async Task RunCorpusAsync<TPixel>(Reader reader, string file)
@@ -301,6 +371,41 @@ internal static class JxlEncoderRoundTrip
     {
         using Image<TPixel> actual = Image.Load<TPixel>(CreateConfiguration(), encoded);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
+        if (expected is Image<RgbaVector> expectedFloats)
+        {
+            // ImageComparer compares at 16 bits, so float samples are also compared bit for bit.
+            AssertFloatBitsEqual(expectedFloats, encoded);
+        }
+    }
+
+    /// <summary>
+    /// Decodes <paramref name="encoded"/> to unclamped float planes and checks that each sample has the bit
+    /// pattern of the matching sample of <paramref name="expected"/>, alpha included.
+    /// </summary>
+    /// <param name="expected">The image that was encoded.</param>
+    /// <param name="encoded">The codestream.</param>
+    public static void AssertFloatBitsEqual(Image<RgbaVector> expected, byte[] encoded)
+    {
+        using MemoryStream stream = new(encoded);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        IReadOnlyList<SixLabors.ImageSharp.Memory.Buffer2D<float>> planes = decoded.Frames[0].Planes;
+        Assert.Equal(4, planes.Count);
+        for (int y = 0; y < expected.Height; y++)
+        {
+            for (int x = 0; x < expected.Width; x++)
+            {
+                RgbaVector e = expected[x, y];
+                float[] samples = { e.R, e.G, e.B, e.A };
+                for (int c = 0; c < 4; c++)
+                {
+                    int actualBits = BitConverter.SingleToInt32Bits(planes[c].DangerousGetRowSpan(y)[x]);
+                    if (BitConverter.SingleToInt32Bits(samples[c]) != actualBits)
+                    {
+                        Assert.Fail($"Channel {c} at ({x}, {y}): expected {samples[c]:R}, got {BitConverter.Int32BitsToSingle(actualBits):R}.");
+                    }
+                }
+            }
+        }
     }
 
     public static void AssertMagickExact<TPixel>(Image<TPixel> expected, byte[] encoded)
@@ -327,8 +432,14 @@ internal static class JxlEncoderRoundTrip
         await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
 
         await JxlTools.RunAsync("djxl", cancellationToken, jxlPath, pngPath);
+        if (typeof(TPixel) == typeof(RgbaVector))
+        {
+            // djxl writes float samples to a PNG at 16 bits, so only its acceptance of the file is checked.
+            return;
+        }
 
-        // ImageSharp's own PNG decoder reads djxl's output; djxl writes 8-bit PNGs for 8-bit input.
+        // ImageSharp's own PNG decoder reads djxl's output; djxl writes 8-bit PNGs for 8-bit input and
+        // 16-bit PNGs for 9 to 16 bits.
         using Image<TPixel> actual = Image.Load<TPixel>(pngPath);
         ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
