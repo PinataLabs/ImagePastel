@@ -10,6 +10,7 @@
 using System;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
@@ -32,7 +33,7 @@ internal sealed class JxlRenderPipeline : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
-    private readonly int numColorPlanes;
+    private int numColorPlanes;
     private Buffer2D<float>[] planes;
     private int width;
     private int height;
@@ -44,7 +45,10 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// </summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="frameDim">The frame dimensions.</param>
-    /// <param name="numColorPlanes">The number of colour planes (<see cref="Headers.JxlImageMetadata.NumColorPlanes"/>).</param>
+    /// <param name="numColorPlanes">
+    /// The number of colour planes: <see cref="Headers.JxlImageMetadata.NumColorPlanes"/>, or three for a
+    /// VarDCT frame, which always codes three.
+    /// </param>
     /// <param name="numExtraChannels">The number of extra channels.</param>
     public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, int numExtraChannels)
     {
@@ -73,6 +77,9 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     /// <summary>Gets the number of channels.</summary>
     public int NumChannels => this.planes.Length;
+
+    /// <summary>Gets the number of colour planes, which come before the extra channels.</summary>
+    public int NumColorPlanes => this.numColorPlanes;
 
     /// <summary>
     /// Returns the plane of channel <paramref name="c"/>. A colour plane may be larger than the frame:
@@ -116,6 +123,17 @@ internal sealed class JxlRenderPipeline : IDisposable
         JxlReferenceFrame saved = null;
         try
         {
+            // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
+            // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its patches,
+            // reference frames and blending. So the frame drops to grey before them, where libjxl keeps
+            // three planes to the output, which takes the first. Every stage before the output works on
+            // each colour channel alone, so the first plane comes out the same.
+            JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
+            if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
+            {
+                this.DropToGrey();
+            }
+
             if (patches != null)
             {
                 // One row may take every patch of the frame, so cancellation is checked row by row.
@@ -156,7 +174,7 @@ internal sealed class JxlRenderPipeline : IDisposable
 
             // The output of a grey image takes the first colour channel: an XYB grey image has three
             // equal colour planes until here, as libjxl's pipeline always has, and its sink gets one.
-            if (sink != null && this.numColorPlanes == 3 && frameHeader.NonserializedMetadata.M.NumOutputColorPlanes == 1)
+            if (sink != null && this.numColorPlanes == 3 && metadata.NumOutputColorPlanes == 1)
             {
                 this.DropToGrey();
             }
@@ -291,6 +309,7 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes[1].Dispose();
         this.planes[2].Dispose();
         this.planes = grey;
+        this.numColorPlanes = 1;
     }
 
     // WriteToImageBundleStage into frame_storage_for_referencing.

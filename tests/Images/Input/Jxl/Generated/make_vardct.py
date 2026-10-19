@@ -5,6 +5,8 @@
 #   vardct_small.png    64 x 48 8-bit RGB: one group, so the frame is a single section
 #   vardct_groups.png   280 x 72 8-bit RGB: two groups, wide enough for a custom coefficient order
 #   vardct_alpha.png    72 x 56 8-bit RGBA: the alpha is an extra channel in the Modular stream
+#   vardct_grey.png     70 x 50 8-bit grey: the frame still codes three colour planes
+#   vardct_grey_alpha.png  70 x 50 8-bit grey and alpha; neither side is a multiple of 8
 # The patterns mix smooth gradients, hard edges and fine texture, so every DCT frequency has
 # something to code.
 
@@ -25,6 +27,17 @@ def rgba8(x, y, width, height):
     return r, g, b, a
 
 
+def grey8(x, y, width, height):
+    r, g, b = rgb8(x, y, width, height)
+    return ((r * 2 + g * 5 + b) // 8,)
+
+
+def grey_alpha8(x, y, width, height):
+    (v,) = grey8(x, y, width, height)
+    a = 255 if (x - 35) ** 2 + (y - 25) ** 2 < 18 ** 2 else (x * 3 + y) & 0xFF
+    return v, a
+
+
 def write_png(path, colour_type, fmt, pixel, width, height):
     rows = b""
     for y in range(height):
@@ -41,3 +54,5 @@ def write_png(path, colour_type, fmt, pixel, width, height):
 write_png("vardct_small.png", 2, ">3B", rgb8, 64, 48)
 write_png("vardct_groups.png", 2, ">3B", rgb8, 280, 72)
 write_png("vardct_alpha.png", 6, ">4B", rgba8, 72, 56)
+write_png("vardct_grey.png", 0, ">B", grey8, 70, 50)
+write_png("vardct_grey_alpha.png", 4, ">2B", grey_alpha8, 70, 50)

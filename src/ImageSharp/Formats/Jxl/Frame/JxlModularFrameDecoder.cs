@@ -425,7 +425,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             for (int y = 0; y < r.YSize; y++)
             {
                 ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
-                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, numColorPlanes + ec, r, y));
+                ConvertRow(rowIn, fp, bits, expBits, factor, accurate, OutRow(pipeline, pipeline.NumColorPlanes + ec, r, y));
             }
         }
     }

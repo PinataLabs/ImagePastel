@@ -36,6 +36,8 @@ public class JxlVarDctTests
     [InlineData("vardct_small")] // RMSE 8.1e-8, peak 3.6e-7
     [InlineData("vardct_groups")] // RMSE 8.3e-8, peak 4.2e-7
     [InlineData("vardct_alpha")] // RMSE 8.1e-8, peak 4.2e-7
+    [InlineData("vardct_grey")] // RMSE 6.4e-8, peak 3.0e-7
+    [InlineData("vardct_grey_alpha")] // RMSE 6.4e-8, peak 3.0e-7
     public void DecodeToPlanes_MatchesDjxl(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -58,6 +60,28 @@ public class JxlVarDctTests
 
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
+
+        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
+        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+    }
+
+    // A grey image that is not XYB still codes three colour planes in a VarDCT frame, as libjxl's
+    // always do; the output has one. Neither side of these is a multiple of 8.
+    [Theory]
+    [InlineData("vardct_grey", 1)]
+    [InlineData("vardct_grey_alpha", 2)]
+    public void Load_Grey_IsWithinOneStepOfTheClampedReference(string name, int channels)
+    {
+        byte[] codestream = File.ReadAllBytes(InputPath(name));
+        JxlFrameHeader frameHeader = JxlTestLayers.ReadFirstFrameHeader(codestream);
+        Assert.Equal(JxlFrameEncoding.VarDct, frameHeader.Encoding);
+        Assert.False(frameHeader.NonserializedMetadata.M.XybEncoded);
+
+        NpyArray expected = LoadReference(name);
+        Assert.Equal(channels, expected.Shape[3]);
+
+        using Image<La16> image = Image.Load<La16>(CreateConfiguration(), codestream);
+        NpyArray actual = JxlConformanceImages.ToNpy(image, channels);
 
         JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");

@@ -31,6 +31,8 @@ These files cover features that no conformance vector checks. They were made for
 | `vardct_small.jxl` | Lossy VarDCT, 64 x 48 8-bit RGB with no XYB: every block DCT8, no Gaborish, no EPF, one-band parametric quant tables. One group, so the frame is a single section. | `External/ReferenceOutput/JxlDecoderTests/vardct_small.npy`, float32 |
 | `vardct_groups.jxl` | The same kind of frame, 280 x 72: two groups, each in its own section, and a custom DCT8 coefficient order. | `External/ReferenceOutput/JxlDecoderTests/vardct_groups.npy` |
 | `vardct_alpha.jxl` | The same kind of frame, 72 x 56 8-bit RGBA: the alpha is a Modular extra channel beside the VarDCT colour. | `External/ReferenceOutput/JxlDecoderTests/vardct_alpha.npy` |
+| `vardct_grey.jxl` | The same kind of frame, 70 x 50 8-bit grey. A VarDCT frame codes three colour planes even for grey, and the output has one. Neither side is a multiple of 8. | `External/ReferenceOutput/JxlDecoderTests/vardct_grey.npy`, one channel |
+| `vardct_grey_alpha.jxl` | The same kind of frame, 70 x 50 8-bit grey with alpha: the alpha is a Modular extra channel after the three VarDCT colour planes. | `External/ReferenceOutput/JxlDecoderTests/vardct_grey_alpha.npy`, two channels |
 | `vardct_strategies.jxl` | The image of `vardct_small.jxl` at a slower effort, which also uses 4x8 and 16x32 blocks: the decoder rejects every strategy but DCT8 until D9. | None: it must throw `NotSupportedException` |
 | `vardct_xyb.jxl` | Lossy VarDCT of the same image with XYB (`cjxl -e 2`). It decodes since D8d; the `vardct_xyb_*` files below check XYB VarDCT output. | None: it must decode |
 
@@ -209,21 +211,27 @@ py -3 make_vardct.py
 benchmark_xl --input=vardct_small.png --codec=jxl:thunder:d1:gab0:epf0:noperc --save_compressed --output_dir=out
 benchmark_xl --input=vardct_groups.png --codec=jxl:thunder:d1:gab0:epf0:noperc --save_compressed --output_dir=out
 benchmark_xl --input=vardct_alpha.png --codec=jxl:thunder:d1:gab0:epf0:noperc --save_compressed --output_dir=out
+benchmark_xl --input=vardct_grey.png --codec=jxl:thunder:d1:gab0:epf0:noperc --save_compressed --output_dir=out
+benchmark_xl --input=vardct_grey_alpha.png --codec=jxl:thunder:d1:gab0:epf0:noperc --save_compressed --output_dir=out
 benchmark_xl --input=vardct_small.png --codec=jxl:wombat:d1:gab0:epf0:noperc --save_compressed --output_dir=out
 mv out/vardct_small.png.noperc.epf0.gab0.d1.thunder.jxl vardct_small.jxl
 mv out/vardct_groups.png.noperc.epf0.gab0.d1.thunder.jxl vardct_groups.jxl
 mv out/vardct_alpha.png.noperc.epf0.gab0.d1.thunder.jxl vardct_alpha.jxl
+mv out/vardct_grey.png.noperc.epf0.gab0.d1.thunder.jxl vardct_grey.jxl
+mv out/vardct_grey_alpha.png.noperc.epf0.gab0.d1.thunder.jxl vardct_grey_alpha.jxl
 mv out/vardct_small.png.noperc.epf0.gab0.d1.wombat.jxl vardct_strategies.jxl
 cjxl vardct_small.png vardct_xyb.jxl -e 2 --gaborish=0 --epf=0
 djxl vardct_small.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_small.npy
 djxl vardct_groups.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_groups.npy
 djxl vardct_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_alpha.npy
+djxl vardct_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_grey.npy
+djxl vardct_grey_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_grey_alpha.npy
 ```
 
 - `make_vardct.py` writes the source PNGs. They are not committed; the script makes them again.
 - `benchmark_xl` is from the same v0.12.0 release as `cjxl`. `noperc` (`disable_perceptual_optimizations`) turns XYB off and codes every quant table as parametric DCT with one distance band, which needs no `FastPowf`. `thunder` is effort 2, where every block is DCT8 and the quant field is constant. `gab0` and `epf0` turn the loop filters off.
 - `benchmark_xl --print_more_stats` counts 7 4x8 blocks and 2 16x32 blocks in `vardct_strategies.jxl`.
-- The VarDCT output cannot match `djxl` bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"). Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 8.1e-8 (`vardct_small`), 8.3e-8 (`vardct_groups`) and 8.1e-8 (`vardct_alpha`), and the peak error 3.6e-7, 4.2e-7 and 4.2e-7.
+- The VarDCT output cannot match `djxl` bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"). Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 8.1e-8 (`vardct_small`), 8.3e-8 (`vardct_groups`), 8.1e-8 (`vardct_alpha`) and 6.4e-8 (`vardct_grey`, `vardct_grey_alpha`), and the peak error 3.6e-7, 4.2e-7, 4.2e-7 and 3.0e-7.
 
 #### How the XYB VarDCT files were made
 

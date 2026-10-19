@@ -110,7 +110,10 @@ internal sealed class JxlFrameDecoder
         // InitFrame resets the dequantization matrices to their defaults for each frame.
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes, this.metadata.M.NumExtraChannels);
+
+        // A VarDCT frame always codes three colour planes, grey or not, as libjxl's.
+        int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct ? 3 : this.metadata.M.NumColorPlanes;
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, this.metadata.M.NumExtraChannels);
         JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(frameHeader, frameDim, matrices) : null;
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
