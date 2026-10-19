@@ -130,20 +130,27 @@ internal static class JxlLossyComparer
     /// <summary>The largest RMSE of any channel.</summary>
     public const double RmsError = 1e-4;
 
+    /// <summary>
+    /// The largest RMSE of any channel for a frame transcoded from a JPEG: the JPEG conformance vectors
+    /// allow ten times less than the general rule.
+    /// </summary>
+    public const double JpegRmsError = 1e-5;
+
     /// <summary>The largest error of any sample.</summary>
     public const double PeakError = 4e-3;
 
     /// <summary>Asserts that every frame is within the lossy thresholds, and returns the measured errors.</summary>
     /// <param name="expected">The djxl output.</param>
     /// <param name="actual">The decoded output.</param>
+    /// <param name="rmsError">The largest RMSE of any channel.</param>
     /// <returns>The measured error of each frame.</returns>
-    public static JxlConformanceFrameResult[] AssertWithinThresholds(NpyArray expected, NpyArray actual)
+    public static JxlConformanceFrameResult[] AssertWithinThresholds(NpyArray expected, NpyArray actual, double rmsError = RmsError)
     {
         JxlConformanceFrameResult[] results = JxlConformanceComparer.Measure(expected, actual);
         foreach (JxlConformanceFrameResult result in results)
         {
             TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: worst channel RMSE {result.WorstChannelRmse:G3}, peak {result.PeakError:G3}");
-            Assert.True(result.WorstChannelRmse <= RmsError, $"Frame {result.Frame}: RMSE {result.WorstChannelRmse:G6} > {RmsError}");
+            Assert.True(result.WorstChannelRmse <= rmsError, $"Frame {result.Frame}: RMSE {result.WorstChannelRmse:G6} > {rmsError}");
             Assert.True(result.PeakError <= PeakError, $"Frame {result.Frame}: peak error {result.PeakError:G6} > {PeakError}");
         }
 

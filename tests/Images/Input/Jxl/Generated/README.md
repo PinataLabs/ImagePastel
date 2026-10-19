@@ -36,6 +36,7 @@ These files cover features that no conformance vector checks. They were made for
 | `vardct_strategies.jxl` | The image of `vardct_small.jxl` at a slower effort, which also uses 4x8, 8x4 and 32x32 blocks with one-band parametric quant tables at their sizes (D9e). | `External/ReferenceOutput/JxlDecoderTests/vardct_strategies.npy` |
 | `vardct_identity_afv.jxl` | `Png/bike-small.png`, 288 x 163 8-bit RGBA, at effort 7 with no XYB: every kind of block up to 32x32, Identity and AFV0 to AFV3 among them (D9f), an adaptive quant field and non-zero chroma-from-luma maps. Two groups. | `External/ReferenceOutput/JxlDecoderTests/vardct_identity_afv.npy` |
 | `vardct_xyb.jxl` | Lossy VarDCT of the same image with XYB (`cjxl -e 2`). It decodes since D8d; the `vardct_xyb_*` files below check XYB VarDCT output. | None: it must decode |
+| `jpeg_rgb.jxl` | `cjxl`'s lossless transcode of `Jpg/baseline/jpeg-rgb.jpg`, a 200 x 200 baseline JPEG coded in RGB (Adobe transform 0). An RGB JPEG transcodes to a VarDCT frame with no colour transform and no chroma subsampling, so it checks the raw quantization tables (D10d) on their own: the DCT8 table is raw, and the others come from the library. One group; the frame has the skip-adaptive-DC-smoothing flag and no loop filters. | `External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy` |
 | `twelve_bit.jxl` | Lossless Modular, 45 x 33 12-bit RGBA: ramps and noise, with alpha 0, 4095 and noise in turn. The encoder tests decode it, encode it again and check that it stays 12-bit with the same samples. | `External/ReferenceOutput/JxlDecoderTests/twelve_bit.png` (16-bit) |
 
 #### How `premultiplied_alpha` was made
@@ -446,3 +447,15 @@ djxl twelve_bit.jxl ../../../External/ReferenceOutput/JxlDecoderTests/twelve_bit
 
 - `make_twelve_bit.py` writes `twelve_bit_source.png`, a 16-bit PNG whose samples are 12-bit values scaled to 16 bits, with an `sBIT` chunk of 12. The source PNG is not committed; the script makes it again.
 - `--override_bitdepth=12` stores 12 bits per sample, for alpha too; `jxlinfo` reports "12-bit RGB+Alpha".
+
+#### How `jpeg_rgb` was made
+
+```sh
+cjxl ../../Jpg/baseline/jpeg-rgb.jpg jpeg_rgb.jxl
+djxl jpeg_rgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy
+```
+
+- Given a JPEG, `cjxl` transcodes it losslessly by default (`--lossless_jpeg=1`), at effort 7. It writes a container with a `jbrd` box, which holds what is needed to rebuild the JPEG, between two `jxlp` boxes.
+- The frame is VarDCT with no colour transform, because the JPEG's components are R, G and B. Its DC quantization factors are all 1/255, and its DCT8 quantization table is raw: before D10d, decoding it threw `NotSupportedException` ("RAW quantization tables") in the AC global section.
+- `djxl` decodes the frame to pixels; the `jbrd` box only matters when rebuilding the JPEG, which this decoder does not do.
+- The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlRawQuantTableTests` holds this file to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 8.4e-8 and the peak error 2.0e-6. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.

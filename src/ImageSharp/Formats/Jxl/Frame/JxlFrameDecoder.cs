@@ -284,7 +284,7 @@ internal sealed class JxlFrameDecoder
         varDct?.InitForAc(numPasses);
 
         // ProcessACGlobal reads only VarDCT data: nothing for a Modular frame.
-        varDct?.ProcessAcGlobal(AcGlobal(), numPasses);
+        varDct?.ProcessAcGlobal(AcGlobal(), numPasses, modularFrameDecoder);
 
         for (long g = 0; g < numGroups; g++)
         {

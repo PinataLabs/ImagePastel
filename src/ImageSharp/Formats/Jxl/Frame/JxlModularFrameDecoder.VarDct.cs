@@ -1,24 +1,26 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/dec_modular.cc (ModularFrameDecoder: DecodeVarDCTDC, DecodeAcMetadata), with
+// lib/jxl/dec_modular.cc (ModularFrameDecoder: DecodeVarDCTDC, DecodeAcMetadata, DecodeQuantTable), with
 // ConvertPlaneAndClamp from lib/jxl/image_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <content>
-/// The VarDCT streams of the DC groups, which use the global MA tree and histograms: the DC, and the
-/// AC metadata.
+/// The VarDCT streams that use the global MA tree and histograms: the DC and the AC metadata of the DC
+/// groups, and the raw quantization tables of the AC global section.
 /// </content>
 internal sealed partial class JxlModularFrameDecoder
 {
     private const int EpfSharpEntries = 8;
+    private const float AlmostZero = 1e-8f;
 
     /// <summary>
     /// Reads the VarDCT DC of one DC group: the extra-precision bits, then the Y, X and B channels,
@@ -150,6 +152,49 @@ internal sealed partial class JxlModularFrameDecoder
         }
 
         state.UsedAcs |= localUsedAcs;
+    }
+
+    /// <summary>
+    /// Reads a raw quantization table: its F16 denominator, then its entries as a Modular stream of three
+    /// channels that uses the frame's global tree, histograms and context map.
+    /// </summary>
+    /// <param name="requiredSizeX">The width of the table in coefficients.</param>
+    /// <param name="requiredSizeY">The height of the table in coefficients.</param>
+    /// <param name="br">The reader.</param>
+    /// <param name="encoding">The encoding to fill.</param>
+    /// <param name="idx">The table, which gives the stream id.</param>
+    public void DecodeQuantTable(int requiredSizeX, int requiredSizeY, JxlBitReader br, JxlQuantEncoding encoding, int idx)
+    {
+        encoding.QTableDen = JxlFieldCoders.ReadF16OrThrow(br);
+        if (encoding.QTableDen < AlmostZero)
+        {
+            // qtable[] values are already checked for <= 0 so the denominator may not be negative.
+            JxlThrowHelper.ThrowInvalidImageContentException("Invalid qtable_den: value too small");
+        }
+
+        using JxlModularImage image = JxlModularImage.Create(this.allocator, requiredSizeX, requiredSizeY, 8, 3);
+        JxlModularOptions options = new();
+        long streamId = JxlModularStreamId.QuantTable(this.frameDim, idx);
+        JxlModularDecoder.ModularGenericDecompress(br, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
+
+        int[] qtable = new int[requiredSizeX * requiredSizeY * 3];
+        for (int c = 0; c < 3; c++)
+        {
+            for (int y = 0; y < requiredSizeY; y++)
+            {
+                ReadOnlySpan<int> row = image.Channel[c].Row(y);
+                for (int x = 0; x < requiredSizeX; x++)
+                {
+                    qtable[(c * requiredSizeX * requiredSizeY) + (y * requiredSizeX) + x] = row[x];
+                    if (row[x] <= 0)
+                    {
+                        JxlThrowHelper.ThrowInvalidImageContentException("Invalid raw quantization table");
+                    }
+                }
+            }
+        }
+
+        encoding.QTable = qtable;
     }
 
     private static void ReplaceChannel(JxlModularImage image, int c, JxlModularChannel channel)
