@@ -462,7 +462,7 @@ internal static class JxlTreeLearner
                         List<JxlTreeSamples.ResidualToken> rtokens = treeSamples.RTokens(pred);
                         CollectExtraBitsIncrease(treeSamples, isStatic, rtokens, countIncrease, extraBitsIncrease, begin, end, propIdx, maxSymbols);
                         Array.Copy(counts, pred * maxSymbols, countsAbove, 0, maxSymbols);
-                        Array.Clear(countsBelow);
+                        countsBelow.AsSpan().Clear();
                         ulong extraBitsBelow = 0;
 
                         // Exclude last used: this ensures neither counts_above nor counts_below is empty.
