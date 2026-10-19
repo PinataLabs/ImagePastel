@@ -49,23 +49,23 @@ internal static class JxlEncoderRoundTrip
         Djxl,
     }
 
-    /// <summary>Runs one case of <see cref="Cases"/> through one reader.</summary>
+    /// <summary>Asserts that one case of <see cref="Cases"/> round-trips exactly through one reader.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="pixelType">The pixel type name.</param>
     /// <param name="pattern">The pattern.</param>
     /// <param name="width">The width.</param>
     /// <param name="height">The height.</param>
     /// <returns>A task.</returns>
-    public static Task RunAsync(Reader reader, string pixelType, string pattern, int width, int height)
-        => JxlPixelTypes.Call(pixelType, new PatternCase(reader, pattern, width, height));
+    public static Task AssertRoundTripAsync(Reader reader, string pixelType, string pattern, int width, int height)
+        => JxlPixelTypes.Verify(pixelType, new PatternCase(reader, pattern, width, height));
 
-    /// <summary>Runs one case of <see cref="CorpusCases"/> through one reader.</summary>
+    /// <summary>Asserts that one case of <see cref="CorpusCases"/> round-trips exactly through one reader.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="file">The test image, relative to the input images folder.</param>
     /// <param name="pixelType">The pixel type name.</param>
     /// <returns>A task.</returns>
-    public static Task RunCorpusAsync(Reader reader, string file, string pixelType)
-        => JxlPixelTypes.Call(pixelType, new CorpusCase(reader, file));
+    public static Task AssertCorpusRoundTripAsync(Reader reader, string file, string pixelType)
+        => JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, file));
 
     // Eight 8-bit colours (times 257) for the icon pattern, none of them in the palette's implicit colour cubes.
     private static readonly Rgba64[] IconColours =

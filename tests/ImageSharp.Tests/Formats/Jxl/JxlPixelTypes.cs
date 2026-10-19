@@ -50,6 +50,16 @@ internal static class JxlPixelTypes
         nameof(Short4) => call.Invoke<Short4>(),
         _ => throw new ArgumentException($"No pixel type named {pixelType}", nameof(pixelType)),
     };
+
+    /// <summary>
+    /// Runs <paramref name="check"/>, work that asserts, for the pixel type named <paramref name="pixelType"/>.
+    /// It is <see cref="Call{TResult}"/> under a name that says a test using it asserts.
+    /// </summary>
+    /// <typeparam name="TResult">The result type.</typeparam>
+    /// <param name="pixelType">The pixel type name.</param>
+    /// <param name="check">The work, which asserts.</param>
+    /// <returns>The result of the work.</returns>
+    public static TResult Verify<TResult>(string pixelType, IJxlPixelTypeCall<TResult> check) => Call(pixelType, check);
 }
 
 /// <summary>

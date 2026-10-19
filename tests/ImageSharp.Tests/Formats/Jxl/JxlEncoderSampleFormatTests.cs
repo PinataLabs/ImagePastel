@@ -186,7 +186,7 @@ public class JxlEncoderSampleFormatTests
     [InlineData(nameof(HalfVector2), 3)]
     [InlineData(nameof(HalfVector4), 4)]
     public void RoundTrip_HalfFloats_KeepEveryHalfAsF16(string pixelType, int planes)
-        => JxlPixelTypes.Call(pixelType, new WideRangeRoundTrip(planes, HalfSamples: true));
+        => JxlPixelTypes.Verify(pixelType, new WideRangeRoundTrip(planes, HalfSamples: true));
 
     // A signed sample is stored as float32 of its scaled value, through which ImageSharp's other
     // encoders and our decoder map it, so the extremes of its range are kept too.
@@ -198,13 +198,13 @@ public class JxlEncoderSampleFormatTests
     [InlineData(nameof(Short2), 3)]
     [InlineData(nameof(Short4), 4)]
     public void RoundTrip_SignedSamples_KeepEverySampleAsFloat32(string pixelType, int planes)
-        => JxlPixelTypes.Call(pixelType, new WideRangeRoundTrip(planes, HalfSamples: false));
+        => JxlPixelTypes.Verify(pixelType, new WideRangeRoundTrip(planes, HalfSamples: false));
 
     [Theory]
     [InlineData(nameof(HalfVector4))]
     [InlineData(nameof(Short4))]
     public Task RoundTrip_HalfAndSignedSamples_DjxlAccepts(string pixelType)
-        => JxlPixelTypes.Call(pixelType, new DjxlAcceptsWideRange());
+        => JxlPixelTypes.Verify(pixelType, new DjxlAcceptsWideRange());
 
     // A half-float file loaded as Rgba64 holds 16-bit integers, which f16 cannot hold, so it is
     // saved at 16 integer bits.
@@ -229,7 +229,7 @@ public class JxlEncoderSampleFormatTests
     [InlineData(nameof(HalfVector4), 16u, 5u)]
     [InlineData(nameof(RgbaVector), 32u, 8u)]
     public void ReEncode_HalfFloatFile_AsFloatPixels_KeepsF16OnlyWhereItHoldsTheSamples(string pixelType, uint bits, uint exponentBits)
-        => JxlPixelTypes.Call(pixelType, new ReEncodeHalfFloatFile(bits, exponentBits));
+        => JxlPixelTypes.Verify(pixelType, new ReEncodeHalfFloatFile(bits, exponentBits));
 
     [Theory]
     [InlineData(nameof(La16), 2u)]

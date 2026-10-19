@@ -52,7 +52,7 @@ public class JxlEncoderIccTests
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
     public Task Encode_MatchingProfile_OurDecoderGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
-        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderKeepsProfile, ReadProfile(profile)));
+        => JxlPixelTypes.Verify(pixelType, new ProfileCheck(Check.OurDecoderKeepsProfile, ReadProfile(profile)));
 
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
@@ -60,13 +60,13 @@ public class JxlEncoderIccTests
     {
         MagickReferenceDecoder.SkipUnlessJxlIsSupported();
 
-        return JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.MagickKeepsProfile, ReadProfile(profile)));
+        return JxlPixelTypes.Verify(pixelType, new ProfileCheck(Check.MagickKeepsProfile, ReadProfile(profile)));
     }
 
     [Theory]
     [MemberData(nameof(MatchingProfiles))]
     public Task Encode_MatchingProfile_DjxlGivesTheSamePixels(string pixelType, string profile)
-        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.DjxlExact, ReadProfile(profile), $"Icc_{pixelType}_{Path.GetFileNameWithoutExtension(profile)}"));
+        => JxlPixelTypes.Verify(pixelType, new ProfileCheck(Check.DjxlExact, ReadProfile(profile), $"Icc_{pixelType}_{Path.GetFileNameWithoutExtension(profile)}"));
 
     [Theory]
     [InlineData(TestImages.Icc.CompactDisplayP3V4)]
@@ -142,14 +142,14 @@ public class JxlEncoderIccTests
         byte[] icc = ReadProfile(profile);
         Assert.Equal(profileColorSpace, new IccProfile(icc).Header.DataColorSpace);
 
-        return JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, icc));
+        return JxlPixelTypes.Verify(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, icc));
     }
 
     [Theory]
     [InlineData(nameof(Rgb24))]
     [InlineData(nameof(L8))]
     public Task Encode_NoProfile_WritesTheSrgbEnum(string pixelType)
-        => JxlPixelTypes.Call(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, null));
+        => JxlPixelTypes.Verify(pixelType, new ProfileCheck(Check.OurDecoderGetsSrgbEnum, null));
 
     [Fact]
     public void Encode_ProfileThatIsNotValid_ThrowsAndWritesNothing()

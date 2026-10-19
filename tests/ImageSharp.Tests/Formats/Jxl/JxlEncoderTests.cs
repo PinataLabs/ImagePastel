@@ -47,32 +47,32 @@ public class JxlEncoderTests
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTrip_OurDecoder_IsExact(string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.RunAsync(JxlEncoderRoundTrip.Reader.Ours, pixelType, pattern, width, height);
+        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Ours, pixelType, pattern, width, height);
 
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTrip_Magick_IsExact(string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.RunAsync(JxlEncoderRoundTrip.Reader.Magick, pixelType, pattern, width, height);
+        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Magick, pixelType, pattern, width, height);
 
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.Cases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTrip_Djxl_IsExact(string pixelType, string pattern, int width, int height)
-        => JxlEncoderRoundTrip.RunAsync(JxlEncoderRoundTrip.Reader.Djxl, pixelType, pattern, width, height);
+        => JxlEncoderRoundTrip.AssertRoundTripAsync(JxlEncoderRoundTrip.Reader.Djxl, pixelType, pattern, width, height);
 
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTripCorpus_OurDecoder_IsExact(string file, string pixelType)
-        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Ours, file, pixelType);
+        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Ours, file, pixelType);
 
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTripCorpus_Magick_IsExact(string file, string pixelType)
-        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Magick, file, pixelType);
+        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Magick, file, pixelType);
 
     [Theory]
     [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
     public Task RoundTripCorpus_Djxl_IsExact(string file, string pixelType)
-        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Djxl, file, pixelType);
+        => JxlEncoderRoundTrip.AssertCorpusRoundTripAsync(JxlEncoderRoundTrip.Reader.Djxl, file, pixelType);
 
     [Fact]
     public void Identify_Grey_ReportsOneEightBitChannelAndGreySrgb()
