@@ -168,28 +168,6 @@ public class JxlUpsamplingTests
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
     }
 
-    // The upsampling conformance vector: 800x600 XYB VarDCT with alpha, coded at 200x150 with Gaborish
-    // and EPF, its colour and alpha upsampled 4x together (late) with the default weights. D10f checks it
-    // against its thresholds (Level 10: RMSE 1e-4, peak 4e-3). Measured on x64: worst channel RMSE 1.3e-6,
-    // peak 4.7e-5; djxl v0.12.0 is within 9.2e-7 and 4.2e-5 of the reference.
-    [Fact]
-    public async Task DecodeToPlanes_UpsamplingVector_Decodes()
-    {
-        JxlConformanceVector vector = JxlConformanceVector.Load("upsampling");
-        NpyArray expected = await JxlConformanceData.LoadReferenceImageAsync(vector, CancellationToken);
-        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
-
-        await using FileStream stream = File.OpenRead(input);
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
-        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
-
-        Assert.Equal(expected.Shape, actual.Shape);
-        foreach (JxlConformanceFrameResult result in JxlConformanceComparer.Measure(expected, actual))
-        {
-            TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: worst channel RMSE {result.WorstChannelRmse:G3}, peak {result.PeakError:G3}");
-        }
-    }
-
     // Patches on an upsampled frame: the patches are drawn at the coded size, before the upsampling, and
     // the extra channels with them when upsampled late (as the colour) or after their own upsampling when
     // the colour is not upsampled. A 4x3 piece of the Ramp layer, whose samples all differ, is drawn at

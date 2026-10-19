@@ -39,6 +39,8 @@ These files cover features that no conformance vector checks. They were made for
 | `jpeg_rgb.jxl` | `cjxl`'s lossless transcode of `Jpg/baseline/jpeg-rgb.jpg`, a 200 x 200 baseline JPEG coded in RGB (Adobe transform 0). An RGB JPEG transcodes to a VarDCT frame with no colour transform and no chroma subsampling, so it checks the raw quantization tables (D10d) on their own: the DCT8 table is raw, and the others come from the library. One group; the frame has the skip-adaptive-DC-smoothing flag and no loop filters. | `External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy` |
 | `twelve_bit.jxl` | Lossless Modular, 45 x 33 12-bit RGBA: ramps and noise, with alpha 0, 4095 and noise in turn. The encoder tests decode it, encode it again and check that it stays 12-bit with the same samples. | `External/ReferenceOutput/JxlDecoderTests/twelve_bit.png` (16-bit) |
 
+D10 decodes every file here that uses upsampling, chroma upsampling, YCbCr or raw quant tables. Apart from `jpeg_rgb` above (D10d), those files have their own tables in the sections below: `upsampling_*` (D10b), `modular_ycbcr*` (D10c) and the JPEG transcodes `jpeg_*` (D10e). The conformance vectors `upsampling`, `cafe`, `grayscale_jpeg` and `bench_oriented_brg` check the same features.
+
 #### How `premultiplied_alpha` was made
 
 ```sh
