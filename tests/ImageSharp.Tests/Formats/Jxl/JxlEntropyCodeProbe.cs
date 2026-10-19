@@ -42,6 +42,27 @@ internal static class JxlEntropyCodeProbe
         reader.Close();
     }
 
+    /// <summary>Reads the codes of the embedded ICC profile stream.</summary>
+    /// <param name="codestream">A bare codestream with an embedded ICC profile.</param>
+    /// <returns>The codes of the ICC tokens.</returns>
+    public static JxlAnsCode ReadIccCode(byte[] codestream)
+    {
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = ReaderAt(codestream, 0);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        Assert.True(metadata.M.ColorEncoding.WantIcc);
+
+        // As JxlIccReader.Read: the encoded size, then the histograms of the 41 ICC contexts.
+        JxlFieldCoders.ReadU64(reader);
+        JxlAnsCode code = new();
+        JxlEntropyDecoder.DecodeHistograms(reader, JxlIccCodecCommon.NumIccContexts, code);
+        reader.Close();
+        return code;
+    }
+
     // Returns the bit offset of the global tree, after the headers, the frame header, the TOC, the
     // DC quantization bit and the has_tree bit.
     private static long FindGlobalTree(byte[] codestream, out long treeSizeLimit)

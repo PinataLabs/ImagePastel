@@ -8,7 +8,9 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -45,12 +47,18 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         cancellationToken.ThrowIfCancellationRequested();
 
         JxlCodecMetadata metadata = CreateMetadata<TPixel>(image);
+        byte[] icc = SetIccProfile(metadata.M.ColorEncoding, image.Metadata.IccProfile);
 
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
         JxlBitWriter writer = new();
         JxlBundle.WriteCodestreamHeaders(metadata, writer);
 
-        // libjxl writes the ICC profile here when the colour encoding wants one; slice E1f adds it.
+        // Only send ICC (at least several hundred bytes) if fields aren't enough.
+        if (metadata.M.ColorEncoding.WantIcc)
+        {
+            JxlIccWriter.WriteIcc(icc, writer);
+        }
+
         writer.ZeroPadToByte();
 
         JxlFrameEncoder.EncodeFrame(metadata, image, this.memoryAllocator, writer);
@@ -78,9 +86,32 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         return metadata;
     }
 
+    // The pixel profile, as libjxl's JxlEncoderSetICCProfile: the only colour input on encode (#115),
+    // embedded verbatim when its data colour space matches the pixels, RGB for colour and grey for grey.
+    // Returns the profile bytes, or null when the colour encoding keeps the sRGB enum.
+    // libjxl has two paths here. With a CMS, SetICC parses the profile and sets the colour fields from
+    // it; without one, SetICCRaw keeps the fields it has. This port has no CMS (#105), so it takes the
+    // second: the fields keep the enum of SetColorEncoding, which already gives the colour space of a
+    // matching profile, and the intensity target stays the SDR default that libjxl's SetIntensityTarget
+    // gives those fields. Lossless never turns the profile back into an enum (DecideIfWantICC runs only
+    // without uses_original_profile). Departure (ADR 0001): libjxl returns an error for a profile
+    // that does not match the channel count, or that its CMS cannot parse; this port ignores such a
+    // profile and writes the enum (#115). A profile that fails IccProfile.CheckIsValid counts as one
+    // that does not parse.
+    private static byte[] SetIccProfile(JxlColorEncoding colorEncoding, IccProfile profile)
+    {
+        IccColorSpaceType pixelColorSpace = colorEncoding.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
+        if (profile is null || !profile.CheckIsValid() || profile.Header.DataColorSpace != pixelColorSpace)
+        {
+            return null;
+        }
+
+        colorEncoding.WantIcc = true;
+        return profile.ToByteArray();
+    }
+
     // The colour encoding: sRGB, or grey with the sRGB white point and transfer function, as libjxl's
-    // ColorEncoding::SRGB(is_gray). Slice E1f adds the pixel profile, written as an ICC profile when
-    // its colour space matches the pixels.
+    // ColorEncoding::SRGB(is_gray). SetIccProfile then adds a matching pixel profile.
     private static void SetColorEncoding(JxlColorEncoding colorEncoding, bool isGray)
     {
         colorEncoding.WantIcc = false;
