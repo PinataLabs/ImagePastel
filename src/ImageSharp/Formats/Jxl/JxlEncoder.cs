@@ -11,8 +11,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
 /// Image encoder for writing an image to a stream as a JPEG XL codestream. Only lossless encoding
-/// (<see cref="Distance"/> 0) at <see cref="JxlEffort.Fastest"/> is supported so far; every other
-/// combination throws <see cref="System.NotSupportedException"/>.
+/// (<see cref="Distance"/> 0) at <see cref="JxlEffort.Fastest"/> and <see cref="JxlEffort.Default"/> is
+/// supported so far; every other combination throws <see cref="System.NotSupportedException"/>.
 /// </summary>
 internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {

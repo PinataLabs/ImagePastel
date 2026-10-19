@@ -8,6 +8,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
+using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using Xunit;
 
@@ -26,6 +27,25 @@ internal static class JxlEncodedFrame
     /// <param name="codestream">A bare codestream.</param>
     /// <returns>The transforms.</returns>
     public static List<JxlTransform> ReadGlobalTransforms(byte[] codestream)
+    {
+        using JxlModularFrameDecoder decoder = ReadGlobalInfo(codestream);
+        return new List<JxlTransform>(decoder.GlobalTransforms);
+    }
+
+    /// <summary>
+    /// Returns the first frame's global MA tree, as the decoder reads it: numbered breadth first, with
+    /// each leaf's <see cref="JxlPropertyDecisionNode.LChild"/> its context.
+    /// </summary>
+    /// <param name="codestream">A bare codestream.</param>
+    /// <returns>The tree.</returns>
+    public static List<JxlPropertyDecisionNode> ReadGlobalTree(byte[] codestream)
+    {
+        using JxlModularFrameDecoder decoder = ReadGlobalInfo(codestream);
+        return new List<JxlPropertyDecisionNode>(decoder.GlobalTree);
+    }
+
+    // Reads the first frame up to the end of its global Modular stream.
+    private static JxlModularFrameDecoder ReadGlobalInfo(byte[] codestream)
     {
         Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
 
@@ -53,9 +73,9 @@ internal static class JxlEncodedFrame
         // The DC global section: the all-default DC quantisation bit, then the global Modular stream.
         JxlBitReader section = new(codestream, sectionStart, (int)sizes[0]);
         Assert.Equal(1UL, section.ReadBits(1));
-        using JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameDim);
+        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameDim);
         decoder.DecodeGlobalInfo(section, frameHeader);
         section.Close();
-        return new List<JxlTransform>(decoder.GlobalTransforms);
+        return decoder;
     }
 }

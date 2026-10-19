@@ -152,7 +152,7 @@ internal static class JxlModularPredict
     /// <param name="wpState">The weighted predictor state, or <see langword="null"/>.</param>
     /// <returns>The prediction.</returns>
     public static JxlPredictionResult PredictNoTree(int w, ReadOnlySpan<int> row, ReadOnlySpan<int> top, ReadOnlySpan<int> topTop, int x, int y, JxlPredictor predictor, JxlWeightedState wpState)
-        => Predict(useTree: false, null, w, row, top, topTop, x, y, predictor, null, null, 0, wpState);
+        => Predict(useTree: false, computeProperties: false, null, w, row, top, topTop, x, y, predictor, null, null, 0, wpState, default);
 
     /// <summary>
     /// Computes the properties of a sample, looks up its leaf in the tree and predicts it.
@@ -171,12 +171,31 @@ internal static class JxlModularPredict
     /// <param name="wpState">The weighted predictor state, or <see langword="null"/>.</param>
     /// <returns>The prediction.</returns>
     public static JxlPredictionResult PredictTree(int[] p, int w, ReadOnlySpan<int> row, ReadOnlySpan<int> top, ReadOnlySpan<int> topTop, int x, int y, JxlFlatDecisionNode[] tree, int[] references, int numExtraProps, JxlWeightedState wpState)
-        => Predict(useTree: true, p, w, row, top, topTop, x, y, JxlPredictor.Zero, tree, references, numExtraProps, wpState);
+        => Predict(useTree: true, computeProperties: true, p, w, row, top, topTop, x, y, JxlPredictor.Zero, tree, references, numExtraProps, wpState, default);
+
+    /// <summary>
+    /// Computes the properties of a sample and the prediction of every predictor, as tree learning
+    /// needs them. The weighted predictor always runs.
+    /// </summary>
+    /// <param name="p">The properties, partly set by <see cref="InitPropsRow"/>.</param>
+    /// <param name="w">The channel width.</param>
+    /// <param name="row">The current row.</param>
+    /// <param name="top">The row above, or empty for row 0.</param>
+    /// <param name="topTop">The row two above, or empty for rows 0 and 1.</param>
+    /// <param name="x">The column.</param>
+    /// <param name="y">The row index.</param>
+    /// <param name="references">The reference properties of the row.</param>
+    /// <param name="numExtraProps">The number of reference properties per column.</param>
+    /// <param name="wpState">The weighted predictor state.</param>
+    /// <param name="predictions">The prediction of each predictor, indexed by predictor.</param>
+    public static void PredictLearnAll(int[] p, int w, ReadOnlySpan<int> row, ReadOnlySpan<int> top, ReadOnlySpan<int> topTop, int x, int y, int[] references, int numExtraProps, JxlWeightedState wpState, Span<long> predictions)
+        => Predict(useTree: false, computeProperties: true, p, w, row, top, topTop, x, y, JxlPredictor.Zero, null, references, numExtraProps, wpState, predictions);
 
     // libjxl specialises Predict on a mode bit set through a template; NoEdgeCases variants skip
     // the border checks and are only an optimisation, so the port keeps the checked form.
     private static JxlPredictionResult Predict(
         bool useTree,
+        bool computeProperties,
         int[] p,
         int w,
         ReadOnlySpan<int> row,
@@ -188,10 +207,10 @@ internal static class JxlModularPredict
         JxlFlatDecisionNode[] tree,
         int[] references,
         int numExtraProps,
-        JxlWeightedState wpState)
+        JxlWeightedState wpState,
+        Span<long> predictions)
     {
         int offset = 3;
-        bool computeProperties = useTree;
         long left = x != 0 ? row[x - 1] : (y != 0 ? topRow[x] : 0);
         long top = y != 0 ? topRow[x] : left;
         long topleft = x != 0 && y != 0 ? topRow[x - 1] : left;
@@ -249,6 +268,11 @@ internal static class JxlModularPredict
             result.Guess = lr.PredictorOffset;
             result.Multiplier = lr.Multiplier;
             predictor = lr.Predictor;
+        }
+
+        for (int i = 0; i < predictions.Length; i++)
+        {
+            predictions[i] = PredictOne((JxlPredictor)i, left, top, toptop, topleft, topright, leftleft, toprightright, wpPred);
         }
 
         result.Guess += PredictOne(predictor, left, top, toptop, topleft, topright, leftleft, toprightright, wpPred);
