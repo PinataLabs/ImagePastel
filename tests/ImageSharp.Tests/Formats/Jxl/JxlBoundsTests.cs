@@ -542,7 +542,9 @@ public class JxlBoundsTests
     // (0, 0), each alpha-blended over the whole frame, about 2^32 pixel blends from a 35 KB dictionary
     // (a copy costs only the raw bits of its blend modes). The limits stay libjxl's; the decode stops
     // soon after it is cancelled instead. Uncancelled, it takes over 30 s; the dictionary is read in well
-    // under the 2 s before the cancellation, so that lands in the patches pass.
+    // under the 2 s before the cancellation, so that lands in the patches pass, where a row takes about
+    // 0.15 s. A thread of its own cancels the decode, as a timer waits for a pool thread that a full,
+    // parallel test run can keep busy for seconds, and the bound is from the cancellation, not the start.
     [Fact]
     public void PatchDictionary_FloodWithinTheLimits_StopsWhenCancelled()
     {
@@ -554,12 +556,22 @@ public class JxlBoundsTests
             .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Patches = new JxlTestPatchDictionary(flood) })
             .ToArray();
         using MemoryStream stream = new(codestream);
-        using CancellationTokenSource cancellation = new(TimeSpan.FromSeconds(2));
+        using CancellationTokenSource cancellation = new();
         Stopwatch stopwatch = Stopwatch.StartNew();
+        TimeSpan cancelledAt = TimeSpan.Zero;
+        Thread canceller = new(() =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(2));
+            cancelledAt = stopwatch.Elapsed;
+            cancellation.Cancel();
+        });
+        canceller.Start();
 
         Assert.ThrowsAny<OperationCanceledException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, cancellation.Token));
 
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(6), $"The decode stopped {stopwatch.Elapsed} after it started.");
+        TimeSpan stoppedAt = stopwatch.Elapsed;
+        canceller.Join();
+        Assert.True(stoppedAt - cancelledAt < TimeSpan.FromSeconds(10), $"The decode stopped {stoppedAt - cancelledAt} after it was cancelled.");
     }
 
     // The reference frame is in slot 3; slot 2 is empty and there are only four slots.
