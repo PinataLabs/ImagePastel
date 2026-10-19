@@ -4,7 +4,8 @@
 // lib/jxl/quant_weights.h and lib/jxl/quant_weights.cc (DctQuantWeightParams, QuantEncoding, QuantTable,
 // kAcStrategyToQuantTableMap, DequantMatrices: Decode, EnsureComputed, Matrix, required_size_x/y;
 // GetQuantWeightsDCT2, GetQuantWeightsIdentity, Interpolate, Mult, GetQuantWeights, ComputeQuantTable,
-// DecodeDctParams and Decode). The library tables are in JxlDequantMatrices.Library.cs.
+// DecodeDctParams and Decode). The library tables are in JxlDequantMatrices.Library.cs; a raw table's
+// Modular stream is read by JxlModularFrameDecoder.DecodeQuantTable (lib/jxl/dec_modular.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -95,7 +96,10 @@ internal sealed partial class JxlDequantMatrices
 
     /// <summary>Reads the encoding of every table from the AC global section.</summary>
     /// <param name="br">The reader.</param>
-    public void Decode(JxlBitReader br)
+    /// <param name="modularFrameDecoder">
+    /// The frame's Modular decoder, whose global tree, histograms and context map a raw table's stream uses.
+    /// </param>
+    public void Decode(JxlBitReader br, JxlModularFrameDecoder modularFrameDecoder)
     {
         bool allDefault = br.ReadBits(1) != 0;
         int numTables = allDefault ? 0 : NumQuantTables;
@@ -106,7 +110,7 @@ internal sealed partial class JxlDequantMatrices
 
         for (int i = 0; i < numTables; i++)
         {
-            this.encodings[i] = DecodeEncoding(br, RequiredSizeX[i % NumQuantTables], RequiredSizeY[i % NumQuantTables]);
+            this.encodings[i] = DecodeEncoding(br, RequiredSizeX[i % NumQuantTables], RequiredSizeY[i % NumQuantTables], i, modularFrameDecoder);
         }
 
         this.computedMask = 0;
@@ -178,7 +182,7 @@ internal sealed partial class JxlDequantMatrices
         }
     }
 
-    private static JxlQuantEncoding DecodeEncoding(JxlBitReader br, int requiredSizeX, int requiredSizeY)
+    private static JxlQuantEncoding DecodeEncoding(JxlBitReader br, int requiredSizeX, int requiredSizeY, int idx, JxlModularFrameDecoder modularFrameDecoder)
     {
         int requiredSize = requiredSizeX * requiredSizeY;
         QuantMode mode = (QuantMode)br.ReadBits(Log2NumQuantModes);
@@ -292,11 +296,17 @@ internal sealed partial class JxlDequantMatrices
                 break;
             }
 
+            case QuantMode.Raw:
+            {
+                // The table has one entry per coefficient, so it is 8 times the size in blocks each way.
+                modularFrameDecoder.DecodeQuantTable(requiredSizeX * JxlFrameDimensions.BlockDim, requiredSizeY * JxlFrameDimensions.BlockDim, br, encoding, idx);
+                break;
+            }
+
             default:
             {
-                // kQuantModeRAW: libjxl reads the table as a Modular stream (DecodeQuantTable). Only
-                // JPEG-transcoded files use it, and those come with D10.
-                JxlThrowHelper.ThrowNotSupportedException("RAW quantization tables");
+                // The mode has 3 bits, and all 8 modes exist.
+                JxlThrowHelper.ThrowInvalidImageContentException("Invalid quantization table encoding");
                 break;
             }
         }
@@ -411,8 +421,17 @@ internal sealed partial class JxlDequantMatrices
 
             case QuantMode.Raw:
             {
-                // Rejected when the encoding is read.
-                JxlThrowHelper.ThrowNotSupportedException("RAW quantization tables");
+                int[] qtable = encoding.QTable;
+                if (qtable == null || qtable.Length != 3 * num)
+                {
+                    JxlThrowHelper.ThrowInvalidImageContentException("Invalid table encoding");
+                }
+
+                for (int i = 0; i < 3 * num; i++)
+                {
+                    weights[i] = 1.0f / (encoding.QTableDen * qtable[i]);
+                }
+
                 break;
             }
 
@@ -737,6 +756,18 @@ internal sealed class JxlQuantEncoding
 
     /// <summary>Gets or sets the predefined table to use, for <see cref="JxlDequantMatrices.QuantMode.Library"/>.</summary>
     public int Predefined { get; set; }
+
+    /// <summary>
+    /// Gets or sets the denominator of a <see cref="JxlDequantMatrices.QuantMode.Raw"/> table: each weight is
+    /// 1 / (denominator x entry).
+    /// </summary>
+    public float QTableDen { get; set; }
+
+    /// <summary>
+    /// Gets or sets the entries of a <see cref="JxlDequantMatrices.QuantMode.Raw"/> table, channel by channel,
+    /// each channel row by row; every entry is positive.
+    /// </summary>
+    public int[] QTable { get; set; }
 
     /// <summary>Returns a library encoding.</summary>
     /// <param name="predefined">The predefined table.</param>

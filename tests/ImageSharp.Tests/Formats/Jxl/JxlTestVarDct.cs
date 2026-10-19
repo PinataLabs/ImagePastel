@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 
@@ -142,6 +143,17 @@ internal sealed class JxlTestVarDct
     {
         w.Write(3, 6); // kQuantModeDCT
         WriteDctParams(w, seed);
+    }
+
+    /// <summary>
+    /// Writes a kQuantModeRAW encoding of a table of one block: the F16 denominator, then a Modular stream on
+    /// the global tree of the 3 x 64 entries, channel by channel, entry i being <paramref name="entry"/>(i).
+    /// </summary>
+    public static void WriteRawTable(JxlTestBitWriter w, ushort denominator, Func<int, int> entry)
+    {
+        w.Write(3, 7); // kQuantModeRAW
+        w.Write(16, denominator);
+        WriteModularStream(w, Enumerable.Range(0, 3 * 64).Select(entry));
     }
 
     /// <summary>Writes the distance bands of one band, whose seed is an F16 for every channel.</summary>

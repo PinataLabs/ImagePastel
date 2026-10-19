@@ -235,6 +235,27 @@ public class JxlVarDctBoundsTests
     public void DequantMatrices_AfvBandBelow1e8_Throws(ushort band, Outcome outcome)
         => AssertOutcome(Dequant(0, w => WriteAfv(w, band)), outcome, "Invalid AFV bands");
 
+    // dec_modular.cc DecodeQuantTable: the denominator of a raw table is at least 1e-8. The smallest
+    // positive F16, 2^-24, is above it; with entries of 1 its weights are 1.7e7, inside ComputeQuantTable's
+    // range.
+    [Theory]
+    [InlineData(SmallestSubnormal, Outcome.Decodes)]
+    [InlineData(One, Outcome.Decodes)]
+    [InlineData(Zero, Outcome.Invalid)]
+    [InlineData(NegativeZero, Outcome.Invalid)]
+    [InlineData(MinusOne, Outcome.Invalid)]
+    public void DequantMatrices_RawDenominatorBelow1e8_Throws(ushort denominator, Outcome outcome)
+        => AssertOutcome(RawTable(denominator, 1), outcome, "Invalid qtable_den: value too small");
+
+    // dec_modular.cc DecodeQuantTable: every entry of a raw table is positive. The last entry is the
+    // value given and the others are 1.
+    [Theory]
+    [InlineData(1, Outcome.Decodes)]
+    [InlineData(0, Outcome.Invalid)]
+    [InlineData(-1, Outcome.Invalid)]
+    public void DequantMatrices_RawEntryNotPositive_Throws(int last, Outcome outcome)
+        => AssertOutcome(RawTable(One, last), outcome, "Invalid raw quantization table");
+
     // dec_modular.cc DecodeAcMetadata: the count covers every varblock. Two DCT8 blocks need two entries.
     [Theory]
     [InlineData(2, Outcome.Decodes)]
@@ -339,6 +360,7 @@ public class JxlVarDctBoundsTests
     [InlineData("order_lehmer_62")]
     [InlineData("block_ctx_map_16_contexts")]
     [InlineData("histogram_selector_2")]
+    [InlineData("raw_table_nonzeros")]
     public void Decode_AnyBitFlipped_ThrowsOnlyTheAllowedExceptions(string name)
     {
         byte[] codestream = name switch
@@ -347,6 +369,7 @@ public class JxlVarDctBoundsTests
             "nonzeros_63" => NonZeros(63, 63),
             "order_lehmer_62" => CoeffOrder(1, 1, 62, nonZeros: 2),
             "block_ctx_map_16_contexts" => BlockCtxMapContexts(16),
+            "raw_table_nonzeros" => RawTableNonZeros(),
             _ => new JxlTestVarDct(520, 8) { NumHistograms = 3, HistogramSelectors = new[] { 2, 0, 1 } }.ToArray(),
         };
 
@@ -397,6 +420,12 @@ public class JxlVarDctBoundsTests
     [InlineData("dequant_band_over_1e8", Outcome.Invalid)]
     [InlineData("dequant_afv_band_one", Outcome.Decodes)]
     [InlineData("dequant_afv_band_zero", Outcome.Invalid)]
+    [InlineData("dequant_raw_den_subnormal", Outcome.Decodes)]
+    [InlineData("dequant_raw_den_zero", Outcome.Invalid)]
+    [InlineData("dequant_raw_den_negative", Outcome.Invalid)]
+    [InlineData("dequant_raw_entry_1", Outcome.Decodes)]
+    [InlineData("dequant_raw_entry_0", Outcome.Invalid)]
+    [InlineData("dequant_raw_entry_negative", Outcome.Invalid)]
     [InlineData("ac_metadata_count_1", Outcome.Invalid)]
     [InlineData("sharpness_7", Outcome.Decodes)]
     [InlineData("sharpness_8", Outcome.Invalid)]
@@ -444,6 +473,12 @@ public class JxlVarDctBoundsTests
             "dequant_band_over_1e8" => Dequant(0, w => JxlTestVarDct.WriteDctParams(w.Write(3, 6), Largest, Largest)),
             "dequant_afv_band_one" => Dequant(0, w => WriteAfv(w, One)),
             "dequant_afv_band_zero" => Dequant(0, w => WriteAfv(w, Zero)),
+            "dequant_raw_den_subnormal" => RawTable(SmallestSubnormal, 1),
+            "dequant_raw_den_zero" => RawTable(Zero, 1),
+            "dequant_raw_den_negative" => RawTable(MinusOne, 1),
+            "dequant_raw_entry_1" => RawTable(One, 1),
+            "dequant_raw_entry_0" => RawTable(One, 0),
+            "dequant_raw_entry_negative" => RawTable(One, -1),
             "ac_metadata_count_1" => new JxlTestVarDct(16, 8) { Strategies = new[] { 0, 0 }, AcMetadataCount = 1 }.ToArray(),
             "sharpness_7" => new JxlTestVarDct(8, 8) { Sharpness = 7 }.ToArray(),
             "sharpness_8" => new JxlTestVarDct(8, 8) { Sharpness = 8 }.ToArray(),
@@ -474,9 +509,15 @@ public class JxlVarDctBoundsTests
     [Theory]
     [InlineData("nonzeros_63")]
     [InlineData("order_lehmer_62")]
+    [InlineData("raw_table_nonzeros")]
     public async Task DecodeToPlanes_MatchesDjxl(string name)
     {
-        byte[] codestream = name == "nonzeros_63" ? NonZeros(63, 63) : CoeffOrder(1, 1, 62, nonZeros: 2);
+        byte[] codestream = name switch
+        {
+            "nonzeros_63" => NonZeros(63, 63),
+            "order_lehmer_62" => CoeffOrder(1, 1, 62, nonZeros: 2),
+            _ => RawTableNonZeros(),
+        };
         string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlVarDctBoundsTests));
         string input = Path.Combine(directory, name + "_planes.jxl");
         string output = Path.Combine(directory, name + "_planes.npy");
@@ -581,6 +622,24 @@ public class JxlVarDctBoundsTests
                 JxlTestVarDct.WriteDctParams(w, One);
             }
         });
+
+    // A raw DCT8 table with the denominator given, whose entries are 1 but for the last.
+    private static byte[] RawTable(ushort denominator, int last)
+        => Dequant(0, w => JxlTestVarDct.WriteRawTable(w, denominator, i => i == (3 * 64) - 1 ? last : 1));
+
+    // A raw DCT8 table of a different entry for each coefficient and channel, with a denominator of 2^-10
+    // (F16 0x1400), so its weights range from 1024/17 to 1024; and a first block whose 63 AC coefficients
+    // of Y are all 1, so that each weight scales its own coefficient.
+    private static byte[] RawTableNonZeros()
+    {
+        List<uint> tokens = new() { 63 };
+        tokens.AddRange(Enumerable.Repeat(2u, 63));
+        return new JxlTestVarDct(8, 8)
+        {
+            DequantMatrices = w => JxlTestVarDct.WriteDequantMatrices(w, 0, t => JxlTestVarDct.WriteRawTable(t, 0x1400, i => 1 + (i % 17))),
+            FirstBlockTokens = tokens.ToArray(),
+        }.ToArray();
+    }
 
     // AFV weights of 1, but for the first AFV band (index 5), then the DCT and 4x4 bands of 1.
     private static void WriteAfv(JxlTestBitWriter w, ushort band)
