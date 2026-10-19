@@ -129,10 +129,11 @@ public class JxlEncoderEffortTests
 
     // The spec checks the totals over the corpus, not each image.
     [Fact]
-    public void Encode_Corpus_DefaultIsSmallerInTotalThanFastest()
+    public void Encode_Corpus_TotalSizeFallsWithEachEffort()
     {
         long fastest = 0;
         long @default = 0;
+        long thorough = 0;
         foreach (ITheoryDataRow row in JxlEncoderRoundTrip.CorpusCases)
         {
             object[] data = row.GetData();
@@ -142,13 +143,16 @@ public class JxlEncoderEffortTests
             }
 
             string file = (string)data[1];
-            int[] sizes = JxlPixelTypes.Call((string)data[2], new EncodeFile(file, JxlEncoderRoundTrip.LosslessFastest, JxlEncoderRoundTrip.Lossless(JxlEffort.Default)));
-            TestContext.Current.TestOutputHelper?.WriteLine($"{file}: Fastest {sizes[0]} B, Default {sizes[1]} B");
+            int[] sizes = JxlPixelTypes.Call((string)data[2], new EncodeFile(file, JxlEncoderRoundTrip.LosslessFastest, JxlEncoderRoundTrip.Lossless(JxlEffort.Default), JxlEncoderRoundTrip.Lossless(JxlEffort.Thorough)));
+            TestContext.Current.TestOutputHelper?.WriteLine($"{file}: Fastest {sizes[0]} B, Default {sizes[1]} B, Thorough {sizes[2]} B");
             fastest += sizes[0];
             @default += sizes[1];
+            thorough += sizes[2];
         }
 
+        TestContext.Current.TestOutputHelper?.WriteLine($"Total: Fastest {fastest} B, Default {@default} B, Thorough {thorough} B");
         Assert.True(@default < fastest, $"Default {@default} B, Fastest {fastest} B");
+        Assert.True(thorough <= @default, $"Thorough {thorough} B, Default {@default} B");
     }
 
     // Without an RCT, lossless Default wrote these RGB photos larger than Fastest, which has YCoCg.
