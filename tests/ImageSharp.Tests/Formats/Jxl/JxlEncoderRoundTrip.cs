@@ -139,8 +139,27 @@ internal static class JxlEncoderRoundTrip
     {
         TheoryData<string, string, int, int> cases = new();
         AddSingleGroup8BitCases(cases);
+        AddPrefixCodeCases(cases);
         AddTransformCases(cases);
         return cases;
+    }
+
+    // E1g: small images whose streams use prefix codes (fewer than 100 tokens), and the first sizes
+    // past that, which use ANS.
+    private static void AddPrefixCodeCases(TheoryData<string, string, int, int> cases)
+    {
+        foreach (string pattern in new[] { "gradient", "noise" })
+        {
+            foreach ((int width, int height) in new[] { (2, 3), (4, 4), (10, 9), (10, 10) })
+            {
+                cases.Add(nameof(L8), pattern, width, height);
+            }
+
+            foreach ((int width, int height) in new[] { (4, 4), (5, 6), (6, 6) })
+            {
+                cases.Add(nameof(Rgb24), pattern, width, height);
+            }
+        }
     }
 
     // E1b: 8-bit grey and RGB in one group, each pattern at 1x1, an odd size and the largest default group.
