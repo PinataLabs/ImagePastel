@@ -59,10 +59,12 @@ internal static class JxlEntropyEncoder
     /// Builds the histograms of <paramref name="tokens"/> in <paramref name="numContexts"/> contexts and
     /// writes them as <see cref="JxlEntropyDecoder.DecodeHistograms"/> reads them: the LZ77 parameters,
     /// the context map, and the codes. With no <paramref name="writer"/>, it only estimates the cost.
+    /// When LZ77 is used, each stream of <paramref name="tokens"/> is replaced by its LZ77 form, as libjxl
+    /// moves the new tokens into its caller's vector; the caller writes those.
     /// </summary>
     /// <param name="parameters">The histogram parameters.</param>
     /// <param name="numContexts">The number of contexts.</param>
-    /// <param name="tokens">The token streams that share the codes.</param>
+    /// <param name="tokens">The token streams that share the codes; replaced when LZ77 is used.</param>
     /// <param name="codes">The codes to fill.</param>
     /// <param name="writer">The writer, or <see langword="null"/> to estimate the cost only.</param>
     /// <returns>The cost in bits.</returns>
@@ -71,8 +73,12 @@ internal static class JxlEntropyEncoder
         codes.Lz77.NonserializedDistanceContext = numContexts;
         codes.Lz77.MinSymbol = parameters.ForceHuffman ? 512u : 224u;
 
-        // libjxl tries LZ77 here (ApplyLZ77). The encoder writes no LZ77 yet, as with kNone, so the
-        // tokens are unchanged and LZ77 stays disabled.
+        List<JxlToken>[] tokensLz77 = JxlLz77Encoder.ApplyLz77(parameters, numContexts, tokens, codes.Lz77);
+        if (tokensLz77 != null)
+        {
+            codes.Lz77.Enabled = true;
+        }
+
         long cost = 0;
         if (writer != null)
         {
@@ -82,6 +88,29 @@ internal static class JxlEntropyEncoder
         {
             JxlBundle.CanEncode(codes.Lz77, out long bits);
             cost += bits;
+        }
+
+        if (codes.Lz77.Enabled)
+        {
+            if (writer != null)
+            {
+                long b = writer.BitsWritten;
+                EncodeUintConfig(codes.Lz77.LengthUintConfig, writer, logAlphaSize: 8);
+                cost += writer.BitsWritten - b;
+            }
+            else
+            {
+                JxlSizeWriter sizeWriter = new();
+                EncodeUintConfig(codes.Lz77.LengthUintConfig, sizeWriter, logAlphaSize: 8);
+                cost += sizeWriter.Size;
+            }
+
+            numContexts += 1;
+            for (int stream = 0; stream < tokens.Count; stream++)
+            {
+                tokens[stream].Clear();
+                tokens[stream].AddRange(tokensLz77[stream]);
+            }
         }
 
         int totalTokens = 0;
@@ -99,7 +128,8 @@ internal static class JxlEntropyEncoder
             foreach (JxlToken token in stream)
             {
                 totalTokens++;
-                uintConfig.Encode(token.Value, out uint tok, out _, out _);
+                (token.IsLz77Length ? codes.Lz77.LengthUintConfig : uintConfig).Encode(token.Value, out uint tok, out _, out _);
+                tok += token.IsLz77Length ? codes.Lz77.MinSymbol : 0;
                 DebugGuard.IsTrue(token.Context < numContexts, "Token context out of range");
                 builder[numContexts == 1 ? 0 : (int)token.Context].Add((int)tok);
             }
@@ -111,7 +141,7 @@ internal static class JxlEntropyEncoder
         }
 
         // Encode histograms.
-        cost += codes.BuildAndStoreEntropyCodes(parameters, builder, writer);
+        cost += codes.BuildAndStoreEntropyCodes(parameters, tokens, builder, writer);
         return cost;
     }
 
@@ -132,7 +162,8 @@ internal static class JxlEntropyEncoder
             foreach (JxlToken token in tokens)
             {
                 int histo = codes.ContextMap[contextOffset + (int)token.Context];
-                codes.UintConfig[histo].Encode(token.Value, out uint tok, out uint nbits, out uint bits);
+                (token.IsLz77Length ? codes.Lz77.LengthUintConfig : codes.UintConfig[histo]).Encode(token.Value, out uint tok, out uint nbits, out uint bits);
+                tok += token.IsLz77Length ? codes.Lz77.MinSymbol : 0;
 
                 // Combine two calls to the BitWriter. Equivalent to:
                 // writer->Write(codes.encoding_info[histo][tok].depth, codes.encoding_info[histo][tok].bits);
@@ -156,7 +187,8 @@ internal static class JxlEntropyEncoder
         {
             JxlToken token = tokens[i];
             int histo = codes.ContextMap[contextOffset + (int)token.Context];
-            codes.UintConfig[histo].Encode(token.Value, out uint tok, out uint nbits, out uint bits);
+            (token.IsLz77Length ? codes.Lz77.LengthUintConfig : codes.UintConfig[histo]).Encode(token.Value, out uint tok, out uint nbits, out uint bits);
+            tok += token.IsLz77Length ? codes.Lz77.MinSymbol : 0;
             ref JxlAnsEncSymbolInfo info = ref codes.EncodingInfo[histo][tok];
             DebugGuard.IsTrue(info.Freq > 0, "Token has no ANS frequency");
 

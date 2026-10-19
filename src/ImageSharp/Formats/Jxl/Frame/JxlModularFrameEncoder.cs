@@ -72,6 +72,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private List<JxlPropertyDecisionNode> tree;
     private JxlGroupHeader[] streamHeaders;
     private List<JxlToken>[] tokens;
+    private int[] imageWidths;
 
     // libjxl's cparams_.colorspace: -1 lets the encoder choose the RCTs, 0 turns the per-group RCT
     // search off. This encoder has no option to force an RCT.
@@ -298,13 +299,14 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         int numStreams = this.streamImages.Length;
         this.streamHeaders = new JxlGroupHeader[numStreams];
         this.tokens = new List<JxlToken>[numStreams];
+        this.imageWidths = new int[numStreams];
         for (int streamId = 0; streamId < numStreams; streamId++)
         {
             this.streamHeaders[streamId] = new JxlGroupHeader();
             this.tokens[streamId] = new List<JxlToken>();
 
-            // libjxl also keeps the width of the widest channel, which only LZ77 uses.
-            JxlModularEncoder.ModularCompress(this.streamImages[streamId], this.streamOptions[streamId], streamId, this.tree, this.streamHeaders[streamId], this.tokens[streamId]);
+            // The width of the widest channel, which LZ77 uses.
+            this.imageWidths[streamId] = JxlModularEncoder.ModularCompress(this.streamImages[streamId], this.streamOptions[streamId], streamId, this.tree, this.streamHeaders[streamId], this.tokens[streamId]);
         }
     }
 
@@ -331,6 +333,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         JxlEntropyEncoder.WriteTokens(this.treeTokens[0], treeCode, 0, writer);
 
         // Write histograms.
+        this.histogramParams.ImageWidths = this.imageWidths;
         JxlEntropyEncoder.BuildAndEncodeHistograms(this.histogramParams, (this.tree.Count + 1) / 2, this.tokens, this.code, writer);
     }
 

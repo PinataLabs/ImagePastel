@@ -48,6 +48,47 @@ public class JxlEncoderEffortTests
         Assert.Equal("CAC3BA22594C71A7E1E139DCD945BEC08190014E6B113D23D6F39DD288187A26", Convert.ToHexString(SHA256.HashData(encoded)));
     }
 
+    // SHA-256 of the Default and Thorough output once E2a to E2d had all merged (feat/jxl-e2c at
+    // a4f7a44d1), on Fastest's cases and on the ramp stripes, which take LZ77. Any later change to these
+    // efforts' output must update them on purpose.
+    [Theory]
+    [InlineData(nameof(JxlEffort.Default), nameof(L8), "gradient", 17, 23, "A981F3A9E91F7C99D67C4B7148966E3E1A47E303EC72CAD3715DD77B3C2F2018")]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgb24), "noise", 256, 256, "834E937DB6814FC102182FB1875514DEC3A6F514B9BE5D81A6F888D47E83FE95")]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgb24), "icon", 64, 64, "883A5641F930E0B67CDD38DBE45ACB240DA45F549A0B8E4C372E0B1A3F4090F1")]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgb24), "gradient", 300, 513, "C0EC5583987621AB49673657722E0F43D873BF1C2ECDA1F0254990F7D6A8BFFE")]
+    [InlineData(nameof(JxlEffort.Default), nameof(L16), "noise", 17, 23, "D9B0569B5741A01A895EB580A97D2B9490C15CB63F7C3F7CB47487B27E377F7B")]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgba64), "translucent", 256, 256, "C2FBFB324A48FC8B8F3B93593DCAD4717271CB66787B95B8FC6658BCA216F878")]
+    [InlineData(nameof(JxlEffort.Default), nameof(RgbaVector), "translucent", 17, 23, "AD5DED0C8D60A3D07F460C716C80825CE749EE3E89CB7476CA16D3A263204425")]
+    [InlineData(nameof(JxlEffort.Default), nameof(La16), "translucent-icon", 64, 64, "1C4D57357C8ECBBB8D9F13A58ADFA61626F18D2093A35A90C5F1E3B67C52EB74")]
+    [InlineData(nameof(JxlEffort.Default), nameof(Rgb24), "ramp-stripes", 128, 128, "61D54C98ECE02AB1D6623AA84D5D4DA5FBA7C378DBE52C152EF6F24DEC6C6774")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(L8), "gradient", 17, 23, "A981F3A9E91F7C99D67C4B7148966E3E1A47E303EC72CAD3715DD77B3C2F2018")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgb24), "noise", 256, 256, "B50527CEDABCD4515440F5C537F67E2570A8F835EF50EF88669E6188699A8CCB")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgb24), "icon", 64, 64, "185A889FA801BE3D9899760575352C448A132274027493CF0F08DA34C1325004")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgb24), "gradient", 300, 513, "821BC73538A5D4AAFBCAD78B6486E9F47EAAD9758E850CA3337DEF7EED678FA8")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(L16), "noise", 17, 23, "DC68499F4FE9B966D88698303CA759C25E37E6FBC7CEA49BD866E688F0119C35")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgba64), "translucent", 256, 256, "BF3564306936645D5AB4D8F6D646A52D9786C2A9BDE4523C32CB6405F43383DF")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(RgbaVector), "translucent", 17, 23, "96355F2853D3FF0AC598B84FA0146B7EC1E4C3AC94513E1EDD02AA5D197B26FC")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(La16), "translucent-icon", 64, 64, "1F8BA5FFD648CFB9D42A0F9FE446D0A68E93996B655A18938C0FB7139BFAD647")]
+    [InlineData(nameof(JxlEffort.Thorough), nameof(Rgb24), "ramp-stripes", 128, 128, "B7AC9A2937881B712E34DCC99503FB127EB9217495F4CCFAEAF285AB7257970A")]
+    public void Encode_DefaultAndThorough_AreByteIdenticalToE2(string effort, string pixelType, string pattern, int width, int height, string expectedSha256)
+    {
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, width, height, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort))));
+
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+    }
+
+    [Theory]
+    [InlineData(nameof(JxlEffort.Default), "B6E6F9901DABC0EC95D0B937016102EDFEA3329A62E27A3E6ACE4E57A831689D")]
+    [InlineData(nameof(JxlEffort.Thorough), "7D8EAAC18F74BC594CFE320E85A74DCADB0F2DBE428FC63D5973BD5F794D21D5")]
+    public void Encode_DefaultAndThoroughPhoto_AreByteIdenticalToE2(string effort, string expectedSha256)
+    {
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort)));
+
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+    }
+
     [Fact]
     public void Encode_DefaultPhoto_HasALearnedTree()
     {

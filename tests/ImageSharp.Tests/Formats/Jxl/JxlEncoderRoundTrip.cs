@@ -100,7 +100,9 @@ internal static class JxlEncoderRoundTrip
     /// <c>translucent</c> (the gradient, with random alpha that is 0 or 65535 in places) or
     /// <c>translucent-icon</c> (the icon, with a different alpha for each colour, 0 and 65535 included),
     /// <c>group-icons</c> (4x4 blocks of a few hundred colours in each 256x256 group, a different set in
-    /// each group) or <c>translucent-group-icons</c> (the same with alpha, 0 and 65535 included).
+    /// each group), <c>translucent-group-icons</c> (the same with alpha, 0 and 65535 included),
+    /// <c>ramp-stripes</c> (grey rows, each an 8-bit ramp with its own slope, so the residuals repeat
+    /// along each row) or <c>noisy-stripes</c> (the ramp stripes under 4 rows of noise).
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="pattern">The pattern.</param>
@@ -134,6 +136,8 @@ internal static class JxlEncoderRoundTrip
                         (ushort)(y * 65535 / Math.Max(1, height - 1)),
                         (ushort)((x + y) * 65535 / Math.Max(1, width + height - 2)),
                         (ushort)((x % 7) switch { 0 => 0, 1 => 65535, _ => random.Next(65536) })),
+                    "ramp-stripes" => RampStripe(x, y),
+                    "noisy-stripes" => y < 4 ? new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), ushort.MaxValue) : RampStripe(x, y),
                     _ => throw new ArgumentException($"Unknown pattern {pattern}", nameof(pattern)),
                 };
 
@@ -144,6 +148,13 @@ internal static class JxlEncoderRoundTrip
         }
 
         return image;
+    }
+
+    // A grey sample of the ramp-stripes pattern: row y is a ramp of slope 5y mod 8, wrapped to 8 bits.
+    private static Rgba64 RampStripe(int x, int y)
+    {
+        ushort v = (ushort)(((x * ((y * 5) % 8)) & 0xFF) * 257);
+        return new Rgba64(v, v, v, ushort.MaxValue);
     }
 
     /// <summary>Encodes <paramref name="image"/> with <paramref name="encoder"/>, or lossless at Fastest.</summary>
@@ -211,6 +222,7 @@ internal static class JxlEncoderRoundTrip
         AddSampleFormatCases(cases);
         AddTransformCases(cases);
         AddGroupTransformCases(cases);
+        AddLz77Cases(cases);
         return cases;
     }
 
@@ -265,6 +277,14 @@ internal static class JxlEncoderRoundTrip
     {
         cases.Add(nameof(Rgb24), "group-icons", 512, 512);
         cases.Add(nameof(Rgba32), "translucent-group-icons", 512, 512);
+    }
+
+    // E2c: images whose residuals repeat along each row, so Default turns RLE LZ77 on, as cjxl 0.12 -e 5
+    // does for the ramp stripes; the noisy stripes code noise in the same LZ77 streams.
+    private static void AddLz77Cases(TheoryData<string, string, int, int> cases)
+    {
+        cases.Add(nameof(Rgb24), "ramp-stripes", 128, 128);
+        cases.Add(nameof(Rgb24), "noisy-stripes", 128, 128);
     }
 
     // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to

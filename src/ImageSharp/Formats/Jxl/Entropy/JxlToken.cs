@@ -7,15 +7,16 @@
 namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
 
 /// <summary>
-/// An integer to be encoded by an entropy coder, either ANS or prefix codes, in a context. libjxl's
-/// token also carries an <c>is_lz77_length</c> bit; the encoder writes no LZ77 yet, so it is left out.
+/// An integer to be encoded by an entropy coder, either ANS or prefix codes, in a context. An LZ77
+/// copy is two tokens: its length, marked with <see cref="IsLz77Length"/>, then its distance.
 /// </summary>
 internal readonly struct JxlToken
 {
-    public JxlToken(uint context, uint value)
+    public JxlToken(uint context, uint value, bool isLz77Length = false)
     {
         this.Context = context;
         this.Value = value;
+        this.IsLz77Length = isLz77Length;
     }
 
     /// <summary>Gets the context.</summary>
@@ -23,4 +24,7 @@ internal readonly struct JxlToken
 
     /// <summary>Gets the value.</summary>
     public uint Value { get; }
+
+    /// <summary>Gets a value indicating whether the value is the length of an LZ77 copy.</summary>
+    public bool IsLz77Length { get; }
 }
