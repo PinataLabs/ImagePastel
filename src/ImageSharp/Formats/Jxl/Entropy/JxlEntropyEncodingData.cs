@@ -121,10 +121,50 @@ internal sealed class JxlEntropyEncodingData
     private long BuildAndStoreAnsEncodingData(JxlHistogramParams.AnsHistogramStrategy strategy, JxlHistogram histogram, JxlBitWriter writer)
     {
         JxlAnsEncSymbolInfo[] info = this.EncodingInfo[^1];
+        int size = histogram.AlphabetSize();
         if (this.UsePrefixCode)
         {
-            // libjxl builds and stores a Huffman tree here (BuildAndStoreHuffmanTree); slice E1g ports it.
-            JxlThrowHelper.ThrowNotSupportedException("Prefix codes in the encoder");
+            long cost = 0;
+            if (size <= 1)
+            {
+                return 0;
+            }
+
+            uint[] histo = new uint[size];
+            for (int i = 0; i < size; i++)
+            {
+                DebugGuard.IsTrue(histogram.Counts[i] >= 0, "Histogram counts are not negative");
+                histo[i] = (uint)histogram.Counts[i];
+            }
+
+            byte[] depths = new byte[size];
+            ushort[] bits = new ushort[size];
+            if (writer == null)
+            {
+                JxlSizeWriter tmpWriter = new();
+                JxlHuffmanEncoder.BuildAndStoreHuffmanTree(histo, size, depths, bits, tmpWriter);
+                cost = tmpWriter.Size;
+            }
+            else
+            {
+                long start = writer.BitsWritten;
+                JxlHuffmanEncoder.BuildAndStoreHuffmanTree(histo, size, depths, bits, writer);
+                cost = writer.BitsWritten - start;
+            }
+
+            for (int i = 0; i < size; i++)
+            {
+                info[i].Bits = depths[i] == 0 ? (ushort)0 : bits[i];
+                info[i].Depth = depths[i];
+            }
+
+            // Estimate data cost.
+            for (int i = 0; i < size; i++)
+            {
+                cost += histo[i] * info[i].Depth;
+            }
+
+            return cost;
         }
 
         JxlAnsEncodingHistogram normalized = JxlAnsEncodingHistogram.ComputeBest(histogram, strategy);
