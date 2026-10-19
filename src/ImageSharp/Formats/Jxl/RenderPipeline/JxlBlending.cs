@@ -13,21 +13,13 @@ using SixLabors.ImageSharp.Memory;
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
-/// Blends a frame onto a background, one row at a time, as libjxl's <c>blending.cc</c>.
+/// Blends a frame or a patch onto a background, one row at a time, as libjxl's <c>blending.cc</c>.
 /// </summary>
 /// <remarks>
-/// Deliberate departures from libjxl:
-/// <list type="bullet">
-/// <item>libjxl always has three colour planes. Here a grey image has one (<see cref="JxlImageMetadata.NumColorPlanes"/>);
-/// libjxl's three grey planes are equal, so blending one gives the same values. Extra channel
-/// <c>i</c> is plane <c>numColorPlanes + i</c> rather than <c>3 + i</c>.</item>
-/// <item>libjxl takes a <c>PatchBlending</c>, which patches share. The blending stage maps
-/// <c>kBlend</c> to <c>kBlendAbove</c> and <c>kAlphaWeightedAdd</c> to <c>kAlphaWeightedAddAbove</c>, and
-/// never makes the <c>Below</c> or <c>None</c> modes, so this takes the frame's
-/// <see cref="JxlBlendingInfo"/> and reads <see cref="JxlBlendMode.Blend"/> and
-/// <see cref="JxlBlendMode.AlphaWeightedAdd"/> as the <c>Above</c> modes. Patches (a later slice) add
-/// the other modes.</item>
-/// </list>
+/// Deliberate departure from libjxl: libjxl always has three colour planes. Here a grey image has one
+/// (<see cref="JxlImageMetadata.NumColorPlanes"/>); libjxl's three grey planes are equal, so blending
+/// one gives the same values. Extra channel <c>i</c> is plane <c>numColorPlanes + i</c> rather than
+/// <c>3 + i</c>.
 /// </remarks>
 internal static class JxlBlending
 {
@@ -116,15 +108,14 @@ internal static class JxlBlending
                 case JxlPatchBlendMode.BlendAbove:
                 {
                     bool isPremultiplied = extraChannelInfo[alpha].AlphaAssociated;
-                    if (alpha == i)
-                    {
-                        JxlAlpha.PerformAlphaBlendingOfAlpha(bg[nc + alpha], fg[nc + alpha], Tmp(nc + i), info.Clamp);
-                    }
-                    else
-                    {
-                        JxlAlpha.PerformAlphaBlending(bg[nc + i], bg[nc + alpha], fg[nc + i], fg[nc + alpha], Tmp(nc + i), isPremultiplied, info.Clamp);
-                    }
+                    BlendExtraChannel(bg[nc + i], bg[nc + alpha], fg[nc + i], fg[nc + alpha], Tmp(nc + i), alpha == i, isPremultiplied, info.Clamp);
+                    continue;
+                }
 
+                case JxlPatchBlendMode.BlendBelow:
+                {
+                    bool isPremultiplied = extraChannelInfo[alpha].AlphaAssociated;
+                    BlendExtraChannel(fg[nc + i], fg[nc + alpha], bg[nc + i], bg[nc + alpha], Tmp(nc + i), alpha == i, isPremultiplied, info.Clamp);
                     continue;
                 }
 
@@ -132,18 +123,26 @@ internal static class JxlBlending
                     JxlAlpha.PerformAlphaWeightedAdd(bg[nc + i], fg[nc + i], fg[nc + alpha], Tmp(nc + i), info.Clamp, alpha == i);
                     continue;
 
+                case JxlPatchBlendMode.AlphaWeightedAddBelow:
+                    // libjxl also copies when both background rows are its zero buffer; the sum it
+                    // would compute instead is the same, as the background is zero.
+                    JxlAlpha.PerformAlphaWeightedAdd(fg[nc + i], bg[nc + i], bg[nc + alpha], Tmp(nc + i), info.Clamp, alpha == i);
+                    continue;
+
                 case JxlPatchBlendMode.Mul:
                     JxlAlpha.PerformMulBlending(bg[nc + i], fg[nc + i], Tmp(nc + i), info.Clamp);
                     continue;
 
-                default:
-                    // Replace.
+                case JxlPatchBlendMode.Replace:
                     fg[nc + i].CopyTo(Tmp(nc + i));
+                    continue;
+
+                case JxlPatchBlendMode.None:
+                    bg[nc + i].CopyTo(Tmp(nc + i));
                     continue;
             }
         }
 
-        int colorAlpha = (int)colorBlending.AlphaChannel;
         switch (colorBlending.Mode)
         {
             case JxlPatchBlendMode.Add:
@@ -153,10 +152,19 @@ internal static class JxlBlending
             case JxlPatchBlendMode.AlphaWeightedAddAbove:
                 if (hasAlpha)
                 {
-                    for (int c = 0; c < nc; c++)
-                    {
-                        JxlAlpha.PerformAlphaWeightedAdd(bg[c], fg[c], fg[nc + colorAlpha], Tmp(c), colorBlending.Clamp, false);
-                    }
+                    AddWeighted(bg, fg, nc, colorBlending, tmp, xsize);
+                }
+                else
+                {
+                    Add(bg, fg, nc, tmp, xsize);
+                }
+
+                break;
+
+            case JxlPatchBlendMode.AlphaWeightedAddBelow:
+                if (hasAlpha)
+                {
+                    AddWeighted(fg, bg, nc, colorBlending, tmp, xsize);
                 }
                 else
                 {
@@ -168,15 +176,19 @@ internal static class JxlBlending
             case JxlPatchBlendMode.BlendAbove:
                 if (hasAlpha)
                 {
-                    // blend_weighted: the colour and the alpha of the layer. The alpha overwrites what
-                    // the extra channel loop wrote for that channel.
-                    bool isPremultiplied = extraChannelInfo[colorAlpha].AlphaAssociated;
-                    for (int c = 0; c < nc; c++)
-                    {
-                        JxlAlpha.PerformAlphaBlending(bg[c], bg[nc + colorAlpha], fg[c], fg[nc + colorAlpha], Tmp(c), isPremultiplied, colorBlending.Clamp);
-                    }
+                    BlendWeighted(bg, fg, nc, colorBlending, extraChannelInfo, tmp, xsize);
+                }
+                else
+                {
+                    Copy(fg, nc, tmp, xsize);
+                }
 
-                    JxlAlpha.PerformAlphaBlendingOfAlpha(bg[nc + colorAlpha], fg[nc + colorAlpha], Tmp(nc + colorAlpha), colorBlending.Clamp);
+                break;
+
+            case JxlPatchBlendMode.BlendBelow:
+                if (hasAlpha)
+                {
+                    BlendWeighted(fg, bg, nc, colorBlending, extraChannelInfo, tmp, xsize);
                 }
                 else
                 {
@@ -193,15 +205,56 @@ internal static class JxlBlending
 
                 break;
 
-            default:
-                // Replace.
+            case JxlPatchBlendMode.Replace:
                 Copy(fg, nc, tmp, xsize);
+                break;
+
+            case JxlPatchBlendMode.None:
+                Copy(bg, nc, tmp, xsize);
                 break;
         }
 
         for (int i = 0; i < nc + numEc; i++)
         {
             Tmp(i).CopyTo(fg[i]);
+        }
+    }
+
+    // One extra channel blended by an alpha. libjxl's single-channel PerformAlphaBlending spots the alpha
+    // channel itself by pointer equality; here the caller says so with isAlpha.
+    private static void BlendExtraChannel(ReadOnlySpan<float> bottom, ReadOnlySpan<float> bottomAlpha, ReadOnlySpan<float> top, ReadOnlySpan<float> topAlpha, Span<float> output, bool isAlpha, bool isPremultiplied, bool clamp)
+    {
+        if (isAlpha)
+        {
+            JxlAlpha.PerformAlphaBlendingOfAlpha(bottomAlpha, topAlpha, output, clamp);
+        }
+        else
+        {
+            JxlAlpha.PerformAlphaBlending(bottom, bottomAlpha, top, topAlpha, output, isPremultiplied, clamp);
+        }
+    }
+
+    // blend_weighted: the colour and the alpha of the layer. The alpha overwrites what the extra channel
+    // loop wrote for that channel.
+    private static void BlendWeighted(JxlBlendingRows bottom, JxlBlendingRows top, int nc, JxlPatchBlending colorBlending, List<JxlExtraChannelInfo> extraChannelInfo, Buffer2D<float> tmp, int xsize)
+    {
+        int alpha = (int)colorBlending.AlphaChannel;
+        bool isPremultiplied = extraChannelInfo[alpha].AlphaAssociated;
+        for (int c = 0; c < nc; c++)
+        {
+            JxlAlpha.PerformAlphaBlending(bottom[c], bottom[nc + alpha], top[c], top[nc + alpha], tmp.DangerousGetRowSpan(c).Slice(0, xsize), isPremultiplied, colorBlending.Clamp);
+        }
+
+        JxlAlpha.PerformAlphaBlendingOfAlpha(bottom[nc + alpha], top[nc + alpha], tmp.DangerousGetRowSpan(nc + alpha).Slice(0, xsize), colorBlending.Clamp);
+    }
+
+    // add_weighted: the colour of the top layer, weighted by its alpha, added to the bottom layer.
+    private static void AddWeighted(JxlBlendingRows bottom, JxlBlendingRows top, int nc, JxlPatchBlending colorBlending, Buffer2D<float> tmp, int xsize)
+    {
+        int alpha = (int)colorBlending.AlphaChannel;
+        for (int c = 0; c < nc; c++)
+        {
+            JxlAlpha.PerformAlphaWeightedAdd(bottom[c], top[c], top[nc + alpha], tmp.DangerousGetRowSpan(c).Slice(0, xsize), colorBlending.Clamp, false);
         }
     }
 
