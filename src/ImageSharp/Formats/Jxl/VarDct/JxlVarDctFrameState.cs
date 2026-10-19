@@ -26,7 +26,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 internal sealed class JxlVarDctFrameState
 {
     /// <summary>The largest number of passes.</summary>
-    public const int MaxNumPasses = 11;
+    public const int MaxNumPasses = JxlPasses.MaxNumPasses;
 
     // Shared by enc/dec. 5F and 13 are by far the most common for d1/2/4/8, 0 ensures low overhead for
     // small images.
