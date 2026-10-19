@@ -17,14 +17,26 @@ internal static class JxlMaTree
     /// <summary>The largest MA tree.</summary>
     public const int MaxTreeSize = 1 << 22;
 
-    // Contexts of the tree's own entropy-coded stream.
-    private const int SplitValContext = 0;
-    private const int PropertyContext = 1;
-    private const int PredictorContext = 2;
-    private const int OffsetContext = 3;
-    private const int MultiplierLogContext = 4;
-    private const int MultiplierBitsContext = 5;
-    private const int NumTreeContexts = 6;
+    /// <summary>The context of split values in the tree's own entropy-coded stream.</summary>
+    public const int SplitValContext = 0;
+
+    /// <summary>The context of properties.</summary>
+    public const int PropertyContext = 1;
+
+    /// <summary>The context of leaf predictors.</summary>
+    public const int PredictorContext = 2;
+
+    /// <summary>The context of leaf offsets.</summary>
+    public const int OffsetContext = 3;
+
+    /// <summary>The context of the log2 of leaf multipliers.</summary>
+    public const int MultiplierLogContext = 4;
+
+    /// <summary>The context of the remaining bits of leaf multipliers.</summary>
+    public const int MultiplierBitsContext = 5;
+
+    /// <summary>The number of contexts of the tree's stream.</summary>
+    public const int NumTreeContexts = 6;
 
     private const int HeightLimit = 2048;
 

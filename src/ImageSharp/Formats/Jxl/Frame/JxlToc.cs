@@ -16,7 +16,8 @@ internal static class JxlToc
     /// <summary>The largest number of TOC entries.</summary>
     public const long MaxTocEntries = 65536;
 
-    private static readonly JxlU32Enc TocDist = new(Bits(10), BitsOffset(14, 1024), BitsOffset(22, 17408), BitsOffset(30, 4211712));
+    /// <summary>The encoding of each section size.</summary>
+    public static readonly JxlU32Enc TocDist = new(Bits(10), BitsOffset(14, 1024), BitsOffset(22, 17408), BitsOffset(30, 4211712));
 
     /// <summary>Returns the index of the section of AC group <paramref name="group"/> in pass <paramref name="pass"/>.</summary>
     /// <param name="pass">The pass.</param>

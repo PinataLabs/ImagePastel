@@ -19,7 +19,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 /// to an <c>AuxOut</c> layer. This port has no <c>AuxOut</c>, so the storage grows on demand instead
 /// and there are no allotments. The bytes after the last written bit are always zero, as in libjxl.
 /// </remarks>
-internal sealed class JxlBitWriter
+internal sealed class JxlBitWriter : IJxlBitSink
 {
     /// <summary>
     /// The most bits one <see cref="Write"/> call takes. libjxl takes 56; this port splits wider

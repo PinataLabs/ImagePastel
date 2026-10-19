@@ -1,0 +1,146 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+// Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// lib/jxl/enc_ans_params.h (HistogramParams) and lib/jxl/enc_ans.cc (HistogramParams::ForModular).
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
+
+using SixLabors.ImageSharp.Formats.Jxl.Modular;
+
+namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+
+/// <summary>How the encoder builds the histograms of an entropy-coded stream.</summary>
+internal sealed class JxlHistogramParams
+{
+    /// <summary>How hard to look for histograms that can share a code.</summary>
+    public enum ClusteringType
+    {
+        /// <summary>Only 4 clusters.</summary>
+        Fastest,
+
+        /// <summary>A k-means step only.</summary>
+        Fast,
+
+        /// <summary>A k-means step, then pair merging by ANS cost.</summary>
+        Best,
+    }
+
+    /// <summary>How the hybrid uint configuration is chosen.</summary>
+    public enum HybridUintMethod
+    {
+        /// <summary>Just use the default configuration (4, 2, 0).</summary>
+        None,
+
+        /// <summary>Force the fastest option, (0, 0, 0).</summary>
+        K000,
+
+        /// <summary>Just try a couple of options.</summary>
+        Fast,
+
+        /// <summary>The fast choice for the context map, (2, 0, 1).</summary>
+        ContextMap,
+
+        /// <summary>Search all options.</summary>
+        Best,
+    }
+
+    /// <summary>
+    /// Whether to try LZ77. libjxl also has several LZ77 match finders; the encoder writes no LZ77 yet,
+    /// so only the first two values are ported.
+    /// </summary>
+    public enum Lz77Method
+    {
+        /// <summary>Do not try LZ77.</summary>
+        None,
+
+        /// <summary>Only try doing RLE.</summary>
+        Rle,
+    }
+
+    /// <summary>How hard to look for the cheapest ANS histogram precision.</summary>
+    public enum AnsHistogramStrategy
+    {
+        /// <summary>Only try some methods, early exit.</summary>
+        Fast,
+
+        /// <summary>Only try some methods.</summary>
+        Approximate,
+
+        /// <summary>Try all methods.</summary>
+        Precise,
+    }
+
+    /// <summary>Gets or sets the clustering.</summary>
+    public ClusteringType Clustering { get; set; } = ClusteringType.Best;
+
+    /// <summary>Gets or sets the hybrid uint method.</summary>
+    public HybridUintMethod UintMethod { get; set; } = HybridUintMethod.Best;
+
+    /// <summary>Gets or sets the LZ77 method.</summary>
+    public Lz77Method Lz77 { get; set; } = Lz77Method.Rle;
+
+    /// <summary>Gets or sets the ANS histogram strategy.</summary>
+    public AnsHistogramStrategy AnsStrategy { get; set; } = AnsHistogramStrategy.Precise;
+
+    /// <summary>Gets or sets the largest number of histograms after clustering.</summary>
+    public int MaxHistograms { get; set; } = int.MaxValue;
+
+    /// <summary>Gets or sets a value indicating whether to always use prefix codes.</summary>
+    public bool ForceHuffman { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the stream chooses ANS or prefix codes itself.</summary>
+    public bool InitializeGlobalState { get; set; } = true;
+
+    /// <summary>
+    /// Returns libjxl's histogram parameters for Modular streams. libjxl also takes the extra DC
+    /// precision of VarDCT frames, which only Modular-coded VarDCT DC uses; that comes with the lossy slices.
+    /// </summary>
+    /// <param name="speedTier">The speed tier.</param>
+    /// <param name="modularMode">Whether the frame is a Modular frame.</param>
+    /// <param name="predictor">The predictor option.</param>
+    /// <param name="decodingSpeedTier">The decoding speed tier.</param>
+    /// <returns>The parameters.</returns>
+    public static JxlHistogramParams ForModular(JxlSpeedTier speedTier, bool modularMode, JxlPredictor predictor, int decodingSpeedTier = 0)
+    {
+        JxlHistogramParams result = new();
+        if (speedTier > JxlSpeedTier.Kitten)
+        {
+            result.Clustering = ClusteringType.Fast;
+            result.AnsStrategy = speedTier > JxlSpeedTier.Thunder ? AnsHistogramStrategy.Fast : AnsHistogramStrategy.Approximate;
+            result.Lz77 = modularMode && speedTier <= JxlSpeedTier.Hare ? Lz77Method.Rle : Lz77Method.None;
+
+            // Near-lossless DC, as well as modular mode, require choosing hybrid uint more carefully.
+            result.UintMethod = modularMode && speedTier < JxlSpeedTier.Cheetah ? HybridUintMethod.Fast : HybridUintMethod.None;
+        }
+        else
+        {
+            // libjxl picks LZ77 match finders here (kOptc256 and kLZ77b3w3f), which E2 ports.
+            result.Lz77 = Lz77Method.Rle;
+        }
+
+        if (decodingSpeedTier >= 2)
+        {
+            result.MaxHistograms = 12;
+        }
+
+        // No predictor requires LZ77 to compress residuals. Effort 3 and lower have forced predictors,
+        // so kNone is set. Below Hare libjxl picks the LZ77 match finders, which E2 ports.
+        if (predictor == JxlPredictor.Zero && modularMode)
+        {
+            result.Lz77 = speedTier >= JxlSpeedTier.Falcon ? Lz77Method.None : Lz77Method.Rle;
+        }
+
+        return result;
+    }
+
+    /// <summary>Returns the hybrid uint configuration that <see cref="UintMethod"/> fixes.</summary>
+    /// <returns>The configuration.</returns>
+    public JxlHybridUintConfig UintConfig()
+        => this.UintMethod switch
+        {
+            HybridUintMethod.ContextMap => new JxlHybridUintConfig(2, 0, 1),
+            HybridUintMethod.K000 => new JxlHybridUintConfig(0, 0, 0),
+
+            // Default config for clustering.
+            _ => new JxlHybridUintConfig(4, 2, 0),
+        };
+}
