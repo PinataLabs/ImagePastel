@@ -21,9 +21,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <summary>
 /// Encodes the Modular streams of a frame: the global stream and one per LF group and per group,
-/// with one global MA tree and one set of histograms that every stream shares. Only the path libjxl's
-/// effort 3 lossless takes is ported: the predefined <c>kWPFixedDC</c> tree with the Weighted
-/// predictor, and no tree learning, squeeze, quantisation, local palettes or per-group RCT search.
+/// with one global MA tree and one set of histograms that every stream shares. The lossless paths of
+/// libjxl's efforts 3, 5 and 7 (Fastest, Default and Thorough) are ported: the predefined
+/// <c>kWPFixedDC</c> tree with the Weighted predictor at effort 3, and a learned tree with the
+/// Gradient and Weighted predictors at efforts 5 and 7, with the per-group RCT search and local
+/// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
+/// palette by the estimated cost. Squeeze and quantisation are not ported.
 /// It is the mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
@@ -32,18 +35,36 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // queues the frame, so the frame encoder always sees this.
     private const int LevelMaxBitdepth = 32;
 
-    // libjxl's CompressParams defaults (enc_params.h): channel_colors_pre_transform_percent, palette_colors
-    // and lossy_palette. Lossless keeps them.
+    // libjxl's CompressParams defaults (enc_params.h): channel_colors_pre_transform_percent,
+    // channel_colors_percent, palette_colors and lossy_palette. Lossless keeps them.
     private const float ChannelColorsPreTransformPercent = 95f;
+    private const float ChannelColorsPercent = 80f;
     private const int PaletteColors = 1 << 10;
     private const bool LossyPalette = false;
 
     // libjxl's do_color: this encoder always codes the colour channels in the Modular image.
     private const bool DoColor = true;
 
+    // libjxl's CompressParams default decoding_speed_tier, which the encoder has no option for.
+    private const int DecodingSpeedTier = 0;
+
+    // Properties in order of their likelihood of being useful, for the non-Squeeze case.
+    private static readonly uint[] PropOrder = { 0, 1, 15, 9, 10, 11, 12, 13, 14, 2, 3, 4, 5, 6, 7, 8 };
+
+    // The RCTs the per-group search tries, in libjxl's order; each speed tier tries the first
+    // NbRctsToTry of them. These should be 19 actually different transforms; the remaining ones are
+    // equivalent to one of these (note that the first two are do-nothing and YCoCg) modulo channel
+    // reordering (which only matters in the case of MA-with-prev-channels-properties) and/or sign
+    // (e.g. RmG vs GmR)
+    private static readonly int[] RctCandidates =
+    {
+        (0 * 7) + 0, (0 * 7) + 6, (0 * 7) + 5, (1 * 7) + 3, (3 * 7) + 5, (5 * 7) + 5, (1 * 7) + 5, (2 * 7) + 5, (1 * 7) + 1, (0 * 7) + 4,
+        (1 * 7) + 2, (2 * 7) + 1, (2 * 7) + 2, (2 * 7) + 3, (4 * 7) + 4, (4 * 7) + 5, (0 * 7) + 2, (0 * 7) + 1, (0 * 7) + 3,
+    };
+
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
-    private readonly JxlSpeedTier speedTier = JxlSpeedTier.Falcon;
+    private readonly JxlSpeedTier speedTier;
     private readonly JxlModularImage[] streamImages;
     private readonly JxlModularOptions[] streamOptions;
     private readonly JxlHistogramParams histogramParams;
@@ -53,17 +74,25 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private List<JxlPropertyDecisionNode> tree;
     private JxlGroupHeader[] streamHeaders;
     private List<JxlToken>[] tokens;
+    private int[] imageWidths;
+
+    // libjxl's cparams_.colorspace: -1 lets the encoder choose the RCTs, 0 turns the per-group RCT
+    // search off. This encoder has no option to force an RCT.
+    private int colorspace = -1;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlModularFrameEncoder"/> class, as libjxl's
-    /// <c>ModularFrameEncoder::Init</c> does for lossless effort 3: no responsive mode, the Weighted
-    /// predictor, the <c>kWPFixedDC</c> tree and the Modular histogram parameters.
+    /// <c>ModularFrameEncoder::Init</c> does for a lossless frame: no responsive mode, the tree-learning
+    /// parameters and predictor of the speed tier, the <c>kWPFixedDC</c> tree at effort 3, and the
+    /// Modular histogram parameters.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
+    /// <param name="speedTier">The speed tier.</param>
     /// <param name="allocator">The allocator.</param>
-    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, MemoryAllocator allocator)
+    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, JxlSpeedTier speedTier, MemoryAllocator allocator)
     {
         this.allocator = allocator;
+        this.speedTier = speedTier;
         this.frameDim = frameHeader.ToFrameDimensions();
 
         long numStreams = JxlModularStreamId.ModularAc(this.frameDim, 0, frameHeader.Passes.NumPasses);
@@ -73,17 +102,29 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             this.streamImages[i] = JxlModularImage.Create(allocator, 0, 0, 8, 0);
         }
 
-        // libjxl's lossless decoding_speed_tier 0 only sets fast_decode_multiplier, which tree
-        // learning uses; responsive mode stays off for lossless. Effort 3 sets the Weighted predictor
-        // and the kWPFixedDC tree. The options of every stream copy those of stream 0.
+        // libjxl's lossless decoding_speed_tier 0 only sets fast_decode_multiplier; responsive mode
+        // stays off for lossless.
         JxlModularOptions options = new()
         {
-            MaxChanSize = this.frameDim.GroupDimension,
-            GroupDim = this.frameDim.GroupDimension,
+            FastDecodeMultiplier = 1.001f,
+            SplittingHeuristicsNodeThreshold = 75 + (14 * (int)speedTier) + (10 * DecodingSpeedTier),
         };
+        SetTreeLearningParameters(options, speedTier, numStreams, frameHeader.NonserializedMetadata.M);
+        options.NbRepeats = Math.Min(1.0f, options.NbRepeats);
+        options.Predictor = DefaultPredictor(speedTier);
+        options.MaxChanSize = this.frameDim.GroupDimension;
+        options.GroupDim = this.frameDim.GroupDimension;
+
+        // TODO(veluca): figure out how to use different predictor sets per channel.
         this.streamOptions = new JxlModularOptions[numStreams];
         Array.Fill(this.streamOptions, options);
-        this.histogramParams = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, JxlPredictor.Weighted);
+        this.streamOptions[0] = options.Clone();
+        if (speedTier == JxlSpeedTier.Falcon)
+        {
+            this.streamOptions[0].Kind = JxlModularOptions.TreeKind.WPFixedDC;
+        }
+
+        this.histogramParams = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, options.Predictor);
     }
 
     /// <summary>
@@ -175,8 +216,13 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             }
         }
 
-        // libjxl's move-to-front and squeeze steps are not taken by lossless Fastest. When no spare
-        // bit is left, libjxl turns off the per-group RCT search, which only higher efforts run.
+        // libjxl's move-to-front and squeeze steps are not taken by lossless.
+        if (maxBitdepth + 1 > LevelMaxBitdepth)
+        {
+            // force no group RCTs if we don't have a spare bit
+            this.colorspace = 0;
+        }
+
         if (maxBitdepth > LevelMaxBitdepth)
         {
             JxlThrowHelper.ThrowImageFormatException($"Bitdepth {maxBitdepth} too high after the transforms");
@@ -186,13 +232,48 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     }
 
     /// <summary>
-    /// Builds the global tree, libjxl's predefined <c>kWPFixedDC</c> one, and turns it into tokens.
-    /// The tree is then kept as the decoder will read it, so its leaf ids are the token contexts.
+    /// Builds the global tree and turns it into tokens: above effort 3 (below Falcon) a tree learned
+    /// from every stream, and at effort 3 libjxl's predefined <c>kWPFixedDC</c> one. The tree is then kept as the
+    /// decoder will read it, so its leaf ids are the token contexts.
     /// </summary>
     public void ComputeTree()
     {
-        // libjxl learns a tree here below effort 3, and builds trees for quantised channels; neither
-        // is ported. Fixed tree.
+        // libjxl gives the tree learning the multipliers of quantised channels here; lossless has none.
+        List<JxlModularMultiplierInfo> multiplierInfo = new();
+        if (this.speedTier < JxlSpeedTier.Falcon)
+        {
+            // libjxl splits the streams into chunks (tree_splits_) and learns one tree per chunk, then
+            // merges them under splits on the stream id. A Modular frame has one chunk, all the streams,
+            // so MergeTrees only copies its tree.
+            // Avoid creating a tree with leaves that don't correspond to any pixels.
+            int start = 0;
+            int stop = this.streamImages.Length;
+            while (start < stop && this.streamImages[start].IsEmpty)
+            {
+                ++start;
+            }
+
+            while (start < stop && this.streamImages[stop - 1].IsEmpty)
+            {
+                --stop;
+            }
+
+            // Don't do anything if modular mode does not have any pixels in this image
+            if (start == stop)
+            {
+                return;
+            }
+
+            // libjxl builds a predefined tree here for a chunk whose first stream does not learn one,
+            // which only VarDCT frames have.
+            List<JxlPropertyDecisionNode> learned = JxlModularEncoder.LearnTree(this.streamImages, this.streamOptions, start, stop, multiplierInfo);
+            this.treeTokens.Clear();
+            this.treeTokens.Add(new List<JxlToken>());
+            this.tree = JxlModularEncoder.TokenizeTree(learned, this.treeTokens[0]);
+            return;
+        }
+
+        // Fixed tree.
         long totalPixels = 0;
         int maxBitdepth = 0;
         foreach (JxlModularImage img in this.streamImages)
@@ -220,13 +301,14 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         int numStreams = this.streamImages.Length;
         this.streamHeaders = new JxlGroupHeader[numStreams];
         this.tokens = new List<JxlToken>[numStreams];
+        this.imageWidths = new int[numStreams];
         for (int streamId = 0; streamId < numStreams; streamId++)
         {
             this.streamHeaders[streamId] = new JxlGroupHeader();
             this.tokens[streamId] = new List<JxlToken>();
 
-            // libjxl also keeps the width of the widest channel, which only LZ77 uses.
-            JxlModularEncoder.ModularCompress(this.streamImages[streamId], this.streamOptions[streamId], streamId, this.tree, this.streamHeaders[streamId], this.tokens[streamId]);
+            // The width of the widest channel, which LZ77 uses.
+            this.imageWidths[streamId] = JxlModularEncoder.ModularCompress(this.streamImages[streamId], this.streamOptions[streamId], streamId, this.tree, this.streamHeaders[streamId], this.tokens[streamId]);
         }
     }
 
@@ -247,12 +329,13 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         writer.Write(1, 1);
 
         // Write tree
-        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, JxlPredictor.Weighted);
+        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, this.streamOptions[0].Predictor);
         JxlEntropyEncodingData treeCode = new();
         JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlMaTree.NumTreeContexts, this.treeTokens, treeCode, writer);
         JxlEntropyEncoder.WriteTokens(this.treeTokens[0], treeCode, 0, writer);
 
         // Write histograms.
+        this.histogramParams.ImageWidths = this.imageWidths;
         JxlEntropyEncoder.BuildAndEncodeHistograms(this.histogramParams, (this.tree.Count + 1) / 2, this.tokens, this.code, writer);
     }
 
@@ -319,6 +402,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // The streams are independent: this loop is where libjxl prepares them in parallel.
         foreach (StreamParams stream in this.streamParams)
         {
+            if (stream.Id != 0)
+            {
+                this.streamOptions[stream.Id] = this.streamOptions[0].Clone();
+            }
+
             this.PrepareStreamParams(stream.Rect, stream.MinShift, stream.MaxShift, stream.Id);
         }
 
@@ -353,9 +441,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
 
         JxlModularImage fullImage = this.streamImages[0];
+        JxlModularImage gi = this.streamImages[streamId];
         if (streamId > 0)
         {
-            JxlModularImage gi = JxlModularImage.Create(this.allocator, (int)rect.XSize, (int)rect.YSize, fullImage.BitDepth, 0);
+            gi = JxlModularImage.Create(this.allocator, (int)rect.XSize, (int)rect.YSize, fullImage.BitDepth, 0);
             this.streamImages[streamId].Dispose();
             this.streamImages[streamId] = gi;
 
@@ -398,10 +487,198 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             {
                 return;
             }
+
+            // Do some per-group transforms
+
+            // Local palette transforms
+            // TODO(veluca): make this work with quantize-after-prediction in lossy mode.
+            if (!LossyPalette && this.speedTier < JxlSpeedTier.Cheetah)
+            {
+                // don't care about that here
+                int maxBitdepth = 0;
+                int maxval = 0;
+                this.TryPalettes(gi, ref maxBitdepth, ref maxval, ChannelColorsPercent);
+            }
         }
 
-        // libjxl does some per-group transforms here: a local palette, the RCT search and the
-        // weighted predictor mode search. Effort 3 runs none of them.
+        // lossless and no specific color transform specified: try Nothing, YCoCg, and 17 RCTs
+        if (this.colorspace < 0 && gi.Channel.Count - gi.NbMetaChannels >= 3 && DoColor && this.speedTier <= JxlSpeedTier.Hare)
+        {
+            TryRcts(gi, NbRctsToTry(this.speedTier));
+        }
+
+        // libjxl searches the weighted predictor modes here from Kitten down.
+    }
+
+    // The tail of libjxl's PrepareStreamParams RCT step: estimate the cost of the image with each of
+    // the first nbRctsToTry candidates on its first three non-meta channels, and apply the cheapest.
+    private static void TryRcts(JxlModularImage gi, int nbRctsToTry)
+    {
+        float bestCost = float.MaxValue;
+        int bestRct = 0;
+        bool needToRestore = nbRctsToTry > 1;
+        JxlModularChannel[] orig = new JxlModularChannel[3];
+        JxlModularChannel[] output = new JxlModularChannel[3];
+        for (int c = 0; c < 3; ++c)
+        {
+            output[c] = gi.Channel[gi.NbMetaChannels + c];
+        }
+
+        try
+        {
+            foreach (int rctType in RctCandidates)
+            {
+                if (nbRctsToTry == 0)
+                {
+                    break;
+                }
+
+                nbRctsToTry--;
+
+                // no-op rct_type; use as baseline cost
+                if (rctType == 0)
+                {
+                    bestCost = JxlModularCostEstimate.EstimateCost(gi);
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        JxlModularChannel genuine = output[c];
+                        orig[c] = JxlModularChannel.Create(genuine.Allocator, genuine.W, genuine.H, genuine.HShift, genuine.VShift);
+                        genuine.SwapPlane(orig[c]);
+                    }
+                }
+                else
+                {
+                    JxlRctEncoder.FwdRct(orig, output, rctType);
+                    float cost = JxlModularCostEstimate.EstimateCost(gi);
+                    if (cost < bestCost)
+                    {
+                        bestRct = rctType;
+                        bestCost = cost;
+                    }
+                }
+            }
+
+            if (needToRestore)
+            {
+                for (int c = 0; c < 3; ++c)
+                {
+                    output[c].SwapPlane(orig[c]);
+                }
+            }
+        }
+        finally
+        {
+            foreach (JxlModularChannel channel in orig)
+            {
+                channel?.Dispose();
+            }
+        }
+
+        // Apply the best RCT to the image for future encoding.
+        if (bestRct != 0)
+        {
+            DoTransform(gi, new JxlTransform { Id = JxlTransformId.Rct, BeginC = (uint)gi.NbMetaChannels, RctType = (uint)bestRct });
+        }
+    }
+
+    // How many of RctCandidates libjxl's per-group RCT search tries at each speed tier. The tiers from
+    // Cheetah up just do the global YCoCg.
+    private static int NbRctsToTry(JxlSpeedTier speedTier) => speedTier switch
+    {
+        JxlSpeedTier.Hare => 4,
+        JxlSpeedTier.Wombat => 5,
+        JxlSpeedTier.Squirrel => 7,
+        JxlSpeedTier.Kitten => 9,
+        JxlSpeedTier.TectonicPlate or JxlSpeedTier.Glacier or JxlSpeedTier.Tortoise => 19,
+        _ => 0,
+    };
+
+    // The tree-learning parameters of each speed tier, from libjxl's Init for a lossless, non-responsive
+    // frame: the properties tree learning may split on, how many values each is quantised to, and the
+    // fraction of pixels sampled. Effort 3 and below (Falcon and faster) use a fixed tree, so their
+    // row (the default) is not read; it is kept as libjxl has it.
+    private static void SetTreeLearningParameters(JxlModularOptions options, JxlSpeedTier speedTier, long numStreams, JxlImageMetadata metadata)
+    {
+        List<uint> propOrder = new(PropOrder);
+
+        // if few groups, don't use group as a property
+        if (numStreams < 30 && speedTier > JxlSpeedTier.Tortoise)
+        {
+            propOrder.RemoveAt(1);
+        }
+
+        int maxProperties = Math.Min(options.MaxProperties, metadata.NumExtraChannels + (metadata.ColorEncoding.IsGray ? 0 : 2));
+        switch (speedTier)
+        {
+            case JxlSpeedTier.Hare:
+                options.SplittingHeuristicsProperties = propOrder.GetRange(0, 4);
+                options.MaxPropertyValues = 48;
+                options.NbRepeats *= 0.5f;
+                break;
+            case JxlSpeedTier.Wombat:
+                options.SplittingHeuristicsProperties = propOrder.GetRange(0, 5);
+                options.MaxPropertyValues = 64;
+                options.NbRepeats *= 0.7f;
+                break;
+            case JxlSpeedTier.Squirrel:
+                options.SplittingHeuristicsProperties = propOrder.GetRange(0, 7);
+                options.MaxPropertyValues = 96;
+                break;
+            case JxlSpeedTier.Kitten:
+                options.SplittingHeuristicsProperties = propOrder.GetRange(0, 10);
+                options.MaxPropertyValues = 128;
+                options.NbRepeats *= 1.1f;
+                break;
+            case JxlSpeedTier.Glacier:
+            case JxlSpeedTier.Tortoise:
+                options.SplittingHeuristicsProperties = propOrder;
+                options.MaxPropertyValues = 256;
+                options.NbRepeats *= 1.3f;
+                break;
+            default:
+                options.SplittingHeuristicsProperties = propOrder.GetRange(0, 3);
+                options.MaxPropertyValues = 32;
+                options.NbRepeats *= 0.3f;
+                break;
+        }
+
+        if (speedTier > JxlSpeedTier.Tortoise)
+        {
+            // Gradient in previous channels.
+            for (int i = 0; i < maxProperties; i++)
+            {
+                options.SplittingHeuristicsProperties.Add((uint)(JxlModularPredict.NumNonrefProperties + (i * 4) + 3));
+            }
+        }
+        else
+        {
+            // All the extra properties in Tortoise mode.
+            for (int i = 0; i < maxProperties * 4; i++)
+            {
+                options.SplittingHeuristicsProperties.Add((uint)(JxlModularPredict.NumNonrefProperties + i));
+            }
+        }
+    }
+
+    // libjxl's default predictor for a lossless, non-responsive Modular frame with no lossy palette:
+    // every predictor in the slowest modes, Gradient and Weighted below Falcon, Weighted at Falcon and
+    // Gradient above it.
+    private static JxlPredictor DefaultPredictor(JxlSpeedTier speedTier)
+    {
+        if (speedTier <= JxlSpeedTier.Glacier)
+        {
+            // TODO(veluca): allow all predictors that don't break residual multipliers in lossy mode.
+            return JxlPredictor.Variable;
+        }
+
+        if (speedTier < JxlSpeedTier.Falcon)
+        {
+            // try median and weighted predictor for anything else
+            return JxlPredictor.Best;
+        }
+
+        // just weighted predictor in falcon mode, and just gradient predictor in thunder mode
+        return speedTier == JxlSpeedTier.Falcon ? JxlPredictor.Weighted : JxlPredictor.Gradient;
     }
 
     // libjxl's do_transform: applies the transform and, when it took, adds it to the image's list.
@@ -417,10 +694,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         return didIt;
     }
 
-    // libjxl's maybe_do_transform. From Squirrel up, which includes Fastest, a transform that applies
-    // is kept. Below Squirrel libjxl estimates the cost after the transform and, when the cost went up,
-    // undoes it with Transform::Inverse (JxlTransform.Inverse here) and drops it from the list. That
-    // estimate (EstimateCost) belongs to slice E2.
+    // libjxl's maybe_do_transform. From Squirrel up, which includes every effort JxlEffort has, a
+    // transform that applies is kept. Below Squirrel (libjxl effort 8 and up) libjxl estimates the cost
+    // after the transform and, when the cost went up, undoes it with Transform::Inverse
+    // (JxlTransform.Inverse here) and drops it from the list. That estimate (JxlModularCostEstimate) is
+    // ported, but undoing a transform by it is not, because no effort reaches it.
     private bool MaybeDoTransform(JxlModularImage image, JxlTransform tr)
     {
         if (this.speedTier >= JxlSpeedTier.Squirrel)
@@ -428,7 +706,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             return DoTransform(image, tr);
         }
 
-        JxlThrowHelper.ThrowNotSupportedException("The transform cost estimate of higher efforts (slice E2)");
+        JxlThrowHelper.ThrowNotSupportedException("Keeping or undoing a transform by its estimated cost (libjxl effort 8 and up)");
         return false;
     }
 
@@ -446,14 +724,15 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         if (PaletteColors != 0 || LossyPalette)
         {
-            // when not estimating, assume some arbitrary bpp. libjxl estimates the cost at Squirrel
-            // and below, which slice E2 adds.
+            // when not estimating, assume some arbitrary bpp
             if (this.speedTier <= JxlSpeedTier.Squirrel)
             {
-                JxlThrowHelper.ThrowNotSupportedException("The palette cost estimate of higher efforts (slice E2)");
+                costBefore = JxlModularCostEstimate.EstimateCost(gi);
             }
-
-            costBefore = nbPixels * arbitraryBppEstimate;
+            else
+            {
+                costBefore = nbPixels * arbitraryBppEstimate;
+            }
 
             // all-channel palette (e.g. RGBA)
             if (nbChans > 1)

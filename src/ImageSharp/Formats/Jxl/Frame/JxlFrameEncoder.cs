@@ -16,12 +16,12 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <summary>
-/// Encodes one lossless Modular frame, as libjxl's <c>EncodeFrameOneShot</c> does at effort 3: the
-/// frame header, the TOC, and the sections.
+/// Encodes one lossless Modular frame, as libjxl's <c>EncodeFrameOneShot</c> does at efforts 3, 5
+/// and 7 (Fastest, Default and Thorough): the frame header, the TOC, and the sections.
 /// </summary>
 /// <remarks>
-/// Departure (ADR 0001): for a frame of more than 8 groups, libjxl's effort-3 lossless encoder takes
-/// its streaming path (<c>EncodeFrameStreaming</c>, chosen by <c>CanDoStreamingEncoding</c>), which
+/// Departure (ADR 0001): for a frame of more than 8 groups, libjxl's lossless encoder takes its
+/// streaming path from effort 2 up (<c>EncodeFrameStreaming</c>, chosen by <c>CanDoStreamingEncoding</c>), which
 /// codes each LF group with its own tree and histograms. This port always takes the one-shot path,
 /// which libjxl takes for 8 groups or fewer. The output is valid either way.
 /// </remarks>
@@ -31,14 +31,15 @@ internal static class JxlFrameEncoder
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="metadata">The codestream headers.</param>
     /// <param name="image">The image.</param>
+    /// <param name="speedTier">The speed tier, which the effort sets.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, MemoryAllocator allocator, JxlBitWriter writer)
+    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         JxlFrameHeader frameHeader = MakeFrameHeader(image.Width, image.Height, metadata);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlModularFrameEncoder encModular = new(frameHeader, allocator);
+        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
         List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular);
 
         WriteFrameHeader(frameHeader, writer);

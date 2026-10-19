@@ -1,8 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/modular/encoding/enc_encoding.cc (MakeFixedTree, EncodeModularChannelMAANS, PredefinedTree,
-// ModularCompress) and lib/jxl/modular/encoding/enc_ma.cc (TokenizeTree).
+// lib/jxl/modular/encoding/enc_encoding.cc (MakeFixedTree, GatherTreeData, LearnTree,
+// EncodeModularChannelMAANS, PredefinedTree, ModularCompress) and lib/jxl/modular/encoding/enc_ma.cc
+// (TokenizeTree).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -39,6 +40,101 @@ internal static class JxlModularEncoder
     /// <returns>The tree.</returns>
     public static List<JxlPropertyDecisionNode> PredefinedTreeWpFixedDc(long totalPixels, int bitdepth)
         => MakeFixedTree(JxlModularPredict.WPProp, WpFixedDcCutoffs, JxlPredictor.Weighted, totalPixels, bitdepth);
+
+    /// <summary>
+    /// Learns one tree for the streams <paramref name="start"/> to <paramref name="stop"/> (exclusive):
+    /// samples the pixels of every stream for the property thresholds, gathers the tree samples of
+    /// every coded channel, then splits greedily. The options of stream <paramref name="start"/> set
+    /// the predictors, properties and limits.
+    /// </summary>
+    /// <param name="images">The image of each stream.</param>
+    /// <param name="options">The options of each stream.</param>
+    /// <param name="start">The first stream.</param>
+    /// <param name="stop">The stream after the last.</param>
+    /// <param name="multiplierInfo">The multiplier boxes of quantised channels; empty for lossless.</param>
+    /// <returns>The tree, before <see cref="TokenizeTree"/>.</returns>
+    public static List<JxlPropertyDecisionNode> LearnTree(JxlModularImage[] images, JxlModularOptions[] options, int start, int stop, List<JxlModularMultiplierInfo> multiplierInfo)
+    {
+        JxlTreeSamples treeSamples = new();
+        treeSamples.SetPredictor(options[start].Predictor, options[start].WpTreeMode);
+        treeSamples.SetProperties(options[start].SplittingHeuristicsProperties, options[start].WpTreeMode);
+        int maxC = 0;
+        List<int> pixelSamples = new();
+        List<int> diffSamples = new();
+        List<uint> groupPixelCount = new();
+        List<uint> channelPixelCount = new();
+        for (int i = start; i < stop; i++)
+        {
+            maxC = Math.Max(images[i].Channel.Count, maxC);
+            JxlTreeLearner.CollectPixelSamples(images[i], options[i], (uint)i, groupPixelCount, channelPixelCount, pixelSamples, diffSamples);
+        }
+
+        JxlStaticPropRange range = default;
+        range[0, 0] = 0;
+        range[0, 1] = (uint)maxC;
+        range[1, 0] = (uint)start;
+        range[1, 1] = (uint)stop;
+
+        treeSamples.PreQuantizeProperties(range, multiplierInfo, groupPixelCount, channelPixelCount, pixelSamples, diffSamples, options[start].MaxPropertyValues);
+
+        // libjxl starts the pixel count from the coded channels of the first stream, and GatherTreeData
+        // then adds every pixel it visits, so the first stream counts twice.
+        long totalPixels = 0;
+        JxlModularImage first = images[start];
+        for (int i = 0; i < first.Channel.Count; i++)
+        {
+            if (i >= first.NbMetaChannels && (first.Channel[i].W > options[start].MaxChanSize || first.Channel[i].H > options[start].MaxChanSize))
+            {
+                break;
+            }
+
+            totalPixels += (long)first.Channel[i].W * first.Channel[i].H;
+        }
+
+        totalPixels = Math.Max(totalPixels, 1);
+
+        for (int i = start; i < stop; i++)
+        {
+            JxlModularImage image = images[i];
+            int nbChannels = image.Channel.Count;
+
+            if (image.W == 0 || image.H == 0 || nbChannels < 1)
+            {
+                continue; // is there any use for a zero-channel image?
+            }
+
+            if (image.Error)
+            {
+                JxlThrowHelper.ThrowImageFormatException("Invalid image");
+            }
+
+            DebugGuard.IsTrue(options[i].Kind == JxlModularOptions.TreeKind.Learn, "The stream learns its tree");
+
+            // encode transforms. libjxl sets the weighted predictor parameters from wp_mode when the
+            // predictor can be Weighted; mode 0 is the default header that Init leaves.
+            JxlWeightedHeader wpHeader = new();
+
+            // Gather tree data
+            for (int c = 0; c < nbChannels; c++)
+            {
+                JxlModularChannel channel = image.Channel[c];
+                if (c >= image.NbMetaChannels && (channel.W > options[i].MaxChanSize || channel.H > options[i].MaxChanSize))
+                {
+                    break;
+                }
+
+                if (channel.W == 0 || channel.H == 0)
+                {
+                    continue; // skip empty channels
+                }
+
+                GatherTreeData(image, c, i, wpHeader, options[i], treeSamples, ref totalPixels);
+            }
+        }
+
+        // TODO(veluca): parallelize more.
+        return LearnTree(treeSamples, totalPixels, options[start], multiplierInfo, range);
+    }
 
     /// <summary>
     /// Turns <paramref name="tree"/> into tokens in the <see cref="JxlMaTree.NumTreeContexts"/>
@@ -173,6 +269,95 @@ internal static class JxlModularEncoder
         // Make sure we actually wrote all tokens
         DebugGuard.IsTrue(tokens.Count - start == totalTokens, "Every pixel gives one token");
         return imageWidth;
+    }
+
+    // Adds the tree samples of one channel: about NbRepeats of its pixels, each with its properties
+    // and the prediction of every predictor tried.
+    private static void GatherTreeData(JxlModularImage image, int chan, int groupId, JxlWeightedHeader wpHeader, JxlModularOptions options, JxlTreeSamples treeSamples, ref long totalPixels)
+    {
+        JxlModularChannel channel = image.Channel[chan];
+        int numExtraProps = JxlModularPredict.ExtraPropsPerChannel * options.MaxProperties;
+        int[] properties = new int[JxlModularPredict.NumNonrefProperties + numExtraProps];
+        double pixelFraction = Math.Min(1.0f, options.NbRepeats);
+
+        // a fraction of 0 is used to disable learning entirely.
+        if (pixelFraction > 0)
+        {
+            pixelFraction = Math.Max(pixelFraction, Math.Min(1.0, 1024.0 / ((ulong)channel.W * (ulong)channel.H)));
+        }
+
+        ulong threshold = (ulong)((ulong.MaxValue >> 32) * pixelFraction);
+        ulong s0 = 0x94D049BB133111EBUL;
+        ulong s1 = 0xBF58476D1CE4E5B9UL;
+
+        // Xorshift128+ adapted from xorshift128+-inl.h
+        bool UseSample()
+        {
+            unchecked
+            {
+                ulong a = s0;
+                ulong b = s1;
+                ulong bits = a + b; // b, c
+                s0 = b;
+                a ^= a << 23;
+                a ^= b ^ (a >> 18) ^ (b >> 5);
+                s1 = a;
+                return (bits >> 32) <= threshold;
+            }
+        }
+
+        int w = channel.W;
+        int[] references = new int[numExtraProps * w];
+        JxlWeightedState wpState = new(wpHeader, w);
+        treeSamples.PrepareForSamples((ulong)((pixelFraction * channel.H * channel.W) + 64));
+
+        // libjxl predicts with only the one predictor when one is tried, and takes a path without the
+        // edge checks for inner pixels; both give the same predictions and properties as this one.
+        Span<long> pred = stackalloc long[JxlModularPredict.NumModularPredictors];
+        for (int y = 0; y < channel.H; y++)
+        {
+            ReadOnlySpan<int> p = channel.Row(y);
+            ReadOnlySpan<int> top = y > 0 ? channel.Row(y - 1) : Span<int>.Empty;
+            ReadOnlySpan<int> topTop = y > 1 ? channel.Row(y - 2) : Span<int>.Empty;
+            JxlModularPredict.PrecomputeReferences(channel, y, image, chan, references, numExtraProps);
+            JxlModularPredict.InitPropsRow(properties, chan, groupId, y);
+
+            // TODO(veluca): avoid computing WP if we don't use its property or predictions.
+            for (int x = 0; x < w; x++)
+            {
+                JxlModularPredict.PredictLearnAll(properties, w, p, top, topTop, x, y, references, numExtraProps, wpState, pred);
+                totalPixels++;
+                if (UseSample())
+                {
+                    treeSamples.AddSample(p[x], properties, pred);
+                }
+
+                wpState.UpdateErrors(p[x], x, y, w);
+            }
+        }
+    }
+
+    // Learns the tree from the gathered samples. A split must save more bits than the node threshold,
+    // scaled by the fraction of the pixels that were sampled.
+    private static List<JxlPropertyDecisionNode> LearnTree(JxlTreeSamples treeSamples, long totalPixels, JxlModularOptions options, List<JxlModularMultiplierInfo> multiplierInfo, JxlStaticPropRange staticPropRange)
+    {
+        for (int i = 0; i < JxlModularPredict.NumStaticProperties; i++)
+        {
+            if (staticPropRange[i, 1] == 0)
+            {
+                staticPropRange[i, 1] = uint.MaxValue;
+            }
+        }
+
+        if (!treeSamples.HasSamples)
+        {
+            return new List<JxlPropertyDecisionNode> { Leaf(treeSamples.PredictorFromIndex(0)) };
+        }
+
+        float pixelFraction = treeSamples.NumSamples * 1.0f / totalPixels;
+        float requiredCost = (float)((pixelFraction * 0.9) + 0.1);
+        treeSamples.AllSamplesDone();
+        return JxlTreeLearner.ComputeBestTree(treeSamples, options.SplittingHeuristicsNodeThreshold * requiredCost, multiplierInfo, staticPropRange, options.FastDecodeMultiplier);
     }
 
     // `cutoffs` must be sorted.

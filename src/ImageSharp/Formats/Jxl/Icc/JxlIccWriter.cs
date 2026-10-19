@@ -49,10 +49,11 @@ internal static class JxlIccWriter
         }
 
         // libjxl default-constructs the parameters, then sets lz77_method to kOptc256 below 16384 bytes
-        // and kLZ77b3w3f above, and force_huffman. Departures (ADR 0001): slice E1 writes no LZ77 (#207),
-        // so LZ77 is off; the default kBest clustering runs as the fast clustering and the kBest hybrid
-        // uint search keeps the default configuration, as everywhere in E1 (E2 ports both). Each choice
-        // gives a valid stream, only larger than libjxl's. force_huffman makes the stream prefix-coded.
+        // and kLZ77b3w3f above, and force_huffman. Departures (ADR 0001): those LZ77 match finders are
+        // not ported, so LZ77 is off; the default kBest clustering runs as the fast clustering, and the
+        // kBest hybrid uint search, which is not ported either, keeps the default configuration. The ICC
+        // stream is the same at every effort, so this also keeps the Fastest output as E1 wrote it. Each
+        // choice gives a valid stream, only larger than libjxl's. force_huffman makes it prefix-coded.
         JxlHistogramParams parameters = new()
         {
             Lz77 = JxlHistogramParams.Lz77Method.None,

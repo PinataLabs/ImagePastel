@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_ans.h and lib/jxl/enc_ans.cc (EntropyEncodingData, BuildAndStoreEntropyCodes,
-// BuildAndStoreANSEncodingData, ChooseUintConfigs).
+// BuildAndStoreANSEncodingData, ChooseUintConfigs, Histogram::ANSPopulationCost),
+// lib/jxl/enc_ans_params.h (Histogram::MaxSymbol) and lib/jxl/enc_ans_simd.cc (EstimateTokenCost).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -41,10 +42,11 @@ internal sealed class JxlEntropyEncodingData
     /// <paramref name="writer"/>, it only builds the codes and estimates their cost.
     /// </summary>
     /// <param name="parameters">The histogram parameters.</param>
+    /// <param name="tokens">The token streams that <paramref name="builder"/> counts.</param>
     /// <param name="builder">The histogram of each context.</param>
     /// <param name="writer">The writer, or <see langword="null"/> to estimate the cost only.</param>
     /// <returns>The cost in bits: exact for the headers, estimated for the data.</returns>
-    public long BuildAndStoreEntropyCodes(JxlHistogramParams parameters, IReadOnlyList<JxlHistogram> builder, JxlBitWriter writer)
+    public long BuildAndStoreEntropyCodes(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, IReadOnlyList<JxlHistogram> builder, JxlBitWriter writer)
     {
         // libjxl can extend the codes of an earlier stream here (prev_histograms); only its streaming
         // mode does, so the port always starts from none.
@@ -74,7 +76,7 @@ internal sealed class JxlEntropyEncodingData
             clusteredHistograms.Add(builder[0]);
         }
 
-        this.ChooseUintConfigs(parameters, clusteredHistograms);
+        this.ChooseUintConfigs(parameters, tokens, clusteredHistograms);
 
         // Used if writer == nullptr to estimate costs.
         JxlSizeWriter sizeWriter = new();
@@ -180,7 +182,9 @@ internal sealed class JxlEntropyEncodingData
         return (long)MathF.Ceiling(normalized.Cost);
     }
 
-    private void ChooseUintConfigs(JxlHistogramParams parameters, List<JxlHistogram> clusteredHistograms)
+    // Chooses the hybrid uint configuration of each clustered histogram, re-tokenizes the histogram
+    // with it, and sets the alphabet size from the largest token.
+    private void ChooseUintConfigs(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, List<JxlHistogram> clusteredHistograms)
     {
         // Set sane default `log_alpha_size`. libjxl's streaming mode uses 8 too; it is not ported.
         if (this.UsePrefixCode)
@@ -202,7 +206,134 @@ internal sealed class JxlEntropyEncodingData
             this.UintConfig.Add(parameters.UintConfig());
         }
 
-        // If the uint config is fixed, just use it. libjxl searches for a better one per histogram
-        // for kBest and kFast, which only the higher efforts use; that search comes with E2.
+        // If the uint config is fixed, just use it. Departure (ADR 0001): libjxl also searches for
+        // kBest, over 28 configurations. kBest is the e8+ search, and the parameters of the ICC stream,
+        // which every effort writes, keep libjxl's default kBest; searching there would change the
+        // Fastest output. So kBest keeps the default configuration, a valid choice.
+        if (parameters.UintMethod != JxlHistogramParams.HybridUintMethod.Fast)
+        {
+            return;
+        }
+
+        // Brute-force method that tries a few options.
+        JxlHybridUintConfig[] configs =
+        {
+            new(4, 2, 0), // default
+            new(4, 1, 2), // add parity but less msb
+            new(0, 0, 0), // smallest histograms
+            new(2, 0, 1), // works well for ctx map
+        };
+
+        // The values of each clustered histogram, then the LZ77 lengths of each, in the second half.
+        int numHisto = clusteredHistograms.Count;
+        List<uint>[] values = new List<uint>[2 * numHisto];
+        uint[] maxValuePerHisto = new uint[2 * numHisto];
+        for (int h = 0; h < 2 * numHisto; h++)
+        {
+            values[h] = new List<uint>();
+        }
+
+        // TODO(veluca): do not ignore lz77 commands.
+        foreach (List<JxlToken> stream in tokens)
+        {
+            foreach (JxlToken token in stream)
+            {
+                int histo = this.ContextMap[(int)token.Context] + (token.IsLz77Length ? numHisto : 0);
+                values[histo].Add(token.Value);
+                maxValuePerHisto[histo] = Math.Max(maxValuePerHisto[histo], token.Value);
+            }
+        }
+
+        // Wider histograms are assigned max cost in PopulationCost anyway and therefore will not be used
+        const uint maxAlpha = JxlAnsParams.AnsMaxAlphabetSize;
+        for (int h = 0; h < numHisto; h++)
+        {
+            float bestCost = float.MaxValue;
+            foreach (JxlHybridUintConfig cfg in configs)
+            {
+                cfg.Encode(maxValuePerHisto[h], out uint tokOfMax, out _, out _);
+                tokOfMax |= cfg.LsbMask;
+                if (tokOfMax >= maxAlpha || (this.Lz77.Enabled && tokOfMax >= this.Lz77.MinSymbol))
+                {
+                    // Not valid config for this context
+                    continue;
+                }
+
+                JxlHistogram histo = new();
+                uint extraBits = EstimateTokenCost(values[h], cfg, histo);
+                float cost = AnsPopulationCost(histo);
+                cost += extraBits;
+
+                // Add signaling cost of the hybriduintconfig itself.
+                cost += JxlBits.CeilLog2Nonzero(cfg.SplitExponent + 1);
+                cost += JxlBits.CeilLog2Nonzero(cfg.SplitExponent - cfg.MsbInToken + 1);
+                if (cost < bestCost)
+                {
+                    this.UintConfig[h] = cfg;
+                    bestCost = cost;
+                    clusteredHistograms[h] = histo;
+                }
+            }
+        }
+
+        // libjxl adds the LZ77 length symbols back into each histogram. When no configuration was
+        // valid for a histogram, it still holds them from the context's histogram, so they count
+        // twice; that is libjxl's behaviour, and the code is still valid.
+        int maxTok = 0;
+        for (int h = 0; h < numHisto; h++)
+        {
+            JxlHistogram histo = clusteredHistograms[h];
+            maxTok = Math.Max(maxTok, MaxSymbol(histo));
+            List<uint> lengths = values[numHisto + h];
+            if (lengths.Count == 0)
+            {
+                // E.g. when lz77 not enabled
+                continue;
+            }
+
+            foreach (uint length in lengths)
+            {
+                this.Lz77.LengthUintConfig.Encode(length, out uint tok, out _, out _);
+                histo.Add((int)(tok + this.Lz77.MinSymbol));
+            }
+
+            maxTok = Math.Max(maxTok, MaxSymbol(histo));
+        }
+
+        // `log_alpha_size - 5` is encoded in the header, so min is 5.
+        int logSize = 5;
+        while (maxTok >= (1 << logSize))
+        {
+            ++logSize;
+        }
+
+        int maxLogAlphaSize = this.UsePrefixCode ? JxlAnsParams.PrefixMaxBits : 8;
+        DebugGuard.IsTrue(logSize <= maxLogAlphaSize, "The tokens must fit the alphabet");
+        this.LogAlphaSize = this.UsePrefixCode ? JxlAnsParams.PrefixMaxBits : logSize;
     }
+
+    // libjxl's EstimateTokenCost, in its scalar form: adds the token of each value to histo and
+    // returns the number of raw bits.
+    private static uint EstimateTokenCost(List<uint> values, JxlHybridUintConfig cfg, JxlHistogram histo)
+    {
+        uint extraBits = 0;
+        foreach (uint v in values)
+        {
+            cfg.Encode(v, out uint tok, out uint nbits, out _);
+            extraBits += nbits;
+            histo.Add((int)tok);
+        }
+
+        return extraBits;
+    }
+
+    // libjxl's Histogram::ANSPopulationCost: the cost of the histogram with the fast ANS strategy,
+    // whatever the parameters ask for.
+    private static float AnsPopulationCost(JxlHistogram histo)
+        => histo.AlphabetSize() > JxlAnsParams.AnsMaxAlphabetSize
+            ? float.MaxValue
+            : JxlAnsEncodingHistogram.ComputeBest(histo, JxlHistogramParams.AnsHistogramStrategy.Fast).Cost;
+
+    // libjxl's Histogram::MaxSymbol: the largest symbol with a count, or 0.
+    private static int MaxSymbol(JxlHistogram histo) => Math.Max(0, histo.AlphabetSize() - 1);
 }

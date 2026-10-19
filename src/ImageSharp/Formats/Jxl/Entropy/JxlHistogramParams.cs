@@ -4,6 +4,8 @@
 // lib/jxl/enc_ans_params.h (HistogramParams) and lib/jxl/enc_ans.cc (HistogramParams::ForModular).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System;
+using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
@@ -44,8 +46,8 @@ internal sealed class JxlHistogramParams
     }
 
     /// <summary>
-    /// Whether to try LZ77. libjxl also has several LZ77 match finders; the encoder writes no LZ77 yet,
-    /// so only the first two values are ported.
+    /// Whether to try LZ77. libjxl also has several LZ77 match finders, which only e8 and above and
+    /// the ICC stream use; only the first two values are ported.
     /// </summary>
     public enum Lz77Method
     {
@@ -91,6 +93,12 @@ internal sealed class JxlHistogramParams
     public bool InitializeGlobalState { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the width of each token stream's image, which LZ77 uses as its distance
+    /// multiplier. A stream with no width, or a width of 0, has no special distances.
+    /// </summary>
+    public IReadOnlyList<int> ImageWidths { get; set; } = Array.Empty<int>();
+
+    /// <summary>
     /// Returns libjxl's histogram parameters for Modular streams. libjxl also takes the extra DC
     /// precision of VarDCT frames, which only Modular-coded VarDCT DC uses; that comes with the lossy slices.
     /// </summary>
@@ -113,8 +121,8 @@ internal sealed class JxlHistogramParams
         }
         else
         {
-            // libjxl picks LZ77 match finders here (kOptc256 and kLZ77b3w3f), which E2 ports.
-            result.Lz77 = Lz77Method.Rle;
+            // libjxl picks its LZ77 match finders here (kOptc256 and kLZ77b3w3f), which are not ported.
+            JxlThrowHelper.ThrowNotSupportedException("The LZ77 match finders of Modular streams (libjxl effort 8 and up)");
         }
 
         if (decodingSpeedTier >= 2)
@@ -123,7 +131,9 @@ internal sealed class JxlHistogramParams
         }
 
         // No predictor requires LZ77 to compress residuals. Effort 3 and lower have forced predictors,
-        // so kNone is set. Below Hare libjxl picks the LZ77 match finders, which E2 ports.
+        // so kNone is set. Departure (ADR 0001): libjxl picks the kLZ77b3w3f match finder at Wombat and
+        // Squirrel (slower tiers threw above). The match finder is not ported, so RLE stands in for it;
+        // no effort sets the Zero predictor below Falcon, so this never runs.
         if (predictor == JxlPredictor.Zero && modularMode)
         {
             result.Lz77 = speedTier >= JxlSpeedTier.Falcon ? Lz77Method.None : Lz77Method.Rle;

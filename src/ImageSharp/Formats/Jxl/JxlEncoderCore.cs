@@ -65,7 +65,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         writer.ZeroPadToByte();
 
-        JxlFrameEncoder.EncodeFrame(metadata, image, this.memoryAllocator, writer);
+        JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
         stream.Write(writer.GetSpan());
     }
 
@@ -165,17 +165,26 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         colorEncoding.RenderingIntent = JxlRenderingIntent.Relative;
     }
 
-    // Only lossless at Fastest is ported. Each other combination names the slice of the spec that adds it.
+    /// <summary>
+    /// Returns the libjxl speed tier of <paramref name="effort"/>, the one place the encoder maps the
+    /// two: Fastest is libjxl's effort 3, Default effort 5 and Thorough effort 7. Every stage is then
+    /// gated by the speed tier, as libjxl gates it.
+    /// </summary>
+    /// <param name="effort">The effort.</param>
+    /// <returns>The speed tier.</returns>
+    internal static JxlSpeedTier ToSpeedTier(JxlEffort effort) => effort switch
+    {
+        JxlEffort.Fastest => JxlSpeedTier.Falcon,
+        JxlEffort.Default => JxlSpeedTier.Hare,
+        _ => JxlSpeedTier.Squirrel,
+    };
+
+    // Lossless is ported at every effort. Lossy names the slice of the spec that adds it.
     private void CheckOptions()
     {
         if (this.distance != 0)
         {
             throw new NotSupportedException($"JPEG XL lossy encoding (distance {this.distance}) is not supported yet; slice E3 adds it.");
-        }
-
-        if (this.effort != JxlEffort.Fastest)
-        {
-            throw new NotSupportedException($"JPEG XL lossless encoding at effort {this.effort} is not supported yet; slice E2 adds it.");
         }
     }
 }

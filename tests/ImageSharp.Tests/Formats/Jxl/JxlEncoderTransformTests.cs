@@ -158,7 +158,7 @@ public class JxlEncoderTransformTests
     }
 
     // A photo in one group: the middle 384x244 of the conformance flower, which the jxl-oracle job also has.
-    private static Image<Rgb24> LoadPhoto() => LoadFlower(x => (x - 384) / 2, 384);
+    internal static Image<Rgb24> LoadPhoto() => LoadFlower(x => (x - 384) / 2, 384);
 
     // Another photo in one group: the left 400x244 of the same flower.
     private static Image<Rgb24> LoadFullRangePhoto() => LoadFlower(_ => 0, 400);
