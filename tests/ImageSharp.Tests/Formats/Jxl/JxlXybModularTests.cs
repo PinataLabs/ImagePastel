@@ -77,6 +77,16 @@ public class JxlXybModularTests
         Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
     }
 
+    [Fact]
+    public void DecodeToPlanes_GammaTransferFunction_IsNotSupported()
+    {
+        // The from-linear stage for a gamma curve comes with the transfer functions slice (D11).
+        using FileStream stream = File.OpenRead(InputPath("xyb_modular_gamma22"));
+
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
+        Assert.Contains("gamma transfer function", ex.Message, StringComparison.Ordinal);
+    }
+
     // Compares each sample with the clamped reference, which reference(pixel, channel) gives.
     private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, Func<int, int, float> reference)
     {
