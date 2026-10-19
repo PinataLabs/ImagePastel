@@ -363,7 +363,7 @@ internal static class JxlEncoderRoundTrip
         }
     }
 
-    private static void AssertMagickExact<TPixel>(Image<TPixel> expected, byte[] encoded)
+    public static void AssertMagickExact<TPixel>(Image<TPixel> expected, byte[] encoded)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         Assert.SkipUnless(ImageMagick.MagickFormatInfo.Create(ImageMagick.MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
@@ -373,7 +373,7 @@ internal static class JxlEncoderRoundTrip
         ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
 
-    private static async Task AssertDjxlExactAsync<TPixel>(Image<TPixel> expected, byte[] encoded, string name, CancellationToken cancellationToken)
+    public static async Task AssertDjxlExactAsync<TPixel>(Image<TPixel> expected, byte[] encoded, string name, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // Resolve the tool first, so the test skips before it writes anything.
