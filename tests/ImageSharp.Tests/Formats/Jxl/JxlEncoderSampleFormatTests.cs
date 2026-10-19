@@ -129,9 +129,7 @@ public class JxlEncoderSampleFormatTests
     public void Encode_EightColourIconWithAlpha_WritesOnePaletteOverColourAndAlpha(string pixelType, uint channels)
     {
         // libjxl's first palette try takes every channel, alpha included.
-        byte[] encoded = pixelType == nameof(La16)
-            ? EncodeIcon<La16>()
-            : EncodeIcon<Rgba32>();
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeIcon());
 
         List<JxlTransform> transforms = JxlEncodedFrame.ReadGlobalTransforms(encoded);
 
@@ -172,11 +170,14 @@ public class JxlEncoderSampleFormatTests
         return image;
     }
 
-    private static byte[] EncodeIcon<TPixel>()
-        where TPixel : unmanaged, IPixel<TPixel>
+    private sealed record EncodeIcon : IJxlPixelTypeCall<byte[]>
     {
-        using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>("translucent-icon", 64, 64);
-        return JxlEncoderRoundTrip.Encode(image);
+        public byte[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>("translucent-icon", 64, 64);
+            return JxlEncoderRoundTrip.Encode(image);
+        }
     }
 
     // The stored samples of both files are equal: their unclamped float planes have the same bits.
