@@ -351,6 +351,31 @@ public class JxlDecoderTests
     }
 
     [Fact]
+    public async Task Load_PatchesLossless_MatchesTheReference()
+    {
+        JxlConformanceVector vector = JxlConformanceVector.Load("patches_lossless");
+        NpyArray planes = await JxlConformanceData.LoadReferenceImageAsync(vector, TestContext.Current.CancellationToken);
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), vector.CommittedInputPath);
+
+        Assert.Equal(new[] { 1, image.Height, image.Width, 4 }, planes.Shape);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                int i = ((y * image.Width) + x) * 4;
+                Rgba32 expected = new(Quantize8(planes.Data[i]), Quantize8(planes.Data[i + 1]), Quantize8(planes.Data[i + 2]), Quantize8(planes.Data[i + 3]));
+                Rgba32 actual = image[x, y];
+
+                // Within one quantisation step.
+                Assert.InRange(actual.R - expected.R, -1, 1);
+                Assert.InRange(actual.G - expected.G, -1, 1);
+                Assert.InRange(actual.B - expected.B, -1, 1);
+                Assert.InRange(actual.A - expected.A, -1, 1);
+            }
+        }
+    }
+
+    [Fact]
     public void Load_CmykLayers_ChoosesRgba32AndHasNoPixelProfile()
     {
         using Image image = Image.Load(CreateConfiguration(), JxlConformanceVector.Load("cmyk_layers").CommittedInputPath);
