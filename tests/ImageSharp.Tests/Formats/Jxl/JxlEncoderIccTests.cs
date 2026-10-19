@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -53,6 +54,49 @@ public class JxlEncoderIccTests
         }
     }
 
+    [Theory]
+    [InlineData(nameof(Rgb24), TestImages.Tiff.CmykTestIccProfile, IccColorSpaceType.Cmyk)]
+    [InlineData(nameof(Rgb24), TestImages.Icc.CompactGrayV4, IccColorSpaceType.Gray)]
+    [InlineData(nameof(L8), TestImages.Icc.CompactDisplayP3V4, IccColorSpaceType.Rgb)]
+    public void Encode_ProfileNotMatchingThePixels_WritesTheSrgbEnumAndNoProfile(string pixelType, string profile, IccColorSpaceType profileColorSpace)
+    {
+        byte[] icc = ReadProfile(profile);
+        Assert.Equal(profileColorSpace, new IccProfile(icc).Header.DataColorSpace);
+        if (pixelType == nameof(L8))
+        {
+            AssertOurDecoderGetsSrgbEnum<L8>(icc);
+        }
+        else
+        {
+            AssertOurDecoderGetsSrgbEnum<Rgb24>(icc);
+        }
+    }
+
+    [Theory]
+    [InlineData(nameof(Rgb24))]
+    [InlineData(nameof(L8))]
+    public void Encode_NoProfile_WritesTheSrgbEnum(string pixelType)
+    {
+        if (pixelType == nameof(L8))
+        {
+            AssertOurDecoderGetsSrgbEnum<L8>(null);
+        }
+        else
+        {
+            AssertOurDecoderGetsSrgbEnum<Rgb24>(null);
+        }
+    }
+
+    [Fact]
+    public void Encode_ProfileThatIsNotValid_WritesTheSrgbEnum()
+    {
+        // An RGB profile whose header claims more bytes than it has.
+        byte[] icc = ReadProfile(TestImages.Icc.CompactDisplayP3V4)[..200];
+        Assert.False(new IccProfile(icc).CheckIsValid());
+
+        AssertOurDecoderGetsSrgbEnum<Rgb24>(icc);
+    }
+
     private static byte[] ReadProfile(string profile) => File.ReadAllBytes(TestFile.GetInputFileFullPath(profile));
 
     private static Image<TPixel> CreateImage<TPixel>(byte[] icc)
@@ -74,6 +118,26 @@ public class JxlEncoderIccTests
         Assert.NotNull(jxlMetadata.OriginalIccProfile);
         Assert.Equal(icc, jxlMetadata.OriginalIccProfile.ToByteArray());
         Assert.Equal(icc, decoded.Metadata.IccProfile?.ToByteArray());
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    private static void AssertOurDecoderGetsSrgbEnum<TPixel>(byte[] icc)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = CreateImage<TPixel>(icc);
+
+        using Image<TPixel> decoded = Image.Load<TPixel>(JxlEncoderRoundTrip.CreateConfiguration(), JxlEncoderRoundTrip.Encode(image));
+
+        JxlMetadata jxlMetadata = decoded.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.Null(jxlMetadata.OriginalIccProfile);
+        Assert.Null(decoded.Metadata.IccProfile);
+        JxlColorEncoding colorEncoding = jxlMetadata.ColorEncoding;
+        Assert.False(colorEncoding.WantIcc);
+        Assert.Equal(typeof(TPixel) == typeof(L8) ? JxlColorSpace.Gray : JxlColorSpace.Rgb, colorEncoding.ColorSpace);
+        Assert.Equal(JxlWhitePoint.D65, colorEncoding.WhitePoint);
+        Assert.Equal(JxlPrimaries.Srgb, colorEncoding.Primaries);
+        Assert.False(colorEncoding.Tf.HaveGamma);
+        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.Tf.TransferFunction);
         ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
 }
