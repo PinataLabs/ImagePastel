@@ -2,8 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
@@ -42,6 +45,36 @@ public class JxlEncoderEffortTests
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.LosslessFastest);
 
         Assert.Equal("CAC3BA22594C71A7E1E139DCD945BEC08190014E6B113D23D6F39DD288187A26", Convert.ToHexString(SHA256.HashData(encoded)));
+    }
+
+    [Fact]
+    public void Encode_DefaultPhoto_HasALearnedTree()
+    {
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+
+        List<JxlPropertyDecisionNode> tree = JxlEncodedFrame.ReadGlobalTree(JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(JxlEffort.Default)));
+
+        Assert.True(tree.Count(n => n.Property == -1) > 1, $"{tree.Count} nodes");
+        Assert.True(tree.Where(n => n.Property >= 0).Select(n => n.Property).Distinct().Count() > 1, "The splits use one property");
+    }
+
+    [Fact]
+    public void Encode_FastestPhoto_HasTheWpFixedDcTree()
+    {
+        // libjxl's kWPFixedDC split values; a photo of 2^14 pixels or more gets every one of them.
+        int[] wpFixedDcCutoffs =
+        {
+            -500, -392, -255, -191, -127, -95, -63, -47, -31, -23, -15, -11, -7, -4, -3, -1, 0,
+            1, 3, 5, 7, 11, 15, 23, 31, 47, 63, 95, 127, 191, 255, 392, 500,
+        };
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+
+        List<JxlPropertyDecisionNode> tree = JxlEncodedFrame.ReadGlobalTree(JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.LosslessFastest));
+
+        List<JxlPropertyDecisionNode> splits = tree.Where(n => n.Property >= 0).ToList();
+        Assert.All(splits, n => Assert.Equal(JxlModularPredict.WPProp, n.Property));
+        Assert.Equal(wpFixedDcCutoffs, splits.Select(n => n.SplitVal).Order());
+        Assert.All(tree.Where(n => n.Property == -1), n => Assert.Equal(JxlPredictor.Weighted, n.Predictor));
     }
 
     private sealed record EncodePattern(string Pattern, int Width, int Height, JxlEncoder Encoder) : IJxlPixelTypeCall<byte[]>

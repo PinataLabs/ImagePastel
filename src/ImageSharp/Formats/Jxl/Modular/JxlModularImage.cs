@@ -49,6 +49,23 @@ internal sealed class JxlModularImage : IDisposable
     /// <summary>Gets or sets a value indicating whether a fatal error occurred.</summary>
     public bool Error { get; set; }
 
+    /// <summary>Gets a value indicating whether no channel has any pixels.</summary>
+    public bool IsEmpty
+    {
+        get
+        {
+            foreach (JxlModularChannel ch in this.Channel)
+            {
+                if (ch.W != 0 && ch.H != 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>Creates an image with <paramref name="nbChans"/> full-size channels.</summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="w">The width.</param>
