@@ -210,12 +210,14 @@ internal sealed class JxlFrameDecoder
     private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlModularFrameDecoder modularFrameDecoder)
     {
         // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
-        // frame without the flag has no dictionary.
-        if ((frameHeader.Flags & JxlFrameFlags.Patches) != 0)
+        // frame without the flag has no dictionary, so the caller passes null.
+        if (patches != null)
         {
             patches.Decode(br, frameDim.XSizePadded, frameDim.YSizePadded, frameHeader.NonserializedMetadata.M.NumExtraChannels);
 
             // Unreachable until upsampling arrives (D10): CheckSupported rejects an upsampled frame first.
+            // The check is unconditional on purpose: libjxl's Decode reports uses_extra_channels, but at
+            // ef67fde2 ProcessDCGlobal never reads it, so this port does not compute it.
             if (frameHeader.Upsampling != 1)
             {
                 foreach (uint ecups in frameHeader.ExtraChannelUpsampling)
