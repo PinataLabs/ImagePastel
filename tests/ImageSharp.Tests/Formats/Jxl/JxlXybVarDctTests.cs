@@ -155,7 +155,6 @@ public class JxlXybVarDctTests
     [Theory]
     [InlineData("vardct_xyb_gaborish", "Loop filters")]
     [InlineData("vardct_xyb_e7", "Loop filters")]
-    [InlineData("vardct_xyb_epf", "Loop filters")]
     [InlineData("vardct_xyb_strategies", "AC strategy")]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]

@@ -6,6 +6,8 @@
 #   vardct_xyb_300x200_source.ppm   300 x 200 8-bit RGB: two groups in one row
 #   vardct_xyb_600x400_source.ppm   600 x 400 8-bit RGB: three by two groups
 #   vardct_xyb_grey_source.pgm      300 x 200 8-bit grey, the red channel of the 300 x 200 image
+#   vardct_xyb_13x37_source.ppm     13 x 37 8-bit RGB: neither side a multiple of 8, and narrower
+#                                   than two blocks
 # The pixels look a little like a photo: smooth gradients, a sine texture, hard-edged blocks and some
 # noise, so every DCT frequency has something to code.
 
@@ -45,3 +47,4 @@ write_ppm("vardct_xyb_64_source.ppm", 64, 64)
 write_ppm("vardct_xyb_300x200_source.ppm", 300, 200)
 write_ppm("vardct_xyb_600x400_source.ppm", 600, 400)
 write_pgm("vardct_xyb_grey_source.pgm", 300, 200)
+write_ppm("vardct_xyb_13x37_source.ppm", 13, 37)

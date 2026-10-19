@@ -284,6 +284,56 @@ djxl vardct_xyb_grey_d50.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - `djxl` gives linear sRGB for `vardct_xyb_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.
 - `djxl` gives linear grey with sRGB's D65 white point for `vardct_xyb_grey_d50.jxl`: libjxl's `CanOutputToColorEncoding` rejects grey with any other white point.
 
+#### How the EPF files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `vardct_xyb_epf.jxl` (above), `vardct_xyb_epf2.jxl`, `vardct_xyb_epf3.jxl` | The 64 x 64 image at `cjxl -e 2 --gaborish=0 -d 1` with `--epf=1`, `2` and `3` (D9c). At `-d 1` the image is barely filtered: with EPF off, `vardct_xyb_epf` changes by at most 2.9e-6, inside the tolerance, so it cannot show a missing EPF. Pass 2 changes the other two by 2.1e-2. | `External/ReferenceOutput/JxlDecoderTests/<name>.npy` |
+| `vardct_xyb_epf1_d3.jxl`, `vardct_xyb_epf2_d3.jxl`, `vardct_xyb_epf3_d3.jxl` | The same at `-d 3`, where every pass changes the output well above the tolerance. | the same |
+| `vardct_xyb_epf3_300x200_d3.jxl`, `vardct_xyb_epf3_600x400_d3.jxl` | Three iterations at `-d 3` on the 300 x 200 image (2 groups, a width that is not a multiple of 8) and the 600 x 400 image (3 x 2 groups). Every block is DCT8. | the same |
+| `vardct_xyb_epf3_13x37_d3.jxl` | Three iterations at `-d 3` on a 13 x 37 image: neither side is a multiple of 8, and the frame is less than two blocks wide. | the same |
+| `vardct_xyb_epf3_custom.jxl` | `vardct_xyb_epf3.jxl` with custom EPF fields patched into the frame header: sharpness LUT `[0, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1.2]`, channel scales `(30, 6, 4)`, zero-flush `(0.4, 0.5)`, quant_mul 0.6, pass 0 scale 1.1, pass 2 scale 5.0, border SAD multiplier 0.5. | the same |
+| `vardct_xyb_epf_sharp0.jxl`, `vardct_xyb_epf_quant_mul0.jxl` | `vardct_xyb_epf.jxl` with an all-zero sharpness LUT, and with quant_mul 0. Every sigma is then clamped to -1e-4, so every block passes through unfiltered: the output equals the frame without EPF. | the same |
+| `xyb_modular_epf2.jxl` | Lossy Modular with XYB, 300 x 200, `cjxl -m 1 -d 1 --gaborish=0 --epf=2`: EPF on a Modular frame (D9d). | None: decoding throws `NotSupportedException` |
+| `xyb_modular_epf_sigma0.jxl`, `xyb_modular_epf_sigma_neg.jxl` | `xyb_modular_epf2.jxl` with `epf_sigma_for_modular` patched to 0 and to -1, below libjxl's bound of 1e-8. `djxl` rejects both. | None: decoding throws `InvalidImageContentException` |
+| `xyb_modular_epf_sigma_tiny.jxl` | The same with `epf_sigma_for_modular` 5.96e-8, the smallest F16 subnormal, which is above the bound. `djxl` decodes it. | None: decoding throws `NotSupportedException` until D9d |
+
+```sh
+py -3 make_vardct_xyb.py
+cjxl vardct_xyb_64_source.ppm vardct_xyb_epf2.jxl -e 2 --gaborish=0 --epf=2 -d 1
+cjxl vardct_xyb_64_source.ppm vardct_xyb_epf3.jxl -e 2 --gaborish=0 --epf=3 -d 1
+cjxl vardct_xyb_64_source.ppm vardct_xyb_epf1_d3.jxl -e 2 --gaborish=0 --epf=1 -d 3
+cjxl vardct_xyb_64_source.ppm vardct_xyb_epf2_d3.jxl -e 2 --gaborish=0 --epf=2 -d 3
+cjxl vardct_xyb_64_source.ppm vardct_xyb_epf3_d3.jxl -e 2 --gaborish=0 --epf=3 -d 3
+cjxl vardct_xyb_300x200_source.ppm vardct_xyb_epf3_300x200_d3.jxl -e 2 --gaborish=0 --epf=3 -d 3
+cjxl vardct_xyb_600x400_source.ppm vardct_xyb_epf3_600x400_d3.jxl -e 2 --gaborish=0 --epf=3 -d 3
+cjxl vardct_xyb_13x37_source.ppm vardct_xyb_epf3_13x37_d3.jxl -e 2 --gaborish=0 --epf=3 -d 3
+cjxl vardct_xyb_300x200_source.ppm xyb_modular_epf2.jxl -m 1 -d 1 --gaborish=0 --epf=2
+py -3 patch_lf.py vardct_xyb_epf3.jxl vardct_xyb_epf3_custom.jxl "{'epf': 3, 'sharp': [0, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1.2], 'weight': [30, 6, 4, 0.4, 0.5], 'sigma': [0.6, 1.1, 5.0, 0.5]}"
+py -3 patch_lf.py vardct_xyb_epf.jxl vardct_xyb_epf_sharp0.jxl "{'epf': 1, 'sharp': [0, 0, 0, 0, 0, 0, 0, 0]}"
+py -3 patch_lf.py vardct_xyb_epf.jxl vardct_xyb_epf_quant_mul0.jxl "{'epf': 1, 'sigma': [0.0, 0.9, 6.5, 0.6666666666666666]}"
+py -3 patch_lf.py xyb_modular_epf2.jxl xyb_modular_epf_sigma0.jxl "{'epf': 2, 'sigma_modular': 0.0}"
+py -3 patch_lf.py xyb_modular_epf2.jxl xyb_modular_epf_sigma_neg.jxl "{'epf': 2, 'sigma_modular': -1.0}"
+py -3 patch_lf.py xyb_modular_epf2.jxl xyb_modular_epf_sigma_tiny.jxl "{'epf': 2, 'sigma_modular': 5.96e-08}"
+djxl vardct_xyb_epf.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf.npy
+djxl vardct_xyb_epf2.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf2.npy
+djxl vardct_xyb_epf3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3.npy
+djxl vardct_xyb_epf1_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf1_d3.npy
+djxl vardct_xyb_epf2_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf2_d3.npy
+djxl vardct_xyb_epf3_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_d3.npy
+djxl vardct_xyb_epf3_300x200_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_300x200_d3.npy
+djxl vardct_xyb_epf3_600x400_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_600x400_d3.npy
+djxl vardct_xyb_epf3_13x37_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_13x37_d3.npy
+djxl vardct_xyb_epf3_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_custom.npy
+djxl vardct_xyb_epf_sharp0.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf_sharp0.npy
+djxl vardct_xyb_epf_quant_mul0.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf_quant_mul0.npy
+```
+
+- `cjxl` v0.12.0 never writes the custom loop-filter fields, so `patch_lf.py` rewrites the loop-filter bundle of a bare codestream's frame header and copies the rest; it re-aligns the TOC. `lfhdr.py` is the header parser it uses; run on its own, it prints a file's headers, with the loop-filter fields.
+- At `-e 2`, `cjxl` codes the same coefficients for every `--epf`, so the files of one image and distance differ only in their frame header. Every block is DCT8 and has EPF sharpness 4.
+- The zero-flush fields are read, but libjxl's EPF never uses them.
+- Each test records how far each reference is from the same file decoded by `djxl` with `epf_iters` patched to 0. Measured on x64 against `djxl` with AVX2, the worst channel RMSE is at most 1.6e-6 and the peak error at most 7.8e-5 (`vardct_xyb_epf3_600x400_d3`). `JxlEpfTests` records the error of each file.
+
 #### How `twelve_bit` was made
 
 ```sh
