@@ -10,12 +10,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
 /// A box over the two static properties, channel and stream id: for each, the half-open range
 /// [begin, end). libjxl's <c>std::array&lt;std::array&lt;uint32_t, 2&gt;, 2&gt;</c>, a value type.
 /// </summary>
-internal struct JxlStaticPropRange
+internal unsafe struct JxlStaticPropRange
 {
-    private uint channelBegin;
-    private uint channelEnd;
-    private uint groupBegin;
-    private uint groupEnd;
+    // The bounds in libjxl's order: the channel's begin and end, then the stream id's.
+    private fixed uint bounds[4];
 
     /// <summary>Gets or sets one bound.</summary>
     /// <param name="property">The static property: 0 for the channel, 1 for the stream id.</param>
@@ -23,31 +21,14 @@ internal struct JxlStaticPropRange
     /// <returns>The bound.</returns>
     public uint this[int property, int bound]
     {
-        readonly get => (property, bound) switch
-        {
-            (0, 0) => this.channelBegin,
-            (0, _) => this.channelEnd,
-            (_, 0) => this.groupBegin,
-            _ => this.groupEnd,
-        };
+        readonly get => this.bounds[Index(property, bound)];
+        set => this.bounds[Index(property, bound)] = value;
+    }
 
-        set
-        {
-            switch ((property, bound))
-            {
-                case (0, 0):
-                    this.channelBegin = value;
-                    break;
-                case (0, _):
-                    this.channelEnd = value;
-                    break;
-                case (_, 0):
-                    this.groupBegin = value;
-                    break;
-                default:
-                    this.groupEnd = value;
-                    break;
-            }
-        }
+    private static int Index(int property, int bound)
+    {
+        DebugGuard.MustBeBetweenOrEqualTo(property, 0, 1, nameof(property));
+        DebugGuard.MustBeBetweenOrEqualTo(bound, 0, 1, nameof(bound));
+        return (property * 2) + bound;
     }
 }
