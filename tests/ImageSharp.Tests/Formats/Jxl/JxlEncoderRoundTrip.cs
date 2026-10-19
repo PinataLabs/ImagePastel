@@ -214,13 +214,15 @@ internal static class JxlEncoderRoundTrip
     }
 
     // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to
-    // 400 pixels on each side, so 257x1 and 1x257 are still one group; the others cross the 256-pixel
-    // group and the 2048-pixel LF group boundaries, or are exact multiples of them.
+    // 400 pixels on each side, so #210's 257x1 and 1x257 are still one group, and 401x1 and 1x401 are
+    // the thin sizes that cross the 256-pixel group boundary, in width alone and in height alone
+    // (JxlEncoderTests checks their group count). The others cross the group and the 2048-pixel LF
+    // group boundaries, or are exact multiples of them.
     private static void AddMultiGroup8BitCases(TheoryData<string, string, int, int> cases)
     {
         foreach (string pixelType in new[] { nameof(L8), nameof(Rgb24) })
         {
-            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (300, 513), (2049, 3), (256, 512) })
+            foreach ((int width, int height) in new[] { (257, 1), (1, 257), (401, 1), (1, 401), (300, 513), (2049, 3), (256, 512) })
             {
                 cases.Add(pixelType, "noise", width, height);
                 cases.Add(pixelType, "gradient", width, height);
