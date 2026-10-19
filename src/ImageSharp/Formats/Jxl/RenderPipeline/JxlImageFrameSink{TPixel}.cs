@@ -11,6 +11,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -44,6 +45,9 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     // The plane of the Black channel of a CMYK image, or -1.
     private readonly int blackPlane;
+
+    // Whether the planes are linear sRGB, which the sink encodes with the sRGB curve.
+    private readonly bool linearSrgb;
     private int framesWritten;
 
     /// <summary>
@@ -53,11 +57,16 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
     /// <param name="image">The image whose frames are written.</param>
     /// <param name="metadata">The image metadata, which gives the colour planes and the extra channels.</param>
     /// <param name="cmyk">Whether the image is CMYK: its colour planes are C, M and Y, with K in its Black channel.</param>
-    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, JxlImageMetadata metadata, bool cmyk)
+    /// <param name="linearSrgb">
+    /// Whether the planes are linear sRGB, as an XYB image renders when the XYB stage cannot output its
+    /// own colour encoding, such as an ICC profile. The pixels are then sRGB, with no pixel profile (ADR 0002).
+    /// </param>
+    public JxlImageFrameSink(Configuration configuration, Image<TPixel> image, JxlImageMetadata metadata, bool cmyk, bool linearSrgb)
     {
+        this.linearSrgb = linearSrgb;
         this.configuration = configuration;
         this.image = image;
-        int colorPlanes = metadata.NumColorPlanes;
+        int colorPlanes = metadata.NumOutputColorPlanes;
         this.gray = colorPlanes == 1;
         this.greenPlane = this.gray ? 0 : 1;
         this.bluePlane = this.gray ? 0 : 2;
@@ -83,8 +92,9 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     public bool ConsumeFrame(Buffer2D<float>[] planes, int width, int height)
     {
-        // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, clamp, then
-        // quantise. The sRGB transfer for XYB arrives with a later slice.
+        // Issue #111's order: un-premultiply, render the spot colours, convert CMYK to RGB, apply the sRGB
+        // curve to linear sRGB, clamp, then quantise. libjxl renders the spot colours of linear output
+        // before its from-linear stage too.
         ImageFrame<TPixel> frame = this.framesWritten == 0 ? this.image.Frames.RootFrame : this.image.Frames.CreateFrame();
         this.framesWritten++;
         Buffer2D<TPixel> pixels = frame.PixelBuffer;
@@ -101,6 +111,11 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
             if (this.blackPlane >= 0)
             {
                 ConvertCmyk(planes[this.blackPlane].DangerousGetRowSpan(y), row);
+            }
+
+            if (this.linearSrgb)
+            {
+                EncodeSrgb(row);
             }
 
             for (int x = 0; x < row.Length; x++)
@@ -146,6 +161,18 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
                 float multiplier = 1F / MathF.Max(SmallAlpha, a[x]);
                 row[x] = new Vector4(r[x] * multiplier, g[x] * multiplier, b[x] * multiplier, a[x]);
             }
+        }
+    }
+
+    // libjxl's sRGB output: its from-linear stage with OpRgb, which uses TF_SRGB().EncodedFromDisplay.
+    private static void EncodeSrgb(Span<Vector4> row)
+    {
+        for (int x = 0; x < row.Length; x++)
+        {
+            ref Vector4 p = ref row[x];
+            p.X = JxlTransferFunctions.SrgbEncodedFromDisplay(p.X);
+            p.Y = JxlTransferFunctions.SrgbEncodedFromDisplay(p.Y);
+            p.Z = JxlTransferFunctions.SrgbEncodedFromDisplay(p.Z);
         }
     }
 

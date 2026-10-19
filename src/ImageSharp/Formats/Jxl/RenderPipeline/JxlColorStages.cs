@@ -23,10 +23,26 @@ internal static class JxlColorStages
     /// colours in the sink, so the from-linear stage can follow the colour transform directly.
     /// </summary>
     /// <remarks>
-    /// Empty for now: the frame decoder rejects every frame with a colour transform, and a frame with none
-    /// has nothing to convert.
+    /// A frame without a colour transform has nothing to convert. The frame decoder rejects YCbCr, which
+    /// comes with a later slice. libjxl adds the from-linear stage only when the XYB stage does not output
+    /// XYB itself, which this port never does (<see cref="JxlXybStage"/>). A departure from libjxl: with a
+    /// spot colour channel and no blending or save after the colour transform, libjxl renders the spot
+    /// colours on the linear samples, before the from-linear stage, where this port renders them in the
+    /// sink, after it.
     /// </remarks>
     /// <param name="frameHeader">The frame header.</param>
     /// <returns>The stages, possibly none.</returns>
-    public static IJxlColorStage[] Create(JxlFrameHeader frameHeader) => Array.Empty<IJxlColorStage>();
+    public static IJxlColorStage[] Create(JxlFrameHeader frameHeader)
+    {
+        if (frameHeader.ColorTransform != JxlColorTransform.Xyb)
+        {
+            return Array.Empty<IJxlColorStage>();
+        }
+
+        JxlOutputEncoding output = JxlOutputEncoding.Create(frameHeader.NonserializedMetadata);
+        JxlFromLinearStage fromLinear = JxlFromLinearStage.Create(output);
+        return fromLinear == null
+            ? new IJxlColorStage[] { new JxlXybStage(output) }
+            : new IJxlColorStage[] { new JxlXybStage(output), fromLinear };
+    }
 }

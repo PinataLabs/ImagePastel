@@ -74,6 +74,13 @@ internal sealed class JxlImageMetadata : JxlFields
     public int NumColorPlanes => this.ColorEncoding.IsGray && !this.XybEncoded ? 1 : 3;
 
     /// <summary>
+    /// Gets the number of colour planes the sinks receive: one for a grey image, three otherwise. It
+    /// differs from <see cref="NumColorPlanes"/> only for XYB grey, which the pipeline renders as three
+    /// equal planes and hands over as one.
+    /// </summary>
+    public int NumOutputColorPlanes => this.ColorEncoding.IsGray ? 1 : 3;
+
+    /// <summary>
     /// Returns the index of the first extra channel of type <paramref name="type"/>, or -1. libjxl's
     /// <c>Find</c> returns the channel itself; the index also gives its render plane.
     /// </summary>

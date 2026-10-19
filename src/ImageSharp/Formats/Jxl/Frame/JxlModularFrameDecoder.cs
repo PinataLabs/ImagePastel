@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_modular.h and lib/jxl/dec_modular.cc (ModularStreamId, ModularFrameDecoder: DecodeGlobalInfo,
-// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding, int_to_float).
+// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding, int_to_float, MultiplySum).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -336,20 +336,31 @@ internal sealed class JxlModularFrameDecoder : IDisposable
                 JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform on a grey image");
             }
 
-            bool fp = metadata.BitDepth.FloatingPointSample && frameHeader.ColorTransform != JxlColorTransform.Xyb;
+            bool xyb = frameHeader.ColorTransform == JxlColorTransform.Xyb;
+            bool fp = metadata.BitDepth.FloatingPointSample && !xyb;
             int bits = (int)metadata.BitDepth.BitsPerSample;
             int expBits = (int)metadata.BitDepth.ExponentBitsPerSample;
             for (; c < numColorPlanes; c++)
             {
-                // libjxl's XYB conversion, which scales by this.matrices.DcQuant(c), comes with a later
-                // slice; the frame decoder rejects XYB images, so it is not reached.
                 double factor = this.fullImage.BitDepth < 32 ? 1.0 / ((1u << this.fullImage.BitDepth) - 1) : 0;
-                if (c >= gi.Channel.Count)
+                int cIn = c;
+                if (xyb)
+                {
+                    factor = this.matrices.DcQuant(c);
+
+                    // XYB is encoded as YX(B-Y)
+                    if (c < 2)
+                    {
+                        cIn = 1 - c;
+                    }
+                }
+
+                if (cIn >= gi.Channel.Count)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException("Missing colour channel");
                 }
 
-                JxlModularChannel chIn = gi.Channel[c];
+                JxlModularChannel chIn = gi.Channel[cIn];
                 if (chIn.W == 0 || chIn.H == 0)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException("Empty image");
@@ -359,6 +370,20 @@ internal sealed class JxlModularFrameDecoder : IDisposable
                 if (r.YSize != mr.YSize || r.XSize != mr.XSize)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException($"Dimension mismatch: trying to fit a {mr.XSize}x{mr.YSize} modular channel into a {r.XSize}x{r.YSize} rect");
+                }
+
+                if (xyb && c == 2)
+                {
+                    // B is rebuilt from the coded B-Y and Y.
+                    JxlModularChannel chY = gi.Channel[0];
+                    for (int y = 0; y < r.YSize; y++)
+                    {
+                        ReadOnlySpan<int> rowIn = chIn.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
+                        ReadOnlySpan<int> rowInY = chY.Row((int)(mr.Y0 + y)).Slice((int)mr.X0, (int)mr.XSize);
+                        MultiplySum(rowIn, rowInY, (float)factor, OutRow(pipeline, c, r, y));
+                    }
+
+                    continue;
                 }
 
                 for (int y = 0; y < r.YSize; y++)
@@ -516,6 +541,15 @@ internal sealed class JxlModularFrameDecoder : IDisposable
             f |= (uint)exp << 23;
             f |= (uint)mantissa;
             rowOut[x] = BitConverter.Int32BitsToSingle(unchecked((int)f));
+        }
+    }
+
+    // MultiplySum: the two samples are added as integers, then converted and scaled in float.
+    private static void MultiplySum(ReadOnlySpan<int> rowIn, ReadOnlySpan<int> rowInY, float factor, Span<float> rowOut)
+    {
+        for (int x = 0; x < rowOut.Length; x++)
+        {
+            rowOut[x] = unchecked(rowIn[x] + rowInY[x]) * factor;
         }
     }
 

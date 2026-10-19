@@ -161,3 +161,38 @@ cjxl depth_source.pam depth.jxl -d 0
 - `make_extra_channels.py` writes the source PAMs. They are not committed; the script makes them again.
 - In a PAM header, `cjxl` reads each `TUPLTYPE` line after the first as one more extra channel: `TUPLTYPE RGB_ALPHA` then `TUPLTYPE Alpha` gives two alpha channels, and `TUPLTYPE RGB` then `TUPLTYPE Depth` a depth channel.
 - `jxlinfo -v` lists the channels as "RGB+Alpha+Alpha" and "RGB+Depth".
+
+#### How the lossy Modular (XYB) files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `xyb_modular_rgb.jxl` | Lossy Modular (`-m 1 -d 1`), 283 x 67 8-bit RGB, sRGB: XYB, no loop filters. Wider than one group. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_rgb.npy` |
+| `xyb_modular_grey.jxl` | The same in grey. The XYB stage gives three equal planes, and the output has one. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_grey.npy`, one channel |
+| `xyb_modular_icc.jxl` | Lossy Modular, 32 x 32 8-bit RGB with the embedded ICC profile of `custom_icc.jxl`. The XYB stage cannot output to an ICC profile, so the output is linear sRGB (ADR 0002). | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_icc.npy`, linear sRGB |
+| `xyb_modular_display_p3.jxl` | Lossy Modular, 32 x 32 8-bit RGB, `DisplayP3`: the inverse opsin matrix is adapted to the P3 primaries. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_display_p3.npy` |
+| `xyb_modular_intensity_target.jxl` | Lossy Modular, 32 x 32 8-bit RGB, sRGB, with an intensity target of 1000 nits, which scales the inverse opsin matrix. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_intensity_target.npy` |
+| `xyb_modular_gamma22.jxl` | Lossy Modular, 32 x 32 8-bit RGB, `RGB_D65_SRG_Per_g0.45455`: a gamma curve, which XYB output does not support until D11. | None: decoding throws `NotSupportedException` |
+| `xyb_modular_icc_animation.jxl` | Lossy Modular, 24 x 16 8-bit RGBA animation with the ICC profile of `custom_icc.jxl`. Its second frame is blended, and libjxl does not blend in the linear sRGB fallback. | None: `djxl` fails on it, and decoding throws `InvalidImageContentException` |
+
+```sh
+py -3 make_custom_icc.py
+py -3 make_colour_encodings.py
+py -3 make_xyb_modular.py custom_icc.icc
+cjxl xyb_modular_source.ppm xyb_modular_rgb.jxl -m 1 -d 1
+cjxl xyb_modular_grey_source.pgm xyb_modular_grey.jxl -m 1 -d 1
+cjxl custom_icc_source.png xyb_modular_icc.jxl -m 1 -d 1
+cjxl colour_source.ppm xyb_modular_display_p3.jxl -m 1 -d 1 -x "color_space=DisplayP3"
+cjxl colour_source.ppm xyb_modular_intensity_target.jxl -m 1 -d 1 --intensity_target=1000
+cjxl colour_source.ppm xyb_modular_gamma22.jxl -m 1 -d 1 -x "color_space=RGB_D65_SRG_Per_g0.45455"
+cjxl xyb_modular_icc_animation_source.png xyb_modular_icc_animation.jxl -m 1 -d 1
+djxl xyb_modular_rgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_rgb.npy
+djxl xyb_modular_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_grey.npy
+djxl xyb_modular_icc.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_icc.npy
+djxl xyb_modular_display_p3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_display_p3.npy
+djxl xyb_modular_intensity_target.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_intensity_target.npy
+```
+
+- `make_xyb_modular.py` writes `xyb_modular_source.ppm` and `xyb_modular_grey_source.pgm`, and, given the profile that `make_custom_icc.py` writes, the APNG `xyb_modular_icc_animation_source.png`. `make_colour_encodings.py` writes `colour_source.ppm`. None of the sources is committed; the scripts make them again.
+- Lossy `cjxl` encodes XYB, so the files are XYB with the colour encoding of the source as their original encoding. `-m 1` makes Modular frames rather than VarDCT, and at `-d 1` they have no Gaborish or EPF.
+- `djxl` writes float32 `.npy` of (frames, height, width, channels), not clamped: some samples are below 0. The decoder cannot match it bit for bit, because libjxl uses FMA (ADR 0004), so the tests compare at the lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output").
+- `djxl` gives linear sRGB for `xyb_modular_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.

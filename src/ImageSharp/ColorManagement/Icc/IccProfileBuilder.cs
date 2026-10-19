@@ -246,7 +246,7 @@ internal static class IccProfileBuilder
         return new[] { wx * factor, 1, (1 - wx - wy) * factor };
     }
 
-    private static float[,] PrimariesToXyz(float rx, float ry, float gx, float gy, float bx, float by, float wx, float wy)
+    internal static float[,] PrimariesToXyz(float rx, float ry, float gx, float gy, float bx, float by, float wx, float wy)
     {
         CheckWhitePoint(wx, wy);
 
@@ -281,7 +281,7 @@ internal static class IccProfileBuilder
     }
 
     // Adapts white point x, y to D50
-    private static float[,] AdaptToXyzD50(float wx, float wy, Vector3 d50)
+    internal static float[,] AdaptToXyzD50(float wx, float wy, Vector3 d50)
     {
         // Out of range values can cause division through zero further down with the bradford
         // adaptation too.
@@ -317,7 +317,7 @@ internal static class IccProfileBuilder
         return Mul3x3Matrix(BradfordInv, b);
     }
 
-    private static float[,] PrimariesToXyzD50(float rx, float ry, float gx, float gy, float bx, float by, float wx, float wy, Vector3 adaptedWhite)
+    internal static float[,] PrimariesToXyzD50(float rx, float ry, float gx, float gy, float bx, float by, float wx, float wy, Vector3 adaptedWhite)
     {
         float[,] toXyz = PrimariesToXyz(rx, ry, gx, gy, bx, by, wx, wy);
         float[,] d50 = AdaptToXyzD50(wx, wy, adaptedWhite);
@@ -334,7 +334,7 @@ internal static class IccProfileBuilder
     }
 
     // Computes C = A * B, where A, B, C are 3x3 matrices.
-    private static float[,] Mul3x3Matrix(float[,] a, float[,] b)
+    internal static float[,] Mul3x3Matrix(float[,] a, float[,] b)
     {
         float[,] c = new float[3, 3];
         for (int x = 0; x < 3; x++)
@@ -370,7 +370,7 @@ internal static class IccProfileBuilder
     }
 
     // Inverts a 3x3 matrix. Intermediate computation is done in double precision.
-    private static float[,] Inv3x3Matrix(float[,] m)
+    internal static float[,] Inv3x3Matrix(float[,] m)
     {
         double[,] temp = new double[3, 3];
         temp[0, 0] = ((double)m[1, 1] * m[2, 2]) - ((double)m[1, 2] * m[2, 1]);
