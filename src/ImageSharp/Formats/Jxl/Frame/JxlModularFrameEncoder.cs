@@ -376,6 +376,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // The streams are independent: this loop is where libjxl prepares them in parallel.
         foreach (StreamParams stream in this.streamParams)
         {
+            if (stream.Id != 0)
+            {
+                this.streamOptions[stream.Id] = this.streamOptions[0].Clone();
+            }
+
             this.PrepareStreamParams(stream.Rect, stream.MinShift, stream.MaxShift, stream.Id);
         }
 
