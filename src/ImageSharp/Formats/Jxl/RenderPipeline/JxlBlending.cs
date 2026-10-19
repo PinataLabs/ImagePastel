@@ -51,10 +51,13 @@ internal static class JxlBlending
 
     /// <summary>
     /// Blends <paramref name="xsize"/> pixels of one row of the foreground onto the background and
-    /// writes the result over the foreground, as libjxl's blending stage calls it (<c>out == fg</c>).
+    /// writes the result to <paramref name="output"/>, which may be the background or the foreground:
+    /// libjxl's blending stage writes over the foreground (<c>out == fg</c>) and its patches stage over
+    /// the background (<c>out == bg</c>).
     /// </summary>
     /// <param name="bg">The background rows, one per channel; an empty span stands for libjxl's zeros.</param>
-    /// <param name="fg">The foreground rows, one per channel, also the output.</param>
+    /// <param name="fg">The foreground rows, one per channel.</param>
+    /// <param name="output">The output rows, one per channel.</param>
     /// <param name="numColorPlanes">The number of colour planes: 1 or 3.</param>
     /// <param name="colorBlending">The blending of the colour planes.</param>
     /// <param name="ecBlending">The blending of each extra channel.</param>
@@ -64,6 +67,7 @@ internal static class JxlBlending
     public static void PerformBlending(
         JxlBlendingRows bg,
         JxlBlendingRows fg,
+        JxlBlendingRows output,
         int numColorPlanes,
         JxlPatchBlending colorBlending,
         ReadOnlySpan<JxlPatchBlending> ecBlending,
@@ -216,7 +220,7 @@ internal static class JxlBlending
 
         for (int i = 0; i < nc + numEc; i++)
         {
-            Tmp(i).CopyTo(fg[i]);
+            Tmp(i).CopyTo(output[i]);
         }
     }
 
