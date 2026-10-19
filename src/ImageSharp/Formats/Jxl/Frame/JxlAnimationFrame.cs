@@ -23,11 +23,11 @@ internal sealed class JxlAnimationFrame : JxlFields
         JxlBundle.Init(this);
     }
 
-    /// <summary>Gets the duration, in ticks.</summary>
-    public uint Duration { get; private set; }
+    /// <summary>Gets or sets the duration, in ticks.</summary>
+    public uint Duration { get; set; }
 
-    /// <summary>Gets the timecode, 0xHHMMSSFF.</summary>
-    public uint Timecode { get; private set; }
+    /// <summary>Gets or sets the timecode, 0xHHMMSSFF.</summary>
+    public uint Timecode { get; set; }
 
     /// <summary>Gets or sets the codestream metadata, which is not serialized here.</summary>
     public JxlCodecMetadata NonserializedMetadata { get; set; }

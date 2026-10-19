@@ -24,26 +24,30 @@ internal sealed class JxlImageMetadata : JxlFields
     /// <summary>Gets the sample format of the colour channels.</summary>
     public JxlBitDepth BitDepth { get; } = new();
 
-    /// <summary>Gets a value indicating whether 16-bit buffers suffice for Modular decoding; otherwise 32 bits are needed.</summary>
-    public bool Modular16BitBufferSufficient { get; private set; }
+    /// <summary>Gets or sets a value indicating whether 16-bit buffers suffice for Modular decoding; otherwise 32 bits are needed.</summary>
+    public bool Modular16BitBufferSufficient { get; set; }
 
-    /// <summary>Gets a value indicating whether the colour is stored as XYB.</summary>
-    public bool XybEncoded { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the colour is stored as XYB.</summary>
+    public bool XybEncoded { get; set; }
 
     /// <summary>Gets the colour encoding.</summary>
     public JxlColorEncoding ColorEncoding { get; } = new();
 
-    /// <summary>Gets the EXIF orientation, 1 to 8.</summary>
-    public uint Orientation => this.orientation;
+    /// <summary>Gets or sets the EXIF orientation, 1 to 8.</summary>
+    public uint Orientation
+    {
+        get => this.orientation;
+        set => this.orientation = value;
+    }
 
-    /// <summary>Gets a value indicating whether a preview frame comes first.</summary>
-    public bool HavePreview { get; private set; }
+    /// <summary>Gets or sets a value indicating whether a preview frame comes first.</summary>
+    public bool HavePreview { get; set; }
 
-    /// <summary>Gets a value indicating whether the image is an animation.</summary>
-    public bool HaveAnimation { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the image is an animation.</summary>
+    public bool HaveAnimation { get; set; }
 
-    /// <summary>Gets a value indicating whether the image has an intrinsic size.</summary>
-    public bool HaveIntrinsicSize { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the image has an intrinsic size.</summary>
+    public bool HaveIntrinsicSize { get; set; }
 
     /// <summary>Gets the intrinsic size. Only valid if <see cref="HaveIntrinsicSize"/>.</summary>
     public JxlSizeHeader IntrinsicSize { get; } = new();
@@ -60,8 +64,8 @@ internal sealed class JxlImageMetadata : JxlFields
     /// <summary>Gets the animation header. Only valid if <see cref="HaveAnimation"/>.</summary>
     public JxlAnimationHeader Animation { get; } = new();
 
-    /// <summary>Gets the extension bits.</summary>
-    public ulong Extensions { get; private set; }
+    /// <summary>Gets or sets the extension bits.</summary>
+    public ulong Extensions { get; set; }
 
     /// <summary>Gets the number of extra channels.</summary>
     public int NumExtraChannels => this.ExtraChannelInfo.Count;
@@ -93,9 +97,13 @@ internal sealed class JxlImageMetadata : JxlFields
             return;
         }
 
-        // libjxl starts from whether these fields differ from their defaults, which only matters
-        // to its writer. The read and default visitors overwrite the flag, so start from false.
-        bool extraFields = visitor.Bool(false, false);
+        // Bundle::AllDefault does not allow usage when reading (it may abort the program when a
+        // codestream has invalid values), but when reading we overwrite the extra_fields value, so do
+        // not need to call AllDefault.
+        bool toneMappingDefault = !visitor.IsReading && JxlBundle.AllDefault(this.ToneMapping);
+
+        bool extraFields = this.orientation != 1 || this.HavePreview || this.HaveAnimation || this.HaveIntrinsicSize || !toneMappingDefault;
+        extraFields = visitor.Bool(false, extraFields);
         if (visitor.Conditional(extraFields))
         {
             // The encoded value is orientation - 1.

@@ -19,14 +19,14 @@ internal sealed class JxlBitDepth : JxlFields
 {
     public JxlBitDepth() => JxlBundle.Init(this);
 
-    /// <summary>Gets a value indicating whether samples are floating point.</summary>
-    public bool FloatingPointSample { get; private set; }
+    /// <summary>Gets or sets a value indicating whether samples are floating point.</summary>
+    public bool FloatingPointSample { get; set; }
 
-    /// <summary>Gets the number of bits per sample, including sign and exponent for floats.</summary>
-    public uint BitsPerSample { get; private set; }
+    /// <summary>Gets or sets the number of bits per sample, including sign and exponent for floats.</summary>
+    public uint BitsPerSample { get; set; }
 
-    /// <summary>Gets the number of exponent bits of floating-point samples; 0 for integers.</summary>
-    public uint ExponentBitsPerSample { get; private set; }
+    /// <summary>Gets or sets the number of exponent bits of floating-point samples; 0 for integers.</summary>
+    public uint ExponentBitsPerSample { get; set; }
 
     public override void VisitFields(JxlVisitor visitor)
     {

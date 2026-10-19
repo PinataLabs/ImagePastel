@@ -1,37 +1,22 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// Writes bits least-significant first, as the JPEG XL bit reader reads them, to build small test bitstreams.
+/// A fluent wrapper over the production <see cref="JxlBitWriter"/>, to build small test bitstreams.
 /// </summary>
 internal sealed class JxlTestBitWriter
 {
-    private readonly List<byte> bytes = new();
-    private int bitCount;
+    private readonly JxlBitWriter writer = new();
 
     /// <summary>Writes the low <paramref name="nbits"/> bits of <paramref name="value"/>.</summary>
     public JxlTestBitWriter Write(int nbits, ulong value)
     {
-        for (int i = 0; i < nbits; i++)
-        {
-            if ((this.bitCount & 7) == 0)
-            {
-                this.bytes.Add(0);
-            }
-
-            if (((value >> i) & 1) != 0)
-            {
-                this.bytes[^1] |= (byte)(1 << (this.bitCount & 7));
-            }
-
-            this.bitCount++;
-        }
-
+        ulong mask = nbits >= 64 ? ulong.MaxValue : (1UL << nbits) - 1;
+        this.writer.Write(nbits, value & mask);
         return this;
     }
 
@@ -52,12 +37,12 @@ internal sealed class JxlTestBitWriter
     /// <summary>Pads to a byte boundary with zero bits.</summary>
     public JxlTestBitWriter ZeroPadToByte()
     {
-        this.bitCount = (this.bitCount + 7) & ~7;
+        this.writer.ZeroPadToByte();
         return this;
     }
 
     /// <summary>Gets the bytes written so far.</summary>
-    public byte[] ToArray() => this.bytes.ToArray();
+    public byte[] ToArray() => this.writer.ToArray();
 
     /// <summary>Returns a reader over the bytes written so far.</summary>
     public JxlBitReader ToReader() => new(this.ToArray());

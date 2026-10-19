@@ -41,6 +41,50 @@ internal sealed class JxlSizeHeader : JxlFields
     /// <summary>Gets the image height.</summary>
     public ulong YSize => this.small ? (this.ysizeDiv8Minus1 + 1) * 8UL : this.ysize;
 
+    /// <summary>
+    /// Sets the size, choosing the most compact form. Throws <see cref="ImageFormatException"/> for an
+    /// empty size or one above 32 bits. A height the header cannot hold is rejected when it is written.
+    /// </summary>
+    /// <param name="xsize">The width.</param>
+    /// <param name="ysize">The height.</param>
+    public void Set(ulong xsize, ulong ysize)
+    {
+        if (xsize > uint.MaxValue || ysize > uint.MaxValue)
+        {
+            JxlThrowHelper.ThrowImageFormatException("Image too large");
+        }
+
+        if (xsize == 0 || ysize == 0)
+        {
+            JxlThrowHelper.ThrowImageFormatException("Empty image");
+        }
+
+        uint xsize32 = (uint)xsize;
+        uint ysize32 = (uint)ysize;
+        this.ratio = JxlAspectRatio.Find(xsize32, ysize32);
+        this.small = ysize <= 256 && (ysize % 8) == 0 && (this.ratio != 0 || (xsize <= 256 && (xsize % 8) == 0));
+        if (this.small)
+        {
+            this.ysizeDiv8Minus1 = (ysize32 / 8) - 1;
+        }
+        else
+        {
+            this.ysize = ysize32;
+        }
+
+        if (this.ratio == 0)
+        {
+            if (this.small)
+            {
+                this.xsizeDiv8Minus1 = (xsize32 / 8) - 1;
+            }
+            else
+            {
+                this.xsize = xsize32;
+            }
+        }
+    }
+
     public override void VisitFields(JxlVisitor visitor)
     {
         this.small = visitor.Bool(false, this.small);

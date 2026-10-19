@@ -20,11 +20,11 @@ internal sealed class JxlCustomXy : JxlFields
 
     public JxlCustomXy() => JxlBundle.Init(this);
 
-    /// <summary>Gets the x chromaticity, times 10^6.</summary>
-    public int X { get; private set; }
+    /// <summary>Gets or sets the x chromaticity, times 10^6.</summary>
+    public int X { get; set; }
 
-    /// <summary>Gets the y chromaticity, times 10^6.</summary>
-    public int Y { get; private set; }
+    /// <summary>Gets or sets the y chromaticity, times 10^6.</summary>
+    public int Y { get; set; }
 
     /// <summary>Gets the chromaticity as CIE xy (Customxy::GetValue).</summary>
     public (double X, double Y) Value => (this.X * (1.0 / 1000000), this.Y * (1.0 / 1000000));

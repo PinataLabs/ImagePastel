@@ -4,6 +4,7 @@
 // lib/jxl/headers.h and lib/jxl/headers.cc (SizeHeader, PreviewHeader, AnimationHeader).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
@@ -41,6 +42,46 @@ internal sealed class JxlPreviewHeader : JxlFields
 
     /// <summary>Gets the preview height.</summary>
     public ulong YSize => this.div8 ? this.ysizeDiv8 * 8UL : this.ysize;
+
+    /// <summary>
+    /// Sets the size, choosing the most compact form. Throws <see cref="ImageFormatException"/> for an
+    /// empty size. A size the header cannot hold is rejected when it is written.
+    /// </summary>
+    /// <param name="xsize">The width.</param>
+    /// <param name="ysize">The height.</param>
+    public void Set(ulong xsize, ulong ysize)
+    {
+        // libjxl truncates to 32 bits here; the U32 fields reject anything that large anyway.
+        uint xsize32 = (uint)Math.Min(xsize, uint.MaxValue);
+        uint ysize32 = (uint)Math.Min(ysize, uint.MaxValue);
+        if (xsize == 0 || ysize == 0)
+        {
+            JxlThrowHelper.ThrowImageFormatException("Empty preview");
+        }
+
+        this.div8 = (xsize % 8) == 0 && (ysize % 8) == 0;
+        if (this.div8)
+        {
+            this.ysizeDiv8 = ysize32 / 8;
+        }
+        else
+        {
+            this.ysize = ysize32;
+        }
+
+        this.ratio = JxlAspectRatio.Find(xsize32, ysize32);
+        if (this.ratio == 0)
+        {
+            if (this.div8)
+            {
+                this.xsizeDiv8 = xsize32 / 8;
+            }
+            else
+            {
+                this.xsize = xsize32;
+            }
+        }
+    }
 
     public override void VisitFields(JxlVisitor visitor)
     {

@@ -22,11 +22,11 @@ internal sealed class JxlPasses : JxlFields
 
     public JxlPasses() => JxlBundle.Init(this);
 
-    /// <summary>Gets the number of passes, at most <see cref="MaxNumPasses"/>.</summary>
-    public uint NumPasses { get; private set; }
+    /// <summary>Gets or sets the number of passes, at most <see cref="MaxNumPasses"/>.</summary>
+    public uint NumPasses { get; set; }
 
-    /// <summary>Gets the number of downsampling targets, at most <see cref="NumPasses"/>.</summary>
-    public uint NumDownsample { get; private set; }
+    /// <summary>Gets or sets the number of downsampling targets, at most <see cref="NumPasses"/>.</summary>
+    public uint NumDownsample { get; set; }
 
     public uint[] Downsample { get; } = new uint[MaxNumPasses];
 
