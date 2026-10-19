@@ -24,9 +24,6 @@ public class JxlSupportedFeaturesTests
     public void Decode_VarDctFrame_IsNotSupported()
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Encoding = JxlFrameEncoding.VarDct }, "VarDCT");
 
-    [Fact]
-    public void Decode_XybModularFrame_IsNotSupported()
-        => AssertNotSupported(new JxlTestLayers(Width, Height) { Xyb = true }, JxlTestFrame.Last(JxlTestLayers.ColourA), "XYB");
 
     [Fact]
     public void Decode_XybVarDctFrame_IsNotSupported()

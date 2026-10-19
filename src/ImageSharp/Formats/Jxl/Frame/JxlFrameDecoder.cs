@@ -149,9 +149,9 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("VarDCT");
         }
 
-        if (frameHeader.ColorTransform == JxlColorTransform.Xyb)
+        if (frameHeader.ColorTransform == JxlColorTransform.Xyb && frameHeader.Encoding != JxlFrameEncoding.Modular)
         {
-            JxlThrowHelper.ThrowNotSupportedException("The XYB colour transform");
+            JxlThrowHelper.ThrowNotSupportedException("The XYB colour transform on a VarDCT frame");
         }
 
         if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
