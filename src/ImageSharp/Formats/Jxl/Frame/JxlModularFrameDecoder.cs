@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_modular.h and lib/jxl/dec_modular.cc (ModularStreamId, ModularFrameDecoder: DecodeGlobalInfo,
-// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding, int_to_float).
+// MaybeDropFullImage, DecodeGroup, ModularImageToDecodedRect, FinalizeDecoding, int_to_float, MultiplySum).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
