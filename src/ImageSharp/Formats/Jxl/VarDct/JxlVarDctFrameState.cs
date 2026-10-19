@@ -137,6 +137,9 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <summary>Gets the context map of each pass, padded for <see cref="JxlBlockCtxMap.ZeroDensityContext"/>.</summary>
     public byte[][] ContextMap { get; } = new byte[MaxNumPasses][];
 
+    /// <summary>Gets the scratch space the AC groups share, which <see cref="InitForAc"/> makes.</summary>
+    public JxlVarDctGroupCache GroupCache { get; private set; }
+
     /// <summary>
     /// Reads the VarDCT part of the DC global section: the quantiser, the block context map and the
     /// chroma-from-luma DC.
@@ -165,10 +168,14 @@ internal sealed class JxlVarDctFrameState : IDisposable
         }
     }
 
-    /// <summary>Sizes the coefficient orders for the strategies the DC groups used.</summary>
+    /// <summary>
+    /// Sizes the coefficient orders for the strategies the DC groups used, and makes the scratch space
+    /// of the AC groups.
+    /// </summary>
     /// <param name="numPasses">The number of passes.</param>
     public void InitForAc(int numPasses)
     {
+        this.GroupCache = new JxlVarDctGroupCache(this.FrameDim, numPasses);
         this.CoeffOrderSize = JxlCoeffOrder.OrderSize(this.UsedAcs);
         int sz = numPasses * this.CoeffOrderSize;
         if (sz > this.CoeffOrders.Length)

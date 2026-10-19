@@ -292,7 +292,7 @@ internal sealed class JxlFrameDecoder
         long gy = acGroupId / frameDim.XSizeGroups;
         if (varDct != null)
         {
-            JxlBitReader[] passReaders = new JxlBitReader[numPasses];
+            JxlBitReader[] passReaders = varDct.GroupCache.Readers;
             for (int i = 0; i < numPasses; i++)
             {
                 passReaders[i] = readers(acGroupId, i);
