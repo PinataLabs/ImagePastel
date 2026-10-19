@@ -77,6 +77,11 @@ internal static class JxlEntropyEncoder
         if (tokensLz77 != null)
         {
             codes.Lz77.Enabled = true;
+            for (int stream = 0; stream < tokens.Count; stream++)
+            {
+                tokens[stream].Clear();
+                tokens[stream].AddRange(tokensLz77[stream]);
+            }
         }
 
         long cost = 0;
@@ -106,11 +111,6 @@ internal static class JxlEntropyEncoder
             }
 
             numContexts += 1;
-            for (int stream = 0; stream < tokens.Count; stream++)
-            {
-                tokens[stream].Clear();
-                tokens[stream].AddRange(tokensLz77[stream]);
-            }
         }
 
         int totalTokens = 0;
