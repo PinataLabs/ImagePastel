@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -40,6 +41,9 @@ internal sealed class JxlPatchDictionary
     private const int NumPatchDictionaryContexts = 10;
 
     private const int NumPatchBlendModes = (int)JxlPatchBlendMode.AlphaWeightedAddBelow + 1;
+
+    // Decode checks the cancellation token once every 4096 positions of a reference patch.
+    private const long CancellationCheckMask = 4095;
 
     private static readonly IComparer<PatchInterval> ByY0 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y0.CompareTo(i1.Y0));
     private static readonly IComparer<PatchInterval> ByY1 = Comparer<PatchInterval>.Create(static (i0, i1) => i0.Y1.CompareTo(i1.Y1));
@@ -77,7 +81,8 @@ internal sealed class JxlPatchDictionary
     /// <param name="xsize">The padded width of the frame.</param>
     /// <param name="ysize">The padded height of the frame.</param>
     /// <param name="numExtraChannels">The number of extra channels of the image.</param>
-    public void Decode(JxlBitReader br, long xsize, long ysize, int numExtraChannels)
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public void Decode(JxlBitReader br, long xsize, long ysize, int numExtraChannels, CancellationToken cancellationToken)
     {
         this.positions.Clear();
         this.refPositions.Clear();
@@ -106,6 +111,7 @@ internal sealed class JxlPatchDictionary
 
         for (long id = 0; id < numRefPatch; id++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             PatchReferencePosition refPos;
             refPos.Ref = ReadNum(ReferenceFrameContext);
             if (refPos.Ref >= JxlReferenceFrames.MaxNumReferenceFrames || this.referenceFrames[(uint)refPos.Ref] == null)
@@ -162,6 +168,11 @@ internal sealed class JxlPatchDictionary
             bool chooseAlpha = numExtraChannels > 1;
             for (long i = 0; i < idCount; i++)
             {
+                if ((i & CancellationCheckMask) == CancellationCheckMask)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 PatchPosition pos;
                 pos.RefPosIdx = this.refPositions.Count;
                 if (i == 0)
@@ -238,7 +249,7 @@ internal sealed class JxlPatchDictionary
             JxlThrowHelper.ThrowInvalidImageContentException("ANS checksum failure.");
         }
 
-        this.ComputePatchTree();
+        this.ComputePatchTree(cancellationToken);
     }
 
     /// <summary>
@@ -365,7 +376,7 @@ internal sealed class JxlPatchDictionary
         }
     }
 
-    private void ComputePatchTree()
+    private void ComputePatchTree(CancellationToken cancellationToken)
     {
         this.patchTree.Clear();
         this.numPatches.Clear();
@@ -410,6 +421,7 @@ internal sealed class JxlPatchDictionary
         int next = 0;
         while (next < this.patchTree.Count)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             PatchTreeNode node = this.patchTree[next];
             int start = node.Start;
             int end = node.Start + node.Num;
