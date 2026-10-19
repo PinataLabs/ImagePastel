@@ -242,22 +242,6 @@ internal sealed class JxlPatchDictionary
     }
 
     /// <summary>
-    /// Throws <see cref="NotSupportedException"/> if a patch uses a blend mode this port does not
-    /// decode yet: Mul and the modes that use alpha arrive in D7c. It runs after the whole dictionary
-    /// is read, so a dictionary that breaks a bound still throws <see cref="InvalidImageContentException"/>.
-    /// </summary>
-    public void CheckSupported()
-    {
-        foreach (JxlPatchBlending blending in this.blendings)
-        {
-            if (blending.Mode == JxlPatchBlendMode.Mul || UsesAlpha(blending.Mode))
-            {
-                JxlThrowHelper.ThrowNotSupportedException($"The {blending.Mode} patch blend mode");
-            }
-        }
-    }
-
-    /// <summary>
     /// Returns the patches that cover row <paramref name="y"/>, in stream order.
     /// </summary>
     /// <param name="y">The row.</param>

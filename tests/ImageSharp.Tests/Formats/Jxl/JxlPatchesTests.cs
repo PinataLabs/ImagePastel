@@ -159,26 +159,6 @@ public class JxlPatchesTests
         JxlConformanceComparer.AssertMatchesDjxl(expected, JxlConformanceImages.ToNpy(decoded));
     }
 
-    [Theory]
-    [InlineData(3, true)] // Mul
-    [InlineData(3, false)]
-    [InlineData(4, true)] // BlendAbove
-    [InlineData(4, false)]
-    [InlineData(5, true)] // BlendBelow
-    [InlineData(5, false)]
-    [InlineData(6, true)] // AlphaWeightedAddAbove
-    [InlineData(6, false)]
-    [InlineData(7, true)] // AlphaWeightedAddBelow
-    [InlineData(7, false)]
-    public void Patch_WithABlendModeOfD7c_IsNotSupported(int mode, bool onColour)
-    {
-        JxlTestPatchBlending blending = new((JxlPatchBlendMode)mode);
-        JxlTestPatch patch = onColour ? new JxlTestPatch(0, 0, blending, None) : new JxlTestPatch(0, 0, Add, blending);
-        byte[] codestream = Layers(new JxlTestRefPatch(Slot, 0, 0, 2, 2, patch));
-
-        Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream));
-    }
-
     [Fact]
     public void Identify_FrameWithPatches_ReadsTheImageHeader()
     {

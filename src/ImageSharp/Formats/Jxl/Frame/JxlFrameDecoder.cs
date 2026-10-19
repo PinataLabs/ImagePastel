@@ -226,9 +226,6 @@ internal sealed class JxlFrameDecoder
                     }
                 }
             }
-
-            // Mul and the blend modes that use alpha are D7c.
-            patches.CheckSupported();
         }
 
         // Splines and noise are rejected by CheckSupported.

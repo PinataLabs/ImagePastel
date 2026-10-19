@@ -621,24 +621,13 @@ public class JxlBoundsTests
         AssertLayers(PatchLayers(new JxlTestPatchDictionary(extraChannel)), throws);
     }
 
-    // With two extra channels, a blend mode that uses alpha names one of them. Alpha blending of patches
-    // arrives with D7c, so a valid alpha channel still fails, as not supported.
+    // With two extra channels, a blend mode that uses alpha names one of them.
     [Theory]
     [InlineData(0u, false)]
     [InlineData(1u, false)]
     [InlineData(2u, true)]
     public void PatchDictionary_AlphaChannel(uint alphaChannel, bool throws)
-    {
-        using MemoryStream stream = new(TwoAlphaPatchLayers(alphaChannel));
-        if (throws)
-        {
-            Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
-        }
-        else
-        {
-            Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
-        }
-    }
+        => AssertLayers(TwoAlphaPatchLayers(alphaChannel), throws);
 
     // The ANS state of the dictionary ends at its initial value. The one symbol of the histogram never
     // changes the state, so the state read is the final one.
