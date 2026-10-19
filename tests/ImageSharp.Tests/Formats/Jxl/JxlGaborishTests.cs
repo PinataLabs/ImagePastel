@@ -83,16 +83,6 @@ public class JxlGaborishTests
         Assert.Contains("Gaborish x weights lead to near 0 unnormalized kernel", ex.Message, StringComparison.Ordinal);
     }
 
-    // Gaborish on a Modular frame is lifted with the other loop filters on Modular frames (D9d).
-    [Fact]
-    public void Decode_GaborishOnAModularFrame_IsNotSupported()
-    {
-        using FileStream stream = File.OpenRead(InputPath("xyb_modular_gaborish"));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains("Loop filters (Gaborish) on a Modular frame", ex.Message, StringComparison.Ordinal);
-    }
-
     private static Configuration CreateConfiguration()
     {
         Configuration configuration = Configuration.CreateDefaultInstance();

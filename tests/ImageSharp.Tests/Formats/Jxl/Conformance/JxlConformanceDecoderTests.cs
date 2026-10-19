@@ -32,6 +32,7 @@ public class JxlConformanceDecoderTests
     [InlineData("cmyk_layers")]
     [InlineData("patches_lossless")]
     [InlineData("bicycles")] // Modular with XYB, in Levels 5 and 10. Measured: RMSE 2.5e-7, peak 8.4e-6.
+    [InlineData("grayscale_public_university")] // Grey Modular, not XYB, with Gaborish and EPF (3 iterations, sigma 20), Level 10. Measured: RMSE 5.1e-8, peak 8.1e-7.
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

@@ -197,9 +197,6 @@ internal sealed class JxlFrameDecoder
         {
             JxlThrowHelper.ThrowNotSupportedException("Progressive passes");
         }
-
-        // Gaborish and EPF have a check each.
-        JxlLoopFilterStages.CheckSupported(frameHeader);
     }
 
     private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)

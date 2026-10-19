@@ -6,22 +6,12 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
-/// <content>Gaborish: its supported-feature check and its stage.</content>
+/// <content>Gaborish: its stage, on VarDCT and Modular frames alike.</content>
 internal static partial class JxlLoopFilterStages
 {
-    // Gaborish decodes on VarDCT frames. A Modular frame with Gaborish waits for D9d.
-    private static void CheckGaborishSupported(JxlFrameHeader frameHeader)
-    {
-        if (frameHeader.LoopFilter.Gab && frameHeader.Encoding == JxlFrameEncoding.Modular)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Loop filters (Gaborish) on a Modular frame");
-        }
-    }
-
     static partial void AddGaborishStage(List<IJxlLoopFilterStage> stages, JxlLoopFilterContext context)
     {
         if (context.LoopFilter.Gab)

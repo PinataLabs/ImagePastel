@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2: ComputeSigma, kInvSigmaNum
-// and kMinSigma from lib/jxl/epf.cc and lib/jxl/epf.h, and the sigma image of PassesDecoderState in
-// lib/jxl/dec_cache.h.
+// and kMinSigma from lib/jxl/epf.cc and lib/jxl/epf.h, the sigma image of PassesDecoderState in
+// lib/jxl/dec_cache.h, and its fill for a Modular frame in FrameDecoder::ProcessDCGroup (lib/jxl/dec_frame.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -39,10 +39,29 @@ internal sealed class JxlEpfSigma
     private readonly float[] sigma;
     private readonly int xsizeBlocks;
 
-    private JxlEpfSigma(float[] sigma, int xsizeBlocks)
+    // The distance between two block rows in sigma: xsizeBlocks, or 0 for a constant image, which
+    // holds one row.
+    private readonly int rowStride;
+
+    private JxlEpfSigma(float[] sigma, int xsizeBlocks, int rowStride)
     {
         this.sigma = sigma;
         this.xsizeBlocks = xsizeBlocks;
+        this.rowStride = rowStride;
+    }
+
+    /// <summary>
+    /// Returns a sigma image with the same inverse sigma for every block: that of a Modular frame, which
+    /// libjxl fills with <c>kInvSigmaNum / epf_sigma_for_modular</c> for each DC group.
+    /// </summary>
+    /// <param name="invSigma">The inverse sigma of every block.</param>
+    /// <param name="xsizeBlocks">The width of the frame in blocks.</param>
+    /// <returns>The sigma image.</returns>
+    public static JxlEpfSigma Constant(float invSigma, int xsizeBlocks)
+    {
+        float[] row = new float[xsizeBlocks];
+        Array.Fill(row, invSigma);
+        return new JxlEpfSigma(row, xsizeBlocks, 0);
     }
 
     /// <summary>
@@ -98,11 +117,11 @@ internal sealed class JxlEpfSigma
             }
         }
 
-        return new JxlEpfSigma(sigma, xsizeBlocks);
+        return new JxlEpfSigma(sigma, xsizeBlocks, xsizeBlocks);
     }
 
     /// <summary>Returns the inverse sigma of the blocks of pixel row <paramref name="y"/>.</summary>
     /// <param name="y">The pixel row of the frame.</param>
     /// <returns>One value per block of the row.</returns>
-    public ReadOnlySpan<float> GetRow(int y) => this.sigma.AsSpan(y / BlockDim * this.xsizeBlocks, this.xsizeBlocks);
+    public ReadOnlySpan<float> GetRow(int y) => this.sigma.AsSpan(y / BlockDim * this.rowStride, this.xsizeBlocks);
 }

@@ -319,7 +319,7 @@ djxl vardct_xyb_e7.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_
 | `vardct_xyb_gaborish_grey.jxl` | The same, 300 x 200 8-bit grey: two groups. The filter runs on the three planes before the output drops to one. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_grey.npy`, one channel |
 | `vardct_xyb_gaborish_custom.jxl` | `vardct_xyb_gaborish.jxl` with custom Gaborish weights in its frame header (x 0.2 and 0.05, y 0.08 and 0.03, b 0.15 and -0.02). `cjxl` never writes custom weights, so `set_gaborish_weights.py` sets them; the coefficients are unchanged. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_custom.npy` |
 | `vardct_xyb_gaborish_zero_kernel.jxl` | `vardct_xyb_gaborish.jxl` with x weights of -0.125 and -0.125, whose kernel sums to 0 before it is scaled. | None: `djxl` fails on it, and decoding throws `InvalidImageContentException` |
-| `xyb_modular_gaborish.jxl` | The 64 x 64 image as lossy Modular (`-m 1 -d 1 --gaborish=1 --epf=0`): Gaborish on a Modular frame (D9d). | None: decoding throws `NotSupportedException` |
+| `xyb_modular_gaborish.jxl` | The 64 x 64 image as lossy Modular (`-m 1 -d 1 --gaborish=1 --epf=0`): Gaborish on a Modular frame. It decodes since D9d. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_gaborish.npy` |
 
 ```sh
 py -3 make_vardct_xyb.py
@@ -333,6 +333,7 @@ djxl vardct_xyb_gaborish.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 djxl vardct_xyb_gaborish_600x400.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_600x400.npy
 djxl vardct_xyb_gaborish_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_grey.npy
 djxl vardct_xyb_gaborish_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gaborish_custom.npy
+djxl xyb_modular_gaborish.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_gaborish.npy
 ```
 
 - `set_gaborish_weights.py` rewrites only the loop-filter bits of the frame header: it sets `gab_custom` and inserts the six weights as float16. The TOC and the sections are copied as they are. It handles only the simple files `cjxl` writes here (one frame, no ICC profile, no extra channels).
@@ -349,9 +350,9 @@ djxl vardct_xyb_gaborish_custom.jxl ../../../External/ReferenceOutput/JxlDecoder
 | `vardct_xyb_epf3_13x37_d3.jxl` | Three iterations at `-d 3` on a 13 x 37 image: neither side is a multiple of 8, and the frame is less than two blocks wide. | the same |
 | `vardct_xyb_epf3_custom.jxl` | `vardct_xyb_epf3.jxl` with custom EPF fields patched into the frame header: sharpness LUT `[0, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1.2]`, channel scales `(30, 6, 4)`, zero-flush `(0.4, 0.5)`, quant_mul 0.6, pass 0 scale 1.1, pass 2 scale 5.0, border SAD multiplier 0.5. | the same |
 | `vardct_xyb_epf_sharp0.jxl`, `vardct_xyb_epf_quant_mul0.jxl` | `vardct_xyb_epf.jxl` with an all-zero sharpness LUT, and with quant_mul 0. Every sigma is then clamped to -1e-4, so every block passes through unfiltered: the output equals the frame without EPF. | the same |
-| `xyb_modular_epf2.jxl` | Lossy Modular with XYB, 300 x 200, `cjxl -m 1 -d 1 --gaborish=0 --epf=2`: EPF on a Modular frame (D9d). | None: decoding throws `NotSupportedException` |
+| `xyb_modular_epf2.jxl` | Lossy Modular with XYB, 300 x 200, `cjxl -m 1 -d 1 --gaborish=0 --epf=2`: EPF on a Modular frame, whose sigma is `epf_sigma_for_modular` (1.0 here). It decodes since D9d. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf2.npy` |
 | `xyb_modular_epf_sigma0.jxl`, `xyb_modular_epf_sigma_neg.jxl` | `xyb_modular_epf2.jxl` with `epf_sigma_for_modular` patched to 0 and to -1, below libjxl's bound of 1e-8. `djxl` rejects both. | None: decoding throws `InvalidImageContentException` |
-| `xyb_modular_epf_sigma_tiny.jxl` | The same with `epf_sigma_for_modular` 5.96e-8, the smallest F16 subnormal, which is above the bound. `djxl` decodes it. | None: decoding throws `NotSupportedException` until D9d |
+| `xyb_modular_epf_sigma_tiny.jxl` | The same with `epf_sigma_for_modular` 5.96e-8, the smallest F16 subnormal, which is above the bound. `djxl` decodes it; the inverse sigma is below `kMinSigma`, so every pixel passes through. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf_sigma_tiny.npy` |
 
 ```sh
 py -3 make_vardct_xyb.py
@@ -382,12 +383,50 @@ djxl vardct_xyb_epf3_13x37_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTe
 djxl vardct_xyb_epf3_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf3_custom.npy
 djxl vardct_xyb_epf_sharp0.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf_sharp0.npy
 djxl vardct_xyb_epf_quant_mul0.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_epf_quant_mul0.npy
+djxl xyb_modular_epf2.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf2.npy
+djxl xyb_modular_epf_sigma_tiny.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf_sigma_tiny.npy
 ```
 
 - `cjxl` v0.12.0 never writes the custom loop-filter fields, so `patch_lf.py` rewrites the loop-filter bundle of a bare codestream's frame header and copies the rest; it re-aligns the TOC. `lfhdr.py` is the header parser it uses; run on its own, it prints a file's headers, with the loop-filter fields.
 - At `-e 2`, `cjxl` codes the same coefficients for every `--epf`, so the files of one image and distance differ only in their frame header. Every block is DCT8 and has EPF sharpness 4.
 - The zero-flush fields are read, but libjxl's EPF never uses them.
 - Each test records how far each reference is from the same file decoded by `djxl` with `epf_iters` patched to 0. Measured on x64 against `djxl` with AVX2, the worst channel RMSE is at most 1.6e-6 and the peak error at most 7.8e-5 (`vardct_xyb_epf3_600x400_d3`). `JxlEpfTests` records the error of each file.
+
+#### How the Modular and both-filter files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `vardct_xyb_gab_epf1.jxl` | The 64 x 64 image at `cjxl -e 2 --gaborish=1 --epf=1 -d 1`: both filters in one VarDCT frame. At `-d 1` EPF barely touches this image (turning it off changes the output by 3.2e-6), so the next file checks EPF after Gaborish. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gab_epf1.npy` |
+| `vardct_xyb_gab_epf3_300x200_d3.jxl` | The 300 x 200 image at `-e 2 --gaborish=1 --epf=3 -d 3`: Gaborish and all three EPF passes, two groups, and a width that is not a multiple of 8. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gab_epf3_300x200_d3.npy` |
+| `xyb_modular_gab_epf3.jxl` | The 300 x 200 image as lossy Modular with XYB, `-m 1 -d 2 --gaborish=1 --epf=3`: both filters on a Modular frame, with `epf_sigma_for_modular` 2.0. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_gab_epf3.npy` |
+| `xyb_modular_gab_epf1_600x400.jxl` | The 600 x 400 image at `-m 1 -d 1 --gaborish=1 --epf=1`: both filters across several Modular groups. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_gab_epf1_600x400.npy` |
+| `xyb_modular_epf2_custom.jxl` | `xyb_modular_epf2.jxl` with custom EPF fields: channel scales `(30, 6, 4)`, zero-flush `(0.4, 0.5)`, pass 0 scale 1.1, pass 2 scale 5.0, border SAD multiplier 0.5, and `epf_sigma_for_modular` 1.5. | `External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf2_custom.npy` |
+| `modular_grey_gab_epf3.jxl` | The 300 x 200 grey image as lossy Modular **without** XYB (`--disable_perceptual_optimizations`), `-m 1 -d 2 --gaborish=1 --epf=3`: the layout of the conformance file `grayscale_public_university`. libjxl copies the grey channel into three channels and filters all three. The output takes the first. | `External/ReferenceOutput/JxlDecoderTests/modular_grey_gab_epf3.npy`, one channel |
+| `modular_grey_gab_epf3_custom.jxl` | `modular_grey_gab_epf3.jxl` with custom Gaborish weights (x 0.2 and 0.05, y 0.08 and 0.03, b 0.15 and -0.02) and `epf_sigma_for_modular` 20, as `grayscale_public_university` has. The three channels then differ after Gaborish, and EPF sums its distances over all three, so a decoder that filtered the one grey plane alone fails. | `External/ReferenceOutput/JxlDecoderTests/modular_grey_gab_epf3_custom.npy`, one channel |
+
+```sh
+py -3 make_vardct_xyb.py
+cjxl vardct_xyb_64_source.ppm vardct_xyb_gab_epf1.jxl -e 2 --gaborish=1 --epf=1 -d 1
+cjxl vardct_xyb_300x200_source.ppm vardct_xyb_gab_epf3_300x200_d3.jxl -e 2 --gaborish=1 --epf=3 -d 3
+cjxl vardct_xyb_300x200_source.ppm xyb_modular_gab_epf3.jxl -m 1 -d 2 --gaborish=1 --epf=3
+cjxl vardct_xyb_600x400_source.ppm xyb_modular_gab_epf1_600x400.jxl -m 1 -d 1 --gaborish=1 --epf=1
+cjxl vardct_xyb_grey_source.pgm modular_grey_gab_epf3.jxl -m 1 -d 2 --gaborish=1 --epf=3 --disable_perceptual_optimizations
+py -3 patch_lf.py modular_grey_gab_epf3.jxl modular_grey_gab_epf3_custom.jxl "{'gab': True, 'gab_custom': [0.2, 0.05, 0.08, 0.03, 0.15, -0.02], 'epf': 3, 'sigma_modular': 20.0}"
+py -3 patch_lf.py xyb_modular_epf2.jxl xyb_modular_epf2_custom.jxl "{'epf': 2, 'weight': [30, 6, 4, 0.4, 0.5], 'sigma': [1.1, 5.0, 0.5], 'sigma_modular': 1.5}"
+djxl vardct_xyb_gab_epf1.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gab_epf1.npy
+djxl vardct_xyb_gab_epf3_300x200_d3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_gab_epf3_300x200_d3.npy
+djxl xyb_modular_gab_epf3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_gab_epf3.npy
+djxl xyb_modular_gab_epf1_600x400.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_gab_epf1_600x400.npy
+djxl xyb_modular_epf2_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/xyb_modular_epf2_custom.npy
+djxl modular_grey_gab_epf3.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_grey_gab_epf3.npy
+djxl modular_grey_gab_epf3_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_grey_gab_epf3_custom.npy
+```
+
+- `cjxl -m 1 --gaborish=1` forces Gaborish on a Modular frame, and `--epf=N` is used as given. So `cjxl` v0.12.0 writes lossy Modular files with either filter alone (`xyb_modular_gaborish.jxl`, `xyb_modular_epf2.jxl`) or with both. It sets `epf_sigma_for_modular` to the distance, and to at least 1.
+- Without `--disable_perceptual_optimizations`, `cjxl -m` codes a grey image in XYB, with three planes.
+- `JxlLoopFilterTests` records, for each file, how far its reference is from the same file decoded by `djxl` with a filter patched off by `patch_lf.py`. Each filter of each file moves the output by more than the tolerance, except EPF in `vardct_xyb_gab_epf1` (3.2e-6), EPF in `xyb_modular_gab_epf1_600x400` (peak 5.0e-2, RMSE 3.0e-4: above the RMSE tolerance only) and EPF in `modular_grey_gab_epf3` (peak 1.9e-3, RMSE 1.4e-4: above the RMSE tolerance only).
+- `modular_grey_gab_epf3_custom.jxl` was checked against a decoder that keeps the three grey channels equal after each filter, as filtering one plane would: that decoder fails it by an RMSE of 6.1e-3. With the default weights the three channels stay equal, so `modular_grey_gab_epf3.jxl` cannot tell the two apart.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is at most 1.3e-6 and the peak error at most 4.6e-5 (`vardct_xyb_gab_epf3_300x200_d3`). `JxlLoopFilterTests` records the error of each file. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.
 
 #### How `twelve_bit` was made
 

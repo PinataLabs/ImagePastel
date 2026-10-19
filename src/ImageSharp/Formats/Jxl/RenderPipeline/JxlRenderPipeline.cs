@@ -139,7 +139,8 @@ internal sealed class JxlRenderPipeline : IDisposable
             // reference frames and blending. So the frame drops to grey before them, where libjxl keeps
             // three planes to the output, which takes the first. Every stage from here to the output works
             // on each colour channel alone, so the first plane comes out the same. EPF mixes the colour
-            // channels, so the loop filters run on all three before the drop.
+            // channels, so the loop filters run on all three before the drop; a Modular frame of such an
+            // image is given three planes for them (RunLoopFilters), and drops back to one here.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
             if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
             {
@@ -214,6 +215,16 @@ internal sealed class JxlRenderPipeline : IDisposable
         if (loopFilters.Length == 0)
         {
             return;
+        }
+
+        // A grey image that is not XYB has one colour plane here. libjxl's Modular decoding copies the
+        // grey channel into all three (rgb_from_gray in ModularFrameDecoder::ModularImageToDecodedRect),
+        // and the loop filters treat them as three channels: Gaborish has weights for each, and EPF sums
+        // its distances over all three, with a scale for each. So the plane is copied into three before
+        // the filters, and Finish keeps the first afterwards, as libjxl's output does.
+        if (this.numColorPlanes == 1)
+        {
+            this.ExpandGreyToThree();
         }
 
         Buffer2D<float>[] spare = new Buffer2D<float>[this.planes.Length];
@@ -339,6 +350,34 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes = imagePlanes;
         this.width = imageXSize;
         this.height = imageYSize;
+    }
+
+    // Copies the grey plane into a second and a third colour plane, before the extra channels.
+    private void ExpandGreyToThree()
+    {
+        Buffer2D<float> grey = this.planes[0];
+        Buffer2D<float>[] rgb = new Buffer2D<float>[this.planes.Length + 2];
+        try
+        {
+            for (int c = 1; c < 3; c++)
+            {
+                rgb[c] = this.allocator.Allocate2D<float>(grey.Width, grey.Height);
+                for (int y = 0; y < grey.Height; y++)
+                {
+                    grey.DangerousGetRowSpan(y).CopyTo(rgb[c].DangerousGetRowSpan(y));
+                }
+            }
+        }
+        catch
+        {
+            JxlPlanes.DisposeAll(rgb);
+            throw;
+        }
+
+        rgb[0] = grey;
+        Array.Copy(this.planes, 1, rgb, 3, this.planes.Length - 1);
+        this.planes = rgb;
+        this.numColorPlanes = 3;
     }
 
     // Disposes the second and third colour planes, so the planes are grey, then the extra channels.

@@ -80,20 +80,6 @@ public class JxlEpfTests
         Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 8-bit steps");
     }
 
-    // cjxl -m 1 -d 1 --gaborish=0 --epf=2: a lossy Modular frame with EPF (D9d), and the same file with
-    // epf_sigma_for_modular patched to the smallest F16 subnormal, 5.96e-8: above libjxl's bound of
-    // 1e-8, so it passes the field check and reaches the supported-feature check.
-    [Theory]
-    [InlineData("xyb_modular_epf2")]
-    [InlineData("xyb_modular_epf_sigma_tiny")]
-    public void Decode_ModularFrameWithEpf_IsNotSupported(string name)
-    {
-        using FileStream stream = File.OpenRead(InputPath(name));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains("Loop filters (EPF on a Modular frame)", ex.Message, StringComparison.Ordinal);
-    }
-
     // loop_filter.cc: epf_sigma_for_modular below 1e-8 fails, as djxl does for both files.
     [Theory]
     [InlineData("xyb_modular_epf_sigma0")]
