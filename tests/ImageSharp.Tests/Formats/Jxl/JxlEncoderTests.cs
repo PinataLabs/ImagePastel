@@ -59,6 +59,21 @@ public class JxlEncoderTests
     public Task RoundTrip_Djxl_IsExact(string pixelType, string pattern, int width, int height)
         => JxlEncoderRoundTrip.RunAsync(JxlEncoderRoundTrip.Reader.Djxl, pixelType, pattern, width, height);
 
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_OurDecoder_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Ours, file, pixelType);
+
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_Magick_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Magick, file, pixelType);
+
+    [Theory]
+    [MemberData(nameof(JxlEncoderRoundTrip.CorpusCases), MemberType = typeof(JxlEncoderRoundTrip))]
+    public Task RoundTripCorpus_Djxl_IsExact(string file, string pixelType)
+        => JxlEncoderRoundTrip.RunCorpusAsync(JxlEncoderRoundTrip.Reader.Djxl, file, pixelType);
+
     [Fact]
     public void Identify_Grey_ReportsOneEightBitChannelAndGreySrgb()
     {
