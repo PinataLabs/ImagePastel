@@ -141,7 +141,7 @@ internal static class JxlEntropyEncoder
         }
 
         // Encode histograms.
-        cost += codes.BuildAndStoreEntropyCodes(parameters, builder, writer);
+        cost += codes.BuildAndStoreEntropyCodes(parameters, tokens, builder, writer);
         return cost;
     }
 

@@ -32,6 +32,9 @@ internal readonly struct JxlHybridUintConfig
 
     public uint LsbInToken { get; }
 
+    /// <summary>Gets the mask of the least-significant bits a token carries.</summary>
+    public uint LsbMask => (1u << (int)this.LsbInToken) - 1;
+
     /// <summary>
     /// Splits <paramref name="value"/> into a token and the raw bits that follow it: the encoder's
     /// half of <see cref="JxlAnsSymbolReader"/>'s hybrid uint read.
