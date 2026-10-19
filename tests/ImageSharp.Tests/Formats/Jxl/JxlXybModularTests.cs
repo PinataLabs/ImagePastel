@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -42,6 +43,62 @@ public class JxlXybModularTests
 
         Assert.IsType<Image<L8>>(image);
     }
+
+    // Measured: worst channel RMSE 3.0e-7, peak 1.3e-6.
+    [Fact]
+    public void DecodeToPlanes_IccProfile_GivesLinearSrgbMatchingDjxl()
+        => AssertPlanesMatchDjxl("xyb_modular_icc").Dispose();
+
+    // Measured: largest difference 0.50 of one 8-bit step, which is the rounding.
+    [Theory]
+    [InlineData("xyb_modular_rgb")]
+    [InlineData("xyb_modular_grey")]
+    public void LoadRgb24_IsWithinOneStepOfDjxl(string name)
+    {
+        NpyArray expected = NpyArray.Load(ReferencePath(name));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
+
+        // A grey image is R = G = B, so its one reference channel is compared with each.
+        int channels = expected.Shape[3];
+        NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
+        AssertWithinOneStep(expected, actual, (i, c) => expected.Data[(i * channels) + (channels == 1 ? 0 : c)]);
+    }
+
+    // Measured: largest difference 0.50 of one 8-bit step, which is the rounding.
+    [Fact]
+    public void LoadRgb24_IccProfile_IsTheSrgbEncodingOfDjxlsLinearOutput()
+    {
+        // djxl's planes are linear sRGB; Image<TPixel> holds sRGB with no pixel profile (ADR 0002).
+        NpyArray expected = NpyArray.Load(ReferencePath("xyb_modular_icc"));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath("xyb_modular_icc"));
+
+        AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 3), (i, c) => (float)LinearToSrgb(Math.Clamp(expected.Data[(i * 3) + c], 0F, 1F)));
+        Assert.Null(image.Metadata.IccProfile);
+        Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+    }
+
+    // Compares each sample with the clamped reference, which reference(pixel, channel) gives.
+    private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, Func<int, int, float> reference)
+    {
+        Assert.Equal(expected.Shape[1], actual.Shape[1]);
+        Assert.Equal(expected.Shape[2], actual.Shape[2]);
+        int pixels = actual.Shape[1] * actual.Shape[2];
+        double worst = 0;
+        for (int i = 0; i < pixels; i++)
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                double e = Math.Clamp(reference(i, c), 0F, 1F);
+                worst = Math.Max(worst, Math.Abs(actual.Data[(i * 3) + c] - e) * 255);
+            }
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one 8-bit step");
+        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 8-bit steps");
+    }
+
+    // The sRGB encoding of IEC 61966-2-1, in double precision.
+    private static double LinearToSrgb(double v) => v <= 0.0031308 ? 12.92 * v : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
 
     private static JxlDecodedImage AssertPlanesMatchDjxl(string name)
     {

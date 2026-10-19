@@ -79,7 +79,7 @@ internal sealed class JxlOutputEncoding
             return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf));
         }
 
-        bool origOk = CanOutputToColorEncoding(orig);
+        bool origOk = IsOriginalOutput(m);
         JxlOutputEncoding output = origOk
             ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf))
             : new JxlOutputEncoding(orig.IsGray, false, null, true);
@@ -139,6 +139,14 @@ internal sealed class JxlOutputEncoding
 
         return output;
     }
+
+    /// <summary>
+    /// Returns whether the image renders to its own colour encoding: it is not XYB, or the XYB stage can
+    /// output that encoding. Otherwise it renders to linear sRGB.
+    /// </summary>
+    /// <param name="m">The image metadata.</param>
+    /// <returns><see langword="true"/> if the output colour encoding is the image's own.</returns>
+    public static bool IsOriginalOutput(JxlImageMetadata m) => !m.XybEncoded || CanOutputToColorEncoding(m.ColorEncoding);
 
     /// <summary>
     /// Returns whether the XYB stage can output to <paramref name="c"/>: it has fields rather than an ICC
