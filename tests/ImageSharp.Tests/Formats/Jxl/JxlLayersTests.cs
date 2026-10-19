@@ -36,6 +36,24 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
 
+    // Sections from the smallest size of the third and fourth TOC size selectors: BitsOffset(22, 17408)
+    // and BitsOffset(30, 4211712). The decoder ignores the zeros after the Modular data, and the next
+    // frame starts only where the TOC says the long section ends.
+    [Theory]
+    [InlineData(17408)]
+    [InlineData(4211712)]
+    public void FrameWithALongSection_IsFollowedByTheNextFrame(int sectionLength)
+    {
+        byte[] section = new byte[sectionLength];
+        JxlTestLayers.ColourA.CopyTo(section, 0);
+        byte[] codestream = new JxlTestLayers(Width, Height)
+            .Add(new JxlTestFrame(section))
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourB) with { Color = new(JxlBlendMode.Add) })
+            .ToArray();
+
+        AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (240, 320, 210, 64));
+    }
+
     [Fact]
     public void Add_SumsTheColourAndReplacesTheAlpha()
     {
