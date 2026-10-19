@@ -24,6 +24,15 @@ public class JxlSupportedFeaturesTests
     public void Decode_YCbCrFrame_IsNotSupported()
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { YCbCr = true }, "YCbCr");
 
+    // The modes are Cb, Y, Cr. Chroma subsampling is checked on its own, before YCbCr, so that the YCbCr
+    // stage (D10c) and the chroma-upsampling stage (D10e) can each lift one check.
+    [Theory]
+    [InlineData(0, 1, 0)]
+    [InlineData(2, 0, 2)]
+    [InlineData(3, 3, 0)]
+    public void Decode_ChromaSubsampledFrame_IsNotSupported(int cb, int y, int cr)
+        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { YCbCr = true, ChromaSubsampling = new[] { cb, y, cr } }, "Chroma subsampling");
+
     [Theory]
     [InlineData(1, "noise")]
     [InlineData(16, "splines")]
@@ -41,6 +50,19 @@ public class JxlSupportedFeaturesTests
     [InlineData(8)]
     public void Decode_UpsampledFrame_IsNotSupported(uint upsampling)
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling }, "Upsampling");
+
+    // The colour channels and the extra channels are checked apart, so that each can be lifted alone.
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void Decode_UpsampledColorChannels_IsNotSupported(uint upsampling)
+        => AssertNotSupported(new JxlTestLayers(Width, Height, alpha: false), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling }, "Upsampling of the colour channels");
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(8)]
+    public void Decode_UpsampledExtraChannel_IsNotSupported(uint extraChannelUpsampling)
+        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { ExtraChannelUpsampling = extraChannelUpsampling }, "Upsampling of the extra channels");
 
     // Patches on a VarDCT frame come with D12; on a Modular frame they decode (JxlLayersTests).
     [Fact]

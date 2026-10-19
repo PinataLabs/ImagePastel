@@ -102,7 +102,7 @@ public class JxlLoopFilterSlotTests
             }
         }
 
-        return pipeline.Finish(frameHeader, loopFilters, null, Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None);
+        return pipeline.Finish(frameHeader, loopFilters, null, Array.Empty<IJxlLoopFilterStage>(), Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None);
     }
 
     // Writes, to each pixel of the colour channels, the input pixel at (dx, dy) from it.

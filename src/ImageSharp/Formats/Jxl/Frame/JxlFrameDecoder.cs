@@ -98,9 +98,10 @@ internal sealed class JxlFrameDecoder
 
         // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
         // The patch dictionary is read with the DC global section, and the patches stage uses it then.
+        // The patches run at the coded size, before the upsampling; the blending at the upsampled size.
         JxlPatchDictionary patches = (frameHeader.Flags & JxlFrameFlags.Patches) != 0 ? new JxlPatchDictionary(this.references) : null;
         using JxlPatchesStage patchesStage = patches != null
-            ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSizeUpsampled)
+            ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSize)
             : null;
         IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
@@ -113,7 +114,7 @@ internal sealed class JxlFrameDecoder
 
         // A VarDCT frame always codes three colour planes, grey or not, as libjxl's.
         int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct ? 3 : this.metadata.M.NumColorPlanes;
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, this.metadata.M.NumExtraChannels);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, JxlRenderPipeline.ChannelShifts(frameHeader, numColorPlanes));
         using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
@@ -129,7 +130,7 @@ internal sealed class JxlFrameDecoder
         // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
         // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
         IJxlLoopFilterStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, loopFilters, patchesStage, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, loopFilters, patchesStage, Array.Empty<IJxlLoopFilterStage>(), colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -204,6 +205,14 @@ internal sealed class JxlFrameDecoder
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
     {
+        // Chroma subsampling is read only for a YCbCr frame, so it comes first: each of the two checks
+        // can then be reached, and lifted, on its own.
+        JxlYCbCrChromaSubsampling chroma = frameHeader.ChromaSubsampling;
+        if (chroma.MaxHShift != 0 || chroma.MaxVShift != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Chroma subsampling");
+        }
+
         if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
         {
             JxlThrowHelper.ThrowNotSupportedException("The YCbCr colour transform");
@@ -243,10 +252,15 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException($"Unknown frame flags 0x{(ulong)(flags & ~knownFlags):X}");
         }
 
-        // An extra channel with a dim_shift has an upsampling of at least 2 here.
-        if (frameHeader.Upsampling != 1 || frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))
+        if (frameHeader.Upsampling != 1)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Upsampling");
+            JxlThrowHelper.ThrowNotSupportedException("Upsampling of the colour channels");
+        }
+
+        // An extra channel with a dim_shift has an upsampling of at least 2 here.
+        if (frameHeader.ExtraChannelUpsampling.Exists(u => u != 1))
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Upsampling of the extra channels");
         }
 
         if (frameHeader.Passes.NumPasses != 1)

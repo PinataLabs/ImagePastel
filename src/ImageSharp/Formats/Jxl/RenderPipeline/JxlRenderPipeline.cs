@@ -1,14 +1,17 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Structure after libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/render_pipeline/simple_render_pipeline.h and simple_render_pipeline.cc (with the
-// SwitchToImageDimensions step of ProcessBuffers), RenderPipelineInput from
-// lib/jxl/render_pipeline/render_pipeline.h, and the stage order of PassesDecoderState::PreparePipeline
-// in lib/jxl/dec_cache.cc.
+// lib/jxl/render_pipeline/simple_render_pipeline.h and simple_render_pipeline.cc (MakeChannelRect, the
+// channel sizes of PrepareForThreadsInternal, and ProcessBuffers with its SwitchToImageDimensions step),
+// the channel shifts of RenderPipeline::Builder::Finalize in lib/jxl/render_pipeline/render_pipeline.cc,
+// RenderPipelineInput from lib/jxl/render_pipeline/render_pipeline.h, and the stage order of
+// PassesDecoderState::PreparePipeline in lib/jxl/dec_cache.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Memory;
@@ -21,30 +24,46 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// group is in, the stages run over the whole frame and the sink receives the planes.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Each channel has a shift, as in libjxl (<see cref="ChannelShifts"/>): log2 of how much the stages
+/// still to run will upsample it. At shift <c>s</c> a channel is the upsampled frame size divided by
+/// <c>2^s</c>, rounded up. A neighbour stage (<see cref="IJxlLoopFilterStage"/>) with a shift doubles the
+/// planes it changes and lowers their shift; once the neighbour stages are done, every channel is at the
+/// upsampled frame size. So the loop filters and the patches run at the coded size, before the
+/// upsampling, and the saves, the colour transform, the blending and the sink at the upsampled size.
+/// </para>
+/// <para>
 /// Deliberate departures from libjxl: the planes carry no border. Instead of the border, which in libjxl
 /// takes the whole 8x8 blocks that VarDCT writes past the right and bottom edges, the colour planes are
-/// padded to the frame's padded size. The stages, the reference slots and the sink are given the frame
-/// size, and the planes keep the padding past it. Only the loop-filter stages (Gaborish and EPF) read
+/// allocated at the frame's coded padded size. The stages, the reference slots and the sink are given
+/// each channel's size, and the planes keep the padding past it. Only the neighbour stages read
 /// neighbouring pixels: they get them through <see cref="JxlNeighbourRows"/>, which mirrors the pixels
-/// past the frame edges in from inside the frame, as libjxl fills its border, so the padding is never
-/// read. Stages run in place, or ping-pong between two sets of planes where they read neighbours, rather
-/// than allocate new planes each, as decided in issue #113. And the stages are fixed steps of
+/// past the channel's edges in from inside it, as libjxl fills its border, so the padding is never read.
+/// Stages run in place, or ping-pong between two sets of planes where they read neighbours, rather than
+/// allocate new planes each, as decided in issue #113. And the stages are fixed steps of
 /// <see cref="Finish"/> rather than a list built per frame, because the frames this port decodes need
-/// only the loop-filter, patches, save, colour-transform, blending and output stages.
+/// only the neighbour, patches, save, colour-transform, blending and output stages.
+/// </para>
 /// </remarks>
 internal sealed class JxlRenderPipeline : IDisposable
 {
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
+
+    // The shift of each channel at the start of the pipeline, by its index then: libjxl's
+    // channel_shifts_[0], from which the group rectangles are made.
+    private readonly JxlChannelShift[] inputShifts;
     private int numColorPlanes;
     private Buffer2D<float>[] planes;
+
+    // The shift each plane has left: libjxl's channel_shifts_ at the next stage.
+    private JxlChannelShift[] shifts;
     private int width;
     private int height;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per
-    /// channel: the colour planes at the frame's padded size, which is the frame size for a Modular frame
-    /// and whole 8x8 blocks for a VarDCT frame, and the extra channels at the frame size.
+    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class for a frame with no
+    /// upsampling and no chroma subsampling, so with every channel at shift 0.
     /// </summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="frameDim">The frame dimensions.</param>
@@ -54,20 +73,43 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// </param>
     /// <param name="numExtraChannels">The number of extra channels.</param>
     public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, int numExtraChannels)
+        : this(allocator, frameDim, numColorPlanes, new JxlChannelShift[numColorPlanes + numExtraChannels])
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per
+    /// channel: the colour planes at the frame's coded padded size, which is the coded size for a Modular
+    /// frame and whole 8x8 blocks for a VarDCT frame, and each extra channel at its size at its shift.
+    /// </summary>
+    /// <param name="allocator">The allocator.</param>
+    /// <param name="frameDim">The frame dimensions.</param>
+    /// <param name="numColorPlanes">
+    /// The number of colour planes: <see cref="Headers.JxlImageMetadata.NumColorPlanes"/>, or three for a
+    /// VarDCT frame, which always codes three.
+    /// </param>
+    /// <param name="channelShifts">
+    /// The shift of each channel (<see cref="ChannelShifts"/>): the colour planes, then the extra channels.
+    /// </param>
+    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, JxlChannelShift[] channelShifts)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
         this.numColorPlanes = numColorPlanes;
+        this.inputShifts = (JxlChannelShift[])channelShifts.Clone();
+        this.shifts = (JxlChannelShift[])channelShifts.Clone();
         this.width = (int)frameDim.XSizeUpsampled;
         this.height = (int)frameDim.YSizeUpsampled;
-        this.planes = new Buffer2D<float>[numColorPlanes + numExtraChannels];
+        this.planes = new Buffer2D<float>[channelShifts.Length];
         try
         {
             for (int c = 0; c < this.planes.Length; c++)
             {
+                // A colour channel's shift is at least log2 of the upsampling, so the channel fits the
+                // coded size. VarDCT writes whole blocks there, and a subsampled channel in the top left.
                 this.planes[c] = c < numColorPlanes
-                    ? allocator.Allocate2D<float>((int)frameDim.XSizeUpsampledPadded, (int)frameDim.YSizeUpsampledPadded)
-                    : allocator.Allocate2D<float>(this.width, this.height);
+                    ? allocator.Allocate2D<float>((int)frameDim.XSizePadded, (int)frameDim.YSizePadded)
+                    : allocator.Allocate2D<float>(this.ChannelXSize(c), this.ChannelYSize(c));
             }
         }
         catch
@@ -85,54 +127,95 @@ internal sealed class JxlRenderPipeline : IDisposable
     public int NumColorPlanes => this.numColorPlanes;
 
     /// <summary>
-    /// Returns the plane of channel <paramref name="c"/>. A colour plane may be larger than the frame:
-    /// a VarDCT group writes whole blocks into it, past the frame's right and bottom edges.
+    /// Returns the shift of each channel at the start of the pipeline, as libjxl's
+    /// <c>channel_shifts_[0]</c>: the sum of the shifts of the stages that change the channel. For a
+    /// colour channel that is its chroma shift (the chroma-upsampling stages) plus log2 of the
+    /// upsampling (the upsampling stage). For an extra channel it is log2 of its own upsampling, whether
+    /// its upsampling stage runs before the patches or with the colour channels after them.
+    /// </summary>
+    /// <param name="frameHeader">The frame header.</param>
+    /// <param name="numColorPlanes">The number of colour planes the pipeline is given.</param>
+    /// <returns>The shifts: the colour planes, then the extra channels.</returns>
+    public static JxlChannelShift[] ChannelShifts(JxlFrameHeader frameHeader, int numColorPlanes)
+    {
+        List<uint> extraChannelUpsampling = frameHeader.ExtraChannelUpsampling;
+        JxlChannelShift[] shifts = new JxlChannelShift[numColorPlanes + extraChannelUpsampling.Count];
+        int upsamplingShift = JxlBits.CeilLog2Nonzero(frameHeader.Upsampling);
+        JxlYCbCrChromaSubsampling chroma = frameHeader.ChromaSubsampling;
+        for (int c = 0; c < numColorPlanes; c++)
+        {
+            shifts[c] = new JxlChannelShift(chroma.HShift(c) + upsamplingShift, chroma.VShift(c) + upsamplingShift);
+        }
+
+        for (int ec = 0; ec < extraChannelUpsampling.Count; ec++)
+        {
+            int shift = JxlBits.CeilLog2Nonzero(extraChannelUpsampling[ec]);
+            shifts[numColorPlanes + ec] = new JxlChannelShift(shift, shift);
+        }
+
+        return shifts;
+    }
+
+    /// <summary>
+    /// Returns the plane of channel <paramref name="c"/>. A plane may be larger than its channel: a
+    /// VarDCT group writes whole blocks into a colour plane, past the frame's right and bottom edges.
     /// </summary>
     /// <param name="c">The channel.</param>
     /// <returns>The plane.</returns>
     public Buffer2D<float> GetPlane(int c) => this.planes[c];
 
     /// <summary>
-    /// Returns the rectangle of group <paramref name="groupId"/>, clipped to the frame, as libjxl's
-    /// <c>MakeChannelRect</c>. libjxl takes a channel too, for channel shifts and upsampling; those
-    /// arrive with later stages, so every channel is full size here.
+    /// Returns the rectangle of group <paramref name="groupId"/> in channel <paramref name="c"/>, clipped
+    /// to the channel, as libjxl's <c>MakeChannelRect</c>: the group size is scaled up by the upsampling
+    /// and down by the channel's shift.
     /// </summary>
     /// <param name="groupId">The group.</param>
+    /// <param name="c">The channel: the colour planes, then the extra channels.</param>
     /// <returns>The rectangle.</returns>
-    public JxlRect GetGroupRect(long groupId)
+    public JxlRect GetGroupRect(long groupId, int c)
     {
+        int baseColorShift = JxlBits.CeilLog2Nonzero((ulong)(this.frameDim.XSizeUpsampledPadded / this.frameDim.XSizePadded));
+        JxlChannelShift shift = this.inputShifts[c];
         long gx = groupId % this.frameDim.XSizeGroups;
         long gy = groupId / this.frameDim.XSizeGroups;
-        long groupDim = this.frameDim.GroupDimension;
-        return new JxlRect(gx * groupDim, gy * groupDim, groupDim, groupDim, this.frameDim.XSizeUpsampled, this.frameDim.YSizeUpsampled);
+        long xgroupdim = ((long)this.frameDim.GroupDimension << baseColorShift) >> shift.X;
+        long ygroupdim = ((long)this.frameDim.GroupDimension << baseColorShift) >> shift.Y;
+        return new JxlRect(
+            gx * xgroupdim,
+            gy * ygroupdim,
+            xgroupdim,
+            ygroupdim,
+            JxlBits.DivCeil(this.frameDim.XSizeUpsampled, 1L << shift.X),
+            JxlBits.DivCeil(this.frameDim.YSizeUpsampled, 1L << shift.Y));
     }
 
     /// <summary>
-    /// Runs the stages over the whole frame, in libjxl's order: the loop filters, the patches, the save
-    /// before the colour transform, the colour-transform stages, the blending, the save after blending,
-    /// and the output. Returns the frame to keep in its reference slot, if it can be referenced; the
-    /// caller saves it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
+    /// Runs the stages over the whole frame, in libjxl's order: the neighbour stages before the patches
+    /// (from D10: the chroma upsampling, the loop filters, then the early upsampling of the extra
+    /// channels), the patches, the neighbour stages after them (the upsampling), the save before the
+    /// colour transform, the colour-transform stages, the blending, the save after blending, and the
+    /// output. Returns the frame to keep in its reference slot, if it can be referenced; the caller saves
+    /// it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
-    /// <param name="loopFilters">
-    /// The loop-filter stages (<see cref="JxlLoopFilterStages.Create"/>), in the order they run: Gaborish,
-    /// then the EPF passes. Possibly none.
+    /// <param name="beforePatches">
+    /// The neighbour stages before the patches, in the order they run: today the loop filters
+    /// (<see cref="JxlLoopFilterStages.Create"/>), Gaborish then the EPF passes. Possibly none.
     /// </param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
+    /// <param name="afterPatches">The neighbour stages after the patches, in the order they run. Possibly none.</param>
     /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
-    /// <param name="cancellationToken">The cancellation token, checked on each row of the loop filters and the patches.</param>
+    /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages and the patches.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] loopFilters, JxlPatchesStage patches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlLoopFilterStage[] beforePatches, JxlPatchesStage patches, IJxlLoopFilterStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
         try
         {
-            // The loop-filter slot: libjxl adds Gaborish and the EPF passes after the chroma upsampling,
-            // which comes in D10, and before the patches.
-            this.RunLoopFilters(loopFilters, cancellationToken);
+            this.RunNeighbourStages(beforePatches, cancellationToken);
 
             // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
             // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its patches,
@@ -140,21 +223,30 @@ internal sealed class JxlRenderPipeline : IDisposable
             // three planes to the output, which takes the first. Every stage from here to the output works
             // on each colour channel alone, so the first plane comes out the same. EPF mixes the colour
             // channels, so the loop filters run on all three before the drop; a Modular frame of such an
-            // image is given three planes for them (RunLoopFilters), and drops back to one here.
+            // image is given three planes for them (RunNeighbourStages), and drops back to one here.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
-            if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
-            {
-                this.DropToGrey();
-            }
+            this.DropToGreyIfGreyImage(metadata);
 
             if (patches != null)
             {
+                // The patches run at the coded size, where every channel is now: the patches check in
+                // JxlFrameDecoder.ProcessDcGlobal keeps the extra channels at the colour channels' size.
+                int xsize = this.ChannelXSize(0);
+                int ysize = this.ChannelYSize(0);
+
                 // One row may take every patch of the frame, so cancellation is checked row by row.
-                for (int y = 0; y < this.height; y++)
+                for (int y = 0; y < ysize; y++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    patches.ProcessRow(this.planes, this.width, y);
+                    patches.ProcessRow(this.planes, xsize, y);
                 }
+            }
+
+            this.RunNeighbourStages(afterPatches, cancellationToken);
+            this.DropToGreyIfGreyImage(metadata);
+            foreach (JxlChannelShift shift in this.shifts)
+            {
+                DebugGuard.IsTrue(shift.X == 0 && shift.Y == 0, "The neighbour stages upsample every channel to the frame size");
             }
 
             if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
@@ -208,20 +300,23 @@ internal sealed class JxlRenderPipeline : IDisposable
     public void Dispose() => this.DisposePlanes();
 
     // SimpleRenderPipeline::ProcessBuffers for stages with kInOut channels: each stage reads the planes,
-    // with its border mirrored in at the frame edges, and writes a second set, which then takes their
-    // place. The planes it replaced are the next stage's output, so two sets ping-pong.
-    private void RunLoopFilters(IJxlLoopFilterStage[] loopFilters, CancellationToken cancellationToken)
+    // with its border mirrored in at the edges of each channel's size, and writes a second set, which
+    // then takes their place. The planes it replaced are the next stage's output, so two sets ping-pong.
+    // A stage with a shift writes planes 2^shift times the size of its input, and the channels it
+    // changes then shrink to their size at the shift they have left.
+    private void RunNeighbourStages(IJxlLoopFilterStage[] stages, CancellationToken cancellationToken)
     {
-        if (loopFilters.Length == 0)
+        if (stages.Length == 0)
         {
             return;
         }
 
         // A grey image that is not XYB has one colour plane here. libjxl's Modular decoding copies the
         // grey channel into all three (rgb_from_gray in ModularFrameDecoder::ModularImageToDecodedRect),
-        // and the loop filters treat them as three channels: Gaborish has weights for each, and EPF sums
-        // its distances over all three, with a scale for each. So the plane is copied into three before
-        // the filters, and Finish keeps the first afterwards, as libjxl's output does.
+        // and its stages see three colour channels: Gaborish has weights for each, and EPF sums its
+        // distances over all three, with a scale for each. So the plane is copied into three before the
+        // stages, which number the channels as libjxl does, and Finish keeps the first afterwards, as
+        // libjxl's output does.
         if (this.numColorPlanes == 1)
         {
             this.ExpandGreyToThree();
@@ -230,40 +325,74 @@ internal sealed class JxlRenderPipeline : IDisposable
         Buffer2D<float>[] spare = new Buffer2D<float>[this.planes.Length];
         try
         {
-            foreach (IJxlLoopFilterStage stage in loopFilters)
+            foreach (IJxlLoopFilterStage stage in stages)
             {
+                // libjxl runs a stage over the largest of its channels. Every stage here changes channels
+                // of one size, at which JxlNeighbourRows mirrors them.
+                int xsize = -1;
+                int ysize = -1;
+                for (int c = 0; c < this.planes.Length; c++)
+                {
+                    if (stage.ChangesChannel(c))
+                    {
+                        DebugGuard.IsTrue(xsize < 0 || (xsize == this.ChannelXSize(c) && ysize == this.ChannelYSize(c)), "The channels a stage changes have one size");
+                        xsize = this.ChannelXSize(c);
+                        ysize = this.ChannelYSize(c);
+                    }
+                }
+
+                if (xsize < 0)
+                {
+                    continue;
+                }
+
+                int shiftX = stage.ShiftX;
+                int shiftY = stage.ShiftY;
                 Buffer2D<float>[] output = new Buffer2D<float>[this.planes.Length];
                 for (int c = 0; c < this.planes.Length; c++)
                 {
                     if (stage.ChangesChannel(c))
                     {
-                        // The same size as the plane it replaces. The stages write only the frame, so
-                        // after the filters the padding past it is zero after an odd number of stages
-                        // (the first spare is allocated clean) and the decoded padding after an even
-                        // number. Nothing reads it: every later stage, save and sink takes the frame
-                        // size. A later stage that reads past the frame edge (D10's upsampling) must
-                        // mirror the frame there, as JxlNeighbourRows and libjxl do, not read the padding.
-                        spare[c] ??= this.allocator.Allocate2D<float>(this.planes[c].Width, this.planes[c].Height, AllocationOptions.Clean);
+                        // A stage with no shift writes planes the same size as those it replaces. It
+                        // writes only the channel, so after such stages the padding past it is zero after
+                        // an odd number of stages (the first spare is allocated clean) and the decoded
+                        // padding after an even number. Nothing reads it: every later stage, save and sink
+                        // takes the channel's size, and a neighbour stage mirrors the channel at its edges,
+                        // as JxlNeighbourRows and libjxl do. A stage with a shift writes planes of its
+                        // input size times 2^shift, as libjxl allocates them.
+                        int outputWidth = shiftX == 0 && shiftY == 0 ? this.planes[c].Width : xsize << shiftX;
+                        int outputHeight = shiftX == 0 && shiftY == 0 ? this.planes[c].Height : ysize << shiftY;
+                        if (spare[c] != null && (spare[c].Width != outputWidth || spare[c].Height != outputHeight))
+                        {
+                            spare[c].Dispose();
+                            spare[c] = null;
+                        }
+
+                        spare[c] ??= this.allocator.Allocate2D<float>(outputWidth, outputHeight, AllocationOptions.Clean);
                         output[c] = spare[c];
                     }
                 }
 
-                using (JxlNeighbourRows input = new(this.allocator, this.planes, stage, this.width, this.height))
+                using (JxlNeighbourRows input = new(this.allocator, this.planes, stage, xsize, ysize))
                 {
-                    for (int y = 0; y < this.height; y++)
+                    for (int y = 0; y < ysize; y++)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         input.MoveTo(y);
-                        stage.ProcessRow(input, output, this.width, y);
+                        stage.ProcessRow(input, output, xsize, y);
                     }
                 }
 
+                // Move the new planes in, and shrink their channels to their size at the next stage.
                 for (int c = 0; c < this.planes.Length; c++)
                 {
                     if (output[c] != null)
                     {
                         spare[c] = this.planes[c];
                         this.planes[c] = output[c];
+                        JxlChannelShift shift = this.shifts[c];
+                        DebugGuard.IsTrue(shift.X >= shiftX && shift.Y >= shiftY, "A stage upsamples a channel no further than its shift");
+                        this.shifts[c] = new JxlChannelShift(shift.X - shiftX, shift.Y - shiftY);
                     }
                 }
             }
@@ -271,6 +400,20 @@ internal sealed class JxlRenderPipeline : IDisposable
         finally
         {
             JxlPlanes.DisposeAll(spare);
+        }
+    }
+
+    // The size of channel c at the shift it has left: libjxl's DivCeil(xsize_upsampled, 1 << shift).
+    private int ChannelXSize(int c) => (int)JxlBits.DivCeil(this.frameDim.XSizeUpsampled, 1L << this.shifts[c].X);
+
+    private int ChannelYSize(int c) => (int)JxlBits.DivCeil(this.frameDim.YSizeUpsampled, 1L << this.shifts[c].Y);
+
+    // The first drop to grey of a grey image that is not XYB: see Finish.
+    private void DropToGreyIfGreyImage(JxlImageMetadata metadata)
+    {
+        if (this.numColorPlanes == 3 && metadata.NumColorPlanes == 1)
+        {
+            this.DropToGrey();
         }
     }
 
@@ -382,6 +525,11 @@ internal sealed class JxlRenderPipeline : IDisposable
         Array.Copy(this.planes, 1, rgb, 3, this.planes.Length - 1);
         this.planes = rgb;
         this.numColorPlanes = 3;
+
+        JxlChannelShift[] shifts = new JxlChannelShift[rgb.Length];
+        shifts[0] = shifts[1] = shifts[2] = this.shifts[0];
+        Array.Copy(this.shifts, 1, shifts, 3, this.shifts.Length - 1);
+        this.shifts = shifts;
     }
 
     // Disposes the second and third colour planes, so the planes are grey, then the extra channels.
@@ -394,6 +542,11 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes[2].Dispose();
         this.planes = grey;
         this.numColorPlanes = 1;
+
+        JxlChannelShift[] shifts = new JxlChannelShift[grey.Length];
+        shifts[0] = this.shifts[0];
+        Array.Copy(this.shifts, 3, shifts, 1, this.shifts.Length - 3);
+        this.shifts = shifts;
     }
 
     // WriteToImageBundleStage into frame_storage_for_referencing.

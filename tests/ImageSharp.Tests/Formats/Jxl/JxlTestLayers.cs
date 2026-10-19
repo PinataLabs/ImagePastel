@@ -347,7 +347,11 @@ internal sealed class JxlTestLayers
             w.Bit(frame.YCbCr);
             if (frame.YCbCr && !useDcFrame)
             {
-                w.Write(2, 0).Write(2, 0).Write(2, 0); // no chroma subsampling
+                // The chroma subsampling mode of each channel, Cb, Y, Cr: 0 (none) unless set.
+                foreach (int mode in frame.ChromaSubsampling ?? new[] { 0, 0, 0 })
+                {
+                    w.Write(2, (ulong)mode);
+                }
             }
         }
 
@@ -356,9 +360,10 @@ internal sealed class JxlTestLayers
             // U32(Val(1), Val(2), Val(4), Val(8)): the selector is log2 of the upsampling.
             ulong upsampling = (ulong)JxlBits.FloorLog2Nonzero(frame.Upsampling);
             w.Write(2, upsampling);
+            ulong extraChannelUpsampling = frame.ExtraChannelUpsampling != 0 ? (ulong)JxlBits.FloorLog2Nonzero(frame.ExtraChannelUpsampling) : upsampling;
             for (int i = 0; i < this.numExtraChannels; i++)
             {
-                w.Write(2, upsampling); // the extra channels are upsampled as the colour channels
+                w.Write(2, extraChannelUpsampling);
             }
         }
 
@@ -501,8 +506,17 @@ internal sealed record JxlTestFrame(byte[] Section)
     /// <summary>Gets a value indicating whether the frame has the YCbCr colour transform, with no chroma subsampling; not for XYB images.</summary>
     public bool YCbCr { get; init; }
 
+    /// <summary>
+    /// Gets the chroma subsampling mode of each channel of a <see cref="YCbCr"/> frame, in Cb, Y, Cr
+    /// order: 0 (4:4:4), 1 (4:2:0), 2 (4:2:2) or 3 (4:4:0). <see langword="null"/> means none.
+    /// </summary>
+    public int[] ChromaSubsampling { get; init; }
+
     /// <summary>Gets the upsampling of the colour and extra channels: 1, 2, 4 or 8.</summary>
     public uint Upsampling { get; init; } = 1;
+
+    /// <summary>Gets the upsampling of every extra channel, 1, 2, 4 or 8, if it differs from <see cref="Upsampling"/>; 0 means the same.</summary>
+    public uint ExtraChannelUpsampling { get; init; }
 
     public bool Crop { get; init; }
 

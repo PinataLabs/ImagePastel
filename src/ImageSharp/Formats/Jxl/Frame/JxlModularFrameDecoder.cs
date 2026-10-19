@@ -320,7 +320,6 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             JxlThrowHelper.ThrowInvalidImageContentException("Transforms left over");
         }
 
-        JxlRect r = pipeline.GetGroupRect(groupId);
         bool accurate = this.fullImage.BitDepth >= 23;
         int numColorPlanes = metadata.NumColorPlanes;
         int c = 0;
@@ -366,6 +365,8 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
                     JxlThrowHelper.ThrowInvalidImageContentException("Empty image");
                 }
 
+                // Each channel has its own rectangle in the pipeline (MakeChannelRect), at its shift.
+                JxlRect r = pipeline.GetGroupRect(groupId, c);
                 JxlRect mr = CropRect(modularRect, chIn);
                 if (r.YSize != mr.YSize || r.XSize != mr.XSize)
                 {
@@ -416,6 +417,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             }
 
             JxlModularChannel chIn = gi.Channel[c];
+            JxlRect r = pipeline.GetGroupRect(groupId, pipeline.NumColorPlanes + ec);
             JxlRect mr = CropRect(modularRect, chIn);
             if (r.YSize != mr.YSize || r.XSize != mr.XSize)
             {
