@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.IO;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
@@ -90,6 +91,19 @@ public class JxlEncoderIccTests
         }
 
         return AssertDjxlExactAsync<Rgb24>(icc, name);
+    }
+
+    [Theory]
+    [InlineData(TestImages.Icc.CompactDisplayP3V4)]
+    [InlineData(TestImages.Icc.LittleCmsRgbLut16V2)]
+    public void Encode_MatchingProfile_IccStreamUsesPrefixCodes(string profile)
+    {
+        // libjxl's WriteICC sets force_huffman, so the ICC stream uses prefix codes at any size.
+        using Image<Rgb24> image = CreateImage<Rgb24>(ReadProfile(profile));
+
+        JxlAnsCode code = JxlEntropyCodeProbe.ReadIccCode(JxlEncoderRoundTrip.Encode(image));
+
+        Assert.True(code.UsePrefixCode);
     }
 
     [Theory]
