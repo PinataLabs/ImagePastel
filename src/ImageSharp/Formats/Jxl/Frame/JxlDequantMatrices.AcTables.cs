@@ -717,14 +717,8 @@ internal sealed partial class JxlDequantMatrices
         }
     }
 
-    // libjxl's FastPowf from lib/jxl/base/fast_math-inl.h. JxlFastMath comes with D8b; until then a
-    // table that needs it cannot be computed. Tables with one distance band, as libjxl's encoder writes
-    // with disable_perceptual_optimizations, do not need it.
-    private static float FastPowf(float b, float e)
-    {
-        JxlThrowHelper.ThrowNotSupportedException("Quantization weights with more than one distance band (JxlFastMath)");
-        return b * e;
-    }
+    // libjxl's FastPowf from lib/jxl/base/fast_math-inl.h, as the scalar and the vector Interpolate call it.
+    private static float FastPowf(float b, float e) => JxlFastMath.FastPowf(b, e);
 }
 
 /// <summary>The distance bands of a parametric quantization table.</summary>

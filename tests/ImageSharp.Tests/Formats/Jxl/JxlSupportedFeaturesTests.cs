@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -19,10 +18,6 @@ public class JxlSupportedFeaturesTests
 {
     private const int Width = 16;
     private const int Height = 16;
-
-    [Fact]
-    public void Decode_XybVarDctFrame_IsNotSupported()
-        => AssertNotSupported(new JxlTestLayers(Width, Height) { Xyb = true }, JxlTestFrame.Last(JxlTestLayers.ColourA) with { Encoding = JxlFrameEncoding.VarDct }, "VarDCT");
 
     [Fact]
     public void Decode_YCbCrFrame_IsNotSupported()

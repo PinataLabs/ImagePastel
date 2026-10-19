@@ -68,8 +68,16 @@ public class JxlVarDctTests
         => AssertNotSupported(File.ReadAllBytes(InputPath("vardct_strategies")), "AC strategy");
 
     [Fact]
-    public void Decode_XybVarDct_IsNotSupported()
-        => AssertNotSupported(File.ReadAllBytes(InputPath("vardct_xyb")), "VarDCT");
+    public void Decode_XybVarDct_Decodes()
+    {
+        // JxlXybVarDctTests compares XYB VarDCT output with djxl's; this is the same image as vardct_small.
+        using FileStream stream = File.OpenRead(InputPath("vardct_xyb"));
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+
+        Assert.Equal(3, decoded.Frames[0].Planes.Count);
+        Assert.Equal(64, decoded.Frames[0].Planes[0].Width);
+        Assert.Equal(48, decoded.Frames[0].Planes[0].Height);
+    }
 
     [Fact]
     public void Decode_RawQuantTable_IsNotSupported()
