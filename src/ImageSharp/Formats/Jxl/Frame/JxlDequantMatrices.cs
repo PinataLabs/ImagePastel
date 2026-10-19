@@ -12,10 +12,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <summary>
 /// The dequantization matrices of a frame. A new frame starts from the defaults, as libjxl's
-/// <c>InitFrame</c> resets them. Only the DC quantization factors are ported so far: the Modular XYB
-/// conversion and the VarDCT DC both use them.
+/// <c>InitFrame</c> resets them. This part holds the DC quantization factors, which the Modular XYB
+/// conversion and the VarDCT DC both use; the AC tables are in <c>JxlDequantMatrices.AcTables.cs</c>.
 /// </summary>
-internal sealed class JxlDequantMatrices
+internal sealed partial class JxlDequantMatrices
 {
     private const float AlmostZero = 1e-8f;
 

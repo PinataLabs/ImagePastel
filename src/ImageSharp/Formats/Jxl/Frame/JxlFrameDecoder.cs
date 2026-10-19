@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
-// ProcessDCGroup, ProcessACGroup, ProcessSections, FinalizeFrame), restricted to Modular frames, and the
+// ProcessDCGroup, FinalizeDC, AllocateOutput, ProcessACGlobal, ProcessACGroup, ProcessSections, FinalizeFrame), and the
 // per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -12,6 +12,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -110,8 +111,9 @@ internal sealed class JxlFrameDecoder
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes, this.metadata.M.NumExtraChannels);
+        JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(frameHeader, frameDim, matrices) : null;
 
-        ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, pipeline, cancellationToken);
+        ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
 
         foreach (JxlBitReader section in sections)
         {
@@ -144,9 +146,9 @@ internal sealed class JxlFrameDecoder
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
     {
-        if (frameHeader.Encoding == JxlFrameEncoding.VarDct)
+        if (frameHeader.Encoding == JxlFrameEncoding.VarDct && frameHeader.ColorTransform == JxlColorTransform.Xyb)
         {
-            JxlThrowHelper.ThrowNotSupportedException("VarDCT");
+            JxlThrowHelper.ThrowNotSupportedException("VarDCT with the XYB colour transform");
         }
 
         if (frameHeader.ColorTransform == JxlColorTransform.Xyb)
@@ -180,11 +182,6 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
         }
 
-        if ((flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Skipping adaptive DC smoothing");
-        }
-
         // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
         const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;
         if ((flags & ~knownFlags) != 0)
@@ -209,7 +206,7 @@ internal sealed class JxlFrameDecoder
         }
     }
 
-    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
+    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
     {
         int numPasses = (int)frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -219,28 +216,35 @@ internal sealed class JxlFrameDecoder
         // Section ids: 0 is DC global, then the DC groups, AC global, and the AC groups of each pass.
         JxlBitReader DcGlobal() => sections[0];
         JxlBitReader DcGroup(long i) => singleSection ? sections[0] : sections[1 + i];
+        JxlBitReader AcGlobal() => singleSection ? sections[0] : sections[1 + numDcGroups];
         JxlBitReader AcGroup(long g, int p) => singleSection ? sections[0] : sections[JxlToc.AcGroupIndex(p, g, numGroups, numDcGroups)];
 
-        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, matrices, modularFrameDecoder, cancellationToken);
+        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, matrices, modularFrameDecoder, varDct, cancellationToken);
 
         for (long i = 0; i < numDcGroups; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ProcessDcGroup(i, DcGroup(i), frameHeader, frameDim, modularFrameDecoder);
+            ProcessDcGroup(i, DcGroup(i), frameHeader, frameDim, modularFrameDecoder, varDct);
         }
+
+        // FinalizeDC: adaptive DC smoothing must happen between all the DC groups and the AC groups.
+        varDct?.FinalizeDc(frameHeader);
 
         // AllocateOutput.
         modularFrameDecoder.MaybeDropFullImage();
+        varDct?.InitForAc(numPasses);
 
         // ProcessACGlobal reads only VarDCT data: nothing for a Modular frame.
+        varDct?.ProcessAcGlobal(AcGlobal(), numPasses);
+
         for (long g = 0; g < numGroups; g++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ProcessAcGroup(g, numPasses, AcGroup, frameHeader, frameDim, modularFrameDecoder, pipeline);
+            ProcessAcGroup(g, numPasses, AcGroup, frameHeader, frameDim, modularFrameDecoder, varDct, pipeline);
         }
     }
 
-    private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, CancellationToken cancellationToken)
+    private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
     {
         // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
         // frame without the flag has no dictionary, so the caller passes null.
@@ -265,22 +269,44 @@ internal sealed class JxlFrameDecoder
 
         // Splines and noise are rejected by CheckSupported.
         matrices.DecodeDc(br);
+        varDct?.DecodeGlobalDcInfo(br);
         modularFrameDecoder.DecodeGlobalInfo(br, frameHeader);
     }
 
-    private static void ProcessDcGroup(long dcGroupId, JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder)
+    private static void ProcessDcGroup(long dcGroupId, JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct)
     {
         long gx = dcGroupId % frameDim.XSizeDcGroups;
         long gy = dcGroupId / frameDim.XSizeDcGroups;
+
+        // A frame that uses a DC frame (D13) has no VarDCT DC of its own; CheckSupported rejects it.
+        if (varDct != null)
+        {
+            modularFrameDecoder.DecodeVarDctDc(frameHeader, dcGroupId, br, varDct);
+        }
+
         JxlRect mrect = new(gx * frameDim.DcGroupDim, gy * frameDim.DcGroupDim, frameDim.DcGroupDim, frameDim.DcGroupDim);
         modularFrameDecoder.DecodeGroup(frameHeader, mrect, br, 3, 1000, JxlModularStreamId.ModularDc(frameDim, dcGroupId), null, -1);
+        if (varDct != null)
+        {
+            modularFrameDecoder.DecodeAcMetadata(frameHeader, dcGroupId, br, varDct);
+        }
     }
 
-    private static void ProcessAcGroup(long acGroupId, int numPasses, Func<long, int, JxlBitReader> readers, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder, JxlRenderPipeline pipeline)
+    private static void ProcessAcGroup(long acGroupId, int numPasses, Func<long, int, JxlBitReader> readers, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline)
     {
         long groupDim = frameDim.GroupDimension;
         long gx = acGroupId % frameDim.XSizeGroups;
         long gy = acGroupId / frameDim.XSizeGroups;
+        if (varDct != null)
+        {
+            JxlBitReader[] passReaders = new JxlBitReader[numPasses];
+            for (int i = 0; i < numPasses; i++)
+            {
+                passReaders[i] = readers(acGroupId, i);
+            }
+
+            JxlVarDctGroup.DecodeGroup(frameHeader, passReaders, numPasses, acGroupId, varDct, pipeline);
+        }
 
         // don't limit to image dimensions here (is done in DecodeGroup)
         JxlRect mrect = new(gx * groupDim, gy * groupDim, groupDim, groupDim);

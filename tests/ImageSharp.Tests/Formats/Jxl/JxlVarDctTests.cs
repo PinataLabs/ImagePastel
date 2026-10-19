@@ -63,7 +63,7 @@ public class JxlVarDctTests
         NpyArray reference = LoadReference(name);
         NpyArray expected = DropAlpha(reference);
 
-        using Image<Rgb24> image = Image.Load<Rgb24>(InputPath(name));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
 
         JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
@@ -82,11 +82,11 @@ public class JxlVarDctTests
     public void Decode_RawQuantTable_IsNotSupported()
     {
         // vardct_groups has its own sections, so AC global starts a section. Its first bit is
-        // all_default (0), then the 3-bit mode of the DCT8 table: kQuantModeDCT (6), whose low bit is
-        // 0. Setting that bit makes the mode kQuantModeRAW (7).
+        // all_default (0), then the 3-bit mode of the DCT8 table, low bit first: kQuantModeDCT (6).
+        // Setting its low bit makes the mode kQuantModeRAW (7).
         byte[] codestream = File.ReadAllBytes(InputPath("vardct_groups"));
         int acGlobal = SectionOffset(codestream, 2);
-        Assert.Equal(0, codestream[acGlobal] & 0b1111);
+        Assert.Equal(0b1100, codestream[acGlobal] & 0b1111);
         codestream[acGlobal] |= 0b0010;
 
         AssertNotSupported(codestream, "RAW");
@@ -114,6 +114,14 @@ public class JxlVarDctTests
         }
 
         return offset;
+    }
+
+    private static Configuration CreateConfiguration()
+    {
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
+        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
+        return configuration;
     }
 
     private static string InputPath(string name) => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", name + ".jxl");
