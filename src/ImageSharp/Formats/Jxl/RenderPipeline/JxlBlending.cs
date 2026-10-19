@@ -144,6 +144,10 @@ internal static class JxlBlending
                 case JxlPatchBlendMode.None:
                     bg[nc + i].CopyTo(Tmp(nc + i));
                     continue;
+
+                default:
+                    ThrowUnknownMode(info.Mode);
+                    break;
             }
         }
 
@@ -216,6 +220,10 @@ internal static class JxlBlending
             case JxlPatchBlendMode.None:
                 Copy(bg, nc, tmp, xsize);
                 break;
+
+            default:
+                ThrowUnknownMode(colorBlending.Mode);
+                break;
         }
 
         for (int i = 0; i < nc + numEc; i++)
@@ -223,6 +231,11 @@ internal static class JxlBlending
             Tmp(i).CopyTo(output[i]);
         }
     }
+
+    // Unreachable: the patch dictionary and the frame header give only the eight modes. libjxl's switches
+    // have no default; one here keeps a tmp row that was not written from reaching the output.
+    private static void ThrowUnknownMode(JxlPatchBlendMode mode)
+        => JxlThrowHelper.ThrowInvalidImageContentException($"Unknown patch blend mode {(int)mode}");
 
     // One extra channel blended by an alpha. libjxl's single-channel PerformAlphaBlending spots the alpha
     // channel itself by pointer equality; here the caller says so with isAlpha.
