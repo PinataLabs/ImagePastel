@@ -111,7 +111,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         bool fp = metadata.BitDepth.FloatingPointSample;
 
-        // bits_per_sample is just metadata for XYB images.
+        // bits_per_sample is just metadata for XYB-encoded images.
         if (metadata.BitDepth.BitsPerSample >= 32)
         {
             if (metadata.BitDepth.BitsPerSample == 32 && !fp)

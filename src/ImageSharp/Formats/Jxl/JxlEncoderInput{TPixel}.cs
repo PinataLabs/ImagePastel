@@ -278,7 +278,7 @@ internal static class JxlEncoderInput<TPixel>
 
                     if (!fp)
                     {
-                        // A departure: libjxl converts floats outside [0, 1] to integers outside the
+                        // Departure (ADR 0001): libjxl converts floats outside [0, 1] to integers outside the
                         // stored range, and a float too large for an int has no defined conversion in
                         // C#. The decoder clamps to [0, 1], so clamping first gives the same pixels.
                         for (int x = 0; x < width; x++)

@@ -46,9 +46,9 @@ internal static class JxlContextMapEncoder
             mtfTokens[0].Add(new JxlToken(0, sym));
         }
 
-        // A departure: libjxl leaves these parameters' LZ77 method at its default, kRLE, so it can
-        // RLE-code a long context map. The encoder writes no LZ77 yet, so this is kNone; the output
-        // is still valid.
+        // Departure (ADR 0001): libjxl leaves these parameters' LZ77 method at its default, kRLE, so
+        // it can RLE-code a long context map. The encoder writes no LZ77 yet, so this is kNone; the
+        // output is still valid.
         JxlHistogramParams parameters = new()
         {
             UintMethod = JxlHistogramParams.HybridUintMethod.ContextMap,

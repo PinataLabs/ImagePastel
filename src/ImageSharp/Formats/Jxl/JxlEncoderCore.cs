@@ -1,5 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
+// Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
+// lib/jxl/encode.cc (JxlEncoderSetBasicInfo, JxlEncoderSetColorEncoding, JxlEncoderSetICCProfile, and the
+// codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
+// (ColorEncoding::SetICCRaw) and lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB).
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using System.IO;
@@ -65,7 +70,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding for a lossless image: the
-    // original colour space (no XYB), the sample depth, and straight alpha at the colour depth when the
+    // image's own colour space (not XYB-encoded), the sample depth, and straight alpha at the colour depth when the
     // pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the depth of the file
     // it reads, or else the depth of the pixel type.
     private static JxlCodecMetadata CreateMetadata<TPixel>(Image<TPixel> image)
@@ -88,7 +93,8 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         JxlImageMetadata m = metadata.M;
         SetBitDepth(m.BitDepth, bitsPerSample, exponentBitsPerSample);
 
-        // Lossless uses the original profile, so a 16-bit buffer is enough up to 12 bits.
+        // Lossless sets libjxl's uses_original_profile (the samples are not XYB-encoded), so a 16-bit
+        // buffer is enough up to 12 bits.
         m.Modular16BitBufferSufficient = bitsPerSample <= 12;
         if (JxlEncoderInput<TPixel>.HasAlpha)
         {
