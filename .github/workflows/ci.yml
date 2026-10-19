@@ -3,13 +3,19 @@ name: CI
 # Builds, tests, and checks the public API. Publishing is separate:
 # release-publish.yml (stable releases) and release-prerelease.yml (pre-releases)
 # both require this workflow to have passed on the commit they publish.
+# Changes to Markdown files alone don't run it. To release such a commit, run
+# this workflow on it by hand (workflow_dispatch) first.
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:

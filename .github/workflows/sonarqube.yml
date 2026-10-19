@@ -5,6 +5,7 @@ name: SonarQube
 # OpenCover format.
 # Kept apart from ci.yml so an analysis failure never blocks a release:
 # require-green-ci.sh only looks at the CI workflow.
+# Changes to Markdown files alone don't run it.
 #
 # Needs the SONAR_TOKEN repository secret. Pull requests from forks and from
 # Dependabot get no secrets, so the job skips them.
@@ -12,9 +13,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:
