@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -52,6 +53,37 @@ public class JxlEncoderIccTests
         {
             AssertOurDecoderKeepsProfile<Rgb24>(icc);
         }
+    }
+
+    [Theory]
+    [MemberData(nameof(MatchingProfiles))]
+    public void Encode_MatchingProfile_MagickGivesTheSameProfileBytesAndPixels(string pixelType, string profile)
+    {
+        Assert.SkipUnless(ImageMagick.MagickFormatInfo.Create(ImageMagick.MagickFormat.Jxl)?.SupportsReading == true, "This Magick.NET build has no libjxl.");
+
+        byte[] icc = ReadProfile(profile);
+        if (pixelType == nameof(L8))
+        {
+            AssertMagickKeepsProfile<L8>(icc);
+        }
+        else
+        {
+            AssertMagickKeepsProfile<Rgb24>(icc);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(MatchingProfiles))]
+    public Task Encode_MatchingProfile_DjxlGivesTheSamePixels(string pixelType, string profile)
+    {
+        byte[] icc = ReadProfile(profile);
+        string name = $"Icc_{pixelType}_{Path.GetFileNameWithoutExtension(profile)}";
+        if (pixelType == nameof(L8))
+        {
+            return AssertDjxlExactAsync<L8>(icc, name);
+        }
+
+        return AssertDjxlExactAsync<Rgb24>(icc, name);
     }
 
     [Theory]
@@ -119,6 +151,25 @@ public class JxlEncoderIccTests
         Assert.Equal(icc, jxlMetadata.OriginalIccProfile.ToByteArray());
         Assert.Equal(icc, decoded.Metadata.IccProfile?.ToByteArray());
         ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    // MagickReferenceDecoder drops metadata, so the profile is read through MagickImage itself.
+    private static void AssertMagickKeepsProfile<TPixel>(byte[] icc)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = CreateImage<TPixel>(icc);
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image);
+
+        using ImageMagick.MagickImage magick = new(encoded);
+        Assert.Equal(icc, magick.GetColorProfile()?.ToByteArray());
+        JxlEncoderRoundTrip.AssertMagickExact(image, encoded);
+    }
+
+    private static async Task AssertDjxlExactAsync<TPixel>(byte[] icc, string name)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = CreateImage<TPixel>(icc);
+        await JxlEncoderRoundTrip.AssertDjxlExactAsync(image, JxlEncoderRoundTrip.Encode(image), name, TestContext.Current.CancellationToken);
     }
 
     private static void AssertOurDecoderGetsSrgbEnum<TPixel>(byte[] icc)
