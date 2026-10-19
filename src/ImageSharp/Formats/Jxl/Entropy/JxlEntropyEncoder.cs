@@ -94,9 +94,9 @@ internal static class JxlEntropyEncoder
         {
             if (writer != null)
             {
-                long b = writer.BitsWritten;
+                long bitsBeforeUintConfig = writer.BitsWritten;
                 EncodeUintConfig(codes.Lz77.LengthUintConfig, writer, logAlphaSize: 8);
-                cost += writer.BitsWritten - b;
+                cost += writer.BitsWritten - bitsBeforeUintConfig;
             }
             else
             {
