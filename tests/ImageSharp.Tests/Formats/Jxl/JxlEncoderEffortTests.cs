@@ -59,6 +59,23 @@ public class JxlEncoderEffortTests
         Assert.True(tree.Where(n => n.Property >= 0).Select(n => n.Property).Distinct().Count() > 1, "The splits use one property");
     }
 
+    // libjxl effort 5 learns the tree over properties 0, 15, 9 and 10 (with 1, the group, for frames
+    // of 30 streams or more); effort 7 adds 11 (NW - N), 12 (N - NE) and 13 (N - NN).
+    [Theory]
+    [InlineData(nameof(JxlEffort.Default), false)]
+    [InlineData(nameof(JxlEffort.Thorough), true)]
+    public void Encode_Photo_SplitsOnTheEffort7PropertiesOnlyAtThorough(string effort, bool expectEffort7Properties)
+    {
+        int[] effort7Properties = { 11, 12, 13 };
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+
+        List<JxlPropertyDecisionNode> tree = JxlEncodedFrame.ReadGlobalTree(JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort))));
+
+        List<int> properties = tree.Where(n => n.Property >= 0).Select(n => (int)n.Property).Distinct().Order().ToList();
+        Assert.Equal(expectEffort7Properties, properties.Intersect(effort7Properties).Any());
+        Assert.All(properties, p => Assert.Contains(p, expectEffort7Properties ? new[] { 0, 9, 10, 11, 12, 13, 15 } : new[] { 0, 9, 10, 15 }));
+    }
+
     [Fact]
     public void Encode_FastestPhoto_HasTheWpFixedDcTree()
     {
