@@ -124,7 +124,12 @@ internal sealed class JxlFrameDecoder
         }
 
         modularFrameDecoder.FinalizeDecoding(frameHeader, pipeline);
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, patchesStage, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+
+        // PreparePipeline adds the loop-filter stages before the sections are decoded, and they read
+        // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
+        // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
+        IJxlLoopFilterStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(this.configuration.MemoryAllocator, frameHeader, frameDim, varDct));
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, loopFilters, patchesStage, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -193,10 +198,8 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("Progressive passes");
         }
 
-        if (frameHeader.LoopFilter.Gab || frameHeader.LoopFilter.EpfIters > 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Loop filters");
-        }
+        // Gaborish and EPF have a check each.
+        JxlLoopFilterStages.CheckSupported(frameHeader);
     }
 
     private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
