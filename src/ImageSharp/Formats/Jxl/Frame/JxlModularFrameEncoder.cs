@@ -1,8 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (ModularFrameEncoder: Init, ComputeEncodingData,
-// PrepareStreamParams, ComputeTree, ComputeTokens, EncodeGlobalInfo, EncodeStream).
+// lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (do_transform, maybe_do_transform, try_palettes, and
+// ModularFrameEncoder: Init, ComputeEncodingData, PrepareStreamParams, ComputeTree, ComputeTokens,
+// EncodeGlobalInfo, EncodeStream).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -12,6 +13,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -29,6 +31,15 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // The level-10 limit. libjxl uses 16 for level 5, but cjxl leaves the level unset (-1) when it
     // queues the frame, so the frame encoder always sees this.
     private const int LevelMaxBitdepth = 32;
+
+    // libjxl's CompressParams defaults (enc_params.h): channel_colors_pre_transform_percent, palette_colors
+    // and lossy_palette. Lossless keeps them.
+    private const float ChannelColorsPreTransformPercent = 95f;
+    private const int PaletteColors = 1 << 10;
+    private const bool LossyPalette = false;
+
+    // libjxl's do_color: this encoder always codes the colour channels in the Modular image.
+    private const bool DoColor = true;
 
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
@@ -127,9 +138,41 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             JxlThrowHelper.ThrowImageFormatException($"Bitdepth too high for level {10} (need {maxBitdepth} bits, have only {LevelMaxBitdepth} in this codestream level)");
         }
 
-        // libjxl tries the global palette, the channel palettes and YCoCg here (enc_modular.cc:889-914),
-        // which slice E1e adds. When a transform leaves no spare bit, libjxl turns off the per-group
-        // RCT search, which only the higher efforts run.
+        // libjxl's maxval only sets the quantisation of lossy channels.
+        int maxval = gi.BitDepth < 32 ? (int)((1u << gi.BitDepth) - 1) : 0;
+
+        // Set options and apply transformations. Lossless keeps libjxl's palette settings.
+        // Global palette transforms
+        float channelColorsPercent = 0;
+        if (!LossyPalette && (this.speedTier <= JxlSpeedTier.Thunder || (DoColor && metadata.BitDepth.BitsPerSample > 8)))
+        {
+            channelColorsPercent = ChannelColorsPreTransformPercent;
+        }
+
+        // Global palette causes bad progressive loading due to interpolation but lossy palette is
+        // still required for JXL art. Lossless Fastest is neither streamed (groupwise) nor responsive.
+        this.TryPalettes(gi, ref maxBitdepth, ref maxval, channelColorsPercent);
+
+        // don't do an RCT if we're short on bits
+        if (DoColor && gi.Channel.Count - gi.NbMetaChannels >= 3 && maxBitdepth + 1 < LevelMaxBitdepth)
+        {
+            // libjxl's colorspace is -1 (choose) unless the caller forces an RCT, which this encoder
+            // has no option for. Lossless above Hare gets the fixed YCoCg.
+            if (this.speedTier > JxlSpeedTier.Hare)
+            {
+                JxlTransform ycocg = new() { Id = JxlTransformId.Rct, RctType = 6, BeginC = (uint)gi.NbMetaChannels };
+                DoTransform(gi, ycocg);
+                maxBitdepth++;
+            }
+        }
+
+        // libjxl's move-to-front and squeeze steps are not taken by lossless Fastest. When no spare
+        // bit is left, libjxl turns off the per-group RCT search, which only higher efforts run.
+        if (maxBitdepth > LevelMaxBitdepth)
+        {
+            JxlThrowHelper.ThrowImageFormatException($"Bitdepth {maxBitdepth} too high after the transforms");
+        }
+
         this.FillStreamParams();
     }
 
@@ -350,6 +393,143 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         // libjxl does some per-group transforms here: a local palette, the RCT search and the
         // weighted predictor mode search. Effort 3 runs none of them.
+    }
+
+    // libjxl's do_transform: applies the transform and, when it took, adds it to the image's list.
+    // libjxl copies the transform first; callers here pass a new one.
+    private static bool DoTransform(JxlModularImage image, JxlTransform tr)
+    {
+        bool didIt = JxlTransformEncoder.TransformForward(tr, image);
+        if (didIt)
+        {
+            image.Transform.Add(tr);
+        }
+
+        return didIt;
+    }
+
+    // libjxl's maybe_do_transform. From Squirrel up, which includes Fastest, a transform that applies
+    // is kept. Below Squirrel libjxl estimates the cost after the transform and, when the cost went up,
+    // undoes it with Transform::Inverse (JxlTransform.Inverse here) and drops it from the list. That
+    // estimate (EstimateCost) belongs to slice E2.
+    private bool MaybeDoTransform(JxlModularImage image, JxlTransform tr)
+    {
+        if (this.speedTier >= JxlSpeedTier.Squirrel)
+        {
+            return DoTransform(image, tr);
+        }
+
+        JxlThrowHelper.ThrowNotSupportedException("The transform cost estimate of higher efforts (slice E2)");
+        return false;
+    }
+
+    // libjxl's try_palettes, without the lossy palette: the global palette over every channel, then
+    // over all but the last, then a channel palette (channel compaction) for each channel left.
+    private void TryPalettes(JxlModularImage gi, ref int maxBitdepth, ref int maxval, float channelColorsPercent)
+    {
+        float costBefore = 0f;
+        int didPalette = 0;
+        float nbPixels = gi.Channel[0].W * gi.Channel[0].H;
+        int nbChans = gi.Channel.Count - gi.NbMetaChannels;
+
+        // arbitrary estimate: 4.8 bpp for 8-bit RGB
+        float arbitraryBppEstimate = 0.2f * gi.BitDepth * nbChans;
+
+        if (PaletteColors != 0 || LossyPalette)
+        {
+            // when not estimating, assume some arbitrary bpp. libjxl estimates the cost at Squirrel
+            // and below, which slice E2 adds.
+            if (this.speedTier <= JxlSpeedTier.Squirrel)
+            {
+                JxlThrowHelper.ThrowNotSupportedException("The palette cost estimate of higher efforts (slice E2)");
+            }
+
+            costBefore = nbPixels * arbitraryBppEstimate;
+
+            // all-channel palette (e.g. RGBA)
+            if (nbChans > 1)
+            {
+                // Heuristic choice of max colors for a palette:
+                // max_colors = nb_pixels * estimated_bpp_without_palette * 0.0005 +
+                //              + nb_pixels / 128 + 128
+                //       (estimated_bpp_without_palette = cost_before / nb_pixels)
+                // Rationale: small image with large palette is not effective;
+                // also if the entropy (estimated bpp) is low (e.g. mostly solid/gradient
+                // areas), palette is less useful and may even be counterproductive.
+                JxlTransform maybePalette = new()
+                {
+                    Id = JxlTransformId.Palette,
+                    BeginC = (uint)gi.NbMetaChannels,
+                    NumC = (uint)nbChans,
+                    NbColors = (uint)Math.Min((int)((costBefore * 0.0005f) + (nbPixels / 128) + 128), Math.Abs(PaletteColors)),
+                    OrderedPalette = PaletteColors >= 0,
+                    LossyPalette = LossyPalette && nbChans == 3,
+                };
+                didPalette = this.MaybeDoTransform(gi, maybePalette) ? 1 : 0;
+            }
+
+            // all-minus-one-channel palette (RGB with separate alpha, or CMY with separate K)
+            if (didPalette == 0 && nbChans > 3)
+            {
+                JxlTransform maybePalette3 = new()
+                {
+                    Id = JxlTransformId.Palette,
+                    BeginC = (uint)gi.NbMetaChannels,
+                    NumC = (uint)(nbChans - 1),
+                    NbColors = (uint)Math.Min((int)((costBefore * 0.0005f) + (nbPixels / 128) + 128), Math.Abs(PaletteColors)),
+                    OrderedPalette = PaletteColors >= 0,
+                    LossyPalette = LossyPalette,
+                };
+                didPalette = this.MaybeDoTransform(gi, maybePalette3) ? 1 : 0;
+            }
+        }
+
+        if (channelColorsPercent > 0)
+        {
+            // single channel palette (like FLIF's ChannelCompact)
+            int nbChannels = gi.Channel.Count - gi.NbMetaChannels - didPalette;
+            int origBitdepth = maxBitdepth;
+            maxBitdepth = 0;
+
+            // libjxl re-estimates the cost here below Squirrel and otherwise sets it to 0; it is not
+            // read again from Squirrel up.
+            for (int i = didPalette; i < nbChannels + didPalette; i++)
+            {
+                JxlTransformEncoder.ComputeMinMax(gi.Channel[gi.NbMetaChannels + i], out int min, out int max);
+                long colors = (long)max - min + 1;
+
+                // simple heuristic: if less than X percent of the values in the range actually occur,
+                // it is probably worth it to do a compaction (but only if the channel palette is less
+                // than 6% the size of the image itself)
+                JxlTransform maybePalette1 = new()
+                {
+                    Id = JxlTransformId.Palette,
+                    BeginC = (uint)(i + gi.NbMetaChannels),
+                    NumC = 1,
+                    NbColors = (uint)Math.Min((int)(nbPixels / 16), (int)(channelColorsPercent / 100.0 * colors)),
+                };
+                bool didChPalette = this.MaybeDoTransform(gi, maybePalette1);
+                if (didChPalette)
+                {
+                    // effective bit depth is lower, adjust quantization accordingly
+                    JxlTransformEncoder.ComputeMinMax(gi.Channel[gi.NbMetaChannels + i], out min, out max);
+                    if (max < maxval)
+                    {
+                        maxval = max;
+                    }
+
+                    int chBitdepth = max > 0 ? JxlBits.CeilLog2Nonzero((uint)max) : 0;
+                    if (chBitdepth > maxBitdepth)
+                    {
+                        maxBitdepth = chBitdepth;
+                    }
+                }
+                else
+                {
+                    maxBitdepth = origBitdepth;
+                }
+            }
+        }
     }
 
     private readonly struct StreamParams
