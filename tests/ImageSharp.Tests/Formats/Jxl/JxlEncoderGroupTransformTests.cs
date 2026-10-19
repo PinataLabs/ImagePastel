@@ -48,6 +48,17 @@ public class JxlEncoderGroupTransformTests
         Assert.All(withoutColourPalette, transforms => Assert.Equal(10u, Assert.Single(transforms, t => t.Id == JxlTransformId.Rct).RctType));
     }
 
+    // libjxl turns the per-group RCT search off when the image has no spare bit, as float32 has none.
+    [Fact]
+    public void Encode_DefaultFloat_WritesNoRct()
+    {
+        using Image<RgbaVector> image = JxlEncoderRoundTrip.CreateImage<RgbaVector>("gradient", 64, 64);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, LosslessDefault);
+
+        Assert.DoesNotContain(JxlEncodedFrame.ReadGlobalTransforms(encoded), t => t.Id == JxlTransformId.Rct);
+    }
+
     [Theory]
     [InlineData(nameof(Rgb24), "group-icons", 3)]
     [InlineData(nameof(Rgba32), "translucent-group-icons", 4)]
