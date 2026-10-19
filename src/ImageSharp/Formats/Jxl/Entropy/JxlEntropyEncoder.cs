@@ -147,30 +147,7 @@ internal static class JxlEntropyEncoder
             return numExtraBits;
         }
 
-        List<ulong> output = new(tokens.Count);
-        List<int> outputNbits = new(tokens.Count);
-        ulong allbits = 0;
-        int numallbits = 0;
-
-        // Writes in *reversed* order.
-        void AddBits(uint bits, int nbits)
-        {
-            if (nbits != 0)
-            {
-                DebugGuard.IsTrue(bits >> nbits == 0, "Only the low nbits bits may be set");
-                if (numallbits + nbits > MaxBitsPerCall)
-                {
-                    output.Add(allbits);
-                    outputNbits.Add(numallbits);
-                    numallbits = 0;
-                    allbits = 0;
-                }
-
-                allbits <<= nbits;
-                allbits |= bits;
-                numallbits += nbits;
-            }
-        }
+        ReversedBits reversed = new(tokens.Count);
 
         // libjxl has a second loop for a single context with no LZ77, which skips the context map
         // lookup; with one context the map has a single entry 0, so one loop covers both.
@@ -184,20 +161,15 @@ internal static class JxlEntropyEncoder
             DebugGuard.IsTrue(info.Freq > 0, "Token has no ANS frequency");
 
             // Extra bits first as this is reversed.
-            AddBits(bits, (int)nbits);
+            reversed.Add(bits, (int)nbits);
             numExtraBits += nbits;
             uint ansBits = ans.PutSymbol(info, out int ansNbits);
-            AddBits(ansBits, ansNbits);
+            reversed.Add(ansBits, ansNbits);
         }
 
         uint state = ans.State;
         writer.Write(32, state);
-        writer.Write(numallbits, allbits);
-        for (int i = output.Count; i > 0; --i)
-        {
-            writer.Write(outputNbits[i - 1], output[i - 1]);
-        }
-
+        reversed.WriteTo(writer);
         return numExtraBits;
     }
 
@@ -225,5 +197,56 @@ internal static class JxlEntropyEncoder
         }
 
         return usePrefixCode;
+    }
+
+    /// <summary>
+    /// The bits of an ANS stream, collected in *reversed* order as libjxl's <c>WriteTokens</c> lambda
+    /// collects them, in chunks of at most <see cref="MaxBitsPerCall"/> bits.
+    /// </summary>
+    private sealed class ReversedBits
+    {
+        private readonly List<ulong> output;
+        private readonly List<int> outputNbits;
+        private ulong allbits;
+        private int numallbits;
+
+        public ReversedBits(int capacity)
+        {
+            this.output = new List<ulong>(capacity);
+            this.outputNbits = new List<int>(capacity);
+        }
+
+        /// <summary>Adds the low <paramref name="nbits"/> bits of <paramref name="bits"/>.</summary>
+        /// <param name="bits">The bits.</param>
+        /// <param name="nbits">The number of bits.</param>
+        public void Add(uint bits, int nbits)
+        {
+            if (nbits != 0)
+            {
+                DebugGuard.IsTrue(bits >> nbits == 0, "Only the low nbits bits may be set");
+                if (this.numallbits + nbits > MaxBitsPerCall)
+                {
+                    this.output.Add(this.allbits);
+                    this.outputNbits.Add(this.numallbits);
+                    this.numallbits = 0;
+                    this.allbits = 0;
+                }
+
+                this.allbits <<= nbits;
+                this.allbits |= bits;
+                this.numallbits += nbits;
+            }
+        }
+
+        /// <summary>Writes the bits in stream order: the last chunk first.</summary>
+        /// <param name="writer">The writer.</param>
+        public void WriteTo(JxlBitWriter writer)
+        {
+            writer.Write(this.numallbits, this.allbits);
+            for (int i = this.output.Count - 1; i >= 0; --i)
+            {
+                writer.Write(this.outputNbits[i], this.output[i]);
+            }
+        }
     }
 }

@@ -33,14 +33,15 @@ internal sealed class JxlHistogram
     /// libjxl's per-lane <c>Entropy</c>: the cost in bits of <paramref name="count"/> symbols that
     /// make up <c>count * invTotal</c> of the data. libjxl adds the lanes of its SIMD vectors in a
     /// different order than this loop, so sums can differ from libjxl's in the last bits. A zero count
-    /// costs nothing; libjxl multiplies its (finite) log by zero instead.
+    /// costs nothing; libjxl multiplies its (finite) log by zero instead. A count lies in [0, total], so
+    /// the range tests below are libjxl's exact tests for the whole numbers it holds.
     /// </summary>
     /// <param name="count">The count.</param>
     /// <param name="invTotal">One over the total.</param>
     /// <param name="total">The total.</param>
     /// <returns>The cost.</returns>
     public static float EntropyOf(float count, float invTotal, float total)
-        => count == total || count == 0 ? 0 : 0 - (count * JxlFastMath.FastLog2f(invTotal * count));
+        => count >= total || count <= 0 ? 0 : 0 - (count * JxlFastMath.FastLog2f(invTotal * count));
 
     /// <summary>Counts one <paramref name="symbol"/>.</summary>
     /// <param name="symbol">The symbol.</param>

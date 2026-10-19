@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -16,6 +17,7 @@ internal static class JxlThrowHelper
     /// Throws for a broken or truncated codestream, where libjxl returns <c>JXL_FAILURE</c>.
     /// </summary>
     /// <param name="errorMessage">The error message for the exception.</param>
+    [DoesNotReturn]
     [MethodImpl(InliningOptions.ColdPath)]
     public static void ThrowInvalidImageContentException(string errorMessage) => throw new InvalidImageContentException(errorMessage);
 
@@ -25,6 +27,7 @@ internal static class JxlThrowHelper
     /// </summary>
     /// <param name="errorMessage">The error message for the exception.</param>
     /// <param name="innerException">The exception that caused it, if any.</param>
+    [DoesNotReturn]
     [MethodImpl(InliningOptions.ColdPath)]
     public static void ThrowImageFormatException(string errorMessage, Exception innerException = null)
         => throw new ImageFormatException(errorMessage, innerException);
@@ -33,6 +36,7 @@ internal static class JxlThrowHelper
     /// Throws for a valid codestream feature that a later slice of the port adds.
     /// </summary>
     /// <param name="feature">The feature that is not decoded yet.</param>
+    [DoesNotReturn]
     [MethodImpl(InliningOptions.ColdPath)]
     public static void ThrowNotSupportedException(string feature) => throw new NotSupportedException($"JPEG XL feature not supported yet: {feature}.");
 }

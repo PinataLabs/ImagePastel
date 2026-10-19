@@ -378,14 +378,12 @@ internal static class JxlIccWriter
                 const int order = 0;
                 const ulong stride = width;
                 ulong num = currentTagsize - 8;
-                byte flags = (byte)((order << 2) | (int)(width - 1) | (stride == width ? 0 : 16));
+
+                // libjxl's flags are (order << 2) | (width - 1) | (stride == width ? 0 : 16). With order 0
+                // and stride equal to width, that is width - 1, and no stride follows.
+                const byte flags = (byte)(width - 1);
                 commandsAdd.Add(CommandPredict);
                 commandsAdd.Add(flags);
-                if ((flags & 16) != 0)
-                {
-                    EncodeVarInt(stride, commandsAdd);
-                }
-
                 EncodeVarInt(num, commandsAdd);
                 PredictAndShuffle(stride, width, order, num, iccList, size, ref pos, dataAdd);
             }
