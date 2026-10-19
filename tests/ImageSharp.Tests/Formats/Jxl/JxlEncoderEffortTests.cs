@@ -7,6 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
@@ -77,6 +78,55 @@ public class JxlEncoderEffortTests
         Assert.All(tree.Where(n => n.Property == -1), n => Assert.Equal(JxlPredictor.Weighted, n.Predictor));
     }
 
+    // libjxl caps the global palette at cost * 0.0005 + pixels / 128 + 128 colours, and at most 1024.
+    // Below effort 7 the cost is a guess of 4.8 bits per pixel for 8-bit RGB, which caps a 256x256 image
+    // at 797 colours; from effort 7 it is EstimateCost, about 1.5 Mbit for noise, which caps it at 1024.
+    [Theory]
+    [InlineData(nameof(JxlEffort.Default), false)]
+    [InlineData(nameof(JxlEffort.Thorough), true)]
+    public void Encode_NoiseOf900Colours_HasAGlobalPaletteOnlyAtThorough(string effort, bool expectPalette)
+    {
+        using Image<Rgb24> image = CreateNoiseOfColours(256, 256, 900);
+        int colours = CountColours(image);
+        Assert.InRange(colours, 798, 1024);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort)));
+
+        List<JxlTransform> palettes = JxlEncodedFrame.ReadGlobalTransforms(encoded).Where(t => t.Id == JxlTransformId.Palette && t.NumC == 3).ToList();
+        if (expectPalette)
+        {
+            Assert.Equal((uint)colours, Assert.Single(palettes).NbColors);
+        }
+        else
+        {
+            Assert.Empty(palettes);
+        }
+    }
+
+    // More colours than the cap's 1024 take no palette at Thorough, whatever the cost estimate.
+    [Fact]
+    public void Encode_ThoroughNoiseOfManyColours_WritesNoPalette()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", 256, 256);
+        Assert.True(CountColours(image) > 1024);
+
+        List<JxlTransform> transforms = JxlEncodedFrame.ReadGlobalTransforms(JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(JxlEffort.Thorough)));
+
+        Assert.DoesNotContain(transforms, t => t.Id == JxlTransformId.Palette);
+    }
+
+    [Fact]
+    public void Encode_ThoroughEightColourIcon_WritesAGlobalPaletteOfEightColours()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("icon", 64, 64);
+
+        List<JxlTransform> transforms = JxlEncodedFrame.ReadGlobalTransforms(JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(JxlEffort.Thorough)));
+
+        JxlTransform palette = Assert.Single(transforms, t => t.Id == JxlTransformId.Palette);
+        Assert.Equal(3u, palette.NumC);
+        Assert.Equal(8u, palette.NbColors);
+    }
+
     // The spec checks the totals over the corpus, not each image.
     [Fact]
     public void Encode_Corpus_DefaultIsSmallerInTotalThanFastest()
@@ -111,6 +161,42 @@ public class JxlEncoderEffortTests
 
         Assert.True(photoSizes[1] < photoSizes[0], $"Photo: Default {photoSizes[1]} B, Fastest {photoSizes[0]} B");
         Assert.True(bikeSizes[1] < bikeSizes[0], $"Bike: Default {bikeSizes[1]} B, Fastest {bikeSizes[0]} B");
+    }
+
+    // Each pixel is one of the first `colours` of a fixed-seed list of random 8-bit colours.
+    private static Image<Rgb24> CreateNoiseOfColours(int width, int height, int colours)
+    {
+        Random random = new(colours);
+        Rgb24[] palette = new Rgb24[colours];
+        for (int i = 0; i < colours; i++)
+        {
+            palette[i] = new Rgb24((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+        }
+
+        Image<Rgb24> image = new(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                image[x, y] = palette[random.Next(colours)];
+            }
+        }
+
+        return image;
+    }
+
+    private static int CountColours(Image<Rgb24> image)
+    {
+        HashSet<Rgb24> colours = new();
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                colours.Add(image[x, y]);
+            }
+        }
+
+        return colours.Count;
     }
 
     private sealed record EncodeFile(string File, params JxlEncoder[] Encoders) : IJxlPixelTypeCall<int[]>
