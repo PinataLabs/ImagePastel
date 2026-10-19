@@ -146,11 +146,6 @@ internal sealed class JxlFrameDecoder
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
     {
-        if (frameHeader.Encoding == JxlFrameEncoding.VarDct && frameHeader.ColorTransform == JxlColorTransform.Xyb)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("VarDCT with the XYB colour transform");
-        }
-
         if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
         {
             JxlThrowHelper.ThrowNotSupportedException("The YCbCr colour transform");
