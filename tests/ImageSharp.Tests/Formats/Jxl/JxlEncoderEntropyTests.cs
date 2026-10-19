@@ -27,6 +27,18 @@ public class JxlEncoderEntropyTests
         Assert.True(imageCode.Lz77.Enabled);
     }
 
+    // RLE pays only when the copies save 0.2 bits a token. A single colour costs almost nothing a token
+    // without LZ77, and noise has no runs, so both keep LZ77 off, as cjxl 0.12 -e 5 -d 0 does.
+    [Theory]
+    [InlineData("solid")]
+    [InlineData("noise")]
+    public void Encode_DefaultSolidOrNoise_LeavesLz77Off(string pattern)
+    {
+        JxlEntropyCodeProbe.ReadGlobalCodes(Encode(pattern, 256, 256, JxlEffort.Default), out _, out JxlAnsCode imageCode);
+
+        Assert.False(imageCode.Lz77.Enabled);
+    }
+
     // libjxl's fast search tries (4, 2, 0), (4, 1, 2), (0, 0, 0) and (2, 0, 1) for each histogram; on
     // noise, cjxl 0.12 -e 5 picks the last three too.
     [Fact]
