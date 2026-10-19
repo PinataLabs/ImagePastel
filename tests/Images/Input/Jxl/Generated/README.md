@@ -523,3 +523,48 @@ djxl modular_ycbcr_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/m
 - The trees predict every sample exactly, so the files are 33 and 50 bytes. Channels 0, 1 and 2 are Cb, Y and Cr, and channel 3 is alpha. `Alpha` must come after `Width` and `Height` in a tree, or `jxl_from_tree` fails.
 - Cb and Cr are signed, so some samples convert to RGB below 0 or above 1. The planes are not clamped; `Image<TPixel>` clamps them.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 1.6e-8 and the peak error 1.2e-7. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.
+
+#### How the JPEG transcodes were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `jpeg_444.jxl` | `cjxl`'s lossless transcode of `jpeg_444_source.jpg`, a 67 x 45 crop of `Png/bike-small.png` saved as a 4:4:4 JPEG. A VarDCT YCbCr frame with a raw DCT8 table and the skip-adaptive-DC-smoothing flag. 67 x 45 is not a multiple of a block. | `External/ReferenceOutput/JxlDecoderTests/jpeg_444.npy` |
+| `jpeg_420.jxl`, `jpeg_422.jxl`, `jpeg_440.jxl` | The same crop as a 4:2:0, 4:2:2 and 4:4:0 JPEG: Cb and Cr are subsampled both ways, across, and down. They check the chroma-upsampling stage (D10e), and D8's subsampled DC, AC metadata and group decode. 67 x 45 is not a multiple of the 16 pixels of a subsampled block either. | `External/ReferenceOutput/JxlDecoderTests/jpeg_420.npy`, `jpeg_422.npy`, `jpeg_440.npy` |
+| `jpeg_grey.jxl` | The same crop as a grey JPEG. The image is grey, and its frame is YCbCr 4:4:4 with three planes; the output is R. `Image.Load` gives `L8`. | `External/ReferenceOutput/JxlDecoderTests/jpeg_grey.npy`, one channel |
+| `jpeg_420_groups.jxl` | All of `Png/bike-small.png`, 288 x 163, as a 4:2:0 JPEG: two groups, so the chroma upsampling reads across a group edge. | `External/ReferenceOutput/JxlDecoderTests/jpeg_420_groups.npy` |
+| `jpeg_mixed.jxl` | The transcode of the repo's `Jpg/baseline/jpeg422.jpg`, 200 x 200. `cjxl` writes it in a "mixed" mode: Y is subsampled down, and Cb and Cr are not. So the chroma-upsampling stage runs on Y. | `External/ReferenceOutput/JxlDecoderTests/jpeg_mixed.npy` |
+| `jpeg_444_smoothing.jxl` | The 4:4:4 transcode of `jpeg_444_smoothing_source.jpg`, a 67 x 45 gradient, with the skip-adaptive-DC-smoothing flag cleared by `clear_skip_smoothing.py`, so that adaptive DC smoothing runs on a YCbCr frame. A bare codestream. | `External/ReferenceOutput/JxlDecoderTests/jpeg_444_smoothing.npy` |
+
+```sh
+magick ../../Png/bike-small.png -alpha off -crop 67x45+100+60 +repage odd67x45.png
+magick odd67x45.png -quality 90 -sampling-factor 1x1 jpeg_444_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 2x2 jpeg_420_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 2x1 jpeg_422_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 1x2 jpeg_440_source.jpg
+magick odd67x45.png -quality 90 -colorspace Gray -type Grayscale jpeg_grey_source.jpg
+magick ../../Png/bike-small.png -alpha off -quality 90 -sampling-factor 2x2 jpeg_420_groups_source.jpg
+magick -size 67x45 gradient:'#305070'-'#a0b0c0' -quality 90 -sampling-factor 1x1 jpeg_444_smoothing_source.jpg
+cjxl jpeg_444_source.jpg jpeg_444.jxl
+cjxl jpeg_420_source.jpg jpeg_420.jxl
+cjxl jpeg_422_source.jpg jpeg_422.jxl
+cjxl jpeg_440_source.jpg jpeg_440.jxl
+cjxl jpeg_grey_source.jpg jpeg_grey.jxl
+cjxl jpeg_420_groups_source.jpg jpeg_420_groups.jxl
+cjxl ../../Jpg/baseline/jpeg422.jpg jpeg_mixed.jxl
+cjxl jpeg_444_smoothing_source.jpg jpeg_444_smoothing_flagged.jxl
+py -3 clear_skip_smoothing.py jpeg_444_smoothing_flagged.jxl jpeg_444_smoothing.jxl
+djxl jpeg_444.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_444.npy
+djxl jpeg_420.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_420.npy
+djxl jpeg_422.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_422.npy
+djxl jpeg_440.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_440.npy
+djxl jpeg_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_grey.npy
+djxl jpeg_420_groups.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_420_groups.npy
+djxl jpeg_mixed.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_mixed.npy
+djxl jpeg_444_smoothing.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_444_smoothing.npy
+```
+
+- The source JPEGs were made with ImageMagick 7.1.2-31 and are committed, as another version may write other bytes. `odd67x45.png` and `jpeg_444_smoothing_flagged.jxl` are not committed.
+- Given a JPEG, `cjxl` transcodes it losslessly by default, into a container with a `jbrd` box. Every transcode from `cjxl` v0.12.0 sets the skip-adaptive-DC-smoothing flag, 4:4:4 included. libjxl ef67fde2, which this decoder ports, would not set it for 4:4:4, so newer files run the smoothing on YCbCr. `clear_skip_smoothing.py` clears it: the flags are a U64 in the frame header, 128 takes 10 bits and 0 takes 2, and every other bit stays. The TOC starts on a byte boundary, so the sections are copied as they are. It writes a bare codestream, without the `jbrd` box.
+- On the bike crop the smoothing changes nothing, as the DC steps between blocks are too large. On the gradient it moves `djxl`'s output by an RMSE of 7.4e-4, so a decoder that skipped it would fail.
+- `djxl` v0.12.0 rejects a subsampled VarDCT frame without the flag ("Non-444 chroma subsampling is not allowed when adaptive DC smoothing is enabled"). libjxl ef67fde2 dropped that check, and this decoder decodes such a frame, so no subsampled file here clears the flag.
+- The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlChromaSubsamplingTests` holds these files to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 3.1e-7 and 2.1e-6 (`jpeg_444`), 2.9e-7 and 2.1e-6 (`jpeg_420`), 2.9e-7 and 2.2e-6 (`jpeg_422`), 3.0e-7 and 2.1e-6 (`jpeg_440`), 2.6e-7 and 2.0e-6 (`jpeg_grey`), 2.7e-7 and 2.8e-6 (`jpeg_420_groups`), 9.2e-8 and 4.8e-7 (`jpeg_mixed`), and 4.2e-8 and 1.2e-7 (`jpeg_444_smoothing`). `Image.Load` is within one 8-bit step of the clamped reference.

@@ -20,15 +20,6 @@ public class JxlSupportedFeaturesTests
     private const int Width = 16;
     private const int Height = 16;
 
-    // The modes are Cb, Y, Cr. A 4:4:4 YCbCr frame decodes since D10c (JxlYCbCrTests); chroma
-    // subsampling comes with the chroma-upsampling stage (D10e).
-    [Theory]
-    [InlineData(0, 1, 0)]
-    [InlineData(2, 0, 2)]
-    [InlineData(3, 3, 0)]
-    public void Decode_ChromaSubsampledFrame_IsNotSupported(int cb, int y, int cr)
-        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { YCbCr = true, ChromaSubsampling = new[] { cb, y, cr } }, "Chroma subsampling");
-
     [Theory]
     [InlineData(1, "noise")]
     [InlineData(16, "splines")]

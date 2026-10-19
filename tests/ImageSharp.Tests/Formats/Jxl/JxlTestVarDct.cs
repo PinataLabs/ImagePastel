@@ -11,7 +11,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// Writes a small VarDCT codestream: an 8-bit RGB image, not XYB, with one VarDCT frame of one DC group
-/// (up to 2048 x 2048) whose blocks are DCT8 unless <see cref="Strategies"/> says otherwise. Each field
+/// (up to 2048 x 2048) whose blocks are DCT8 unless <see cref="Strategies"/> says otherwise. The frame
+/// has no colour transform, or YCbCr with the <see cref="ChromaSubsampling"/> given. Each field
 /// under test is a writer of its own, so a test can put one value over its bound and keep the rest
 /// valid.
 /// </summary>
@@ -31,6 +32,11 @@ internal sealed class JxlTestVarDct
 {
     private const int BlockDim = 8;
     private const int GroupDimInBlocks = 32;
+
+    // libjxl's kHShift and kVShift (frame_header.h): how many times the channel of each mode is wider and
+    // higher than the most subsampled channel, as a shift.
+    private static readonly int[] HShiftTable = { 0, 1, 1, 0 };
+    private static readonly int[] VShiftTable = { 0, 1, 0, 1 };
 
     // The order of the code length code lengths: kCodeLengthCodeOrder in lib/jxl/dec_huffman.cc.
     private static readonly int[] CodeLengthCodeOrder = { 1, 2, 3, 4, 0, 5, 17, 6, 16, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -59,6 +65,21 @@ internal sealed class JxlTestVarDct
     /// block is DCT8.
     /// </summary>
     public int[] Strategies { get; init; }
+
+    /// <summary>
+    /// Gets the chroma subsampling mode of each channel, in Cb, Y, Cr order, for a frame with the YCbCr
+    /// colour transform; <see langword="null"/>, the default, for a frame with no colour transform. A mode
+    /// is the channel's JPEG sampling factors: 0 is 1 x 1, 1 is 2 x 2, 2 is 2 across and 3 is 2 down. So
+    /// 4:2:0 is (0, 1, 0), and (1, 0, 1) subsamples Y.
+    /// </summary>
+    public int[] ChromaSubsampling { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the frame has the skip-adaptive-DC-smoothing flag. By default only a
+    /// chroma-subsampled frame has it, as every JPEG transcode has: libjxl v0.12.0 rejects a subsampled
+    /// VarDCT frame without it, which libjxl ef67fde2, the port's source, decodes.
+    /// </summary>
+    public bool? SkipAdaptiveDcSmoothing { get; init; }
 
     /// <summary>Gets the number of AC metadata entries, when it is not the number of varblocks.</summary>
     public int? AcMetadataCount { get; init; }
@@ -91,9 +112,14 @@ internal sealed class JxlTestVarDct
     /// </summary>
     public uint[] FirstBlockTokens { get; init; }
 
-    private int XSizeBlocks => (this.Width + BlockDim - 1) / BlockDim;
+    // FrameDimensions::Set: the blocks are rounded up to whole blocks of the most subsampled channel.
+    private int XSizeBlocks => ((this.Width + (BlockDim << this.MaxHShift) - 1) / (BlockDim << this.MaxHShift)) << this.MaxHShift;
 
-    private int YSizeBlocks => (this.Height + BlockDim - 1) / BlockDim;
+    private int YSizeBlocks => ((this.Height + (BlockDim << this.MaxVShift) - 1) / (BlockDim << this.MaxVShift)) << this.MaxVShift;
+
+    private int MaxHShift => this.ChromaSubsampling?.Max(m => HShiftTable[m]) ?? 0;
+
+    private int MaxVShift => this.ChromaSubsampling?.Max(m => VShiftTable[m]) ?? 0;
 
     private int XSizeGroups => (this.XSizeBlocks + GroupDimInBlocks - 1) / GroupDimInBlocks;
 
@@ -294,6 +320,9 @@ internal sealed class JxlTestVarDct
             Encoding = JxlFrameEncoding.VarDct,
             IsLast = true,
             Sections = sections.Count > 1 ? sections.ToArray() : null,
+            Flags = (this.SkipAdaptiveDcSmoothing ?? (this.MaxHShift != 0 || this.MaxVShift != 0)) ? 128UL : 0,
+            YCbCr = this.ChromaSubsampling != null,
+            ChromaSubsampling = this.ChromaSubsampling,
         };
         return new JxlTestLayers(this.Width, this.Height, alpha: false).Add(frame).ToArray();
     }
@@ -330,6 +359,22 @@ internal sealed class JxlTestVarDct
         }
     }
 
+    // The number of blocks of an xsize x ysize area that colour channel c (0 is X or Cb, 1 is Y, 2 is B or
+    // Cr) codes: one in 2^shift each way. The area is whole blocks of the most subsampled channel.
+    private int ChannelBlocks(int c, int xsize, int ysize)
+    {
+        if (this.ChromaSubsampling == null)
+        {
+            return xsize * ysize;
+        }
+
+        int mode = this.ChromaSubsampling[c];
+        return (xsize >> (this.MaxHShift - HShiftTable[mode])) * (ysize >> (this.MaxVShift - VShiftTable[mode]));
+    }
+
+    private int AllChannelBlocks(int xsize, int ysize)
+        => this.ChannelBlocks(0, xsize, ysize) + this.ChannelBlocks(1, xsize, ysize) + this.ChannelBlocks(2, xsize, ysize);
+
     private void WriteDcGlobal(JxlTestBitWriter w)
     {
         w.Bit(true); // default DC quantization
@@ -350,9 +395,9 @@ internal sealed class JxlTestVarDct
     {
         int numBlocks = this.XSizeBlocks * this.YSizeBlocks;
 
-        // VarDCT DC: no extra precision, then the Y, X and B channels, all 0.
+        // VarDCT DC: no extra precision, then the Y, X and B channels, all 0, each at its subsampled size.
         w.Write(2, 0);
-        WriteModularStream(w, Repeat(0, 3 * numBlocks));
+        WriteModularStream(w, Repeat(0, this.AllChannelBlocks(this.XSizeBlocks, this.YSizeBlocks)));
 
         // AC metadata: the count, then the YtoX and YtoB maps of the colour tiles, the strategy and quant
         // field of each varblock, and the EPF sharpness of each block.
@@ -403,7 +448,7 @@ internal sealed class JxlTestVarDct
         int gy = group / this.XSizeGroups;
         int xsize = Math.Min(GroupDimInBlocks, this.XSizeBlocks - (gx * GroupDimInBlocks));
         int ysize = Math.Min(GroupDimInBlocks, this.YSizeBlocks - (gy * GroupDimInBlocks));
-        for (int i = 0; i < xsize * ysize * 3; i++)
+        for (int i = 0; i < this.AllChannelBlocks(xsize, ysize); i++)
         {
             if (group == 0 && i == 0 && this.FirstBlockTokens != null)
             {

@@ -191,16 +191,17 @@ internal sealed class JxlRenderPipeline : IDisposable
 
     /// <summary>
     /// Runs the stages over the whole frame, in libjxl's order: the neighbour stages before the patches
-    /// (from D10: the chroma upsampling, the loop filters, then the early upsampling of the extra
-    /// channels), the patches, the neighbour stages after them (the upsampling), the save before the
+    /// (the chroma upsampling, the loop filters, then the early upsampling of the extra channels), the
+    /// patches, the neighbour stages after them (the upsampling), the save before the
     /// colour transform, the colour-transform stages, the blending, the save after blending, and the
     /// output. Returns the frame to keep in its reference slot, if it can be referenced; the caller saves
     /// it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="beforePatches">
-    /// The neighbour stages before the patches, in the order they run: today the loop filters
-    /// (<see cref="JxlLoopFilterStages.Create"/>), Gaborish then the EPF passes. Possibly none.
+    /// The neighbour stages before the patches, in the order they run: the chroma-upsampling stages
+    /// (<see cref="JxlChromaUpsamplingStage"/>), the loop filters (<see cref="JxlLoopFilterStages.Create"/>),
+    /// Gaborish then the EPF passes, and the early upsampling of the extra channels. Possibly none.
     /// </param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
     /// <param name="afterPatches">The neighbour stages after the patches, in the order they run. Possibly none.</param>

@@ -34,10 +34,13 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// table encoding" cannot happen; the predefined table has 0 bits, so "Invalid predefined table" cannot
 /// either; and the number of distance bands has 4 bits, at most 16 of the 17 libjxl allows. Interpolate's
 /// position check is a JXL_ENSURE that the band geometry keeps.</item>
-/// <item>AC metadata: "AC strategy not compatible with chroma subsampling" needs YCbCr, which is not
-/// supported until D10.</item>
-/// <item>AC groups: "Frame dimensions are too big for the image." needs chroma subsampling as well, and
-/// the number of histograms is 1 + a bit field, so it is never 0.</item>
+/// <item>AC groups: "Frame dimensions are too big for the image." (dec_group.cc) checks that each colour
+/// channel's blocks of the group, shifted by its chroma subsampling, lie inside the DC planes, which are
+/// <c>xsize_blocks</c> x <c>ysize_blocks</c>. The group's blocks lie inside them, since the groups are
+/// counted from the frame's pixel size, which is at most 8 <c>xsize_blocks</c>. A shift only moves the
+/// rectangle's corners towards the origin: <c>(x0 &gt;&gt; s) + (xsize &gt;&gt; s) &lt;= (x0 + xsize) &gt;&gt; s</c>.
+/// So no stream reaches it; <see cref="AcGroup_SubsampledGroupsAtOddSizes_Decode"/> decodes subsampled
+/// frames of several groups at the bound. The number of histograms is 1 + a bit field, so it is never 0.</item>
 /// </list>
 /// </remarks>
 [Trait("Format", "Jxl")]
@@ -263,6 +266,41 @@ public class JxlVarDctBoundsTests
     public void AcMetadata_CountBelowTheVarblocks_Throws(int count, Outcome outcome)
         => AssertOutcome(new JxlTestVarDct(16, 8) { Strategies = new[] { 0, 0 }, AcMetadataCount = count }.ToArray(), outcome, "Corrupted stream");
 
+    // dec_modular.cc DecodeAcMetadata: a chroma-subsampled frame has only varblocks of one block, as a
+    // JPEG has. The modes are Cb, Y, Cr. A 16 x 16 frame is 2 x 2 blocks: four DCT4X4 (raw 3) or Identity
+    // (raw 1) blocks decode in 4:2:0, and a DCT16X16 (raw 4) does not, nor do two DCT8X16 (raw 7, 2 x 1)
+    // in 4:2:2 or two DCT16X8 (raw 6, 1 x 2) with Y subsampled (the "mixed" mode). A 4:4:4 YCbCr frame
+    // takes the DCT16X16.
+    [Theory]
+    [InlineData(new[] { 0, 0, 0 }, new[] { 4 }, Outcome.Decodes)]
+    [InlineData(new[] { 0, 1, 0 }, new[] { 3, 3, 3, 3 }, Outcome.Decodes)]
+    [InlineData(new[] { 0, 1, 0 }, new[] { 1, 1, 1, 1 }, Outcome.Decodes)]
+    [InlineData(new[] { 0, 1, 0 }, new[] { 4 }, Outcome.Invalid)]
+    [InlineData(new[] { 0, 2, 0 }, new[] { 7, 7 }, Outcome.Invalid)]
+    [InlineData(new[] { 1, 0, 1 }, new[] { 6, 6 }, Outcome.Invalid)]
+    public void AcMetadata_StrategyNotFittingChromaSubsampling_Throws(int[] modes, int[] strategies, Outcome outcome)
+        => AssertOutcome(new JxlTestVarDct(16, 16) { ChromaSubsampling = modes, Strategies = strategies }.ToArray(), outcome, "AC strategy not compatible with chroma subsampling");
+
+    // dec_group.cc: the subsampled channels of every group lie inside the DC planes (see the remarks). A
+    // 520 x 21 frame is three groups, the last of 2 or 1 blocks across, and neither size is a multiple
+    // of a subsampled block.
+    [Theory]
+    [InlineData(0, 1, 0)]
+    [InlineData(0, 2, 0)]
+    [InlineData(0, 3, 0)]
+    [InlineData(1, 0, 1)]
+    [InlineData(2, 3, 0)]
+    public void AcGroup_SubsampledGroupsAtOddSizes_Decode(int cb, int y, int cr)
+        => AssertOutcome(new JxlTestVarDct(520, 21) { ChromaSubsampling = new[] { cb, y, cr } }.ToArray(), Outcome.Decodes);
+
+    // libjxl ef67fde2 runs adaptive DC smoothing on a chroma-subsampled VarDCT frame without the skip flag.
+    // v0.12.0 rejected such a frame in InitFrame ("Non-444 chroma subsampling is not allowed when adaptive
+    // DC smoothing is enabled"), so djxl v0.12.0 cannot check it, and the other subsampled streams here
+    // have the flag, as every JPEG transcode has.
+    [Fact]
+    public void Decode_SubsampledFrameWithAdaptiveDcSmoothing_Decodes()
+        => AssertOutcome(new JxlTestVarDct(40, 21) { ChromaSubsampling = new[] { 0, 1, 0 }, SkipAdaptiveDcSmoothing = false }.ToArray(), Outcome.Decodes);
+
     // dec_modular.cc DecodeAcMetadata: the EPF sharpness is in [0, 8).
     [Theory]
     [InlineData(0, Outcome.Decodes)]
@@ -443,6 +481,13 @@ public class JxlVarDctBoundsTests
     [InlineData("nonzeros_left", Outcome.Invalid)]
     [InlineData("ac_ans_state", Outcome.Invalid)]
     [InlineData("quantizer_max", Outcome.Decodes)]
+    [InlineData("strategy_dct16_444", Outcome.Decodes)]
+    [InlineData("strategy_dct4_420", Outcome.Decodes)]
+    [InlineData("strategy_dct16_420", Outcome.Invalid)]
+    [InlineData("strategy_dct8x16_422", Outcome.Invalid)]
+    [InlineData("strategy_dct16x8_y_subsampled", Outcome.Invalid)]
+    [InlineData("subsampled_groups_420", Outcome.Decodes)]
+    [InlineData("subsampled_groups_y", Outcome.Decodes)]
     public async Task Djxl_RejectsTheSameStreams(string name, Outcome outcome)
     {
         byte[] codestream = name switch
@@ -495,6 +540,13 @@ public class JxlVarDctBoundsTests
             "nonzeros_64" => NonZeros(64, 63),
             "nonzeros_left" => NonZeros(1, 0),
             "ac_ans_state" => new JxlTestVarDct(8, 8) { AcAnsState = 0x130001 }.ToArray(),
+            "strategy_dct16_444" => new JxlTestVarDct(16, 16) { ChromaSubsampling = new[] { 0, 0, 0 }, Strategies = new[] { 4 } }.ToArray(),
+            "strategy_dct4_420" => new JxlTestVarDct(16, 16) { ChromaSubsampling = new[] { 0, 1, 0 }, Strategies = new[] { 3, 3, 3, 3 } }.ToArray(),
+            "strategy_dct16_420" => new JxlTestVarDct(16, 16) { ChromaSubsampling = new[] { 0, 1, 0 }, Strategies = new[] { 4 } }.ToArray(),
+            "strategy_dct8x16_422" => new JxlTestVarDct(16, 16) { ChromaSubsampling = new[] { 0, 2, 0 }, Strategies = new[] { 7, 7 } }.ToArray(),
+            "strategy_dct16x8_y_subsampled" => new JxlTestVarDct(16, 16) { ChromaSubsampling = new[] { 1, 0, 1 }, Strategies = new[] { 6, 6 } }.ToArray(),
+            "subsampled_groups_420" => new JxlTestVarDct(520, 21) { ChromaSubsampling = new[] { 0, 1, 0 } }.ToArray(),
+            "subsampled_groups_y" => new JxlTestVarDct(520, 21) { ChromaSubsampling = new[] { 1, 0, 1 } }.ToArray(),
             _ => Quantizer(73728, 65536),
         };
         string input = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlVarDctBoundsTests)), name + ".jxl");
@@ -510,12 +562,20 @@ public class JxlVarDctBoundsTests
     [InlineData("nonzeros_63")]
     [InlineData("order_lehmer_62")]
     [InlineData("raw_table_nonzeros")]
+    [InlineData("subsampled_nonzeros_y_420")]
+    [InlineData("subsampled_nonzeros_y_422")]
+    [InlineData("subsampled_nonzeros_420")]
     public async Task DecodeToPlanes_MatchesDjxl(string name)
     {
+        // The subsampled frames have AC coefficients in their first block's Y channel, which is
+        // subsampled in the first two ("mixed" modes), so the chroma-upsampling stage spreads it.
         byte[] codestream = name switch
         {
             "nonzeros_63" => NonZeros(63, 63),
             "order_lehmer_62" => CoeffOrder(1, 1, 62, nonZeros: 2),
+            "subsampled_nonzeros_y_420" => new JxlTestVarDct(40, 21) { ChromaSubsampling = new[] { 1, 0, 1 }, FirstBlockTokens = NonZeroTokens(9, 9) }.ToArray(),
+            "subsampled_nonzeros_y_422" => new JxlTestVarDct(40, 21) { ChromaSubsampling = new[] { 2, 0, 2 }, FirstBlockTokens = NonZeroTokens(9, 9) }.ToArray(),
+            "subsampled_nonzeros_420" => new JxlTestVarDct(40, 21) { ChromaSubsampling = new[] { 0, 1, 0 }, FirstBlockTokens = NonZeroTokens(9, 9) }.ToArray(),
             _ => RawTableNonZeros(),
         };
         string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlVarDctBoundsTests));
@@ -668,6 +728,9 @@ public class JxlVarDctBoundsTests
     // The first block's Y channel says nonZeros, then has coded non-zero coefficients (1) and zeros, up
     // to where the decoder stops: the last non-zero, or the end of the block.
     private static byte[] NonZeros(int nonZeros, int coded)
+        => new JxlTestVarDct(8, 8) { FirstBlockTokens = NonZeroTokens(nonZeros, coded) }.ToArray();
+
+    private static uint[] NonZeroTokens(int nonZeros, int coded)
     {
         List<uint> tokens = new() { (uint)nonZeros };
         int left = nonZeros;
@@ -678,7 +741,7 @@ public class JxlVarDctBoundsTests
             left -= nonZero ? 1 : 0;
         }
 
-        return new JxlTestVarDct(8, 8) { FirstBlockTokens = tokens.ToArray() }.ToArray();
+        return tokens.ToArray();
     }
 
     private static byte[] Quantizer(uint globalScale, uint quantDc)
