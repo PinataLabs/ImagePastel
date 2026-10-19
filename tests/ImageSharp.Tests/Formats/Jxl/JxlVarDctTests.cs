@@ -94,6 +94,20 @@ public class JxlVarDctTests
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
     }
 
+    // The djxl match above covers an adaptive quant field and non-zero chroma-from-luma maps only if the
+    // file has them. Read from the decoder's state after the DC groups: the quant field over the first
+    // blocks of the varblocks, and how many of the 5 x 3 tiles of each map are not 0.
+    [Fact]
+    public void DecodeDcGroups_IdentityAfv_HasAnAdaptiveQuantFieldAndNonZeroChromaFromLuma()
+    {
+        using JxlDecodedDcGroups dc = JxlDecodedDcGroups.Decode(File.ReadAllBytes(InputPath("vardct_identity_afv")));
+
+        Assert.Equal((4, 10), dc.QuantFieldRange());
+        Assert.Equal(15, dc.State.Cmap.YtoXMap.Length);
+        Assert.Equal(9, dc.State.Cmap.YtoXMap.Count(v => v != 0));
+        Assert.Equal(2, dc.State.Cmap.YtoBMap.Count(v => v != 0));
+    }
+
     [Fact]
     public void Decode_XybVarDct_Decodes()
     {

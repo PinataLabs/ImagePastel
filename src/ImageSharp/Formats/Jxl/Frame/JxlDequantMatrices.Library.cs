@@ -4,7 +4,7 @@
 // lib/jxl/quant_weights.cc (DequantMatricesLibraryDef and DequantMatrices::LibraryInit).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using System;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
@@ -99,7 +99,9 @@ internal sealed partial class JxlDequantMatrices
         // DCT256X128
         16 => Dct(8, LargeX(2.6, 23629.073922049845), LargeY(2.6, 8611.3238710010046), LargeB(2.6, 4492.2486445538634)),
 
-        _ => ThrowInvalidTable(table),
+        // Unreachable: the caller passes a table index below NumQuantTables, and libjxl indexes an array of
+        // the 17 tables. A switch expression needs a default arm.
+        _ => throw new ArgumentOutOfRangeException(nameof(table), table, "Not a quantization table"),
     };
 
     // The bands of the tables of 64x32 and larger share everything but their first band, which is a

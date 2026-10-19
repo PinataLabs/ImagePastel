@@ -61,10 +61,11 @@ public class JxlConformanceDecoderTests
 
     // A vector that needs a feature of a later slice, which the spec lists under that slice. bike is XYB
     // with the BT.709 transfer function (D11). With a trial BT.709 stage it matched djxl v0.12.0 within a
-    // peak error of 1.2e-5, so it needs nothing else.
+    // peak error of 1.2e-5, so it needs nothing else. patches is a VarDCT frame with patches (D12).
     [Theory]
     [InlineData("bike", "Bt709")]
     [InlineData("bike_5", "Bt709")]
+    [InlineData("patches", "Patches on VarDCT frames")]
     public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

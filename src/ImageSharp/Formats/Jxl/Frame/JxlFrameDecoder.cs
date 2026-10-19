@@ -150,6 +150,56 @@ internal sealed class JxlFrameDecoder
     public static bool IsLastOfStill(JxlFrameHeader frameHeader)
         => frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
 
+    // Internal, as ProcessDcGroup, so that tests can read the state the DC sections fill (the AC
+    // metadata, the quant field and the chroma-from-luma maps), which no output shows on its own.
+    internal static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
+    {
+        // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
+        // frame without the flag has no dictionary, so the caller passes null.
+        if (patches != null)
+        {
+            patches.Decode(br, frameDim.XSizePadded, frameDim.YSizePadded, frameHeader.NonserializedMetadata.M.NumExtraChannels, cancellationToken);
+
+            // Unreachable until upsampling arrives (D10): CheckSupported rejects an upsampled frame first.
+            // The check is unconditional on purpose: libjxl's Decode reports uses_extra_channels, but at
+            // ef67fde2 ProcessDCGlobal never reads it, so this port does not compute it.
+            if (frameHeader.Upsampling != 1)
+            {
+                foreach (uint ecups in frameHeader.ExtraChannelUpsampling)
+                {
+                    if (ecups != frameHeader.Upsampling)
+                    {
+                        JxlThrowHelper.ThrowInvalidImageContentException("Cannot use extra channels in patches if color channels are subsampled differently from extra channels");
+                    }
+                }
+            }
+        }
+
+        // Splines and noise are rejected by CheckSupported.
+        matrices.DecodeDc(br);
+        varDct?.DecodeGlobalDcInfo(br);
+        modularFrameDecoder.DecodeGlobalInfo(br, frameHeader);
+    }
+
+    internal static void ProcessDcGroup(long dcGroupId, JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct)
+    {
+        long gx = dcGroupId % frameDim.XSizeDcGroups;
+        long gy = dcGroupId / frameDim.XSizeDcGroups;
+
+        // A frame that uses a DC frame (D13) has no VarDCT DC of its own; CheckSupported rejects it.
+        if (varDct != null)
+        {
+            modularFrameDecoder.DecodeVarDctDc(frameHeader, dcGroupId, br, varDct);
+        }
+
+        JxlRect mrect = new(gx * frameDim.DcGroupDim, gy * frameDim.DcGroupDim, frameDim.DcGroupDim, frameDim.DcGroupDim);
+        modularFrameDecoder.DecodeGroup(frameHeader, mrect, br, 3, 1000, JxlModularStreamId.ModularDc(frameDim, dcGroupId), null, -1);
+        if (varDct != null)
+        {
+            modularFrameDecoder.DecodeAcMetadata(frameHeader, dcGroupId, br, varDct);
+        }
+    }
+
     // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
     // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
@@ -178,6 +228,12 @@ internal sealed class JxlFrameDecoder
         if ((flags & JxlFrameFlags.UseDcFrame) != 0)
         {
             JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
+        }
+
+        // Patches on a Modular frame decode; on a VarDCT frame they come with D12.
+        if ((flags & JxlFrameFlags.Patches) != 0 && frameHeader.Encoding == JxlFrameEncoding.VarDct)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Patches on VarDCT frames");
         }
 
         // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
@@ -234,54 +290,6 @@ internal sealed class JxlFrameDecoder
         {
             cancellationToken.ThrowIfCancellationRequested();
             ProcessAcGroup(g, numPasses, AcGroup, frameHeader, frameDim, modularFrameDecoder, varDct, pipeline);
-        }
-    }
-
-    private static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
-    {
-        // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
-        // frame without the flag has no dictionary, so the caller passes null.
-        if (patches != null)
-        {
-            patches.Decode(br, frameDim.XSizePadded, frameDim.YSizePadded, frameHeader.NonserializedMetadata.M.NumExtraChannels, cancellationToken);
-
-            // Unreachable until upsampling arrives (D10): CheckSupported rejects an upsampled frame first.
-            // The check is unconditional on purpose: libjxl's Decode reports uses_extra_channels, but at
-            // ef67fde2 ProcessDCGlobal never reads it, so this port does not compute it.
-            if (frameHeader.Upsampling != 1)
-            {
-                foreach (uint ecups in frameHeader.ExtraChannelUpsampling)
-                {
-                    if (ecups != frameHeader.Upsampling)
-                    {
-                        JxlThrowHelper.ThrowInvalidImageContentException("Cannot use extra channels in patches if color channels are subsampled differently from extra channels");
-                    }
-                }
-            }
-        }
-
-        // Splines and noise are rejected by CheckSupported.
-        matrices.DecodeDc(br);
-        varDct?.DecodeGlobalDcInfo(br);
-        modularFrameDecoder.DecodeGlobalInfo(br, frameHeader);
-    }
-
-    private static void ProcessDcGroup(long dcGroupId, JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct)
-    {
-        long gx = dcGroupId % frameDim.XSizeDcGroups;
-        long gy = dcGroupId / frameDim.XSizeDcGroups;
-
-        // A frame that uses a DC frame (D13) has no VarDCT DC of its own; CheckSupported rejects it.
-        if (varDct != null)
-        {
-            modularFrameDecoder.DecodeVarDctDc(frameHeader, dcGroupId, br, varDct);
-        }
-
-        JxlRect mrect = new(gx * frameDim.DcGroupDim, gy * frameDim.DcGroupDim, frameDim.DcGroupDim, frameDim.DcGroupDim);
-        modularFrameDecoder.DecodeGroup(frameHeader, mrect, br, 3, 1000, JxlModularStreamId.ModularDc(frameDim, dcGroupId), null, -1);
-        if (varDct != null)
-        {
-            modularFrameDecoder.DecodeAcMetadata(frameHeader, dcGroupId, br, varDct);
         }
     }
 

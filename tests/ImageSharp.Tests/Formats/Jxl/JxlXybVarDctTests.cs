@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
@@ -164,6 +165,21 @@ public class JxlXybVarDctTests
         Assert.Null(metadata.ColorEncoding);
         Assert.NotNull(metadata.OriginalIccProfile);
         Assert.Null(info.Metadata.IccProfile);
+    }
+
+    // The djxl match above covers an adaptive quant field and a non-zero chroma-from-luma map only if the
+    // file has them. Read from the decoder's state after the DC groups: the quant field over the first
+    // blocks of the varblocks, and how many tiles of each map are not 0.
+    [Theory]
+    [InlineData("vardct_xyb_identity_afv", 5, 18, 1, 0)] // 5 x 3 tiles
+    [InlineData("vardct_xyb_strategies", 6, 8, 0, 0)] // one tile
+    public void DecodeDcGroups_QuantFieldAndChromaFromLuma(string name, int minQuant, int maxQuant, int nonZeroYtoX, int nonZeroYtoB)
+    {
+        using JxlDecodedDcGroups dc = JxlDecodedDcGroups.Decode(File.ReadAllBytes(InputPath(name)));
+
+        Assert.Equal((minQuant, maxQuant), dc.QuantFieldRange());
+        Assert.Equal(nonZeroYtoX, dc.State.Cmap.YtoXMap.Count(v => v != 0));
+        Assert.Equal(nonZeroYtoB, dc.State.Cmap.YtoBMap.Count(v => v != 0));
     }
 
     // The 64 x 64 image with one of the features of a later slice each.

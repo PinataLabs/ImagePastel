@@ -5,6 +5,8 @@ using System;
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
@@ -90,6 +92,22 @@ public class JxlEpfTests
 
         InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
         Assert.Contains("EPF: sigma for modular is too small", ex.Message, StringComparison.Ordinal);
+    }
+
+    // libjxl's JXL_ENSURE(epf_iters > 0) in ComputeSigma. No file reaches it, as only a frame with EPF
+    // gets the EPF stages that compute the sigma, so it is called on the DC groups of one such frame.
+    [Fact]
+    public void ComputeSigma_EpfOff_IsInvalid()
+    {
+        using JxlDecodedDcGroups dc = JxlDecodedDcGroups.Decode(File.ReadAllBytes(InputPath("vardct_xyb_epf")));
+        JxlLoopFilter lf = dc.FrameHeader.LoopFilter;
+        Assert.Equal(1u, lf.EpfIters);
+        Assert.NotNull(JxlEpfSigma.Compute(lf, dc.State));
+
+        lf.EpfIters = 0;
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => JxlEpfSigma.Compute(lf, dc.State));
+        Assert.Contains("EPF sigma computed with EPF off", ex.Message, StringComparison.Ordinal);
     }
 
     private static Configuration CreateConfiguration()
