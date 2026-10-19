@@ -1,11 +1,12 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_fields.cc (WriteVisitor, Bundle::Write).
+// lib/jxl/enc_fields.cc (WriteVisitor, Bundle::Write, WriteCodestreamHeaders).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Fields;
 
@@ -41,6 +42,25 @@ internal static partial class JxlBundle
         long start = writer.BitsWritten;
         new WriteVisitor(check.ExtensionBits, writer).Visit(fields);
         DebugGuard.IsTrue(writer.BitsWritten - start == check.TotalBits, "Bundle wrote a different number of bits than CanEncode counted");
+    }
+
+    /// <summary>
+    /// Writes the codestream signature, the size header, the image metadata and the transform data,
+    /// as the decoder reads them before any ICC profile.
+    /// </summary>
+    /// <param name="metadata">The codestream headers.</param>
+    /// <param name="writer">The writer.</param>
+    public static void WriteCodestreamHeaders(JxlCodecMetadata metadata, JxlBitWriter writer)
+    {
+        // Marker/signature
+        writer.Write(8, JxlConstants.CodestreamSignature[0]);
+        writer.Write(8, JxlConstants.CodestreamSignature[1]);
+
+        Write(metadata.Size, writer);
+        Write(metadata.M, writer);
+
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        Write(metadata.TransformData, writer);
     }
 
     /// <summary>

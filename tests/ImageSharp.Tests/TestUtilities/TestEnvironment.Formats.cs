@@ -80,8 +80,10 @@ public static partial class TestEnvironment
             bmpEncoder,
             new BmpImageFormatDetector());
 
-        // JPEG XL has no encoder yet. Magick reads it through 16-bit samples, so 9- to 16-bit images keep their precision.
+        // Magick reads JPEG XL through 16-bit samples, so 9- to 16-bit images keep their precision. The
+        // encoder is internal and writes only lossless at Fastest so far.
         cfg.ImageFormatsManager.SetDecoder(JxlFormat.Instance, MagickReferenceDecoder.HighBitDepthInstance);
+        cfg.ImageFormatsManager.SetEncoder(JxlFormat.Instance, new JxlEncoder { Distance = 0, Effort = JxlEffort.Fastest });
         cfg.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
 
         return cfg;
