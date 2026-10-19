@@ -77,6 +77,56 @@ public class JxlEncoderEffortTests
         Assert.All(tree.Where(n => n.Property == -1), n => Assert.Equal(JxlPredictor.Weighted, n.Predictor));
     }
 
+    // The spec checks the totals over the corpus, not each image.
+    [Fact]
+    public void Encode_Corpus_DefaultIsSmallerInTotalThanFastest()
+    {
+        long fastest = 0;
+        long @default = 0;
+        foreach (ITheoryDataRow row in JxlEncoderRoundTrip.CorpusCases)
+        {
+            object[] data = row.GetData();
+            if ((string)data[0] != nameof(JxlEffort.Fastest))
+            {
+                continue;
+            }
+
+            string file = (string)data[1];
+            int[] sizes = JxlPixelTypes.Call((string)data[2], new EncodeFile(file, JxlEncoderRoundTrip.LosslessFastest, JxlEncoderRoundTrip.Lossless(JxlEffort.Default)));
+            TestContext.Current.TestOutputHelper?.WriteLine($"{file}: Fastest {sizes[0]} B, Default {sizes[1]} B");
+            fastest += sizes[0];
+            @default += sizes[1];
+        }
+
+        Assert.True(@default < fastest, $"Default {@default} B, Fastest {fastest} B");
+    }
+
+    // Without an RCT, lossless Default wrote these RGB photos larger than Fastest, which has YCoCg.
+    [Fact]
+    public void Encode_RgbPhotos_AreSmallerAtDefaultThanAtFastest()
+    {
+        using Image<Rgb24> photo = JxlEncoderTransformTests.LoadPhoto();
+        int[] photoSizes = new EncodeFile(null, JxlEncoderRoundTrip.LosslessFastest, JxlEncoderRoundTrip.Lossless(JxlEffort.Default)).Encode(photo);
+        int[] bikeSizes = JxlPixelTypes.Call(nameof(Rgb24), new EncodeFile(TestImages.Png.Bike, JxlEncoderRoundTrip.LosslessFastest, JxlEncoderRoundTrip.Lossless(JxlEffort.Default)));
+
+        Assert.True(photoSizes[1] < photoSizes[0], $"Photo: Default {photoSizes[1]} B, Fastest {photoSizes[0]} B");
+        Assert.True(bikeSizes[1] < bikeSizes[0], $"Bike: Default {bikeSizes[1]} B, Fastest {bikeSizes[0]} B");
+    }
+
+    private sealed record EncodeFile(string File, params JxlEncoder[] Encoders) : IJxlPixelTypeCall<int[]>
+    {
+        public int[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = Image.Load<TPixel>(TestFile.GetInputFileFullPath(this.File));
+            return this.Encode(image);
+        }
+
+        public int[] Encode<TPixel>(Image<TPixel> image)
+            where TPixel : unmanaged, IPixel<TPixel>
+            => this.Encoders.Select(encoder => JxlEncoderRoundTrip.Encode(image, encoder).Length).ToArray();
+    }
+
     private sealed record EncodePattern(string Pattern, int Width, int Height, JxlEncoder Encoder) : IJxlPixelTypeCall<byte[]>
     {
         public byte[] Invoke<TPixel>()
