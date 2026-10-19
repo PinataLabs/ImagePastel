@@ -384,12 +384,23 @@ public class JxlDecoderTests
         Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.Header.DataColorSpace);
     }
 
+    // A dim_shift of 3 makes the extra channel 8x smaller, upsampled 8x on decode, which decodes since
+    // D10b. alpha_triangles' frame then reads its alpha as a 128 x 128 channel, as djxl does.
     [Fact]
-    public void Decode_ExtraChannelWithDimShift_ThrowsNotSupported()
+    public async Task DecodeToPlanes_ExtraChannelWithDimShift_MatchesDjxl()
     {
-        using MemoryStream stream = new(AlphaTrianglesWithExtraChannel(1, dimShift: 3));
+        byte[] codestream = AlphaTrianglesWithExtraChannel(1, dimShift: 3);
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlDecoderTests));
+        string input = Path.Combine(directory, "alpha_dim_shift_3.jxl");
+        string output = Path.Combine(directory, "alpha_dim_shift_3.npy");
+        await File.WriteAllBytesAsync(input, codestream, TestContext.Current.CancellationToken);
 
-        Assert.Throws<NotSupportedException>(() => new JxlDecoder().Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None));
+        await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, input, output);
+
+        NpyArray expected = NpyArray.Load(output);
+        using MemoryStream stream = new(codestream);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken);
+        Assert.Single(JxlLossyComparer.AssertWithinThresholds(expected, JxlConformanceImages.ToNpy(decoded)));
     }
 
     /// <summary>

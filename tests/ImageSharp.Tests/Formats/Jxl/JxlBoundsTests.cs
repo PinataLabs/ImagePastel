@@ -674,6 +674,49 @@ public class JxlBoundsTests
     public void PatchDictionary_AnsFinalState(uint state, bool throws)
         => AssertLayers(PatchLayers(new JxlTestPatchDictionary() { AnsState = state }), throws);
 
+    // dec_frame.cc ProcessDCGlobal: the patches run at the coded size, before the colour is upsampled, so
+    // an extra channel must be upsampled as the colour is, with it after the patches. With the colour not
+    // upsampled, an upsampled extra channel is brought to the frame size before the patches.
+    [Theory]
+    [InlineData(2u, 2u, false)]
+    [InlineData(8u, 8u, false)]
+    [InlineData(1u, 2u, false)]
+    [InlineData(2u, 4u, true)]
+    [InlineData(4u, 8u, true)]
+    public void PatchDictionary_ExtraChannelsUpsampledAsTheColour(uint upsampling, uint extraChannelUpsampling, bool throws)
+        => AssertLayers(UpsampledPatchLayers(upsampling, extraChannelUpsampling), throws);
+
+    // ModularFrameDecoder::ModularImageToDecodedRect: each Modular channel must fit its rectangle in the
+    // pipeline, "Dimension mismatch" otherwise. Both sides come from the frame header: the Modular image
+    // shrinks an extra channel to the upsampled size over its upsampling, and the pipeline sizes it by its
+    // shift, so no stream can tell them apart. These frames shift the extra channel against the colour, at
+    // sizes that do not divide, and each decodes to a constant alpha at the image size.
+    [Theory]
+    [InlineData(1u, 2u, 17, 11)]
+    [InlineData(1u, 8u, 17, 11)]
+    [InlineData(2u, 4u, 23, 9)]
+    [InlineData(2u, 8u, 23, 9)]
+    [InlineData(4u, 8u, 33, 7)]
+    public void ModularChannels_ShiftedExtraChannel_FitTheirRectangles(uint upsampling, uint extraChannelUpsampling, int width, int height)
+    {
+        byte[] codestream = new JxlTestLayers(width, height)
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling, ExtraChannelUpsampling = extraChannelUpsampling })
+            .ToArray();
+        using MemoryStream stream = new(codestream);
+
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        JxlDecodedFrame frame = Assert.Single(decoded.Frames);
+        Buffer2D<float> alpha = frame.Planes[3];
+        Assert.Equal((width, height), (decoded.Width, decoded.Height));
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                Assert.Equal(128 / 255f, alpha[x, y], 1e-6f);
+            }
+        }
+    }
+
     // libjxl rejects the same patch dictionaries.
     [Theory]
     [InlineData("1120_reference_patches", false)]
@@ -692,6 +735,9 @@ public class JxlBoundsTests
     [InlineData("alpha_channel_1", false)]
     [InlineData("alpha_channel_2", true)]
     [InlineData("ans_final_state", true)]
+    [InlineData("upsampled_2x_alpha_2x", false)]
+    [InlineData("upsampled_1x_alpha_2x", false)]
+    [InlineData("upsampled_2x_alpha_4x", true)]
     public async Task Djxl_RejectsTheSamePatches(string name, bool throws)
     {
         JxlTestRefPatch Patch(uint slot, uint x0, uint y0, uint xsize, uint ysize, params (int X, int Y)[] at)
@@ -715,6 +761,9 @@ public class JxlBoundsTests
             "blend_mode_8" => PatchLayers(new JxlTestPatchDictionary(new JxlTestRefPatch(3, 0, 0, 1, 1, new JxlTestPatch(0, 0, new((JxlPatchBlendMode)8), PatchReplace)))),
             "alpha_channel_1" => TwoAlphaPatchLayers(1),
             "alpha_channel_2" => TwoAlphaPatchLayers(2),
+            "upsampled_2x_alpha_2x" => UpsampledPatchLayers(2, 2),
+            "upsampled_1x_alpha_2x" => UpsampledPatchLayers(1, 2),
+            "upsampled_2x_alpha_4x" => UpsampledPatchLayers(2, 4),
             _ => PatchLayers(new JxlTestPatchDictionary() { AnsState = 0x130001 }),
         };
         string input = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlBoundsTests)), name + ".jxl");
@@ -788,6 +837,13 @@ public class JxlBoundsTests
         => new JxlTestLayers(24, 16)
             .Add(reference ?? new JxlTestFrame(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
             .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Patches = patches })
+            .ToArray();
+
+    // PatchLayers with one patch, whose displayed frame is upsampled: coded at 12 x 8 for a 2x upsampling.
+    private static byte[] UpsampledPatchLayers(uint upsampling, uint extraChannelUpsampling)
+        => new JxlTestLayers(24, 16)
+            .Add(new JxlTestFrame(JxlTestLayers.Ramp) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
+            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Patches = new JxlTestPatchDictionary(OnePixelPatch()), Upsampling = upsampling, ExtraChannelUpsampling = extraChannelUpsampling })
             .ToArray();
 
     // The generated 16 x 16 files with two alpha channels: two_alpha_a in slot 3, then two_alpha_b with

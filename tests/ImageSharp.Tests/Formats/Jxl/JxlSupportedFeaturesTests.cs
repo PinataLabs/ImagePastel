@@ -44,26 +44,6 @@ public class JxlSupportedFeaturesTests
     public void Decode_FrameFlag_IsNotSupported(ulong flags, string feature)
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }, feature);
 
-    // Upsampling comes with D10.
-    [Theory]
-    [InlineData(2)]
-    [InlineData(8)]
-    public void Decode_UpsampledFrame_IsNotSupported(uint upsampling)
-        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling }, "Upsampling");
-
-    // The colour channels and the extra channels are checked apart, so that each can be lifted alone.
-    [Theory]
-    [InlineData(2)]
-    [InlineData(4)]
-    public void Decode_UpsampledColorChannels_IsNotSupported(uint upsampling)
-        => AssertNotSupported(new JxlTestLayers(Width, Height, alpha: false), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Upsampling = upsampling }, "Upsampling of the colour channels");
-
-    [Theory]
-    [InlineData(2)]
-    [InlineData(8)]
-    public void Decode_UpsampledExtraChannel_IsNotSupported(uint extraChannelUpsampling)
-        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { ExtraChannelUpsampling = extraChannelUpsampling }, "Upsampling of the extra channels");
-
     // Patches on a VarDCT frame come with D12; on a Modular frame they decode (JxlLayersTests).
     [Fact]
     public void Decode_VarDctFrameWithPatches_IsNotSupported()
