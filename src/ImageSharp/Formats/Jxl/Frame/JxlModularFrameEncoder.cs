@@ -689,10 +689,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         return didIt;
     }
 
-    // libjxl's maybe_do_transform. From Squirrel up, which includes Fastest, a transform that applies
-    // is kept. Below Squirrel libjxl estimates the cost after the transform and, when the cost went up,
-    // undoes it with Transform::Inverse (JxlTransform.Inverse here) and drops it from the list. That
-    // estimate (JxlModularCostEstimate) is ported, but undoing a transform by it is not.
+    // libjxl's maybe_do_transform. From Squirrel up, which includes every effort JxlEffort has, a
+    // transform that applies is kept. Below Squirrel (libjxl effort 8 and up) libjxl estimates the cost
+    // after the transform and, when the cost went up, undoes it with Transform::Inverse
+    // (JxlTransform.Inverse here) and drops it from the list. That estimate (JxlModularCostEstimate) is
+    // ported, but undoing a transform by it is not, because no effort reaches it.
     private bool MaybeDoTransform(JxlModularImage image, JxlTransform tr)
     {
         if (this.speedTier >= JxlSpeedTier.Squirrel)
@@ -700,7 +701,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             return DoTransform(image, tr);
         }
 
-        JxlThrowHelper.ThrowNotSupportedException("The transform cost estimate of higher efforts (slice E2)");
+        JxlThrowHelper.ThrowNotSupportedException("Keeping or undoing a transform by its estimated cost (libjxl effort 8 and up)");
         return false;
     }
 
@@ -718,14 +719,15 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         if (PaletteColors != 0 || LossyPalette)
         {
-            // when not estimating, assume some arbitrary bpp. libjxl estimates the cost at Squirrel
-            // and below, which slice E2d adds.
+            // when not estimating, assume some arbitrary bpp
             if (this.speedTier <= JxlSpeedTier.Squirrel)
             {
-                JxlThrowHelper.ThrowNotSupportedException("The palette cost estimate of higher efforts (slice E2)");
+                costBefore = JxlModularCostEstimate.EstimateCost(gi);
             }
-
-            costBefore = nbPixels * arbitraryBppEstimate;
+            else
+            {
+                costBefore = nbPixels * arbitraryBppEstimate;
+            }
 
             // all-channel palette (e.g. RGBA)
             if (nbChans > 1)
