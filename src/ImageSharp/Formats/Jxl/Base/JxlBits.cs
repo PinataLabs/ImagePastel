@@ -4,6 +4,9 @@
 // lib/jxl/base/bits.h, lib/jxl/pack_signed.h and DivCeil from lib/jxl/base/common.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+#if NETCOREAPP3_0_OR_GREATER
+using System.Numerics;
+#endif
 using System.Runtime.CompilerServices;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Base;
@@ -31,6 +34,18 @@ internal static class JxlBits
     {
         int floorLog2 = FloorLog2Nonzero(x);
         return (x & (x - 1)) == 0 ? floorLog2 : floorLog2 + 1;
+    }
+
+    /// <summary>Returns the number of zero bits below the lowest set bit of a nonzero <paramref name="x"/>.</summary>
+    [MethodImpl(InliningOptions.ShortMethod)]
+    public static int Num0BitsBelowLs1BitNonzero(uint x)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        return BitOperations.TrailingZeroCount(x);
+#else
+        // netstandard2.1 has no BitOperations: the lowest set bit alone is a power of two.
+        return Numerics.Log2(x & (~x + 1));
+#endif
     }
 
     /// <summary>Maps a signed value to an unsigned one: 0, -1, 1, -2, ... become 0, 1, 2, 3, ...</summary>

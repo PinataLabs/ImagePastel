@@ -153,17 +153,12 @@ internal sealed partial class JxlModularFrameDecoder
         state.UsedAcs |= localUsedAcs;
 
         // The other strategies come with D9. This is checked after the whole DC group, so that every
-        // libjxl bound above is checked first.
+        // libjxl bound above is checked first. It is the only place they are rejected: every block of the
+        // frame gets its strategy here, before any AC group is decoded.
         uint unsupported = localUsedAcs & ~(1u << (int)JxlAcStrategyType.Dct);
         if (unsupported != 0)
         {
-            int first = 0;
-            while ((unsupported & (1u << first)) == 0)
-            {
-                first++;
-            }
-
-            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)first} AC strategy");
+            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)JxlBits.Num0BitsBelowLs1BitNonzero(unsupported)} AC strategy");
         }
     }
 

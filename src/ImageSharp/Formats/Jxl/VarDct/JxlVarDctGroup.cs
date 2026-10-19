@@ -172,12 +172,6 @@ internal static class JxlVarDctGroup
                         continue;
                     }
 
-                    // The other strategies are rejected with the AC metadata (D9).
-                    if (acs.Strategy != JxlAcStrategyType.Dct)
-                    {
-                        JxlThrowHelper.ThrowNotSupportedException($"The {acs.Strategy} AC strategy");
-                    }
-
                     int log2CoveredBlocks = acs.Log2CoveredBlocks;
                     int coveredBlocks = 1 << log2CoveredBlocks;
                     int size = coveredBlocks * DctBlockSize;
