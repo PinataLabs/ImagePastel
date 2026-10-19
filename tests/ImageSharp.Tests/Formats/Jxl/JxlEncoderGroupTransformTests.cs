@@ -29,4 +29,31 @@ public class JxlEncoderGroupTransformTests
         JxlTransform rct = Assert.Single(transforms, t => t.Id == JxlTransformId.Rct);
         Assert.NotEqual(0u, rct.RctType);
     }
+
+    [Fact]
+    public void Encode_DefaultPhotoOfSeveralGroups_WritesAnRctOnEachGroupAndNoneGlobally()
+    {
+        // Bike is 6 groups.
+        using Image<Rgb24> image = Image.Load<Rgb24>(TestFile.GetInputFileFullPath(TestImages.Png.Bike));
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, LosslessDefault);
+
+        Assert.DoesNotContain(JxlEncodedFrame.ReadGlobalTransforms(encoded), t => t.Id == JxlTransformId.Rct);
+        List<List<JxlTransform>> groups = JxlEncodedFrame.ReadGroupTransforms(encoded);
+        Assert.True(groups.Count > 1, $"{groups.Count} groups");
+        Assert.All(groups, transforms => Assert.NotEqual(0u, Assert.Single(transforms, t => t.Id == JxlTransformId.Rct).RctType));
+    }
+
+    [Theory]
+    [InlineData(64, 64)]
+    [InlineData(300, 513)]
+    public void Encode_DefaultGrey_WritesNoRct(int width, int height)
+    {
+        using Image<L8> image = JxlEncoderRoundTrip.CreateImage<L8>("noise", width, height);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, LosslessDefault);
+
+        Assert.DoesNotContain(JxlEncodedFrame.ReadGlobalTransforms(encoded), t => t.Id == JxlTransformId.Rct);
+        Assert.All(JxlEncodedFrame.ReadGroupTransforms(encoded), transforms => Assert.DoesNotContain(transforms, t => t.Id == JxlTransformId.Rct));
+    }
 }

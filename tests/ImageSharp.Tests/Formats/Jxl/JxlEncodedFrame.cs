@@ -44,8 +44,64 @@ internal static class JxlEncodedFrame
         return new List<JxlPropertyDecisionNode>(decoder.GlobalTree);
     }
 
+    /// <summary>
+    /// Returns the transforms of each group's Modular stream in the first frame, in group order, or
+    /// none for a frame of one group, whose global stream codes everything. A group with no channels
+    /// has an empty list.
+    /// </summary>
+    /// <param name="codestream">A bare codestream.</param>
+    /// <returns>The transforms of each group.</returns>
+    public static List<List<JxlTransform>> ReadGroupTransforms(byte[] codestream)
+    {
+        List<List<JxlTransform>> groups = new();
+        (JxlFrameHeader frameHeader, uint[] sizes, int sectionStart) = ReadFrameHeader(codestream);
+        JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
+        if (sizes.Length == 1)
+        {
+            return groups;
+        }
+
+        // A Modular frame's AC group section holds just the group's Modular stream (one pass).
+        for (long g = 0; g < frameDim.NumGroups; g++)
+        {
+            long index = JxlToc.AcGroupIndex(0, g, frameDim.NumGroups, frameDim.NumDcGroups);
+            int start = sectionStart;
+            for (long i = 0; i < index; i++)
+            {
+                start += (int)sizes[i];
+            }
+
+            JxlGroupHeader header = new();
+            if (sizes[index] != 0)
+            {
+                JxlBitReader section = new(codestream, start, (int)sizes[index]);
+                JxlBundle.Read(section, header);
+                section.Close();
+            }
+
+            groups.Add(new List<JxlTransform>(header.Transforms));
+        }
+
+        return groups;
+    }
+
     // Reads the first frame up to the end of its global Modular stream.
     private static JxlModularFrameDecoder ReadGlobalInfo(byte[] codestream)
+    {
+        (JxlFrameHeader frameHeader, uint[] sizes, int sectionStart) = ReadFrameHeader(codestream);
+
+        // The DC global section: the all-default DC quantisation bit, then the global Modular stream.
+        JxlBitReader section = new(codestream, sectionStart, (int)sizes[0]);
+        Assert.Equal(1UL, section.ReadBits(1));
+        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameHeader.ToFrameDimensions());
+        decoder.DecodeGlobalInfo(section, frameHeader);
+        section.Close();
+        return decoder;
+    }
+
+    // Reads the headers and the first frame's header and TOC: the section sizes, and where the first
+    // section starts.
+    private static (JxlFrameHeader FrameHeader, uint[] Sizes, int SectionStart) ReadFrameHeader(byte[] codestream)
     {
         Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
 
@@ -69,13 +125,6 @@ internal static class JxlEncodedFrame
         reader.EnsureAllReadsWithinBounds("frame header");
         int sectionStart = 2 + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
-
-        // The DC global section: the all-default DC quantisation bit, then the global Modular stream.
-        JxlBitReader section = new(codestream, sectionStart, (int)sizes[0]);
-        Assert.Equal(1UL, section.ReadBits(1));
-        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameDim);
-        decoder.DecodeGlobalInfo(section, frameHeader);
-        section.Close();
-        return decoder;
+        return (frameHeader, sizes, sectionStart);
     }
 }
