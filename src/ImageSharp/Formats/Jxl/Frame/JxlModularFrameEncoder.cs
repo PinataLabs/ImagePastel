@@ -119,9 +119,18 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.streamImages[0].Dispose();
         this.streamImages[0] = gi;
 
-        JxlEncoderInput<TPixel>.CopyColorChannels(image, gi);
+        JxlEncoderInput<TPixel>.CopyColorChannels(image, metadata.BitDepth, gi);
 
-        // libjxl copies the extra channels here, after the colour channels; slice E1d adds alpha.
+        // The extra channels follow the colour channels. A pixel type has at most one, its alpha, and
+        // the frame header keeps every extra channel at the frame's resolution.
+        for (int ec = 0, c = nbChans - metadata.NumExtraChannels; ec < metadata.NumExtraChannels; ec++, c++)
+        {
+            JxlExtraChannelInfo eci = metadata.ExtraChannelInfo[ec];
+            bool ecFp = eci.BitDepth.FloatingPointSample;
+            maxBitdepth = Math.Max(maxBitdepth, (int)eci.BitDepth.BitsPerSample + (ecFp ? 0 : 1));
+            JxlEncoderInput<TPixel>.CopyAlphaChannel(image, eci, gi, c);
+        }
+
         if (maxBitdepth > LevelMaxBitdepth)
         {
             JxlThrowHelper.ThrowImageFormatException($"Bitdepth too high for level {10} (need {maxBitdepth} bits, have only {LevelMaxBitdepth} in this codestream level)");
