@@ -23,8 +23,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Encodes the Modular streams of a frame: the global stream and one per LF group and per group,
 /// with one global MA tree and one set of histograms that every stream shares. The lossless paths of
 /// libjxl's efforts 3 and 5 are ported: the predefined <c>kWPFixedDC</c> tree with the Weighted
-/// predictor at effort 3, and a learned tree with the Gradient and Weighted predictors at effort 5.
-/// Squeeze, quantisation, local palettes and the per-group RCT search are not ported.
+/// predictor at effort 3, and a learned tree with the Gradient and Weighted predictors at effort 5,
+/// with effort 5's per-group RCT search and local palettes. Squeeze and quantisation are not ported.
 /// It is the mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
@@ -692,7 +692,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // libjxl's maybe_do_transform. From Squirrel up, which includes Fastest, a transform that applies
     // is kept. Below Squirrel libjxl estimates the cost after the transform and, when the cost went up,
     // undoes it with Transform::Inverse (JxlTransform.Inverse here) and drops it from the list. That
-    // estimate (EstimateCost) belongs to slice E2.
+    // estimate (JxlModularCostEstimate) is ported, but undoing a transform by it is not.
     private bool MaybeDoTransform(JxlModularImage image, JxlTransform tr)
     {
         if (this.speedTier >= JxlSpeedTier.Squirrel)
@@ -719,7 +719,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         if (PaletteColors != 0 || LossyPalette)
         {
             // when not estimating, assume some arbitrary bpp. libjxl estimates the cost at Squirrel
-            // and below, which slice E2 adds.
+            // and below, which slice E2d adds.
             if (this.speedTier <= JxlSpeedTier.Squirrel)
             {
                 JxlThrowHelper.ThrowNotSupportedException("The palette cost estimate of higher efforts (slice E2)");
