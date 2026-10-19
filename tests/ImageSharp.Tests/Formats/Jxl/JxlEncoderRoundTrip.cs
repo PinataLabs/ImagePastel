@@ -98,7 +98,9 @@ internal static class JxlEncoderRoundTrip
     /// Creates a deterministic test image: <c>solid</c> (one colour), <c>gradient</c> (a different ramp in
     /// each channel), <c>noise</c> (fixed-seed random samples), <c>icon</c> (eight colours in 8x8 blocks),
     /// <c>translucent</c> (the gradient, with random alpha that is 0 or 65535 in places) or
-    /// <c>translucent-icon</c> (the icon, with a different alpha for each colour, 0 and 65535 included).
+    /// <c>translucent-icon</c> (the icon, with a different alpha for each colour, 0 and 65535 included),
+    /// <c>group-icons</c> (4x4 blocks of a few hundred colours in each 256x256 group, a different set in
+    /// each group) or <c>translucent-group-icons</c> (the same with alpha, 0 and 65535 included).
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="pattern">The pattern.</param>
@@ -124,6 +126,8 @@ internal static class JxlEncoderRoundTrip
                         ushort.MaxValue),
                     "noise" => new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), ushort.MaxValue),
                     "icon" => IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length],
+                    "group-icons" => GroupIconColour(x, y, translucent: false),
+                    "translucent-group-icons" => GroupIconColour(x, y, translucent: true),
                     "translucent-icon" => WithAlpha(IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length], IconAlphas[((x / 8) + (3 * (y / 8))) % IconAlphas.Length]),
                     "translucent" => new Rgba64(
                         (ushort)(x * 65535 / Math.Max(1, width - 1)),
@@ -206,6 +210,7 @@ internal static class JxlEncoderRoundTrip
         AddPrefixCodeCases(cases);
         AddSampleFormatCases(cases);
         AddTransformCases(cases);
+        AddGroupTransformCases(cases);
         return cases;
     }
 
@@ -253,6 +258,13 @@ internal static class JxlEncoderRoundTrip
                 cases.Add(pixelType, "icon", width, height);
             }
         }
+    }
+
+    // E2b: four groups that each take a local palette at Default, without and with alpha.
+    private static void AddGroupTransformCases(TheoryData<string, string, int, int> cases)
+    {
+        cases.Add(nameof(Rgb24), "group-icons", 512, 512);
+        cases.Add(nameof(Rgba32), "translucent-group-icons", 512, 512);
     }
 
     // E1c: 8-bit grey and RGB larger than one group. libjxl's group size grows to 512 for images up to
@@ -353,6 +365,33 @@ internal static class JxlEncoderRoundTrip
             {
                 cases.Add(pixelType, pattern, 17, 23);
             }
+        }
+    }
+
+    // E2b: each group uses GroupIconColours colours of its own. An image of four groups or more has more
+    // colours than libjxl's global palette takes (1024), and each group few enough for a local palette.
+    private static Rgba64 GroupIconColour(int x, int y, bool translucent)
+    {
+        const int groupIconColours = 300;
+        uint group = (uint)((x / 256) + (64 * (y / 256)));
+        uint index = Mix((uint)((x / 4) + (1024 * (y / 4)))) % groupIconColours;
+        uint h = Mix((group * groupIconColours) + index + 1);
+        ushort alpha = !translucent ? ushort.MaxValue : (index % 5) switch
+        {
+            0 => (ushort)0,
+            1 => ushort.MaxValue,
+            _ => (ushort)((h >> 24) * 257),
+        };
+        return new Rgba64((ushort)((h & 0xFF) * 257), (ushort)(((h >> 8) & 0xFF) * 257), (ushort)(((h >> 16) & 0xFF) * 257), alpha);
+
+        // A 32-bit integer hash (the MurmurHash3 finaliser).
+        static uint Mix(uint h)
+        {
+            h ^= h >> 16;
+            h *= 0x85EBCA6B;
+            h ^= h >> 13;
+            h *= 0xC2B2AE35;
+            return h ^ (h >> 16);
         }
     }
 
