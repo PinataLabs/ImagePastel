@@ -109,8 +109,7 @@ internal sealed class JxlFrameDecoder
         // InitFrame resets the dequantization matrices to their defaults for each frame.
         JxlDequantMatrices matrices = new();
         using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
-        int numChannels = this.metadata.M.NumColorPlanes + this.metadata.M.NumExtraChannels;
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numChannels);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, this.metadata.M.NumColorPlanes, this.metadata.M.NumExtraChannels);
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, pipeline, cancellationToken);
 

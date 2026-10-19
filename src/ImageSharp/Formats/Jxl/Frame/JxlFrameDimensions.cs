@@ -44,6 +44,8 @@ internal readonly struct JxlFrameDimensions
 
         this.XSizePadded = xsizePadded;
         this.YSizePadded = ysizePadded;
+        this.XSizeUpsampledPadded = xsizePadded * upsampling;
+        this.YSizeUpsampledPadded = ysizePadded * upsampling;
         this.XSizeGroups = JxlBits.DivCeil(this.XSize, this.GroupDimension);
         this.YSizeGroups = JxlBits.DivCeil(this.YSize, this.GroupDimension);
         this.XSizeDcGroups = JxlBits.DivCeil(this.XSizeBlocks, this.GroupDimension);
@@ -63,6 +65,11 @@ internal readonly struct JxlFrameDimensions
     public long YSizeUpsampled { get; }
 
     // Image size after upsampling the padded image.
+    public long XSizeUpsampledPadded { get; }
+
+    public long YSizeUpsampledPadded { get; }
+
+    // Image size after padding to a multiple of kBlockDim (if VarDCT mode).
     public long XSizePadded { get; }
 
     public long YSizePadded { get; }

@@ -20,8 +20,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// group is in, the stages run over the whole frame and the sink receives the planes.
 /// </summary>
 /// <remarks>
-/// Deliberate departures from libjxl: the planes carry no border padding, because no stage needs
-/// neighbours yet; stages are to run in place rather than allocate new planes each, as decided in
+/// Deliberate departures from libjxl: the planes carry no border, because no stage needs neighbours
+/// yet. Instead of the border, which in libjxl takes the whole 8x8 blocks that VarDCT writes past the
+/// right and bottom edges, the colour planes are padded to the frame's padded size; the stages see the
+/// frame size, and the padding is cropped before the planes are handed over. Stages are to run in place rather than allocate new planes each, as decided in
 /// issue #113; and the stages are fixed steps of <see cref="Finish"/> rather than a list built per
 /// frame, because the frames this port decodes need only the patches, save, colour-transform, blending
 /// and output stages.
@@ -35,23 +37,28 @@ internal sealed class JxlRenderPipeline : IDisposable
     private int height;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per channel.
+    /// Initializes a new instance of the <see cref="JxlRenderPipeline"/> class, allocating one plane per
+    /// channel: the colour planes at the frame's padded size, which is the frame size for a Modular frame
+    /// and whole 8x8 blocks for a VarDCT frame, and the extra channels at the frame size.
     /// </summary>
     /// <param name="allocator">The allocator.</param>
     /// <param name="frameDim">The frame dimensions.</param>
-    /// <param name="numChannels">The number of channels: the colour planes (<see cref="Headers.JxlImageMetadata.NumColorPlanes"/>) plus the extra channels.</param>
-    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numChannels)
+    /// <param name="numColorPlanes">The number of colour planes (<see cref="Headers.JxlImageMetadata.NumColorPlanes"/>).</param>
+    /// <param name="numExtraChannels">The number of extra channels.</param>
+    public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, int numExtraChannels)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
         this.width = (int)frameDim.XSizeUpsampled;
         this.height = (int)frameDim.YSizeUpsampled;
-        this.planes = new Buffer2D<float>[numChannels];
+        this.planes = new Buffer2D<float>[numColorPlanes + numExtraChannels];
         try
         {
-            for (int c = 0; c < numChannels; c++)
+            for (int c = 0; c < this.planes.Length; c++)
             {
-                this.planes[c] = allocator.Allocate2D<float>((int)frameDim.XSizeUpsampled, (int)frameDim.YSizeUpsampled);
+                this.planes[c] = c < numColorPlanes
+                    ? allocator.Allocate2D<float>((int)frameDim.XSizeUpsampledPadded, (int)frameDim.YSizeUpsampledPadded)
+                    : allocator.Allocate2D<float>(this.width, this.height);
             }
         }
         catch
@@ -65,7 +72,10 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <summary>Gets the number of channels.</summary>
     public int NumChannels => this.planes.Length;
 
-    /// <summary>Returns the plane of channel <paramref name="c"/>.</summary>
+    /// <summary>
+    /// Returns the plane of channel <paramref name="c"/>. A colour plane may be larger than the frame:
+    /// a VarDCT group writes whole blocks into it, past the frame's right and bottom edges.
+    /// </summary>
     /// <param name="c">The channel.</param>
     /// <returns>The plane.</returns>
     public Buffer2D<float> GetPlane(int c) => this.planes[c];
@@ -132,6 +142,9 @@ internal sealed class JxlRenderPipeline : IDisposable
             {
                 this.Blend(blending);
             }
+
+            // The save after blending and the sink take the planes over, at the size they are given.
+            this.CropPadding();
 
             if (canBeReferenced && !frameHeader.SaveBeforeColorTransform)
             {
@@ -235,6 +248,29 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.planes = imagePlanes;
         this.width = imageXSize;
         this.height = imageYSize;
+    }
+
+    // Replaces each plane that is larger than the frame, which only padded colour planes are, with a
+    // frame-sized copy. Blending leaves image-sized planes, so then there is nothing to crop.
+    private void CropPadding()
+    {
+        for (int c = 0; c < this.planes.Length; c++)
+        {
+            Buffer2D<float> plane = this.planes[c];
+            if (plane.Width == this.width && plane.Height == this.height)
+            {
+                continue;
+            }
+
+            Buffer2D<float> cropped = this.allocator.Allocate2D<float>(this.width, this.height);
+            for (int y = 0; y < this.height; y++)
+            {
+                plane.DangerousGetRowSpan(y).Slice(0, this.width).CopyTo(cropped.DangerousGetRowSpan(y));
+            }
+
+            plane.Dispose();
+            this.planes[c] = cropped;
+        }
     }
 
     // WriteToImageBundleStage into frame_storage_for_referencing.
