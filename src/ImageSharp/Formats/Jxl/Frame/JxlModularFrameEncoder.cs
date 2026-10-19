@@ -43,7 +43,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
-    private readonly JxlSpeedTier speedTier = JxlSpeedTier.Falcon;
+    private readonly JxlSpeedTier speedTier;
     private readonly JxlModularImage[] streamImages;
     private readonly JxlModularOptions[] streamOptions;
     private readonly JxlHistogramParams histogramParams;
@@ -60,10 +60,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// predictor, the <c>kWPFixedDC</c> tree and the Modular histogram parameters.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
+    /// <param name="speedTier">The speed tier.</param>
     /// <param name="allocator">The allocator.</param>
-    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, MemoryAllocator allocator)
+    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, JxlSpeedTier speedTier, MemoryAllocator allocator)
     {
         this.allocator = allocator;
+        this.speedTier = speedTier;
         this.frameDim = frameHeader.ToFrameDimensions();
 
         long numStreams = JxlModularStreamId.ModularAc(this.frameDim, 0, frameHeader.Passes.NumPasses);

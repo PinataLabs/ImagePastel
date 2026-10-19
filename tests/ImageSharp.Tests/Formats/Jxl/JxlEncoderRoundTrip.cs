@@ -22,19 +22,23 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// </summary>
 internal static class JxlEncoderRoundTrip
 {
-    /// <summary>Gets the supported encoder setting: lossless at Fastest.</summary>
-    public static JxlEncoder LosslessFastest => new() { Distance = 0, Effort = JxlEffort.Fastest };
+    // The efforts every round-trip case runs at. Each E2 slice that adds an effort adds it here.
+    private static readonly JxlEffort[] Efforts = { JxlEffort.Fastest, JxlEffort.Default };
+
+    /// <summary>Gets the encoder setting most tests use: lossless at Fastest.</summary>
+    public static JxlEncoder LosslessFastest => Lossless(JxlEffort.Fastest);
 
     /// <summary>
-    /// Gets the round-trip cases: pixel type, pattern (see <see cref="CreateImage{TPixel}"/>), width and height.
+    /// Gets the round-trip cases at each supported effort: effort name, pixel type, pattern (see
+    /// <see cref="CreateImage{TPixel}"/>), width and height.
     /// </summary>
-    public static TheoryData<string, string, int, int> Cases { get; } = CreateCases();
+    public static TheoryData<string, string, string, int, int> Cases { get; } = AtEveryEffort(CreateCases());
 
     /// <summary>
-    /// Gets the lossless corpus cases: a repo test image (relative to the input images folder) and the
-    /// pixel type to load it as.
+    /// Gets the lossless corpus cases at each supported effort: effort name, a repo test image (relative
+    /// to the input images folder) and the pixel type to load it as.
     /// </summary>
-    public static TheoryData<string, string> CorpusCases { get; } = CreateCorpusCases();
+    public static TheoryData<string, string, string> CorpusCases { get; } = AtEveryEffort(CreateCorpusCases());
 
     /// <summary>Which decoder reads the encoded file back.</summary>
     public enum Reader
@@ -51,21 +55,28 @@ internal static class JxlEncoderRoundTrip
 
     /// <summary>Asserts that one case of <see cref="Cases"/> round-trips exactly through one reader.</summary>
     /// <param name="reader">The reader.</param>
+    /// <param name="effort">The effort name.</param>
     /// <param name="pixelType">The pixel type name.</param>
     /// <param name="pattern">The pattern.</param>
     /// <param name="width">The width.</param>
     /// <param name="height">The height.</param>
     /// <returns>A task.</returns>
-    public static Task AssertRoundTripAsync(Reader reader, string pixelType, string pattern, int width, int height)
-        => JxlPixelTypes.Verify(pixelType, new PatternCase(reader, pattern, width, height));
+    public static Task AssertRoundTripAsync(Reader reader, string effort, string pixelType, string pattern, int width, int height)
+        => JxlPixelTypes.Verify(pixelType, new PatternCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), pattern, width, height));
 
     /// <summary>Asserts that one case of <see cref="CorpusCases"/> round-trips exactly through one reader.</summary>
     /// <param name="reader">The reader.</param>
+    /// <param name="effort">The effort name.</param>
     /// <param name="file">The test image, relative to the input images folder.</param>
     /// <param name="pixelType">The pixel type name.</param>
     /// <returns>A task.</returns>
-    public static Task AssertCorpusRoundTripAsync(Reader reader, string file, string pixelType)
-        => JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, file));
+    public static Task AssertCorpusRoundTripAsync(Reader reader, string effort, string file, string pixelType)
+        => JxlPixelTypes.Verify(pixelType, new CorpusCase(reader, Lossless(Enum.Parse<JxlEffort>(effort)), file));
+
+    /// <summary>Gets a lossless encoder at <paramref name="effort"/>.</summary>
+    /// <param name="effort">The effort.</param>
+    /// <returns>The encoder.</returns>
+    public static JxlEncoder Lossless(JxlEffort effort) => new() { Distance = 0, Effort = effort };
 
     // Eight 8-bit colours (times 257) for the icon pattern, none of them in the palette's implicit colour cubes.
     private static readonly Rgba64[] IconColours =
@@ -153,6 +164,37 @@ internal static class JxlEncoderRoundTrip
         configuration.ImageFormatsManager.SetEncoder(JxlFormat.Instance, LosslessFastest);
         configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
         return configuration;
+    }
+
+    // Each case of the slices below, once at each effort of Efforts.
+    private static TheoryData<string, string, string, int, int> AtEveryEffort(TheoryData<string, string, int, int> cases)
+    {
+        TheoryData<string, string, string, int, int> result = new();
+        foreach (JxlEffort effort in Efforts)
+        {
+            foreach (ITheoryDataRow row in cases)
+            {
+                object[] data = row.GetData();
+                result.Add(effort.ToString(), (string)data[0], (string)data[1], (int)data[2], (int)data[3]);
+            }
+        }
+
+        return result;
+    }
+
+    private static TheoryData<string, string, string> AtEveryEffort(TheoryData<string, string> cases)
+    {
+        TheoryData<string, string, string> result = new();
+        foreach (JxlEffort effort in Efforts)
+        {
+            foreach (ITheoryDataRow row in cases)
+            {
+                object[] data = row.GetData();
+                result.Add(effort.ToString(), (string)data[0], (string)data[1]);
+            }
+        }
+
+        return result;
     }
 
     // Each slice adds its cases with one call here and its own Add method below.
@@ -320,17 +362,17 @@ internal static class JxlEncoderRoundTrip
         return colour;
     }
 
-    private static async Task RunCorpusAsync<TPixel>(Reader reader, string file)
+    private static async Task RunCorpusAsync<TPixel>(Reader reader, JxlEncoder encoder, string file)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         using Image<TPixel> image = Image.Load<TPixel>(TestFile.GetInputFileFullPath(file));
-        await RunAsync(reader, image, Path.GetFileNameWithoutExtension(file) + "_" + typeof(TPixel).Name);
+        await RunAsync(reader, encoder, image, Path.GetFileNameWithoutExtension(file) + "_" + typeof(TPixel).Name + "_" + encoder.Effort);
     }
 
-    private static async Task RunAsync<TPixel>(Reader reader, Image<TPixel> image, string name)
+    private static async Task RunAsync<TPixel>(Reader reader, JxlEncoder encoder, Image<TPixel> image, string name)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] encoded = Encode(image);
+        byte[] encoded = Encode(image, encoder);
         switch (reader)
         {
             case Reader.Ours:
@@ -345,11 +387,11 @@ internal static class JxlEncoderRoundTrip
         }
     }
 
-    private static async Task RunAsync<TPixel>(Reader reader, string pattern, int width, int height)
+    private static async Task RunAsync<TPixel>(Reader reader, JxlEncoder encoder, string pattern, int width, int height)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         using Image<TPixel> image = CreateImage<TPixel>(pattern, width, height);
-        byte[] encoded = Encode(image);
+        byte[] encoded = Encode(image, encoder);
         switch (reader)
         {
             case Reader.Ours:
@@ -359,7 +401,7 @@ internal static class JxlEncoderRoundTrip
                 AssertMagickExact(image, encoded);
                 break;
             case Reader.Djxl:
-                await AssertDjxlExactAsync(image, encoded, $"{typeof(TPixel).Name}_{pattern}_{width}x{height}", TestContext.Current.CancellationToken);
+                await AssertDjxlExactAsync(image, encoded, $"{typeof(TPixel).Name}_{pattern}_{width}x{height}_{encoder.Effort}", TestContext.Current.CancellationToken);
                 break;
         }
     }
@@ -447,17 +489,17 @@ internal static class JxlEncoderRoundTrip
         ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
 
-    private sealed record PatternCase(Reader Reader, string Pattern, int Width, int Height) : IJxlPixelTypeCall<Task>
+    private sealed record PatternCase(Reader Reader, JxlEncoder Encoder, string Pattern, int Width, int Height) : IJxlPixelTypeCall<Task>
     {
         public Task Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>
-            => RunAsync<TPixel>(this.Reader, this.Pattern, this.Width, this.Height);
+            => RunAsync<TPixel>(this.Reader, this.Encoder, this.Pattern, this.Width, this.Height);
     }
 
-    private sealed record CorpusCase(Reader Reader, string File) : IJxlPixelTypeCall<Task>
+    private sealed record CorpusCase(Reader Reader, JxlEncoder Encoder, string File) : IJxlPixelTypeCall<Task>
     {
         public Task Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>
-            => RunCorpusAsync<TPixel>(this.Reader, this.File);
+            => RunCorpusAsync<TPixel>(this.Reader, this.Encoder, this.File);
     }
 }
