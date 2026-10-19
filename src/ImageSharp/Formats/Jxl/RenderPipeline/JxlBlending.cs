@@ -73,8 +73,8 @@ internal static class JxlBlending
         JxlBlendingRows bg,
         JxlBlendingRows fg,
         int numColorPlanes,
-        JxlBlendingInfo colorBlending,
-        List<JxlBlendingInfo> ecBlending,
+        JxlPatchBlending colorBlending,
+        ReadOnlySpan<JxlPatchBlending> ecBlending,
         List<JxlExtraChannelInfo> extraChannelInfo,
         Buffer2D<float> tmp,
         int xsize)
@@ -96,11 +96,11 @@ internal static class JxlBlending
         // Blend extra channels first so that we use the pre-blending alpha.
         for (int i = 0; i < numEc; i++)
         {
-            JxlBlendingInfo info = ecBlending[i];
+            JxlPatchBlending info = ecBlending[i];
             int alpha = (int)info.AlphaChannel;
             switch (info.Mode)
             {
-                case JxlBlendMode.Add:
+                case JxlPatchBlendMode.Add:
                 {
                     ReadOnlySpan<float> b = bg[nc + i];
                     ReadOnlySpan<float> f = fg[nc + i];
@@ -113,9 +113,8 @@ internal static class JxlBlending
                     continue;
                 }
 
-                case JxlBlendMode.Blend:
+                case JxlPatchBlendMode.BlendAbove:
                 {
-                    // kBlendAbove.
                     bool isPremultiplied = extraChannelInfo[alpha].AlphaAssociated;
                     if (alpha == i)
                     {
@@ -129,17 +128,16 @@ internal static class JxlBlending
                     continue;
                 }
 
-                case JxlBlendMode.AlphaWeightedAdd:
-                    // kAlphaWeightedAddAbove.
+                case JxlPatchBlendMode.AlphaWeightedAddAbove:
                     JxlAlpha.PerformAlphaWeightedAdd(bg[nc + i], fg[nc + i], fg[nc + alpha], Tmp(nc + i), info.Clamp, alpha == i);
                     continue;
 
-                case JxlBlendMode.Mul:
+                case JxlPatchBlendMode.Mul:
                     JxlAlpha.PerformMulBlending(bg[nc + i], fg[nc + i], Tmp(nc + i), info.Clamp);
                     continue;
 
                 default:
-                    // kReplace.
+                    // Replace.
                     fg[nc + i].CopyTo(Tmp(nc + i));
                     continue;
             }
@@ -148,12 +146,11 @@ internal static class JxlBlending
         int colorAlpha = (int)colorBlending.AlphaChannel;
         switch (colorBlending.Mode)
         {
-            case JxlBlendMode.Add:
+            case JxlPatchBlendMode.Add:
                 Add(bg, fg, nc, tmp, xsize);
                 break;
 
-            case JxlBlendMode.AlphaWeightedAdd:
-                // kAlphaWeightedAddAbove.
+            case JxlPatchBlendMode.AlphaWeightedAddAbove:
                 if (hasAlpha)
                 {
                     for (int c = 0; c < nc; c++)
@@ -168,8 +165,7 @@ internal static class JxlBlending
 
                 break;
 
-            case JxlBlendMode.Blend:
-                // kBlendAbove.
+            case JxlPatchBlendMode.BlendAbove:
                 if (hasAlpha)
                 {
                     // blend_weighted: the colour and the alpha of the layer. The alpha overwrites what
@@ -189,7 +185,7 @@ internal static class JxlBlending
 
                 break;
 
-            case JxlBlendMode.Mul:
+            case JxlPatchBlendMode.Mul:
                 for (int p = 0; p < nc; p++)
                 {
                     JxlAlpha.PerformMulBlending(bg[p], fg[p], Tmp(p), colorBlending.Clamp);
@@ -198,7 +194,7 @@ internal static class JxlBlending
                 break;
 
             default:
-                // kReplace.
+                // Replace.
                 Copy(fg, nc, tmp, xsize);
                 break;
         }
