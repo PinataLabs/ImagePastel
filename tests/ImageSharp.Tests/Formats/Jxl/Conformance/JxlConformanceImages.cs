@@ -104,6 +104,19 @@ internal static class JxlConformanceImages
     }
 
     /// <summary>
+    /// Checks that an image of one frame (<see cref="ToNpy{TPixel}"/>) is within one 8-bit step of the
+    /// reference, channel by channel, with both clamped to [0, 1], and records the peak error.
+    /// </summary>
+    /// <param name="expected">The reference.</param>
+    /// <param name="actual">The image, with the reference's channels.</param>
+    public static void AssertWithinOneStepOfTheClampedReference(NpyArray expected, NpyArray actual)
+    {
+        JxlConformanceFrameResult result = Assert.Single(JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange));
+        TestContext.Current.TestOutputHelper?.WriteLine($"Peak error {result.PeakError * 255:G3} of one 8-bit step");
+        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+    }
+
+    /// <summary>
     /// Checks that an RGB image (<see cref="ToNpy{TPixel}"/> with 3 channels) is within one 8-bit step of
     /// the reference clamped to [0, 1]. A grey reference has one channel, which each of R, G and B is
     /// compared with, as a grey image is R = G = B.

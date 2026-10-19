@@ -25,8 +25,10 @@ internal static class JxlColorStages
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A frame without a colour transform has nothing to convert. The frame decoder rejects YCbCr, which
-    /// comes with a later slice. libjxl adds the from-linear stage only when the XYB stage does not output
+    /// A frame without a colour transform has nothing to convert. A YCbCr frame has the YCbCr stage
+    /// (<see cref="JxlYCbCrStage"/>) alone, on three colour planes even for a grey image
+    /// (<see cref="JxlFrameHeader.DropsToGreyAfterColorTransform"/>): its output is already in the image's colour encoding, so no
+    /// from-linear stage follows it. libjxl adds the from-linear stage only when the XYB stage does not output
     /// XYB itself, which this port never does (<see cref="JxlXybStage"/>). An XYB image that cannot render
     /// to its own encoding renders to linear sRGB, as djxl's default output, or to sRGB for a sink that
     /// takes display-encoded samples, as libjxl when it is asked for sRGB (<see cref="JxlOutputEncoding"/>).
@@ -46,6 +48,11 @@ internal static class JxlColorStages
     /// <returns>The stages, possibly none.</returns>
     public static IJxlColorStage[] Create(JxlFrameHeader frameHeader, bool displayEncoded)
     {
+        if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
+        {
+            return new IJxlColorStage[] { new JxlYCbCrStage() };
+        }
+
         if (frameHeader.ColorTransform != JxlColorTransform.Xyb)
         {
             return Array.Empty<IJxlColorStage>();

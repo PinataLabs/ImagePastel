@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
@@ -40,8 +41,8 @@ public class JxlConformanceLoadTests
         Premultiplied,
     }
 
-    // Measured: opsin_inverse, animation_icos4d and grayscale_public_university are within 0.50 of one
-    // step, which is the rounding. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
+    // Measured: opsin_inverse, animation_icos4d, grayscale_public_university, cafe, grayscale_jpeg and
+    // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
     // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
     // light, and the sRGB curve magnifies that in the shadows.
     [Theory]
@@ -50,6 +51,10 @@ public class JxlConformanceLoadTests
     [InlineData("alpha_premultiplied", typeof(Rgba64), ReferenceSpace.Premultiplied)]
     [InlineData("animation_icos4d", typeof(Rgba32), ReferenceSpace.AsCoded)]
     [InlineData("grayscale_public_university", typeof(L8), ReferenceSpace.AsCoded)]
+    [InlineData("upsampling", typeof(Rgba32), ReferenceSpace.AsCoded)]
+    [InlineData("cafe", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("grayscale_jpeg", typeof(L8), ReferenceSpace.AsCoded)]
+    [InlineData("bench_oriented_brg", typeof(Rgb24), ReferenceSpace.AsCoded)]
     public async Task Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference(string id, Type pixelType, ReferenceSpace space)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
@@ -86,6 +91,10 @@ public class JxlConformanceLoadTests
     [InlineData("animation_icos4d", 128, 128, 32, "Rgb", "Srgb", 1, true)]
     [InlineData("bike", 2048, 2560, 24, "Rgb", "Bt709", 0, true)]
     [InlineData("grayscale_public_university", 2880, 1620, 8, "Gray", "Srgb", 0, false)]
+    [InlineData("upsampling", 800, 600, 32, "Rgb", "Srgb", 1, true)] // The size after the 4x upsampling, not the coded 200x150.
+    [InlineData("cafe", 1280, 1600, 24, null, null, 0, false)]
+    [InlineData("grayscale_jpeg", 200, 200, 8, null, null, 0, false)]
+    [InlineData("bench_oriented_brg", 606, 500, 24, null, null, 0, false)] // Orientation 5: the coded 500x606 is transposed.
     public async Task Identify_ReportsSizeChannelsAndColourEncoding(string id, int width, int height, int bitsPerPixel, string colorSpace, string transferFunction, int extraChannels, bool xyb)
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
@@ -110,6 +119,20 @@ public class JxlConformanceLoadTests
             Assert.Equal(transferFunction, metadata.ColorEncoding.Tf.TransferFunction.ToString());
             Assert.Null(metadata.OriginalIccProfile);
         }
+    }
+
+    // bench_oriented_brg has codestream orientation 5 and an Exif box. Identify reports the image as Load
+    // gives it: transposed, with the Exif orientation reset to 1, as djxl writes it.
+    [Fact]
+    public async Task Identify_OrientedJpegTranscode_ReportsTheOrientedImage()
+    {
+        string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load("bench_oriented_brg"), CancellationToken);
+
+        IImageInfo info = Image.Identify(CreateConfiguration(), input, out _);
+
+        Assert.Equal(606, info.Width);
+        Assert.Equal(500, info.Height);
+        Assert.Equal((ushort)1, info.Metadata.ExifProfile.GetValue(ExifTag.Orientation).Value);
     }
 
     // Sample i of the pixels and of the reference, in the space where they are compared.

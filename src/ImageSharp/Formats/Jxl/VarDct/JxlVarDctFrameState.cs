@@ -190,9 +190,10 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// </summary>
     /// <param name="br">The reader.</param>
     /// <param name="numPasses">The number of passes.</param>
-    public void ProcessAcGlobal(JxlBitReader br, int numPasses)
+    /// <param name="modularFrameDecoder">The frame's Modular decoder, for the raw quantization tables.</param>
+    public void ProcessAcGlobal(JxlBitReader br, int numPasses, JxlModularFrameDecoder modularFrameDecoder)
     {
-        this.Matrices.Decode(br);
+        this.Matrices.Decode(br, modularFrameDecoder);
         this.Matrices.EnsureComputed(this.UsedAcs);
 
         int numHistoBits = JxlBits.CeilLog2Nonzero((uint)this.FrameDim.NumGroups);

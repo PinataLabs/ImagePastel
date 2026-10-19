@@ -6,10 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
@@ -68,8 +65,7 @@ public class JxlVarDctTests
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
         NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
 
-        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
     }
 
     // A grey image that is not XYB still codes three colour planes in a VarDCT frame, as libjxl's
@@ -90,8 +86,7 @@ public class JxlVarDctTests
         using Image<La16> image = Image.Load<La16>(CreateConfiguration(), codestream);
         NpyArray actual = JxlConformanceImages.ToNpy(image, channels);
 
-        JxlConformanceFrameResult result = JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange).Single();
-        Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
+        JxlConformanceImages.AssertWithinOneStepOfTheClampedReference(expected, actual);
     }
 
     // The djxl match above covers an adaptive quant field and non-zero chroma-from-luma maps only if the
@@ -118,44 +113,6 @@ public class JxlVarDctTests
         Assert.Equal(3, decoded.Frames[0].Planes.Count);
         Assert.Equal(64, decoded.Frames[0].Planes[0].Width);
         Assert.Equal(48, decoded.Frames[0].Planes[0].Height);
-    }
-
-    [Fact]
-    public void Decode_RawQuantTable_IsNotSupported()
-    {
-        // vardct_groups has its own sections, so AC global starts a section. Its first bit is
-        // all_default (0), then the 3-bit mode of the DCT8 table, low bit first: kQuantModeDCT (6).
-        // Setting its low bit makes the mode kQuantModeRAW (7).
-        byte[] codestream = File.ReadAllBytes(InputPath("vardct_groups"));
-        int acGlobal = SectionOffset(codestream, 2);
-        Assert.Equal(0b1100, codestream[acGlobal] & 0b1111);
-        codestream[acGlobal] |= 0b0010;
-
-        AssertNotSupported(codestream, "RAW");
-    }
-
-    // Returns where section sectionIndex of the first frame starts, for a bare codestream with no ICC.
-    private static int SectionOffset(byte[] codestream, int sectionIndex)
-    {
-        JxlCodecMetadata metadata = new();
-        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
-        JxlBundle.Read(reader, metadata.Size);
-        JxlBundle.Read(reader, metadata.M);
-        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
-        JxlBundle.Read(reader, metadata.TransformData);
-        reader.JumpToByteBoundary();
-        JxlFrameHeader frameHeader = new(metadata);
-        JxlBundle.Read(reader, frameHeader);
-        JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        uint[] sizes = JxlToc.ReadToc(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses), reader);
-        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
-        reader.Close();
-        for (int i = 0; i < sectionIndex; i++)
-        {
-            offset += (int)sizes[i];
-        }
-
-        return offset;
     }
 
     private static Configuration CreateConfiguration()
@@ -186,12 +143,5 @@ public class JxlVarDctTests
         }
 
         return new NpyArray(new[] { array.Shape[0], array.Shape[1], array.Shape[2], 3 }, data);
-    }
-
-    private static void AssertNotSupported(byte[] codestream, string feature)
-    {
-        using MemoryStream stream = new(codestream);
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
-        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 }

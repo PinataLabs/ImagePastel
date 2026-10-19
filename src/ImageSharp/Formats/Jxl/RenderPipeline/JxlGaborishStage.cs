@@ -19,7 +19,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// libjxl adds the weighted sums with <c>MulAdd</c>, which is a fused multiply-add on AVX2. This port
 /// rounds each product and each sum (ADR 0004), so its output can differ from libjxl's in the last bits.
 /// </remarks>
-internal sealed class JxlGaborishStage : IJxlLoopFilterStage
+internal sealed class JxlGaborishStage : IJxlNeighbourStage
 {
     private const int NumColorChannels = 3;
 

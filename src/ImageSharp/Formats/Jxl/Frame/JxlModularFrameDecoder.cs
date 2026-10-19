@@ -323,21 +323,15 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             JxlThrowHelper.ThrowInvalidImageContentException("Transforms left over");
         }
 
-        JxlRect r = pipeline.GetGroupRect(groupId);
         bool accurate = this.fullImage.BitDepth >= 23;
-        int numColorPlanes = metadata.NumColorPlanes;
         int c = 0;
         if (this.doColor)
         {
             // libjxl copies a grey channel into all three colour channels (rgb_from_gray); this port
-            // renders grey as one plane (JxlImageMetadata.NumColorPlanes), so it is converted once. A
-            // grey image whose frame has a colour transform has three channels but one plane; libjxl
-            // allows it with YCbCr, which comes with a later slice.
-            bool rgbFromGray = metadata.ColorEncoding.IsGray && frameHeader.ColorTransform == JxlColorTransform.None;
-            if ((rgbFromGray ? 1 : 3) != numColorPlanes)
-            {
-                JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform on a grey image");
-            }
+            // renders it as one plane, so it is converted once. A grey image whose frame has a colour
+            // transform codes three channels, which the pipeline is given as three planes.
+            int numColorPlanes = frameHeader.NumDecodedColorPlanes;
+            DebugGuard.IsTrue(numColorPlanes == pipeline.NumColorPlanes, "The pipeline has a plane for each colour channel");
 
             bool xyb = frameHeader.ColorTransform == JxlColorTransform.Xyb;
             bool fp = metadata.BitDepth.FloatingPointSample && !xyb;
@@ -369,6 +363,8 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
                     JxlThrowHelper.ThrowInvalidImageContentException("Empty image");
                 }
 
+                // Each channel has its own rectangle in the pipeline (MakeChannelRect), at its shift.
+                JxlRect r = pipeline.GetGroupRect(groupId, c);
                 JxlRect mr = CropRect(modularRect, chIn);
                 if (r.YSize != mr.YSize || r.XSize != mr.XSize)
                 {
@@ -419,6 +415,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
             }
 
             JxlModularChannel chIn = gi.Channel[c];
+            JxlRect r = pipeline.GetGroupRect(groupId, pipeline.NumColorPlanes + ec);
             JxlRect mr = CropRect(modularRect, chIn);
             if (r.YSize != mr.YSize || r.XSize != mr.XSize)
             {

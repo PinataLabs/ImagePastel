@@ -36,7 +36,10 @@ These files cover features that no conformance vector checks. They were made for
 | `vardct_strategies.jxl` | The image of `vardct_small.jxl` at a slower effort, which also uses 4x8, 8x4 and 32x32 blocks with one-band parametric quant tables at their sizes (D9e). | `External/ReferenceOutput/JxlDecoderTests/vardct_strategies.npy` |
 | `vardct_identity_afv.jxl` | `Png/bike-small.png`, 288 x 163 8-bit RGBA, at effort 7 with no XYB: every kind of block up to 32x32, Identity and AFV0 to AFV3 among them (D9f), an adaptive quant field and non-zero chroma-from-luma maps. Two groups. | `External/ReferenceOutput/JxlDecoderTests/vardct_identity_afv.npy` |
 | `vardct_xyb.jxl` | Lossy VarDCT of the same image with XYB (`cjxl -e 2`). It decodes since D8d; the `vardct_xyb_*` files below check XYB VarDCT output. | None: it must decode |
+| `jpeg_rgb.jxl` | `cjxl`'s lossless transcode of `Jpg/baseline/jpeg-rgb.jpg`, a 200 x 200 baseline JPEG coded in RGB (Adobe transform 0). An RGB JPEG transcodes to a VarDCT frame with no colour transform and no chroma subsampling, so it checks the raw quantization tables (D10d) on their own: the DCT8 table is raw, and the others come from the library. One group; the frame has the skip-adaptive-DC-smoothing flag and no loop filters. | `External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy` |
 | `twelve_bit.jxl` | Lossless Modular, 45 x 33 12-bit RGBA: ramps and noise, with alpha 0, 4095 and noise in turn. The encoder tests decode it, encode it again and check that it stays 12-bit with the same samples. | `External/ReferenceOutput/JxlDecoderTests/twelve_bit.png` (16-bit) |
+
+D10 decodes every file here that uses upsampling, chroma upsampling, YCbCr or raw quant tables. Apart from `jpeg_rgb` above (D10d), those files have their own tables in the sections below: `upsampling_*` (D10b), `modular_ycbcr*` (D10c) and the JPEG transcodes `jpeg_*` (D10e). The conformance vectors `upsampling`, `cafe`, `grayscale_jpeg` and `bench_oriented_brg` check the same features.
 
 #### How `premultiplied_alpha` was made
 
@@ -436,6 +439,51 @@ djxl modular_grey_gab_epf3_custom.jxl ../../../External/ReferenceOutput/JxlDecod
 - `modular_grey_gab_epf3_custom.jxl` was checked against a decoder that keeps the three grey channels equal after each filter, as filtering one plane would: that decoder fails it by an RMSE of 6.1e-3. With the default weights the three channels stay equal, so `modular_grey_gab_epf3.jxl` cannot tell the two apart.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE is at most 1.3e-6 and the peak error at most 4.6e-5 (`vardct_xyb_gab_epf3_300x200_d3`). `JxlLoopFilterTests` records the error of each file. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.
 
+#### How the upsampling files were made
+
+Frames coded at a lower resolution and upsampled on decode (D10b). Each reference is `External/ReferenceOutput/JxlDecoderTests/<name>.npy`. `JxlUpsamplingTests` checks them.
+
+| File | Why it is here |
+|---|---|
+| `upsampling_2x_xyb.jxl`, `upsampling_4x_xyb.jxl`, `upsampling_8x_xyb.jxl` | A 67 x 45 crop of `Png/bike-small.png`, lossy VarDCT with XYB, Gaborish and EPF, upsampled 2x, 4x and 8x with the default weights. The frames are coded at 34 x 23, 17 x 12 and 9 x 6: odd sizes, which the upsampling rounds back down. |
+| `upsampling_2x_xyb_nolf.jxl` | The same at 2x with no loop filters. |
+| `upsampling_2x_lossless.jxl`, `upsampling_4x_lossless.jxl`, `upsampling_8x_lossless.jxl` | The same crop as lossless Modular: no XYB and no loop filters, so the upsampling stage alone makes the difference from the coded pixels. |
+| `upsampling_4x_nn_lossless.jxl` | A 37 x 21 crop, lossless Modular, with custom 4x weights in the image header that pick the nearest pixel. Every 4 x 4 block of the 148 x 84 output is one coded pixel, so `upsampling_4x_nn_lossless.png` (the source) is a bit-exact reference too. |
+| `upsampling_2x_custom.jxl`, `upsampling_4x_custom.jxl`, `upsampling_8x_custom.jxl` | The 37 x 21 crop, lossy VarDCT with XYB, with custom "pixel dots" weights for 2x, 4x and 8x in the image header (custom weights mask 1, 2 and 4). |
+| `upsampling_2x_alpha_late.jxl` | The 67 x 45 crop with its alpha, upsampled 2x, the alpha too. Every extra channel has the frame's upsampling, so the alpha is upsampled with the colour, after the patches ("late"). |
+| `upsampling_2x_alpha_4x.jxl` | The same with the alpha upsampled 4x: the alpha has its own stage, before the patches ("early"). |
+| `upsampling_4x_alpha_8x.jxl` | The same at 4x, with the alpha at 8x: coded 17 x 12, alpha 9 x 6. |
+| `upsampling_1x_alpha_2x.jxl` | A 288 x 40 crop with alpha: the colour is not upsampled, and the alpha is upsampled 2x. Two groups, so the alpha's group rectangles are half the colour's. |
+
+```sh
+magick ../../Png/bike-small.png -alpha off -crop 67x45+100+60 +repage upsampling_rgb_source.png
+magick ../../Png/bike-small.png -crop 67x45+100+60 +repage upsampling_rgba_source.png
+magick ../../Png/bike-small.png -crop 288x40+0+60 +repage upsampling_rgba_wide_source.png
+magick ../../Png/bike-small.png -alpha off -crop 37x21+120+70 +repage upsampling_small_source.png
+cjxl upsampling_rgb_source.png upsampling_2x_xyb.jxl -d 1 --resampling=2
+cjxl upsampling_rgb_source.png upsampling_4x_xyb.jxl -d 1 --resampling=4
+cjxl upsampling_rgb_source.png upsampling_8x_xyb.jxl -d 1 --resampling=8
+cjxl upsampling_rgb_source.png upsampling_2x_xyb_nolf.jxl -d 1 --resampling=2 --gaborish=0 --epf=0
+cjxl upsampling_rgb_source.png upsampling_2x_lossless.jxl -d 0 --resampling=2
+cjxl upsampling_rgb_source.png upsampling_4x_lossless.jxl -d 0 --resampling=4
+cjxl upsampling_rgb_source.png upsampling_8x_lossless.jxl -d 0 --resampling=8
+cjxl upsampling_small_source.png upsampling_4x_nn_lossless.jxl -d 0 --resampling=4 --already_downsampled --upsampling_mode=0
+cjxl upsampling_small_source.png upsampling_2x_custom.jxl -d 1 --resampling=2 --already_downsampled --upsampling_mode=1
+cjxl upsampling_small_source.png upsampling_4x_custom.jxl -d 1 --resampling=4 --already_downsampled --upsampling_mode=1
+cjxl upsampling_small_source.png upsampling_8x_custom.jxl -d 1 --resampling=8 --already_downsampled --upsampling_mode=1
+cjxl upsampling_rgba_source.png upsampling_2x_alpha_late.jxl -d 1 --resampling=2 --ec_resampling=2
+cjxl upsampling_rgba_source.png upsampling_2x_alpha_4x.jxl -d 1 --resampling=2 --ec_resampling=4
+cjxl upsampling_rgba_source.png upsampling_4x_alpha_8x.jxl -d 1 --resampling=4 --ec_resampling=8
+cjxl upsampling_rgba_wide_source.png upsampling_1x_alpha_2x.jxl -d 1 --resampling=1 --ec_resampling=2
+for f in upsampling_*.jxl; do djxl $f ../../../External/ReferenceOutput/JxlDecoderTests/${f%.jxl}.npy; done
+cp upsampling_small_source.png ../../../External/ReferenceOutput/JxlDecoderTests/upsampling_4x_nn_lossless.png
+```
+
+- ImageMagick 7.1.2 made the crops. Only the 37 x 21 crop is committed, as the nearest-neighbour reference; the commands make the others again.
+- `cjxl` writes custom weights only with `--already_downsampled`: it then codes the input as it is and sets `--upsampling_mode` (0 nearest neighbour, 1 "pixel dots") in the image header. Without it, `cjxl` downsamples with the default weights and ignores `--upsampling_mode`.
+- The upsampling stage clamps each output pixel to the smallest and largest of the 5 x 5 input pixels it is made from. A decoder without the clamp fails 13 of the 14 `djxl` comparisons, all but `upsampling_2x_custom`.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 5.9e-7 and 3.5e-6 (`upsampling_2x_xyb`), 4.4e-7 and 3.1e-6 (`upsampling_4x_xyb`), 5.4e-7 and 3.3e-6 (`upsampling_8x_xyb`), 5.0e-7 and 5.3e-6 (`upsampling_2x_xyb_nolf`), 1.9e-8 and 1.2e-7 (`upsampling_2x_lossless`), 1.8e-8 and 1.2e-7 (`upsampling_4x_lossless`, `upsampling_8x_lossless`), 0 and 0 (`upsampling_4x_nn_lossless`), 5.2e-7 and 2.9e-6 (`upsampling_2x_custom`), 3.9e-7 and 2.9e-6 (`upsampling_4x_custom`), 4.2e-7 and 2.9e-6 (`upsampling_8x_custom`), 5.7e-7 and 3.6e-6 (`upsampling_2x_alpha_late`), 5.9e-7 and 3.5e-6 (`upsampling_2x_alpha_4x`), 4.4e-7 and 3.1e-6 (`upsampling_4x_alpha_8x`) and 3.7e-7 and 8.9e-6 (`upsampling_1x_alpha_2x`). libjxl fuses the stage's multiplies and adds on AVX2, and this port does not (ADR 0004). `Image.Load<Rgba32>` is within 0.50 of one 8-bit step of the clamped reference.
+
 #### How `twelve_bit` was made
 
 ```sh
@@ -446,3 +494,79 @@ djxl twelve_bit.jxl ../../../External/ReferenceOutput/JxlDecoderTests/twelve_bit
 
 - `make_twelve_bit.py` writes `twelve_bit_source.png`, a 16-bit PNG whose samples are 12-bit values scaled to 16 bits, with an `sBIT` chunk of 12. The source PNG is not committed; the script makes it again.
 - `--override_bitdepth=12` stores 12 bits per sample, for alpha too; `jxlinfo` reports "12-bit RGB+Alpha".
+
+#### How `jpeg_rgb` was made
+
+```sh
+cjxl ../../Jpg/baseline/jpeg-rgb.jpg jpeg_rgb.jxl
+djxl jpeg_rgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_rgb.npy
+```
+
+- Given a JPEG, `cjxl` transcodes it losslessly by default (`--lossless_jpeg=1`), at effort 7. It writes a container with a `jbrd` box, which holds what is needed to rebuild the JPEG, between two `jxlp` boxes.
+- The frame is VarDCT with no colour transform, because the JPEG's components are R, G and B. Its DC quantization factors are all 1/255, and its DCT8 quantization table is raw: before D10d, decoding it threw `NotSupportedException` ("RAW quantization tables") in the AC global section.
+- `djxl` decodes the frame to pixels; the `jbrd` box only matters when rebuilding the JPEG, which this decoder does not do.
+- The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlRawQuantTableTests` holds this file to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 8.4e-8 and the peak error 2.0e-6. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.
+
+#### How the YCbCr files were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `modular_ycbcr.jxl` | A 67 x 45 8-bit Modular frame with the YCbCr colour transform, 4:4:4, written by `jxl_from_tree` from `modular_ycbcr.tree`. Cb, Y and Cr each vary across the image, so it checks the YCbCr stage (D10c) on its own, with no VarDCT and no chroma upsampling. | `External/ReferenceOutput/JxlDecoderTests/modular_ycbcr.npy` |
+| `modular_ycbcr_alpha.jxl` | The same kind of frame from `modular_ycbcr_alpha.tree`, 150 x 70 with alpha and 128 x 128 groups (`GroupShift 0`): two groups, and an extra channel that the YCbCr stage leaves alone. | `External/ReferenceOutput/JxlDecoderTests/modular_ycbcr_alpha.npy` |
+
+```sh
+jxl_from_tree modular_ycbcr.tree modular_ycbcr.jxl
+jxl_from_tree modular_ycbcr_alpha.tree modular_ycbcr_alpha.jxl
+djxl modular_ycbcr.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_ycbcr.npy
+djxl modular_ycbcr_alpha.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_ycbcr_alpha.npy
+```
+
+- The `CbYCr` token makes `jxl_from_tree` write a YCbCr frame, always 4:4:4. `cjxl` never writes Modular YCbCr: its YCbCr frames are JPEG transcodes, which are VarDCT.
+- The trees predict every sample exactly, so the files are 33 and 50 bytes. Channels 0, 1 and 2 are Cb, Y and Cr, and channel 3 is alpha. `Alpha` must come after `Width` and `Height` in a tree, or `jxl_from_tree` fails.
+- Cb and Cr are signed, so some samples convert to RGB below 0 or above 1. The planes are not clamped; `Image<TPixel>` clamps them.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 1.6e-8 and the peak error 1.2e-7. `Image.Load<Rgb24>` is within one 8-bit step of the clamped reference.
+
+#### How the JPEG transcodes were made
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `jpeg_444.jxl` | `cjxl`'s lossless transcode of `jpeg_444_source.jpg`, a 67 x 45 crop of `Png/bike-small.png` saved as a 4:4:4 JPEG. A VarDCT YCbCr frame with a raw DCT8 table and the skip-adaptive-DC-smoothing flag. 67 x 45 is not a multiple of a block. | `External/ReferenceOutput/JxlDecoderTests/jpeg_444.npy` |
+| `jpeg_420.jxl`, `jpeg_422.jxl`, `jpeg_440.jxl` | The same crop as a 4:2:0, 4:2:2 and 4:4:0 JPEG: Cb and Cr are subsampled both ways, across, and down. They check the chroma-upsampling stage (D10e), and D8's subsampled DC, AC metadata and group decode. 67 x 45 is not a multiple of the 16 pixels of a subsampled block either. | `External/ReferenceOutput/JxlDecoderTests/jpeg_420.npy`, `jpeg_422.npy`, `jpeg_440.npy` |
+| `jpeg_grey.jxl` | The same crop as a grey JPEG. The image is grey, and its frame is YCbCr 4:4:4 with three planes; the output is R. `Image.Load` gives `L8`. | `External/ReferenceOutput/JxlDecoderTests/jpeg_grey.npy`, one channel |
+| `jpeg_420_groups.jxl` | All of `Png/bike-small.png`, 288 x 163, as a 4:2:0 JPEG: two groups, so the chroma upsampling reads across a group edge. | `External/ReferenceOutput/JxlDecoderTests/jpeg_420_groups.npy` |
+| `jpeg_mixed.jxl` | The transcode of the repo's `Jpg/baseline/jpeg422.jpg`, 200 x 200. `cjxl` writes it in a "mixed" mode: Y is subsampled down, and Cb and Cr are not. So the chroma-upsampling stage runs on Y. | `External/ReferenceOutput/JxlDecoderTests/jpeg_mixed.npy` |
+| `jpeg_444_smoothing.jxl` | The 4:4:4 transcode of `jpeg_444_smoothing_source.jpg`, a 67 x 45 gradient, with the skip-adaptive-DC-smoothing flag cleared by `clear_skip_smoothing.py`, so that adaptive DC smoothing runs on a YCbCr frame. A bare codestream. | `External/ReferenceOutput/JxlDecoderTests/jpeg_444_smoothing.npy` |
+
+```sh
+magick ../../Png/bike-small.png -alpha off -crop 67x45+100+60 +repage odd67x45.png
+magick odd67x45.png -quality 90 -sampling-factor 1x1 jpeg_444_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 2x2 jpeg_420_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 2x1 jpeg_422_source.jpg
+magick odd67x45.png -quality 90 -sampling-factor 1x2 jpeg_440_source.jpg
+magick odd67x45.png -quality 90 -colorspace Gray -type Grayscale jpeg_grey_source.jpg
+magick ../../Png/bike-small.png -alpha off -quality 90 -sampling-factor 2x2 jpeg_420_groups_source.jpg
+magick -size 67x45 gradient:'#305070'-'#a0b0c0' -quality 90 -sampling-factor 1x1 jpeg_444_smoothing_source.jpg
+cjxl jpeg_444_source.jpg jpeg_444.jxl
+cjxl jpeg_420_source.jpg jpeg_420.jxl
+cjxl jpeg_422_source.jpg jpeg_422.jxl
+cjxl jpeg_440_source.jpg jpeg_440.jxl
+cjxl jpeg_grey_source.jpg jpeg_grey.jxl
+cjxl jpeg_420_groups_source.jpg jpeg_420_groups.jxl
+cjxl ../../Jpg/baseline/jpeg422.jpg jpeg_mixed.jxl
+cjxl jpeg_444_smoothing_source.jpg jpeg_444_smoothing_flagged.jxl
+py -3 clear_skip_smoothing.py jpeg_444_smoothing_flagged.jxl jpeg_444_smoothing.jxl
+djxl jpeg_444.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_444.npy
+djxl jpeg_420.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_420.npy
+djxl jpeg_422.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_422.npy
+djxl jpeg_440.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_440.npy
+djxl jpeg_grey.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_grey.npy
+djxl jpeg_420_groups.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_420_groups.npy
+djxl jpeg_mixed.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_mixed.npy
+djxl jpeg_444_smoothing.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jpeg_444_smoothing.npy
+```
+
+- The source JPEGs were made with ImageMagick 7.1.2-31 and are committed, as another version may write other bytes. `odd67x45.png` and `jpeg_444_smoothing_flagged.jxl` are not committed.
+- Given a JPEG, `cjxl` transcodes it losslessly by default, into a container with a `jbrd` box. Every transcode from `cjxl` v0.12.0 sets the skip-adaptive-DC-smoothing flag, 4:4:4 included. libjxl ef67fde2, which this decoder ports, would not set it for 4:4:4, so newer files run the smoothing on YCbCr. `clear_skip_smoothing.py` clears it: the flags are a U64 in the frame header, 128 takes 10 bits and 0 takes 2, and every other bit stays. The TOC starts on a byte boundary, so the sections are copied as they are. It writes a bare codestream, without the `jbrd` box.
+- On the bike crop the smoothing changes nothing, as the DC steps between blocks are too large. On the gradient it moves `djxl`'s output by an RMSE of 7.4e-4, so a decoder that skipped it would fail.
+- `djxl` v0.12.0 rejects a subsampled VarDCT frame without the flag ("Non-444 chroma subsampling is not allowed when adaptive DC smoothing is enabled"). libjxl ef67fde2 dropped that check, and this decoder decodes such a frame, so no subsampled file here clears the flag.
+- The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlChromaSubsamplingTests` holds these files to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 3.1e-7 and 2.1e-6 (`jpeg_444`), 2.9e-7 and 2.1e-6 (`jpeg_420`), 2.9e-7 and 2.2e-6 (`jpeg_422`), 3.0e-7 and 2.1e-6 (`jpeg_440`), 2.6e-7 and 2.0e-6 (`jpeg_grey`), 2.7e-7 and 2.8e-6 (`jpeg_420_groups`), 9.2e-8 and 4.8e-7 (`jpeg_mixed`), and 4.2e-8 and 1.2e-7 (`jpeg_444_smoothing`). `Image.Load` is within one 8-bit step of the clamped reference.

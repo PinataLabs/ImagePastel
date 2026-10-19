@@ -101,6 +101,27 @@ internal sealed class JxlFrameHeader : JxlFields
     public bool CanBeReferenced
         => !this.IsLast && this.FrameType != JxlFrameType.Dc && (this.AnimationFrame.Duration == 0 || this.SaveAsReference != 0);
 
+    /// <summary>
+    /// Gets the number of colour planes the frame decodes into the render pipeline. A VarDCT frame, or a
+    /// frame with a colour transform, decodes three even for a grey image, as libjxl does (its
+    /// <c>nb_chans</c> in <c>ModularFrameDecoder::DecodeGlobalInfo</c>). A Modular frame with no colour
+    /// transform decodes <see cref="JxlImageMetadata.NumColorPlanes"/>: one for a grey image, which libjxl
+    /// copies into three (<c>rgb_from_gray</c>) and this port keeps as one.
+    /// </summary>
+    public int NumDecodedColorPlanes
+        => this.Encoding == JxlFrameEncoding.VarDct || this.ColorTransform != JxlColorTransform.None ? 3 : this.NonserializedMetadata.M.NumColorPlanes;
+
+    /// <summary>
+    /// Gets a value indicating whether the frame is a grey image's YCbCr frame, which drops to one colour
+    /// plane only after its colour transform. A departure from libjxl, which keeps three colour planes to
+    /// the output: this port drops the frame of a grey image that is not XYB to one plane before the
+    /// patches, as its patches, reference slots and blending hold one
+    /// (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The YCbCr transform mixes the three
+    /// planes, so such a frame keeps them through it.
+    /// </summary>
+    public bool DropsToGreyAfterColorTransform
+        => this.ColorTransform == JxlColorTransform.YCbCr && this.NonserializedMetadata.M.NumColorPlanes == 1;
+
     private long DefaultXSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.XSize;
 
     private long DefaultYSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.YSize;

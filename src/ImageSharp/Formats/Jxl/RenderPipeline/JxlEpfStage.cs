@@ -23,7 +23,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// default build (<c>JXL_HIGH_PRECISION</c> is 1), not <c>ApproximateReciprocal</c>. libjxl filters a
 /// vector of pixels at a time, all of one block; this filters one pixel at a time, with the same values.
 /// </remarks>
-internal abstract class JxlEpfStage : IJxlLoopFilterStage
+internal abstract class JxlEpfStage : IJxlNeighbourStage
 {
     /// <summary>The side of a block, libjxl's <c>kBlockDim</c>.</summary>
     protected const int BlockDim = 8;

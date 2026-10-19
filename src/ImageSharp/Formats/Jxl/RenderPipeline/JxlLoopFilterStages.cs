@@ -23,9 +23,9 @@ internal static class JxlLoopFilterStages
     /// </summary>
     /// <param name="context">What the stages are built from.</param>
     /// <returns>The stages, possibly none.</returns>
-    public static IJxlLoopFilterStage[] Create(JxlLoopFilterContext context)
+    public static IJxlNeighbourStage[] Create(JxlLoopFilterContext context)
     {
-        List<IJxlLoopFilterStage> stages = new();
+        List<IJxlNeighbourStage> stages = new();
         JxlLoopFilter lf = context.LoopFilter;
 
         // GetGaborishStage, for a frame with loop_filter.gab.

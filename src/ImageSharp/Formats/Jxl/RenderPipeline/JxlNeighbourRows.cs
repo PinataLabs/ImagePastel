@@ -12,10 +12,11 @@ using SixLabors.ImageSharp.Memory;
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
-/// The input of a loop-filter stage for one output row: for each channel the stage changes, the rows
-/// <c>y - Border</c> to <c>y + Border</c>, each widened by <see cref="Border"/> pixels on both sides.
-/// Pixels outside the frame are mirrored in from inside it, as libjxl's pipeline does before each stage
-/// with a border; the block padding past the frame's right and bottom edges is never read.
+/// The input of a neighbour stage (<see cref="IJxlNeighbourStage"/>) for one output row: for each
+/// channel the stage changes, the rows <c>y - Border</c> to <c>y + Border</c>, each widened by
+/// <see cref="Border"/> pixels on both sides. Pixels outside the channel are mirrored in from inside it,
+/// at the channel's current size, as libjxl's pipeline does before each stage with a border; the block
+/// padding past its right and bottom edges is never read.
 /// </summary>
 /// <remarks>
 /// libjxl's simple pipeline keeps a border of <c>kRenderPipelineXOffset</c> pixels around every plane and
@@ -38,9 +39,9 @@ internal sealed class JxlNeighbourRows : IDisposable
     /// <param name="allocator">The allocator of the window.</param>
     /// <param name="planes">The planes the stage reads, one per channel.</param>
     /// <param name="stage">The stage, which gives the border and the channels it reads.</param>
-    /// <param name="xsize">The width of the frame.</param>
-    /// <param name="ysize">The height of the frame.</param>
-    public JxlNeighbourRows(MemoryAllocator allocator, Buffer2D<float>[] planes, IJxlLoopFilterStage stage, int xsize, int ysize)
+    /// <param name="xsize">The width of the channels the stage changes, at their current shift, where they are mirrored.</param>
+    /// <param name="ysize">The height of the channels the stage changes, at their current shift.</param>
+    public JxlNeighbourRows(MemoryAllocator allocator, Buffer2D<float>[] planes, IJxlNeighbourStage stage, int xsize, int ysize)
     {
         this.planes = planes;
         this.xsize = xsize;
@@ -61,7 +62,7 @@ internal sealed class JxlNeighbourRows : IDisposable
         this.buffer = allocator.Allocate<float>(numChannels * this.windowRows * this.rowLength);
     }
 
-    /// <summary>Gets how far the rows reach past the pixel the stage writes: <see cref="IJxlLoopFilterStage.Border"/>.</summary>
+    /// <summary>Gets how far the rows reach past the pixel the stage writes: <see cref="IJxlNeighbourStage.Border"/>.</summary>
     public int Border { get; }
 
     /// <summary>Gets the row the stage writes.</summary>
