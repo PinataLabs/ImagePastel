@@ -104,26 +104,6 @@ internal readonly struct JxlAcStrategy
     /// <summary>The number of strategies.</summary>
     public const int NumValidStrategies = (int)JxlAcStrategyType.Dct128X256 + 1;
 
-    /// <summary>The largest number of 8x8 blocks a strategy covers along one side.</summary>
-    public const int MaxCoeffBlocks = 32;
-
-    /// <summary>The largest side of a strategy, in pixels.</summary>
-    public const int MaxBlockDim = JxlFrameDimensions.BlockDim * MaxCoeffBlocks;
-
-    /// <summary>The largest number of coefficients of a strategy.</summary>
-    public const int MaxCoeffArea = MaxBlockDim * MaxBlockDim;
-
-    private const uint MultiblockBits =
-        (1u << (int)JxlAcStrategyType.Dct16X16) | (1u << (int)JxlAcStrategyType.Dct32X32) |
-        (1u << (int)JxlAcStrategyType.Dct16X8) | (1u << (int)JxlAcStrategyType.Dct8X16) |
-        (1u << (int)JxlAcStrategyType.Dct32X8) | (1u << (int)JxlAcStrategyType.Dct8X32) |
-        (1u << (int)JxlAcStrategyType.Dct16X32) | (1u << (int)JxlAcStrategyType.Dct32X16) |
-        (1u << (int)JxlAcStrategyType.Dct32X64) | (1u << (int)JxlAcStrategyType.Dct64X32) |
-        (1u << (int)JxlAcStrategyType.Dct64X64) | (1u << (int)JxlAcStrategyType.Dct64X128) |
-        (1u << (int)JxlAcStrategyType.Dct128X64) | (1u << (int)JxlAcStrategyType.Dct128X128) |
-        (1u << (int)JxlAcStrategyType.Dct128X256) | (1u << (int)JxlAcStrategyType.Dct256X128) |
-        (1u << (int)JxlAcStrategyType.Dct256X256);
-
     public JxlAcStrategy(JxlAcStrategyType strategy, bool isFirst)
     {
         this.Strategy = strategy;
@@ -138,9 +118,6 @@ internal readonly struct JxlAcStrategy
 
     /// <summary>Gets the raw strategy value.</summary>
     public byte RawStrategy => (byte)this.Strategy;
-
-    /// <summary>Gets a value indicating whether the strategy covers more than one 8x8 block.</summary>
-    public bool IsMultiblock => ((1u << (int)this.Strategy) & MultiblockBits) != 0;
 
     /// <summary>Gets the number of 8x8 blocks the strategy covers horizontally.</summary>
     public int CoveredBlocksX => CoveredBlocksXLut[(int)this.Strategy];
@@ -181,11 +158,7 @@ internal readonly struct JxlAcStrategy
     /// increasing "anisotropic" frequency of the continuous DCT basis.
     /// </summary>
     /// <param name="order">The order, <see cref="CoveredBlocksX"/> x <see cref="CoveredBlocksY"/> x 64 entries.</param>
-    public void ComputeNaturalCoeffOrder(Span<uint> order) => this.CoeffOrderAndLut(order, false);
-
-    /// <summary>Writes the inverse of <see cref="ComputeNaturalCoeffOrder"/>.</summary>
-    /// <param name="lut">The look-up table, <see cref="CoveredBlocksX"/> x <see cref="CoveredBlocksY"/> x 64 entries.</param>
-    public void ComputeNaturalCoeffOrderLut(Span<uint> lut) => this.CoeffOrderAndLut(lut, true);
+    public void ComputeNaturalCoeffOrder(Span<uint> order) => this.CoeffOrderAndLut(order);
 
     /// <summary>
     /// Swaps <paramref name="rows"/> and <paramref name="columns"/> so the rows are the smaller: DCT
@@ -204,7 +177,8 @@ internal readonly struct JxlAcStrategy
     // Tries to generalize zig-zag order to non-square blocks. Surprisingly, in square block frequency
     // along the (i + j == const) diagonals is roughly the same. For historical reasons, consecutive
     // diagonals are traversed in alternating directions - so called "zig-zag" (or "snake") order.
-    private void CoeffOrderAndLut(Span<uint> output, bool isLut)
+    // libjxl's template also writes the inverse look-up table, which the decoder never uses.
+    private void CoeffOrderAndLut(Span<uint> output)
     {
         const int blockDim = JxlFrameDimensions.BlockDim;
         int cx = this.CoveredBlocksX;
@@ -246,7 +220,7 @@ internal readonly struct JxlAcStrategy
                     val = cur++;
                 }
 
-                Store(output, isLut, (y * cx * blockDim) + x, val);
+                output[val] = (uint)((y * cx * blockDim) + x);
             }
         }
 
@@ -270,20 +244,8 @@ internal readonly struct JxlAcStrategy
 
                 y >>= xss;
                 int val = cur++;
-                Store(output, isLut, (y * cx * blockDim) + x, val);
+                output[val] = (uint)((y * cx * blockDim) + x);
             }
-        }
-    }
-
-    private static void Store(Span<uint> output, bool isLut, int pos, int val)
-    {
-        if (isLut)
-        {
-            output[pos] = (uint)val;
-        }
-        else
-        {
-            output[val] = (uint)pos;
         }
     }
 }

@@ -55,9 +55,6 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     /// <summary>Gets a value indicating whether the frame keeps a full-frame Modular image until the end.</summary>
     public bool UsesFullImage => this.useFullImage;
 
-    /// <summary>Gets the frame's dequantization matrices, whose DC factors scale the XYB channels.</summary>
-    public JxlDequantMatrices Matrices => this.matrices;
-
     /// <summary>Reads the global Modular stream from the DC global section.</summary>
     /// <param name="reader">The reader.</param>
     /// <param name="frameHeader">The frame header.</param>
