@@ -2,11 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
@@ -121,6 +123,25 @@ public class JxlEncoderSampleFormatTests
         Assert.True(File.Exists(pfmPath));
     }
 
+    [Theory]
+    [InlineData(nameof(La16), 2u)]
+    [InlineData(nameof(Rgba32), 4u)]
+    public void Encode_EightColourIconWithAlpha_WritesOnePaletteOverColourAndAlpha(string pixelType, uint channels)
+    {
+        // libjxl's first palette try takes every channel, alpha included.
+        byte[] encoded = pixelType == nameof(La16)
+            ? EncodeIcon<La16>()
+            : EncodeIcon<Rgba32>();
+
+        List<JxlTransform> transforms = JxlEncodedFrame.ReadGlobalTransforms(encoded);
+
+        JxlTransform palette = Assert.Single(transforms);
+        Assert.Equal(JxlTransformId.Palette, palette.Id);
+        Assert.Equal(0u, palette.BeginC);
+        Assert.Equal(channels, palette.NumC);
+        Assert.Equal(8u, palette.NbColors);
+    }
+
     [Fact]
     public void DeepClone_CopiesTheBitDepth()
     {
@@ -149,6 +170,13 @@ public class JxlEncoderSampleFormatTests
         }
 
         return image;
+    }
+
+    private static byte[] EncodeIcon<TPixel>()
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>("translucent-icon", 64, 64);
+        return JxlEncoderRoundTrip.Encode(image);
     }
 
     // The stored samples of both files are equal: their unclamped float planes have the same bits.

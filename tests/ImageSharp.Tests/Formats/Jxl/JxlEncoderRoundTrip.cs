@@ -101,10 +101,14 @@ internal static class JxlEncoderRoundTrip
         new Rgba64(2570, 2570, 5140, ushort.MaxValue),
     };
 
+    // The alpha of each icon colour in the translucent-icon pattern, so that it still has eight colours.
+    private static readonly ushort[] IconAlphas = { 0, 65535, 257 * 64, 257 * 128, 257 * 32, 257 * 192, 257 * 16, 257 * 240 };
+
     /// <summary>
     /// Creates a deterministic test image: <c>solid</c> (one colour), <c>gradient</c> (a different ramp in
-    /// each channel), <c>noise</c> (fixed-seed random samples), <c>icon</c> (eight colours in 8x8 blocks)
-    /// or <c>translucent</c> (the gradient, with random alpha that is 0 or 65535 in places).
+    /// each channel), <c>noise</c> (fixed-seed random samples), <c>icon</c> (eight colours in 8x8 blocks),
+    /// <c>translucent</c> (the gradient, with random alpha that is 0 or 65535 in places) or
+    /// <c>translucent-icon</c> (the icon, with a different alpha for each colour, 0 and 65535 included).
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="pattern">The pattern.</param>
@@ -130,6 +134,7 @@ internal static class JxlEncoderRoundTrip
                         ushort.MaxValue),
                     "noise" => new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), ushort.MaxValue),
                     "icon" => IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length],
+                    "translucent-icon" => WithAlpha(IconColours[((x / 8) + (3 * (y / 8))) % IconColours.Length], IconAlphas[((x / 8) + (3 * (y / 8))) % IconAlphas.Length]),
                     "translucent" => new Rgba64(
                         (ushort)(x * 65535 / Math.Max(1, width - 1)),
                         (ushort)(y * 65535 / Math.Max(1, height - 1)),
@@ -303,6 +308,18 @@ internal static class JxlEncoderRoundTrip
 
             cases.Add(pixelType, "translucent", 256, 256);
         }
+
+        // E1e's palette with alpha: the palette covers the alpha channel too.
+        foreach (string pixelType in new[] { nameof(La16), nameof(Rgba32), nameof(Rgba64) })
+        {
+            cases.Add(pixelType, "translucent-icon", 64, 64);
+        }
+    }
+
+    private static Rgba64 WithAlpha(Rgba64 colour, ushort alpha)
+    {
+        colour.A = alpha;
+        return colour;
     }
 
     private static async Task RunCorpusAsync<TPixel>(Reader reader, string file)
