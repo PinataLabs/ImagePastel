@@ -19,15 +19,15 @@ internal sealed class JxlBlendingInfo : JxlFields
 {
     public JxlBlendingInfo() => JxlBundle.Init(this);
 
-    public JxlBlendMode Mode { get; private set; }
+    public JxlBlendMode Mode { get; set; }
 
-    /// <summary>Gets the extra channel used as alpha by blend modes that need one.</summary>
-    public uint AlphaChannel { get; private set; }
+    /// <summary>Gets or sets the extra channel used as alpha by blend modes that need one.</summary>
+    public uint AlphaChannel { get; set; }
 
-    public bool Clamp { get; private set; }
+    public bool Clamp { get; set; }
 
-    /// <summary>Gets the reference frame to blend onto.</summary>
-    public uint Source { get; private set; }
+    /// <summary>Gets or sets the reference frame to blend onto.</summary>
+    public uint Source { get; set; }
 
     /// <summary>Gets or sets the number of extra channels, which is not serialized here.</summary>
     public int NonserializedNumExtraChannels { get; set; }

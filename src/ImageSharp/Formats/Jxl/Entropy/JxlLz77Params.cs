@@ -14,14 +14,14 @@ internal sealed class JxlLz77Params : JxlFields
 {
     public JxlLz77Params() => JxlBundle.Init(this);
 
-    /// <summary>Gets a value indicating whether LZ77 is enabled.</summary>
-    public bool Enabled { get; private set; }
+    /// <summary>Gets or sets a value indicating whether LZ77 is enabled.</summary>
+    public bool Enabled { get; set; }
 
-    /// <summary>Gets the first token that starts a copy. Tokens from it on are lengths.</summary>
-    public uint MinSymbol { get; private set; }
+    /// <summary>Gets or sets the first token that starts a copy. Tokens from it on are lengths.</summary>
+    public uint MinSymbol { get; set; }
 
-    /// <summary>Gets the shortest copy length.</summary>
-    public uint MinLength { get; private set; }
+    /// <summary>Gets or sets the shortest copy length.</summary>
+    public uint MinLength { get; set; }
 
     /// <summary>Gets or sets the hybrid uint configuration of copy lengths.</summary>
     public JxlHybridUintConfig LengthUintConfig { get; set; } = new(0, 0, 0);

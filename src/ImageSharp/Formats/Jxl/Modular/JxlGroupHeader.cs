@@ -20,8 +20,8 @@ internal sealed class JxlGroupHeader : JxlFields
 {
     public JxlGroupHeader() => JxlBundle.Init(this);
 
-    /// <summary>Gets a value indicating whether the stream uses the frame's global tree and histograms.</summary>
-    public bool UseGlobalTree { get; private set; }
+    /// <summary>Gets or sets a value indicating whether the stream uses the frame's global tree and histograms.</summary>
+    public bool UseGlobalTree { get; set; }
 
     /// <summary>Gets the weighted predictor parameters.</summary>
     public JxlWeightedHeader WpHeader { get; } = new();

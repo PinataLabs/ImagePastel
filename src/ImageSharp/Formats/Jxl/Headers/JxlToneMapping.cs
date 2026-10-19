@@ -21,17 +21,17 @@ internal sealed class JxlToneMapping : JxlFields
 
     public JxlToneMapping() => JxlBundle.Init(this);
 
-    /// <summary>Gets the upper bound on the intensity level of the image, in nits.</summary>
-    public float IntensityTarget { get; private set; }
+    /// <summary>Gets or sets the upper bound on the intensity level of the image, in nits.</summary>
+    public float IntensityTarget { get; set; }
 
-    /// <summary>Gets the lower bound on the intensity level of the image, in nits.</summary>
-    public float MinNits { get; private set; }
+    /// <summary>Gets or sets the lower bound on the intensity level of the image, in nits.</summary>
+    public float MinNits { get; set; }
 
-    /// <summary>Gets a value indicating whether <see cref="LinearBelow"/> is a fraction of the display maximum.</summary>
-    public bool RelativeToMaxDisplay { get; private set; }
+    /// <summary>Gets or sets a value indicating whether <see cref="LinearBelow"/> is a fraction of the display maximum.</summary>
+    public bool RelativeToMaxDisplay { get; set; }
 
-    /// <summary>Gets the level below which tone mapping keeps the image linear.</summary>
-    public float LinearBelow { get; private set; }
+    /// <summary>Gets or sets the level below which tone mapping keeps the image linear.</summary>
+    public float LinearBelow { get; set; }
 
     public override void VisitFields(JxlVisitor visitor)
     {

@@ -25,20 +25,20 @@ internal sealed class JxlColorEncoding : JxlFields
 {
     public JxlColorEncoding() => JxlBundle.Init(this);
 
-    /// <summary>Gets a value indicating whether an ICC profile follows the headers instead of the enumerated fields.</summary>
-    public bool WantIcc { get; private set; }
+    /// <summary>Gets or sets a value indicating whether an ICC profile follows the headers instead of the enumerated fields.</summary>
+    public bool WantIcc { get; set; }
 
-    /// <summary>Gets the colour space.</summary>
-    public JxlColorSpace ColorSpace { get; private set; } = JxlColorSpace.Rgb;
+    /// <summary>Gets or sets the colour space.</summary>
+    public JxlColorSpace ColorSpace { get; set; } = JxlColorSpace.Rgb;
 
-    /// <summary>Gets the white point.</summary>
-    public JxlWhitePoint WhitePoint { get; private set; } = JxlWhitePoint.D65;
+    /// <summary>Gets or sets the white point.</summary>
+    public JxlWhitePoint WhitePoint { get; set; } = JxlWhitePoint.D65;
 
     /// <summary>Gets the custom white point, used if <see cref="WhitePoint"/> is <see cref="JxlWhitePoint.Custom"/>.</summary>
     public JxlCustomXy White { get; } = new();
 
-    /// <summary>Gets the primaries. Only valid if <see cref="HasPrimaries"/>.</summary>
-    public JxlPrimaries Primaries { get; private set; } = JxlPrimaries.Srgb;
+    /// <summary>Gets or sets the primaries. Only valid if <see cref="HasPrimaries"/>.</summary>
+    public JxlPrimaries Primaries { get; set; } = JxlPrimaries.Srgb;
 
     /// <summary>Gets the custom red primary.</summary>
     public JxlCustomXy Red { get; } = new();
@@ -52,8 +52,8 @@ internal sealed class JxlColorEncoding : JxlFields
     /// <summary>Gets the transfer function.</summary>
     public JxlCustomTransferFunction Tf { get; } = new();
 
-    /// <summary>Gets the rendering intent.</summary>
-    public JxlRenderingIntent RenderingIntent { get; private set; } = JxlRenderingIntent.Relative;
+    /// <summary>Gets or sets the rendering intent.</summary>
+    public JxlRenderingIntent RenderingIntent { get; set; } = JxlRenderingIntent.Relative;
 
     /// <summary>Gets a value indicating whether the image is greyscale.</summary>
     public bool IsGray => this.ColorSpace == JxlColorSpace.Gray;
