@@ -97,7 +97,6 @@ internal static class JxlVarDctGroup
         int by0 = (int)blockRect.Y0;
         int xsizeBlocks = (int)blockRect.XSize;
         int ysizeBlocks = (int)blockRect.YSize;
-        int stride = state.XSizeBlocks;
         float invGlobalScale = state.Quantizer.InvGlobalScale;
         JxlYCbCrChromaSubsampling cs = frameHeader.ChromaSubsampling;
         JxlColorCorrelation colorCorrelation = state.Cmap;
@@ -141,8 +140,8 @@ internal static class JxlVarDctGroup
         for (int by = 0; by < ysizeBlocks; ++by)
         {
             int[] sby = { by >> vshift[0], by >> vshift[1], by >> vshift[2] };
-            ReadOnlySpan<int> rowQuant = state.RawQuantField.AsSpan(((by0 + by) * stride) + bx0, xsizeBlocks);
-            ReadOnlySpan<byte> quantDcRow = state.QuantDc.AsSpan(((by0 + by) * stride) + bx0, xsizeBlocks);
+            ReadOnlySpan<int> rowQuant = state.RawQuantField.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
+            ReadOnlySpan<byte> quantDcRow = state.QuantDc.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
 
             int ty = (by0 + by) / JxlColorCorrelation.ColorTileDimInBlocks;
             ReadOnlySpan<sbyte> rowCmapX = colorCorrelation.YtoXMap.AsSpan(ty * colorCorrelation.XSizeTiles, colorCorrelation.XSizeTiles);
@@ -230,7 +229,7 @@ internal static class JxlVarDctGroup
                     for (int c = 0; c < 3; c++)
                     {
                         // LowestFrequenciesFromDC: the DC of this block.
-                        float dc = state.Dc[c][((ry0[c] + sby[c]) * stride) + rx0[c] + sbx[c]];
+                        float dc = state.Dc[c].DangerousGetRowSpan(ry0[c] + sby[c])[rx0[c] + sbx[c]];
                         JxlDct.LowestFrequenciesFromDcDct8(dc, block.AsSpan(c * size, size));
                     }
 

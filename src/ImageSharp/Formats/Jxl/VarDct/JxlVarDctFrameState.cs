@@ -12,6 +12,8 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+using SixLabors.ImageSharp.Memory;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
@@ -21,9 +23,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// decode, and what the AC global section adds for the AC groups.
 /// </summary>
 /// <remarks>
-/// The block images are plain arrays of one entry per 8x8 block, as small as 1/64 of the frame.
+/// The DC, quant field, quantised-DC and EPF sharpness images have one entry per 8x8 block and come
+/// from the configured allocator; the strategy image and the chroma-from-luma maps are plain arrays.
 /// </remarks>
-internal sealed class JxlVarDctFrameState
+internal sealed class JxlVarDctFrameState : IDisposable
 {
     /// <summary>The largest number of passes.</summary>
     public const int MaxNumPasses = JxlPasses.MaxNumPasses;
@@ -32,22 +35,38 @@ internal sealed class JxlVarDctFrameState
     // small images.
     private static readonly JxlU32Enc OrderEnc = new(Val(0x5F), Val(0x13), Val(0), Bits(JxlBlockCtxMap.NumOrders));
 
+    private readonly MemoryAllocator allocator;
+
     /// <summary>Initializes a new instance of the <see cref="JxlVarDctFrameState"/> class.</summary>
+    /// <param name="allocator">The allocator of the block images.</param>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="matrices">The frame's dequantization matrices.</param>
-    public JxlVarDctFrameState(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
+    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
     {
+        this.allocator = allocator;
         this.FrameDim = frameDim;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
         this.YSizeBlocks = (int)frameDim.YSizeBlocks;
-        int numBlocks = this.XSizeBlocks * this.YSizeBlocks;
         this.AcStrategy = new JxlAcStrategyImage(this.XSizeBlocks, this.YSizeBlocks);
-        this.RawQuantField = new int[numBlocks];
-        this.EpfSharpness = new byte[numBlocks];
         this.Cmap = new JxlColorCorrelation(frameDim.XSize, frameDim.YSize);
-        this.QuantDc = new byte[numBlocks];
-        this.Dc = new[] { new float[numBlocks], new float[numBlocks], new float[numBlocks] };
+        try
+        {
+            this.RawQuantField = allocator.Allocate2D<int>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            this.EpfSharpness = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            this.QuantDc = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            for (int c = 0; c < 3; c++)
+            {
+                this.Dc[c] = allocator.Allocate2D<float>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            }
+        }
+        catch
+        {
+            // The constructor throws, so no caller can dispose what is already allocated.
+            this.Dispose();
+            throw;
+        }
+
         this.Matrices = matrices;
         this.Quantizer = new JxlQuantizer(matrices);
         this.XDmMultiplier = MathF.Pow(1 / 1.25f, frameHeader.XQmScale - 2.0f);
@@ -68,19 +87,19 @@ internal sealed class JxlVarDctFrameState
     public JxlAcStrategyImage AcStrategy { get; }
 
     /// <summary>Gets the quant field of each block.</summary>
-    public int[] RawQuantField { get; }
+    public Buffer2D<int> RawQuantField { get; }
 
     /// <summary>Gets the EPF sharpness of each block, which only EPF (D9) uses.</summary>
-    public byte[] EpfSharpness { get; }
+    public Buffer2D<byte> EpfSharpness { get; }
 
     /// <summary>Gets the chroma-from-luma parameters and maps.</summary>
     public JxlColorCorrelation Cmap { get; }
 
     /// <summary>Gets the bucket of the quantised DC of each block.</summary>
-    public byte[] QuantDc { get; }
+    public Buffer2D<byte> QuantDc { get; }
 
-    /// <summary>Gets the X, Y and B DC of each block.</summary>
-    public float[][] Dc { get; }
+    /// <summary>Gets the X, Y and B DC of each block. Smoothing replaces the planes.</summary>
+    public Buffer2D<float>[] Dc { get; } = new Buffer2D<float>[3];
 
     /// <summary>Gets the dequantization matrices.</summary>
     public JxlDequantMatrices Matrices { get; }
@@ -142,7 +161,7 @@ internal sealed class JxlVarDctFrameState
     {
         if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0 && (frameHeader.Flags & JxlFrameFlags.UseDcFrame) == 0)
         {
-            JxlCompressedDc.AdaptiveDcSmoothing(this.Quantizer.MulDc, this.Dc, this.XSizeBlocks, this.YSizeBlocks);
+            JxlCompressedDc.AdaptiveDcSmoothing(this.allocator, this.Quantizer.MulDc, this.Dc, this.XSizeBlocks, this.YSizeBlocks);
         }
     }
 
@@ -190,5 +209,13 @@ internal sealed class JxlVarDctFrameState
 
         // libjxl picks 16- or 32-bit coefficients here from the largest token width (max_num_bits). This
         // port always keeps them as int, a deliberate departure: the values are the same either way.
+    }
+
+    public void Dispose()
+    {
+        this.RawQuantField?.Dispose();
+        this.EpfSharpness?.Dispose();
+        this.QuantDc?.Dispose();
+        JxlPlanes.DisposeAll(this.Dc);
     }
 }

@@ -114,7 +114,7 @@ internal sealed class JxlFrameDecoder
         // A VarDCT frame always codes three colour planes, grey or not, as libjxl's.
         int numColorPlanes = frameHeader.Encoding == JxlFrameEncoding.VarDct ? 3 : this.metadata.M.NumColorPlanes;
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, this.metadata.M.NumExtraChannels);
-        JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(frameHeader, frameDim, matrices) : null;
+        using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
         ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
 

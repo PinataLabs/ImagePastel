@@ -46,7 +46,7 @@ internal sealed partial class JxlModularFrameDecoder
 
         JxlModularOptions options = new();
         JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
-        JxlCompressedDc.DequantDc(r, state.Dc, state.QuantDc, state.XSizeBlocks, image, state.Quantizer.MulDc, mul, state.Cmap.DcFactors, frameHeader.ChromaSubsampling, state.BlockCtxMap);
+        JxlCompressedDc.DequantDc(r, state.Dc, state.QuantDc, image, state.Quantizer.MulDc, mul, state.Cmap.DcFactors, frameHeader.ChromaSubsampling, state.BlockCtxMap);
     }
 
     /// <summary>
@@ -88,14 +88,13 @@ internal sealed partial class JxlModularFrameDecoder
         int xlim = Math.Min(acStrategy.XSize, rx0 + rxsize);
         int ylim = Math.Min(acStrategy.YSize, ry0 + rysize);
         uint localUsedAcs = 0;
-        int stride = state.XSizeBlocks;
         ReadOnlySpan<int> rowIn1 = image.Channel[2].Row(0);
         ReadOnlySpan<int> rowIn2 = image.Channel[2].Row(1);
         for (int iy = 0; iy < rysize; iy++)
         {
             int y = ry0 + iy;
-            Span<int> rowQf = state.RawQuantField.AsSpan((y * stride) + rx0, rxsize);
-            Span<byte> rowEpf = state.EpfSharpness.AsSpan((y * stride) + rx0, rxsize);
+            Span<int> rowQf = state.RawQuantField.DangerousGetRowSpan(y).Slice(rx0, rxsize);
+            Span<byte> rowEpf = state.EpfSharpness.DangerousGetRowSpan(y).Slice(rx0, rxsize);
             ReadOnlySpan<int> rowIn3 = image.Channel[3].Row(iy);
             for (int ix = 0; ix < rxsize; ix++)
             {
