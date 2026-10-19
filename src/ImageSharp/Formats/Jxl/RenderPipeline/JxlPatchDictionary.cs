@@ -100,6 +100,10 @@ internal sealed class JxlPatchDictionary
         long numRefPatch = ReadNum(NumRefPatchContext);
 
         // Limit max memory usage of patches to about 66 bytes per pixel (assuming 8 bytes per size_t).
+        // These are libjxl's limits, kept as they are so that every file libjxl accepts decodes. They
+        // bound the memory, not the time: a dictionary of a few bytes can place about one patch per pixel,
+        // each as large as the frame, so the patches pass may blend patches x pixels samples. The work is
+        // proportional to that and stops when the decode is cancelled; a time budget is D14's.
         long numPixels = xsize * ysize;
         long maxRefPatches = 1024 + (numPixels / 4);
         long maxPatches = maxRefPatches * 4;
