@@ -78,6 +78,9 @@ internal sealed class JxlTestLayers
     /// <summary>Gets the animation's loop count; 0 is forever.</summary>
     public uint NumLoops { get; init; }
 
+    /// <summary>Gets a value indicating whether the image is XYB-encoded, which gives every frame the XYB colour transform.</summary>
+    public bool Xyb { get; init; }
+
     /// <summary>
     /// Returns layers that keep the image header of a single-frame, single-group Modular file, which
     /// must not be XYB or animated, and gives that frame's section. The section only decodes in a
@@ -164,7 +167,7 @@ internal sealed class JxlTestLayers
             w.Write(2, 1).Bit(false).Write(2, 0).Bit(false).Write(2, 0).Write(2, 0).Write(2, 0).Bit(true); // 8-bit premultiplied alpha
         }
 
-        w.Bit(false).Bit(true); // not XYB, sRGB
+        w.Bit(this.Xyb).Bit(true); // XYB or not, sRGB
         if (this.Animation)
         {
             w.Bit(true); // default tone mapping
@@ -300,7 +303,7 @@ internal sealed class JxlTestLayers
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
         ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
-        w.Bit(true); // Modular
+        w.Bit(frame.Encoding == JxlFrameEncoding.Modular);
         if (flags == 0)
         {
             w.Write(2, 0);
@@ -314,14 +317,34 @@ internal sealed class JxlTestLayers
             w.Write(2, 2).Write(8, flags - 17); // U64: 17 to 272
         }
 
-        w.Bit(false); // no YCbCr
-        w.Write(2, 0); // upsampling 1
-        for (int i = 0; i < this.numExtraChannels; i++)
+        bool useDcFrame = (flags & (ulong)JxlFrameFlags.UseDcFrame) != 0;
+        if (!this.Xyb)
         {
-            w.Write(2, 0); // extra channel upsampling 1
+            w.Bit(frame.YCbCr);
+            if (frame.YCbCr && !useDcFrame)
+            {
+                w.Write(2, 0).Write(2, 0).Write(2, 0); // no chroma subsampling
+            }
         }
 
-        w.Write(2, this.groupSizeShift); // 1 unless taken from a file: 256 x 256 groups
+        if (!useDcFrame)
+        {
+            w.Write(2, 0); // upsampling 1
+            for (int i = 0; i < this.numExtraChannels; i++)
+            {
+                w.Write(2, 0); // extra channel upsampling 1
+            }
+        }
+
+        if (frame.Encoding == JxlFrameEncoding.Modular)
+        {
+            w.Write(2, this.groupSizeShift); // 1 unless taken from a file: 256 x 256 groups
+        }
+        else if (this.Xyb)
+        {
+            w.Write(3, 3).Write(3, 2); // the default x_qm_scale and b_qm_scale
+        }
+
         if (frame.Type != JxlFrameType.ReferenceOnly)
         {
             w.Write(2, 0); // one pass
@@ -432,8 +455,14 @@ internal sealed record JxlTestFrame(byte[] Section)
 {
     public JxlFrameType Type { get; init; } = JxlFrameType.Regular;
 
-    /// <summary>Gets the frame flags, up to 272, which must not change the rest of the header (no LF frame).</summary>
+    /// <summary>Gets the frame flags, up to 272.</summary>
     public ulong Flags { get; init; }
+
+    /// <summary>Gets the frame encoding. A VarDCT frame's section is still Modular data, so it only reaches the header checks.</summary>
+    public JxlFrameEncoding Encoding { get; init; } = JxlFrameEncoding.Modular;
+
+    /// <summary>Gets a value indicating whether the frame has the YCbCr colour transform, with no chroma subsampling; not for XYB images.</summary>
+    public bool YCbCr { get; init; }
 
     public bool Crop { get; init; }
 

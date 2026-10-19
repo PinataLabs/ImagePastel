@@ -141,22 +141,55 @@ internal sealed class JxlFrameDecoder
         => frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
 
     // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
-    // decoding badly.
+    // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
     private static void CheckSupported(JxlFrameHeader frameHeader, JxlCodecMetadata metadata)
     {
-        if (frameHeader.Encoding != JxlFrameEncoding.Modular)
+        if (frameHeader.Encoding == JxlFrameEncoding.VarDct)
         {
             JxlThrowHelper.ThrowNotSupportedException("VarDCT");
         }
 
-        if (frameHeader.ColorTransform != JxlColorTransform.None)
+        if (frameHeader.ColorTransform == JxlColorTransform.Xyb)
         {
-            JxlThrowHelper.ThrowNotSupportedException($"The {frameHeader.ColorTransform} colour transform");
+            JxlThrowHelper.ThrowNotSupportedException("The XYB colour transform");
         }
 
-        if (frameHeader.FrameType == JxlFrameType.Dc || (frameHeader.Flags & ~JxlFrameFlags.Patches) != JxlFrameFlags.None)
+        if (frameHeader.ColorTransform == JxlColorTransform.YCbCr)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames");
+            JxlThrowHelper.ThrowNotSupportedException("The YCbCr colour transform");
+        }
+
+        if (frameHeader.FrameType == JxlFrameType.Dc)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (a DC frame)");
+        }
+
+        JxlFrameFlags flags = frameHeader.Flags;
+        if ((flags & JxlFrameFlags.Noise) != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (noise)");
+        }
+
+        if ((flags & JxlFrameFlags.Splines) != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (splines)");
+        }
+
+        if ((flags & JxlFrameFlags.UseDcFrame) != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
+        }
+
+        if ((flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Skipping adaptive DC smoothing");
+        }
+
+        // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
+        const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;
+        if ((flags & ~knownFlags) != 0)
+        {
+            JxlThrowHelper.ThrowNotSupportedException($"Unknown frame flags 0x{(ulong)(flags & ~knownFlags):X}");
         }
 
         // An extra channel with a dim_shift has an upsampling of at least 2 here.
