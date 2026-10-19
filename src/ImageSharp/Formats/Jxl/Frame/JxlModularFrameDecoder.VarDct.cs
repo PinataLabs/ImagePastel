@@ -158,8 +158,13 @@ internal sealed partial class JxlModularFrameDecoder
         uint unsupported = localUsedAcs & ~(1u << (int)JxlAcStrategyType.Dct);
         if (unsupported != 0)
         {
-            JxlAcStrategyType first = (JxlAcStrategyType)System.Numerics.BitOperations.TrailingZeroCount(unsupported);
-            JxlThrowHelper.ThrowNotSupportedException($"The {first} AC strategy");
+            int first = 0;
+            while ((unsupported & (1u << first)) == 0)
+            {
+                first++;
+            }
+
+            JxlThrowHelper.ThrowNotSupportedException($"The {(JxlAcStrategyType)first} AC strategy");
         }
     }
 
