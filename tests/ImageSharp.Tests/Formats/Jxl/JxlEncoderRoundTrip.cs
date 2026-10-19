@@ -23,7 +23,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 internal static class JxlEncoderRoundTrip
 {
     // The efforts every round-trip case runs at. Each E2 slice that adds an effort adds it here.
-    private static readonly JxlEffort[] Efforts = { JxlEffort.Fastest, JxlEffort.Default };
+    private static readonly JxlEffort[] Efforts = { JxlEffort.Fastest, JxlEffort.Default, JxlEffort.Thorough };
 
     /// <summary>Gets the encoder setting most tests use: lossless at Fastest.</summary>
     public static JxlEncoder LosslessFastest => Lossless(JxlEffort.Fastest);

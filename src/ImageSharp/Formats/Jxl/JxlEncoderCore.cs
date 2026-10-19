@@ -179,18 +179,12 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         _ => JxlSpeedTier.Squirrel,
     };
 
-    // Lossless at Fastest and Default is ported. Each other combination names the slice of the spec
-    // that adds it.
+    // Lossless is ported at every effort. Lossy names the slice of the spec that adds it.
     private void CheckOptions()
     {
         if (this.distance != 0)
         {
             throw new NotSupportedException($"JPEG XL lossy encoding (distance {this.distance}) is not supported yet; slice E3 adds it.");
-        }
-
-        if (this.effort == JxlEffort.Thorough)
-        {
-            throw new NotSupportedException($"JPEG XL lossless encoding at effort {this.effort} is not supported yet; slice E2d adds it.");
         }
     }
 }
