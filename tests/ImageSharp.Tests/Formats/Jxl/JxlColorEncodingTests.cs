@@ -163,15 +163,18 @@ public class JxlColorEncodingTests
     }
 
     // An RGB PQ or HLG encoding that a cicp tag can name gets libjxl's 3D-LUT profile, which is not built
-    // yet (D11f).
-    [Fact]
-    public void Load_RgbHlgThatACicpTagNames_HasNoPixelProfile()
+    // yet (D11f). The values are JxlTransferFunction's Hlg (18) and Pq (16), which is internal.
+    [Theory]
+    [InlineData("hlg", 18)]
+    [InlineData("pq", 16)]
+    [InlineData("p3_hlg", 18)]
+    public void Load_RgbPqOrHlgThatACicpTagNames_HasNoPixelProfile(string name, int transferFunction)
     {
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_hlg.jxl"));
-        using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath("hlg"));
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl"));
+        using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath(name));
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
-        Assert.Equal(JxlTransferFunction.Hlg, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Tf.TransferFunction);
+        Assert.Equal((JxlTransferFunction)transferFunction, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Tf.TransferFunction);
         Assert.Null(image.Metadata.IccProfile);
     }
 

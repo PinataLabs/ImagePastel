@@ -55,12 +55,4 @@ internal sealed class JxlHlgOotf : JxlHlgOotfBase
         green *= ratio;
         blue *= ratio;
     }
-
-    // std::log2 of a float, log2f. MathF.Log2 is not in .NET Standard 2.1.
-    private static float Log2(float x)
-#if NETCOREAPP3_0_OR_GREATER
-        => MathF.Log2(x);
-#else
-        => (float)(Math.Log(x) / Math.Log(2));
-#endif
 }

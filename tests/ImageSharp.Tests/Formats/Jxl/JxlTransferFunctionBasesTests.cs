@@ -37,6 +37,27 @@ public class JxlTransferFunctionBasesTests
     public void PqDisplayFromEncoded_GivesLibjxlsValue(float intensityTarget, double encoded, double expected)
         => AssertWithinOneFloatStep(expected, JxlTfPqBase.DisplayFromEncoded(intensityTarget, encoded));
 
+    // The inverse, which the Rec. 2408 tone mapper uses with a target of 1 nit. Measured: 0 (every value
+    // equal to libjxl's).
+    [Theory]
+    [InlineData(1F, 0.0, 0.0)]
+    [InlineData(1F, 1e-6, 0.00011948233441216871)]
+    [InlineData(1F, 1e-4, 0.0016671882476657629)]
+    [InlineData(1F, 0.01, 0.021486213430762291)]
+    [InlineData(1F, 0.025, 0.033541299402713776)]
+    [InlineData(1F, 0.1, 0.062336865812540054)]
+    [InlineData(1F, 0.5, 0.11745962500572205)]
+    [InlineData(1F, 1.0, 0.14994573593139648)]
+    [InlineData(1F, -0.01, -0.021486213430762291)]
+    [InlineData(10000F, 1e-6, 0.021486213430762291)]
+    [InlineData(10000F, 0.01, 0.50807839632034302)]
+    [InlineData(10000F, 0.1, 0.75182712078094482)]
+    [InlineData(10000F, 0.5, 0.92654669284820557)]
+    [InlineData(10000F, 1.0, 1.0)]
+    [InlineData(10000F, -0.01, -0.50807839632034302)]
+    public void PqEncodedFromDisplay_GivesLibjxlsValue(float intensityTarget, double display, double expected)
+        => AssertWithinOneFloatStep(expected, JxlTfPqBase.EncodedFromDisplay(intensityTarget, display));
+
     // Measured: 0 (every value equal to libjxl's).
     [Theory]
     [InlineData(0.0, 0.0)]

@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // MaybeCreateProfileImpl (the parts specific to a JPEG XL colour encoding), MaybeCreateICCCICPTag,
-// ColorEncodingDescriptionImpl, CanToneMap and CreateTableCurve in lib/jxl/cms/jxl_cms_internal.h.
+// ColorEncodingDescriptionImpl, CanToneMap, CreateTableCurve and ToneMapPixel in
+// lib/jxl/cms/jxl_cms_internal.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -57,6 +58,81 @@ internal static class JxlIccBuilder
         {
             throw new InvalidImageContentException(e.Message, e);
         }
+    }
+
+    /// <summary>
+    /// Tone-maps one encoded PQ or HLG sample of <paramref name="c"/> and gives its 8-bit PCS Lab value: a
+    /// node of the 3D LUT (<c>A2B0</c>) that libjxl writes in the profile of an encoding <c>CanToneMap</c>
+    /// accepts. PQ is tone-mapped from 0-10,000 nits to 0-250 nits (Rec. 2408), HLG with the OOTF from 300
+    /// nits to 80; both are then gamut-mapped, adapted to D50 and converted to CIELAB.
+    /// </summary>
+    /// <param name="c">An RGB colour encoding with the PQ or HLG transfer function.</param>
+    /// <param name="input">The encoded red, green and blue samples, from 0 to 1.</param>
+    /// <param name="pcsLabOut">Receives L*, a* and b* as PCS Lab bytes: 255 L* / 100, and a* and b* plus 128.</param>
+    /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
+    internal static void ToneMapPixel(JxlColorEncoding c, ReadOnlySpan<float> input, Span<byte> pcsLabOut)
+    {
+        ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
+        (double wx, double wy) = c.WhitePointXy;
+        float[,] primariesXyz = IccProfileBuilder.PrimariesToXyz((float)rx, (float)ry, (float)gx, (float)gy, (float)bx, (float)by, (float)wx, (float)wy);
+        ReadOnlySpan<float> luminances = stackalloc float[3] { primariesXyz[1, 0], primariesXyz[1, 1], primariesXyz[1, 2] };
+        Span<float> linear = stackalloc float[3];
+        bool pq = c.Tf.TransferFunction == JxlTransferFunction.Pq;
+        for (int i = 0; i < 3; i++)
+        {
+            linear[i] = pq
+                ? (float)JxlTfPqBase.DisplayFromEncoded(10000.0f, input[i])
+                : (float)JxlTfHlgBase.DisplayFromEncoded(input[i]);
+        }
+
+        if (pq)
+        {
+            new JxlRec2408ToneMapperBase((0.0f, 10000.0f), (0.0f, 250.0f), luminances).ToneMap(linear);
+        }
+        else
+        {
+            new JxlHlgOotfBase(sourceLuminance: 300, targetLuminance: 80, luminances).Apply(linear);
+        }
+
+        JxlGamutMap.GamutMapScalar(linear, luminances, preserveSaturation: 0.3f);
+
+        // The Bradford adaptation is to libjxl's D50 white (IccProfileBuilder.LibjxlD50); the Lab conversion
+        // below uses a third D50 white, neither that one nor the wtpt tag's.
+        float[,] chad = IccProfileBuilder.AdaptToXyzD50((float)wx, (float)wy, IccProfileBuilder.LibjxlD50);
+        float[,] toXyzD50 = IccProfileBuilder.Mul3x3Matrix(chad, primariesXyz);
+
+        Span<float> xyz = stackalloc float[3];
+        for (int xyzC = 0; xyzC < 3; xyzC++)
+        {
+            for (int rgbC = 0; rgbC < 3; rgbC++)
+            {
+                xyz[xyzC] += linear[rgbC] * toXyzD50[xyzC, rgbC];
+            }
+        }
+
+        const float xn = 0.964212f;
+        const float yn = 1;
+        const float zn = 0.825188f;
+
+        float fX = LabF(xyz[0] / xn);
+        float fY = LabF(xyz[1] / yn);
+        float fZ = LabF(xyz[2] / zn);
+
+        pcsLabOut[0] = (byte)MathF.Round(255.0f * Clamp1((1.16f * fY) - .16f, 0.0f, 1.0f), MidpointRounding.AwayFromZero);
+        pcsLabOut[1] = (byte)MathF.Round(128.0f + Clamp1(500 * (fX - fY), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
+        pcsLabOut[2] = (byte)MathF.Round(128.0f + Clamp1(200 * (fY - fZ), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
+
+        static float LabF(float x)
+        {
+            // static constexpr float kDelta = 6. / 29; the other constants are float expressions of it.
+            const float delta = (float)(6.0 / 29);
+            return x <= delta * delta * delta
+                ? (x * (1 / (3 * delta * delta))) + (4.0f / 29)
+                : MathF.Cbrt(x);
+        }
+
+        // libjxl's Clamp1.
+        static float Clamp1(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
     }
 
     private static IccProfile Build(JxlColorEncoding c)
