@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/color_encoding_internal.h and lib/jxl/color_encoding_internal.cc (Customxy,
-// CustomTransferFunction, ColorEncoding fields), with the storage defaults and gamma limits of
-// lib/jxl/cms/color_encoding_cms.h.
+// CustomTransferFunction, ColorEncoding fields), with the storage defaults, gamma limits and the
+// IsUnknown, IsSRGB, IsLinear, IsPQ, IsHLG, Is709 and IsDCI predicates of lib/jxl/cms/color_encoding_cms.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -37,7 +37,25 @@ internal sealed class JxlCustomTransferFunction : JxlFields
     public JxlTransferFunction TransferFunction { get; set; } = JxlTransferFunction.Srgb;
 
     /// <summary>Gets a value indicating whether the transfer function is unknown.</summary>
-    public bool IsUnknown => !this.HaveGamma && this.TransferFunction == JxlTransferFunction.Unknown;
+    public bool IsUnknown => this.Is(JxlTransferFunction.Unknown);
+
+    /// <summary>Gets a value indicating whether the transfer function is sRGB's, libjxl's <c>IsSRGB</c>.</summary>
+    public bool IsSrgb => this.Is(JxlTransferFunction.Srgb);
+
+    /// <summary>Gets a value indicating whether the transfer function is linear, libjxl's <c>IsLinear</c>.</summary>
+    public bool IsLinear => this.Is(JxlTransferFunction.Linear);
+
+    /// <summary>Gets a value indicating whether the transfer function is PQ, libjxl's <c>IsPQ</c>.</summary>
+    public bool IsPq => this.Is(JxlTransferFunction.Pq);
+
+    /// <summary>Gets a value indicating whether the transfer function is HLG, libjxl's <c>IsHLG</c>.</summary>
+    public bool IsHlg => this.Is(JxlTransferFunction.Hlg);
+
+    /// <summary>Gets a value indicating whether the transfer function is BT.709's, libjxl's <c>Is709</c>.</summary>
+    public bool IsBt709 => this.Is(JxlTransferFunction.Bt709);
+
+    /// <summary>Gets a value indicating whether the transfer function is DCI's 2.6 gamma, libjxl's <c>IsDCI</c>.</summary>
+    public bool IsDci => this.Is(JxlTransferFunction.Dci);
 
     /// <summary>Copies the fields of <paramref name="other"/> into this instance.</summary>
     /// <param name="other">The transfer function to copy.</param>
@@ -70,6 +88,9 @@ internal sealed class JxlCustomTransferFunction : JxlFields
             }
         }
     }
+
+    // libjxl's IsX(): no gamma value, and the transfer function X.
+    private bool Is(JxlTransferFunction transferFunction) => !this.HaveGamma && this.TransferFunction == transferFunction;
 
     // XYB implies a gamma of 1/3 (cms::CustomTransferFunction::SetGamma).
     private bool SetImplicit()

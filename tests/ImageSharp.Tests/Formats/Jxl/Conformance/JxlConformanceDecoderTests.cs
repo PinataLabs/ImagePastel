@@ -67,12 +67,29 @@ public class JxlConformanceDecoderTests
         JxlConformanceComparer.AssertWithinThresholds(vector, expected, actual);
     }
 
-    // A vector that needs a feature of a later slice, which the spec lists under that slice. bike is XYB
-    // with the BT.709 transfer function (D11). With a trial BT.709 stage it matched djxl v0.12.0 within a
-    // peak error of 1.2e-5, so it needs nothing else. patches is a VarDCT frame with patches (D12).
+    // libjxl test data that no conformance vector covers, against a djxl v0.12.0 .npy reference (see the
+    // README next to the file). A lossless file decodes exactly.
     [Theory]
-    [InlineData("bike", "Bt709")]
-    [InlineData("bike_5", "Bt709")]
+    [InlineData("pq_gradient")] // PQ, 16-bit grey, lossless Modular, not XYB: the samples are the PQ-encoded ones. Measured: exact.
+    public void DecodeToPlanes_LibjxlTestData_MatchesDjxlExactly(string name)
+    {
+        NpyArray expected = NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".npy"));
+
+        using FileStream stream = File.OpenRead(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", name + ".jxl"));
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+
+        Assert.Equal(expected.Shape, actual.Shape);
+        Assert.Equal(expected.Data, actual.Data);
+    }
+
+    // A vector that needs a feature of a later slice, which the spec lists under that slice. patches is a
+    // VarDCT frame with patches (D12). bike is XYB with the BT.709 transfer function, which XYB output has
+    // since D11a, but its VarDCT frame also has patches, so bike and bike_5 moved from D11 to D12 at D11's
+    // done-check.
+    [Theory]
+    [InlineData("bike", "Patches on VarDCT frames")]
+    [InlineData("bike_5", "Patches on VarDCT frames")]
     [InlineData("patches", "Patches on VarDCT frames")]
     public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
     {

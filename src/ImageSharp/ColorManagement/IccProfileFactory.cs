@@ -76,7 +76,10 @@ public static class IccProfileFactory
     public static IccProfile CreateGray(IccToneCurve toneCurve)
     {
         Guard.NotNull(toneCurve, nameof(toneCurve));
-        return IccProfileBuilder.Build(IccColorSpaceType.Gray, IccStandardRgb.D65, null, new[] { toneCurve.Curve }, IccConnectionSpace.D50, IccRenderingIntent.Perceptual, "Gray", null);
+        return IccProfileBuilder.Build(
+            IccColorSpaceType.Gray,
+            new IccProfileBuilderHeader(IccStandardRgb.D65, null, IccConnectionSpace.D50, IccRenderingIntent.Perceptual, "Gray", null),
+            new[] { toneCurve.Curve });
     }
 
     /// <summary>
@@ -98,13 +101,8 @@ public static class IccProfileFactory
         Guard.NotNull(toneCurve, nameof(toneCurve));
         return IccProfileBuilder.Build(
             IccColorSpaceType.Gray,
-            (whitePoint.X, whitePoint.Y),
-            null,
-            new[] { toneCurve.Curve },
-            IccConnectionSpace.D50,
-            renderingIntent,
-            description ?? "Gray",
-            null);
+            new IccProfileBuilderHeader((whitePoint.X, whitePoint.Y), null, IccConnectionSpace.D50, renderingIntent, description ?? "Gray", null),
+            new[] { toneCurve.Curve });
     }
 
     /// <summary>
@@ -157,12 +155,13 @@ public static class IccProfileFactory
         Guard.NotNull(blueToneCurve, nameof(blueToneCurve));
         return IccProfileBuilder.Build(
             IccColorSpaceType.Rgb,
-            (whitePoint.X, whitePoint.Y),
-            new (double X, double Y)[] { (primaries.R.X, primaries.R.Y), (primaries.G.X, primaries.G.Y), (primaries.B.X, primaries.B.Y) },
-            new[] { redToneCurve.Curve, greenToneCurve.Curve, blueToneCurve.Curve },
-            IccConnectionSpace.D50,
-            renderingIntent,
-            description ?? "RGB",
-            null);
+            new IccProfileBuilderHeader(
+                (whitePoint.X, whitePoint.Y),
+                new (double X, double Y)[] { (primaries.R.X, primaries.R.Y), (primaries.G.X, primaries.G.Y), (primaries.B.X, primaries.B.Y) },
+                IccConnectionSpace.D50,
+                renderingIntent,
+                description ?? "RGB",
+                null),
+            new[] { redToneCurve.Curve, greenToneCurve.Curve, blueToneCurve.Curve });
     }
 }

@@ -3,9 +3,12 @@
 
 using System;
 using System.IO;
-using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
@@ -14,7 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// The frame features of later slices: each is rejected on its own with
 /// <see cref="NotSupportedException"/>, so that a slice can lift one rejection at a time. The features
-/// that D10 lifted decode.
+/// that D10 and D11 lifted decode.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlSupportedFeaturesTests
@@ -68,6 +71,73 @@ public class JxlSupportedFeaturesTests
         }
     }
 
+    // The D11 feature, which threw before D11: XYB output in the BT.709, gamma, DCI and PQ transfer
+    // functions. Each encodes the linear samples one by one, so each plane is the curve of the plane of
+    // the same image with a linear transfer function. The curves are checked against libjxl's values in
+    // JxlTransferFunctionsTests, and real pixels against djxl in JxlXybModularTests and JxlXybVarDctTests.
+    [Theory]
+    [InlineData(nameof(JxlTransferFunction.Bt709))]
+    [InlineData(nameof(JxlTransferFunction.Dci))]
+    [InlineData(nameof(JxlTransferFunction.Pq))]
+    [InlineData("Gamma")] // A gamma of 1 / 2.2.
+    public void Decode_XybOutputInATransferFunction_IsTheCurveOfTheLinearOutput(string transferFunction)
+    {
+        const uint gamma = 4545450;
+        JxlTestFrame frame = JxlTestFrame.Last(JxlTestLayers.Ramp);
+        JxlTestLayers layers = transferFunction == "Gamma"
+            ? new JxlTestLayers(Width, Height) { Xyb = true, Gamma = gamma }
+            : new JxlTestLayers(Width, Height) { Xyb = true, TransferFunction = Enum.Parse<JxlTransferFunction>(transferFunction) };
+        NpyArray linear = DecodeToNpy(new JxlTestLayers(Width, Height) { Xyb = true, TransferFunction = JxlTransferFunction.Linear }, frame);
+        NpyArray actual = DecodeToNpy(layers, frame);
+
+        // PQ's 1.0 is 10,000 nits, and the image's intensity target is the default 255 nits.
+        Func<float, float> curve = transferFunction switch
+        {
+            nameof(JxlTransferFunction.Bt709) => JxlTransferFunctions.Bt709EncodedFromDisplay,
+            nameof(JxlTransferFunction.Dci) => v => JxlTransferFunctions.GammaEncodedFromDisplay(v, 1f / 2.6f),
+            nameof(JxlTransferFunction.Pq) => v => JxlTransferFunctions.PqEncodedFromDisplay(v, JxlTransferFunctions.PqScaleTo10000Nits(255)),
+            _ => v => JxlTransferFunctions.GammaEncodedFromDisplay(v, (float)(gamma * (1.0 / 1e7))),
+        };
+
+        Assert.Equal(new[] { 1, Height, Width, 4 }, actual.Shape);
+        Assert.Equal(linear.Shape, actual.Shape);
+        for (int i = 0; i < linear.Data.Length; i++)
+        {
+            float expected = i % 4 == 3 ? linear.Data[i] : curve(linear.Data[i]);
+            Assert.Equal(expected, actual.Data[i]);
+        }
+    }
+
+    // HLG output applies the OOTF to the three planes together before the curve, so it is not a curve of
+    // each sample. It decodes; JxlXybVarDctTests checks it against djxl.
+    [Fact]
+    public void Decode_XybOutputInHlg_Decodes()
+    {
+        NpyArray actual = DecodeToNpy(new JxlTestLayers(Width, Height) { Xyb = true, TransferFunction = JxlTransferFunction.Hlg }, JxlTestFrame.Last(JxlTestLayers.Ramp));
+
+        Assert.Equal(new[] { 1, Height, Width, 4 }, actual.Shape);
+        Assert.All(actual.Data, v => Assert.True(float.IsFinite(v)));
+    }
+
+    // The other D11 feature: a PQ or HLG image gets a pixel profile, which it did not before D11. An RGB
+    // encoding that a cicp tag names, as here, gets libjxl's 3D LUT to Lab. JxlColorEncodingTests compares
+    // that LUT, and the table curve of the other encodings, with djxl's.
+    [Theory]
+    [InlineData(nameof(JxlTransferFunction.Pq))]
+    [InlineData(nameof(JxlTransferFunction.Hlg))]
+    public void Load_PqOrHlg_HasA3DLutProfile(string transferFunction)
+    {
+        using MemoryStream stream = new(new JxlTestLayers(Width, Height) { TransferFunction = Enum.Parse<JxlTransferFunction>(transferFunction) }.Add(JxlTestFrame.Last(JxlTestLayers.Ramp)).ToArray());
+
+        using Image<Rgba32> image = new JxlDecoder().Decode<Rgba32>(Configuration.Default, stream, TestContext.Current.CancellationToken);
+
+        IccProfile profile = image.Metadata.IccProfile;
+        Assert.NotNull(profile);
+        Assert.Equal(IccColorSpaceType.CieLab, profile.Header.ProfileConnectionSpace);
+        Assert.True(profile.TryGetTag(IccProfileTag.AToB0, out IccTagDataEntry _));
+        Assert.True(profile.CheckIsValid());
+    }
+
     [Fact]
     public void Decode_SkipAdaptiveDcSmoothingOnModularFrame_Decodes()
     {
@@ -75,14 +145,16 @@ public class JxlSupportedFeaturesTests
         byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = 128 }).ToArray();
         using MemoryStream stream = new(codestream);
 
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken);
         Assert.Single(decoded.Frames);
     }
 
-    private static NpyArray DecodeToNpy(JxlTestFrame frame)
+    private static NpyArray DecodeToNpy(JxlTestFrame frame) => DecodeToNpy(new JxlTestLayers(Width, Height), frame);
+
+    private static NpyArray DecodeToNpy(JxlTestLayers layers, JxlTestFrame frame)
     {
-        using MemoryStream stream = new(new JxlTestLayers(Width, Height).Add(frame).ToArray());
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using MemoryStream stream = new(layers.Add(frame).ToArray());
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken);
         return JxlConformanceImages.ToNpy(decoded);
     }
 
@@ -91,7 +163,7 @@ public class JxlSupportedFeaturesTests
         byte[] codestream = layers.Add(frame).ToArray();
         using MemoryStream stream = new(codestream);
 
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken));
         Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 }

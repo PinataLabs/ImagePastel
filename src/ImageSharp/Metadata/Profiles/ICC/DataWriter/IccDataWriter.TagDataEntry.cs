@@ -297,7 +297,7 @@ internal sealed partial class IccDataWriter
     {
         int count = this.WriteByte((byte)value.InputChannelCount);
         count += this.WriteByte((byte)value.OutputChannelCount);
-        count += this.WriteByte((byte)value.ClutValues.Values[0].Length);
+        count += this.WriteByte(value.ClutValues.GridPointCount[0]);
         count += this.WriteEmpty(1);
 
         count += this.WriteMatrix(value.Matrix, false);

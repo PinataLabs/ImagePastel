@@ -97,12 +97,6 @@ internal static class IccStandardRgb
         (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
         => IccProfileBuilder.Build(
             IccColorSpaceType.Rgb,
-            D65,
-            primaries,
-            [curve.Curve, curve.Curve, curve.Curve],
-            IccConnectionSpace.D50,
-            IccRenderingIntent.Perceptual,
-            description,
-            null,
-            cicp);
+            new IccProfileBuilderHeader(D65, primaries, IccConnectionSpace.D50, IccRenderingIntent.Perceptual, description, null, cicp),
+            [curve.Curve, curve.Curve, curve.Curve]);
 }

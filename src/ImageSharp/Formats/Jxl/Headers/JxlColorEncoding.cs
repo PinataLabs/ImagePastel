@@ -7,6 +7,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using SixLabors.ImageSharp.ColorManagement.Icc;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
@@ -80,6 +81,23 @@ internal sealed class JxlColorEncoding : JxlFields
         JxlPrimaries.Bt2100 => ((0.708, 0.292), (0.170, 0.797), (0.131, 0.046)),
         _ => ((0.680, 0.320), (0.265, 0.690), (0.150, 0.060)), // P3
     };
+
+    /// <summary>
+    /// Returns the matrix that takes linear samples with these primaries to CIE XYZ, not adapted to D50
+    /// (libjxl's <c>PrimariesToXYZ</c> of <see cref="PrimariesXy"/> and <see cref="WhitePointXy"/>), and its Y
+    /// row: the luminances of the red, green and blue primaries, which libjxl's tone mapping and HLG OOTF
+    /// weight the samples with (<c>luminances</c>, <c>primaries_luminances</c>). Only valid if
+    /// <see cref="HasPrimaries"/>.
+    /// </summary>
+    /// <returns>The matrix, and a new array with its Y row.</returns>
+    /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
+    public (float[,] ToXyz, float[] Luminances) PrimariesToXyz()
+    {
+        ((double rx, double ry), (double gx, double gy), (double bx, double by)) = this.PrimariesXy;
+        (double wx, double wy) = this.WhitePointXy;
+        float[,] toXyz = IccProfileBuilder.PrimariesToXyz((float)rx, (float)ry, (float)gx, (float)gy, (float)bx, (float)by, (float)wx, (float)wy);
+        return (toXyz, new[] { toXyz[1, 0], toXyz[1, 1], toXyz[1, 2] });
+    }
 
     /// <summary>Returns a copy of this encoding.</summary>
     /// <returns>The copy.</returns>
