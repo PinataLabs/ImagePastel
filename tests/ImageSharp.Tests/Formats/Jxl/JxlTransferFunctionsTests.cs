@@ -100,5 +100,52 @@ public class JxlTransferFunctionsTests
     public void GammaEncodedFromDisplay_AtOrBelowTheThreshold_IsZero(float linear)
         => Assert.Equal(0F, JxlTransferFunctions.GammaEncodedFromDisplay(linear, 0.45455F));
 
+    // libjxl's TF_HLG at 0, on the square-root segment, at its threshold 1/12 (which is still on it:
+    // libjxl's test is x <= 1/12, and it gives 0.5), just above it, on the log segment, and above 1.
+    // Measured: exact.
+    [Theory]
+    [InlineData(0F, 0F)]
+    [InlineData(1e-6F, 0.00173205079F)]
+    [InlineData(1e-3F, 0.0547722578F)]
+    [InlineData(0.05F, 0.387298346F)]
+    [InlineData(1F / 12, 0.5F)]
+    [InlineData(0.0834F, 0.500199556F)]
+    [InlineData(0.2F, 0.693893969F)]
+    [InlineData(0.5F, 0.871643186F)]
+    [InlineData(0.75F, 0.947098374F)]
+    [InlineData(1F, 0.999999762F)]
+    [InlineData(2F, 1.12611687F)]
+    [InlineData(12F, 1.44832218F)]
+    public void HlgEncodedFromDisplay_GivesLibjxlsValue(float linear, float expected)
+        => Assert.Equal(expected, JxlTransferFunctions.HlgEncodedFromDisplay(linear));
+
+    [Theory]
+    [InlineData(-1e-3F, -0.0547722578F)]
+    [InlineData(-0.25F, -0.738549232F)]
+    [InlineData(-1F, -0.999999762F)]
+    public void HlgEncodedFromDisplay_OfANegativeSample_IsLibjxlsMirroredValue(float linear, float expected)
+        => Assert.Equal(expected, JxlTransferFunctions.HlgEncodedFromDisplay(linear));
+
+    // Measured: 3.7e-7 against BT.2100's HLG OETF in double precision. libjxl documents a maximum
+    // error of 5e-7.
+    [Fact]
+    public void HlgEncodedFromDisplay_IsCloseToTheFormula()
+    {
+        const double a = 0.17883277;
+        const double b = 1 - (4 * a);
+        const double c = 0.5599107295;
+        Random random = new(7);
+        double worst = 0;
+        for (int i = 0; i < 200_000; i++)
+        {
+            float f = (float)random.NextDouble();
+            double formula = f <= 1.0 / 12 ? Math.Sqrt(3 * f) : (a * Math.Log((12 * f) - b)) + c;
+            worst = Math.Max(worst, Math.Abs(JxlTransferFunctions.HlgEncodedFromDisplay(f) - formula));
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Worst error {worst:G4}");
+        Assert.True(worst < 1e-6, $"Worst absolute error {worst:G4}");
+    }
+
     private static double LinearToSrgb(double v) => v <= 0.0031308 ? 12.92 * v : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
 }

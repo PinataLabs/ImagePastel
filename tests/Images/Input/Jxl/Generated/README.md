@@ -340,7 +340,8 @@ An XYB image renders to its own colour encoding, so its last stage encodes the l
 | `vardct_xyb_bt709.jxl` | The 64 x 64 image of `vardct_xyb_64.jxl` at `cjxl -d 1` (default effort), `RGB_D65_SRG_Rel_709`: XYB output to the BT.709 curve (libjxl's `Op709`, D11a), with the pixel profile of that encoding. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_bt709.npy` |
 | `vardct_xyb_dci.jxl` | The same image, `RGB_DCI_DCI_Rel_DCI`: DCI white point, P3 primaries and the DCI curve, a gamma of 2.6 (libjxl's `OpGamma`, D11a). | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dci.npy` |
 | `vardct_xyb_pq.jxl` | The same image, `Rec2100PQ`, intensity target 10000 nits: XYB output to PQ (D11b). | None yet: decoding throws `NotSupportedException` |
-| `vardct_xyb_hlg.jxl` | The same image, `Rec2100HLG`, intensity target 1000 nits: XYB output to HLG (D11c). | None yet: decoding throws `NotSupportedException` |
+| `vardct_xyb_hlg.jxl` | The same image, `Rec2100HLG`, intensity target 1000 nits: XYB output to HLG (libjxl's `OpHlg`, D11c), through the HLG OOTF to scene light with the luminances of the BT.2100 primaries. This is the `cjxl`-made HLG file. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_hlg.npy` |
+| `vardct_xyb_grey_hlg.jxl` | The 300 x 200 grey image of `vardct_xyb_grey.jxl` at `cjxl -d 1` (default effort), `Gra_D65_Rel_HLG`, intensity target 1000 nits: grey XYB output to HLG, whose OOTF takes the sRGB luminances (D11c). | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_grey_hlg.npy`, one channel |
 
 ```sh
 py -3 make_vardct_xyb.py
@@ -348,12 +349,15 @@ cjxl vardct_xyb_64_source.ppm vardct_xyb_bt709.jxl -d 1 -x "color_space=RGB_D65_
 cjxl vardct_xyb_64_source.ppm vardct_xyb_dci.jxl -d 1 -x "color_space=RGB_DCI_DCI_Rel_DCI"
 cjxl vardct_xyb_64_source.ppm vardct_xyb_pq.jxl -d 1 -x "color_space=Rec2100PQ"
 cjxl vardct_xyb_64_source.ppm vardct_xyb_hlg.jxl -d 1 -x "color_space=Rec2100HLG"
+cjxl vardct_xyb_grey_source.pgm vardct_xyb_grey_hlg.jxl -d 1 -x "color_space=Gra_D65_Rel_HLG"
 djxl vardct_xyb_bt709.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_bt709.npy
 djxl vardct_xyb_dci.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dci.npy
+djxl vardct_xyb_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_hlg.npy
+djxl vardct_xyb_grey_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_grey_hlg.npy
 ```
 
-- `make_vardct_xyb.py` writes `vardct_xyb_64_source.ppm`, which is not committed. A PPM carries no colour information, so `cjxl` takes the colour encoding from `-x color_space`, and the intensity target is `cjxl`'s default for it (`jxlinfo` shows 10000 nits for PQ and 1000 for HLG).
-- `djxl` writes float32 `.npy` in the image's own encoding, not clamped. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 5.8e-7 and 6.6e-6 (`xyb_modular_gamma22`), 6.9e-7 and 6.0e-6 (`vardct_xyb_bt709`), and 2.7e-6 and 1.1e-4 (`vardct_xyb_dci`). The DCI curve is steep near 0 (its slope is about 460 at 1e-5), so it magnifies the small differences of the linear samples, which come from libjxl's FMA (ADR 0004). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
+- `make_vardct_xyb.py` writes `vardct_xyb_64_source.ppm` and `vardct_xyb_grey_source.pgm`, which are not committed. A PPM or PGM carries no colour information, so `cjxl` takes the colour encoding from `-x color_space`, and the intensity target is `cjxl`'s default for it (`jxlinfo` shows 10000 nits for PQ and 1000 for HLG).
+- `djxl` writes float32 `.npy` in the image's own encoding, not clamped. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 5.8e-7 and 6.6e-6 (`xyb_modular_gamma22`), 6.9e-7 and 6.0e-6 (`vardct_xyb_bt709`), 2.7e-6 and 1.1e-4 (`vardct_xyb_dci`), 3.5e-6 and 1.7e-4 (`vardct_xyb_hlg`), and 1.8e-7 and 2.5e-6 (`vardct_xyb_grey_hlg`). The DCI curve is steep near 0 (its slope is about 460 at 1e-5), and so is HLG's square-root segment after the OOTF (its slope is 3 / 2E, about 360 at E = 0.004), so they magnify the small differences of the linear samples, which come from libjxl's FMA (ADR 0004). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding. `Image.Load<Rgb48>` of `vardct_xyb_grey_hlg` is within 0.58 of one 16-bit step. `vardct_xyb_hlg` is within 0.93 of one 16-bit step where the clamped reference is at least 0.1; 14 of its 12288 samples, all darker, are more than one step away, the largest 8.1 steps at 0.0041.
 
 #### How the Gaborish files were made
 

@@ -1,7 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// OutputEncodingInfo (SetFromMetadata, SetColorEncoding, with inverse_gamma) and CanOutputToColorEncoding
+// OutputEncodingInfo (SetFromMetadata, SetColorEncoding, with inverse_gamma, luminances and the original and
+// desired intensity targets) and CanOutputToColorEncoding
 // in lib/jxl/dec_xyb.h and lib/jxl/dec_xyb.cc, OpsinParams and InitSIMDInverseMatrix in lib/jxl/opsin_params.h and
 // lib/jxl/opsin_params.cc, for an XYB image whose output colour encoding the caller does not choose.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
@@ -24,12 +25,16 @@ internal sealed class JxlOutputEncoding
     // kSRGBLuminances in SetColorEncoding.
     private static readonly float[] SrgbLuminances = { 0.2126f, 0.7152f, 0.0722f };
 
-    private JxlOutputEncoding(bool isGray, bool colorEncodingIsOriginal, JxlCustomTransferFunction tf, bool linear)
+    private JxlOutputEncoding(bool isGray, bool colorEncodingIsOriginal, JxlCustomTransferFunction tf, bool linear, float intensityTarget)
     {
         this.IsGray = isGray;
         this.ColorEncodingIsOriginal = colorEncodingIsOriginal;
         this.Tf = tf;
         this.IsLinear = linear;
+        this.OrigIntensityTarget = intensityTarget;
+
+        // This port has no caller-chosen intensity target, so the desired one is the image's own.
+        this.DesiredIntensityTarget = intensityTarget;
 
         // Set the inverse gamma based on color space transfer function.
         this.InverseGamma = tf is null ? 1.0f
@@ -64,6 +69,26 @@ internal sealed class JxlOutputEncoding
     public float InverseGamma { get; }
 
     /// <summary>
+    /// Gets the image's intensity target, in nits, libjxl's <c>orig_intensity_target</c>: the luminance
+    /// of a linear sample of 1.0.
+    /// </summary>
+    public float OrigIntensityTarget { get; }
+
+    /// <summary>
+    /// Gets the peak luminance, in nits, of the display the output is for, libjxl's
+    /// <c>desired_intensity_target</c>. The HLG OOTF takes display light on such a display back to scene
+    /// light. libjxl's decoder API can choose it; in this port it is always <see cref="OrigIntensityTarget"/>.
+    /// </summary>
+    public float DesiredIntensityTarget { get; }
+
+    /// <summary>
+    /// Gets the luminances of the output primaries, libjxl's <c>luminances</c>: the Y row of the
+    /// primaries' XYZ matrix (not adapted to D50), or the sRGB luminances for sRGB primaries with a D65
+    /// white point, for grey, and for the linear sRGB fallback. Only for an XYB image.
+    /// </summary>
+    public float[] Luminances { get; } = (float[])SrgbLuminances.Clone();
+
+    /// <summary>
     /// Gets the inverse opsin matrix, row-major, scaled so that 1.0 is the original intensity target: the
     /// image's matrix, adapted to the output primaries, and for grey output reduced to luminance. Only
     /// for an XYB image.
@@ -92,16 +117,17 @@ internal sealed class JxlOutputEncoding
         if (!m.XybEncoded)
         {
             // The samples are in the image's own encoding; only an XYB image needs the opsin parameters.
-            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf));
+            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), m.ToneMapping.IntensityTarget);
         }
 
         // The fallback has sRGB primaries and a D65 white point, with the sRGB curve or none.
         bool origOk = IsOriginalOutput(m);
+        float intensityTarget = m.ToneMapping.IntensityTarget;
         JxlOutputEncoding output = origOk
-            ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf))
+            ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), intensityTarget)
             : displayEncoded
-                ? new JxlOutputEncoding(orig.IsGray, false, new JxlCustomTransferFunction(), false)
-                : new JxlOutputEncoding(orig.IsGray, false, null, true);
+                ? new JxlOutputEncoding(orig.IsGray, false, new JxlCustomTransferFunction(), false, intensityTarget)
+                : new JxlOutputEncoding(orig.IsGray, false, null, true, intensityTarget);
 
         JxlOpsinInverseMatrix im = metadata.TransformData.OpsinInverseMatrix;
         for (int i = 0; i < 3; ++i)
@@ -124,7 +150,7 @@ internal sealed class JxlOutputEncoding
         {
             try
             {
-                inverseMatrix = AdaptToPrimaries(orig, inverseMatrix);
+                inverseMatrix = AdaptToPrimaries(orig, inverseMatrix, output.Luminances);
             }
             catch (ArgumentException ex)
             {
@@ -147,7 +173,6 @@ internal sealed class JxlOutputEncoding
         // The internal XYB color space uses absolute luminance, so we scale back the
         // opsin inverse matrix to relative luminance where 1.0 corresponds to the
         // original intensity target.
-        float intensityTarget = m.ToneMapping.IntensityTarget;
         for (int j = 0; j < 3; ++j)
         {
             for (int i = 0; i < 3; ++i)
@@ -199,10 +224,9 @@ internal sealed class JxlOutputEncoding
     private static bool IsLinearTf(JxlCustomTransferFunction tf) => !tf.HaveGamma && tf.TransferFunction == JxlTransferFunction.Linear;
 
     // The primaries part of SetColorEncoding for an XYB image: the matrix from linear sRGB to the output
-    // primaries, through XYZ adapted to D50 with Bradford, is folded into the inverse opsin matrix.
-    // libjxl also takes the luminances from these primaries, but only grey output uses them, and grey
-    // has no primaries.
-    private static float[,] AdaptToPrimaries(JxlColorEncoding c, float[,] origInverseMatrix)
+    // primaries, through XYZ adapted to D50 with Bradford, is folded into the inverse opsin matrix, and
+    // the luminances are the Y row of the primaries' XYZ matrix (original_to_xyz[1]).
+    private static float[,] AdaptToPrimaries(JxlColorEncoding c, float[,] origInverseMatrix, float[] luminances)
     {
         // The default colour encoding is sRGB.
         JxlColorEncoding srgbEncoding = new();
@@ -215,6 +239,10 @@ internal sealed class JxlOutputEncoding
         (double X, double Y) w = c.WhitePointXy;
         float[,] originalToXyz = IccProfileBuilder.PrimariesToXyz(
             (float)p.R.X, (float)p.R.Y, (float)p.G.X, (float)p.G.Y, (float)p.B.X, (float)p.B.Y, (float)w.X, (float)w.Y);
+        for (int i = 0; i < 3; i++)
+        {
+            luminances[i] = originalToXyz[1, i];
+        }
 
         float[,] adaptToD50 = IccProfileBuilder.AdaptToXyzD50((float)w.X, (float)w.Y, IccProfileBuilder.LibjxlD50);
         float[,] xyzd50ToOriginal = IccProfileBuilder.Inv3x3Matrix(IccProfileBuilder.Mul3x3Matrix(adaptToD50, originalToXyz));

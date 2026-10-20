@@ -20,7 +20,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
 /// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
 /// field and a non-zero chroma-from-luma map; and D11a's <c>vardct_xyb_bt709</c> and <c>vardct_xyb_dci</c>,
-/// which render to the BT.709 and DCI curves. The planes are compared with djxl's float output at the
+/// which render to the BT.709 and DCI curves; and D11c's <c>vardct_xyb_hlg</c> and <c>vardct_xyb_grey_hlg</c>,
+/// which render to HLG through the OOTF to scene light. The planes are compared with djxl's float output at the
 /// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
 /// measured when it was written.
 /// </summary>
@@ -46,6 +47,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_e7", 3)] // Gaborish, EPF (1 iteration) and other block sizes: RMSE 1.1e-6, peak 1.7e-5
     [InlineData("vardct_xyb_bt709", 3)] // The BT.709 curve (Op709): RMSE 6.9e-7, peak 6.0e-6
     [InlineData("vardct_xyb_dci", 3)] // The DCI curve (OpGamma, 1 / 2.6), steep near 0: RMSE 2.7e-6, peak 1.1e-4
+    [InlineData("vardct_xyb_hlg", 3)] // HLG (OpHlg), the OOTF with the BT.2100 luminances, steep in the shadows: RMSE 3.5e-6, peak 1.7e-4
+    [InlineData("vardct_xyb_grey_hlg", 1)] // Grey HLG (OpHlg), the OOTF with the sRGB luminances: RMSE 1.8e-7, peak 2.5e-6
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -70,6 +73,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_identity_afv")]
     [InlineData("vardct_xyb_bt709")]
     [InlineData("vardct_xyb_dci")]
+    [InlineData("vardct_xyb_hlg")]
+    [InlineData("vardct_xyb_grey_hlg")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -78,6 +83,69 @@ public class JxlXybVarDctTests
         // A grey image is R = G = B, so its one reference channel is compared with each.
         int channels = expected.Shape[3];
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 3), 3, (i, c) => expected.Data[(i * channels) + (channels == 1 ? 0 : c)]);
+    }
+
+    // The samples are HLG-encoded, as djxl's are. HLG's square-root segment is steep in the shadows (its
+    // slope from scene light is 3 / 2E, about 360 at E = 0.004), so it magnifies the differences of a few
+    // 1e-7 in linear light that come from libjxl's FMA (ADR 0004) to several 16-bit steps. A sample whose
+    // clamped reference is at least 0.1, where the slope is at most 15, must be within one 16-bit step; a
+    // darker one within the lossy peak error.
+    // Measured: vardct_xyb_hlg is within 0.93 of one step at or above 0.1; 14 of its 12288 samples, all
+    // below 0.1, are more than one step away, the largest 8.1 steps at 0.0041. vardct_xyb_grey_hlg is within
+    // 0.58 of one step everywhere.
+    [Theory]
+    [InlineData("vardct_xyb_hlg")]
+    [InlineData("vardct_xyb_grey_hlg")]
+    public void LoadRgb48_Hlg_IsWithinOneStepOfTheClampedReferenceOutsideTheShadows(string name)
+    {
+        const double step = 1.0 / 65535;
+        const double shadows = 0.1;
+        NpyArray expected = LoadReference(name);
+        using Image<Rgb48> image = Image.Load<Rgb48>(CreateConfiguration(), InputPath(name));
+        NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
+
+        // A grey image is R = G = B, so its one reference channel is compared with each.
+        int channels = expected.Shape[3];
+        Assert.Equal(expected.Shape[1], actual.Shape[1]);
+        Assert.Equal(expected.Shape[2], actual.Shape[2]);
+        int pixels = actual.Shape[1] * actual.Shape[2];
+        double worst = 0;
+        double worstInShadows = 0;
+        int overOneStep = 0;
+        for (int i = 0; i < pixels; i++)
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                double e = Math.Clamp(expected.Data[(i * channels) + (channels == 1 ? 0 : c)], 0F, 1F);
+                double difference = Math.Abs(actual.Data[(i * 3) + c] - e) / step;
+                overOneStep += difference > 1 + 1e-4 ? 1 : 0;
+                if (e >= shadows)
+                {
+                    worst = Math.Max(worst, difference);
+                }
+                else
+                {
+                    worstInShadows = Math.Max(worstInShadows, difference);
+                }
+            }
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one 16-bit step at or above {shadows}, {worstInShadows:G3} below; {overOneStep} of {pixels * 3} samples over one step");
+        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 16-bit steps at or above {shadows}");
+        Assert.True(worstInShadows * step <= JxlLossyComparer.PeakError, $"Largest difference {worstInShadows:G4} 16-bit steps below {shadows}");
+    }
+
+    // The samples are HLG, which JxlMetadata reports, but the ICC builder cannot yet describe an RGB HLG
+    // encoding that a CICP tag names (its 3D LUT profile is slice D11f), so there is no pixel profile.
+    [Fact]
+    public void Load_RgbHlg_ReportsHlgAndHasNoPixelProfile()
+    {
+        using Image<Rgb48> image = Image.Load<Rgb48>(CreateConfiguration(), InputPath("vardct_xyb_hlg"));
+
+        Assert.Null(image.Metadata.IccProfile);
+        JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.True(metadata.IsXybEncoded);
+        Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.Tf.TransferFunction);
     }
 
     // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
@@ -193,7 +261,6 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     [InlineData("vardct_xyb_pq", "XYB output with the Pq transfer function")]
-    [InlineData("vardct_xyb_hlg", "XYB output with the Hlg transfer function")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
     {
         using FileStream stream = File.OpenRead(InputPath(name));
