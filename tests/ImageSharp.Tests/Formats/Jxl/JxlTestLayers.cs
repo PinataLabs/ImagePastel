@@ -357,18 +357,12 @@ internal sealed class JxlTestLayers
     // section. frameOffset is where the frame header starts.
     private static byte[] FirstSection(byte[] codestream, out JxlCodecMetadata metadata, out JxlFrameHeader frameHeader, out int frameOffset)
     {
-        metadata = new JxlCodecMetadata();
-        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
-        JxlBundle.Read(reader, metadata.Size);
-        JxlBundle.Read(reader, metadata.M);
-        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
-        JxlBundle.Read(reader, metadata.TransformData);
-        reader.JumpToByteBoundary();
-        frameOffset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        metadata = JxlCodestreamFrames.ReadImageHeader(codestream, out frameOffset);
+        JxlBitReader reader = new(codestream, frameOffset, codestream.Length - frameOffset);
         frameHeader = new JxlFrameHeader(metadata);
         JxlBundle.Read(reader, frameHeader);
         uint[] sizes = JxlToc.ReadToc(1, reader);
-        int start = 2 + (int)(reader.TotalBitsConsumed / 8);
+        int start = frameOffset + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
         return codestream.AsSpan(start, (int)sizes[0]).ToArray();
     }
@@ -376,7 +370,9 @@ internal sealed class JxlTestLayers
     private void WriteFrame(JxlTestBitWriter w, JxlTestFrame frame)
     {
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
-        ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
+        ulong flags = frame.Patches != null ? frame.Flags | (ulong)JxlFrameFlags.Patches : frame.Flags;
+        flags = frame.Splines != null ? flags | (ulong)JxlFrameFlags.Splines : flags;
+        flags = frame.NoiseLut != null ? flags | (ulong)JxlFrameFlags.Noise : flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(frame.Encoding == JxlFrameEncoding.Modular);
         if (flags == 0)
@@ -482,19 +478,25 @@ internal sealed class JxlTestLayers
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
-        // The patch dictionary comes first in the DC global section, which a single group and pass puts
-        // at the start of the frame's only section.
+        // The patch dictionary, the spline dictionary, then the noise look-up table come first in the DC
+        // global section, which a single group and pass puts at the start of the frame's only section.
         byte[] section = frame.Section;
-        if (frame.Patches != null)
+        if (frame.Patches != null || frame.Splines != null || frame.NoiseLut != null)
         {
-            JxlTestBitWriter withPatches = new();
-            frame.Patches.Write(withPatches, this.numExtraChannels);
-            foreach (byte b in frame.Section)
+            JxlTestBitWriter withFeatures = new();
+            frame.Patches?.Write(withFeatures, this.numExtraChannels);
+            frame.Splines?.Write(withFeatures);
+            foreach (uint entry in frame.NoiseLut ?? Array.Empty<uint>())
             {
-                withPatches.Write(8, b);
+                withFeatures.Write(10, entry);
             }
 
-            section = withPatches.ToArray();
+            foreach (byte b in frame.Section)
+            {
+                withFeatures.Write(8, b);
+            }
+
+            section = withFeatures.ToArray();
         }
 
         // TOC: no permutation, then the size of each section as U32(Bits(10), BitsOffset(14, 1024),
@@ -599,12 +601,21 @@ internal sealed record JxlTestFrame(byte[] Section)
 
     /// <summary>
     /// Gets the frame's sections in TOC order, for a frame of more than one section; when set, it
-    /// replaces <see cref="Section"/>, and the frame cannot have patches.
+    /// replaces <see cref="Section"/>, and the frame cannot have patches or splines.
     /// </summary>
     public byte[][] Sections { get; init; }
 
     /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
     public JxlTestPatchDictionary Patches { get; init; }
+
+    /// <summary>Gets the spline dictionary; when set, the splines flag is set too.</summary>
+    public JxlTestSplines Splines { get; init; }
+
+    /// <summary>
+    /// Gets the eight entries of the noise look-up table, in units of 1/1024 (10 bits each); when set,
+    /// the noise flag is set too.
+    /// </summary>
+    public uint[] NoiseLut { get; init; }
 
     /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
     /// <param name="section">The frame's section.</param>

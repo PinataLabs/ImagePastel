@@ -8,7 +8,6 @@ using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using Xunit;
 
@@ -41,21 +40,9 @@ internal sealed class JxlDecodedDcGroups : IDisposable
     /// <returns>The decoded DC groups.</returns>
     public static JxlDecodedDcGroups Decode(byte[] codestream)
     {
-        Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
-
         // The same steps as JxlDecoderCore.ReadHeaders and JxlFrameDecoder.DecodeFrame.
-        JxlCodecMetadata metadata = new();
-        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
-        JxlBundle.Read(reader, metadata.Size);
-        JxlBundle.Read(reader, metadata.M);
-        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
-        JxlBundle.Read(reader, metadata.TransformData);
-        if (metadata.M.ColorEncoding.WantIcc)
-        {
-            JxlIccReader.Read(reader);
-        }
-
-        reader.JumpToByteBoundary();
+        JxlCodecMetadata metadata = JxlCodestreamFrames.ReadImageHeader(codestream, out int frameOffset);
+        JxlBitReader reader = new(codestream, frameOffset, codestream.Length - frameOffset);
         JxlFrameHeader frameHeader = new(metadata);
         JxlBundle.Read(reader, frameHeader);
         Assert.Equal(JxlFrameEncoding.VarDct, frameHeader.Encoding);
@@ -64,7 +51,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
         uint[] sizes = JxlToc.ReadToc(tocEntries, reader);
         reader.EnsureAllReadsWithinBounds("frame header");
-        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        int offset = frameOffset + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
 
         JxlBitReader[] sections = new JxlBitReader[tocEntries];
@@ -79,7 +66,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         JxlDequantMatrices matrices = new();
         JxlModularFrameDecoder modularFrameDecoder = new(Configuration.Default.MemoryAllocator, frameDim, matrices);
         JxlVarDctFrameState state = new(Configuration.Default.MemoryAllocator, frameHeader, frameDim, matrices);
-        JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, null, matrices, modularFrameDecoder, state, CancellationToken.None);
+        JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, JxlImageFeatures.None, state.Cmap, matrices, modularFrameDecoder, state, CancellationToken.None);
         for (long i = 0; i < frameDim.NumDcGroups; i++)
         {
             JxlFrameDecoder.ProcessDcGroup(i, singleSection ? sections[0] : sections[1 + i], frameHeader, frameDim, modularFrameDecoder, state);
