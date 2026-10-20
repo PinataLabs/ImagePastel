@@ -142,6 +142,32 @@ public class IccDataWriterTagDataEntryTests
         Assert.Equal(expected, output);
     }
 
+    // The grid point count is written as such, not as the number of output channels: a CLUT with two
+    // inputs of five grid points and three outputs reads back as written.
+    [Fact]
+    public void WriteLut8TagDataEntry_GridPointCountOtherThanTheOutputCount_ReadsBack()
+    {
+        byte[][] nodes = new byte[5 * 5][];
+        for (int i = 0; i < nodes.Length; i++)
+        {
+            nodes[i] = new[] { (byte)(i * 10), (byte)(255 - (i * 10)), (byte)i };
+        }
+
+        IccLut8TagDataEntry entry = new(
+            new IccLut[] { IccTestDataLut.LUT8_ValGrad, IccTestDataLut.LUT8_ValGrad },
+            new IccClut(nodes, new byte[] { 5, 5 }),
+            new IccLut[] { IccTestDataLut.LUT8_ValGrad, IccTestDataLut.LUT8_ValGrad, IccTestDataLut.LUT8_ValGrad });
+        using IccDataWriter writer = CreateWriter();
+
+        writer.WriteLut8TagDataEntry(entry);
+        byte[] output = writer.GetData();
+
+        Assert.Equal(5, output[2]);
+        IccLut8TagDataEntry read = new IccDataReader(output).ReadLut8TagDataEntry();
+        Assert.Equal(new byte[] { 5, 5 }, read.ClutValues.GridPointCount);
+        Assert.Equal(entry, read);
+    }
+
     [Theory]
     [MemberData(nameof(IccTestDataTagDataEntry.LutAToBTagDataEntryTestData), MemberType = typeof(IccTestDataTagDataEntry))]
     internal void WriteLutAToBTagDataEntry(byte[] expected, IccLutAToBTagDataEntry data)

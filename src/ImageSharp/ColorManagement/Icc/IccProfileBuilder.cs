@@ -2,8 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // MaybeCreateProfileImpl and its helpers (PrimariesToXYZ, AdaptToXYZD50, CIEXYZFromWhiteCIExy,
-// WriteICCS15Fixed16, CreateICCHeader, MaybeCreateICCCICPTag, CreateICCCurvCurvTag) in
-// lib/jxl/cms/jxl_cms_internal.h,
+// WriteICCS15Fixed16, CreateICCHeader (with the Lab profile connection space), MaybeCreateICCCICPTag,
+// CreateICCCurvCurvTag, CreateICCLutAtoBTagForHDR (the tag around the grid), CreateICCNoOpBToATag and
+// CreateICCCurvParaTag) in lib/jxl/cms/jxl_cms_internal.h,
 // and Mul3x3Matrix, Mul3x3Vector and Inv3x3Matrix in lib/jxl/base/matrix_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -21,6 +22,8 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// the math of libjxl's <c>MaybeCreateProfile</c>: <c>desc</c>, <c>cprt</c>, <c>wtpt</c>, <c>chad</c>,
 /// <c>cicp</c> (when the caller gives code points), <c>rXYZ</c>/<c>gXYZ</c>/<c>bXYZ</c> and the TRCs, with
 /// Bradford adaptation to D50 and the colorants computed in single precision with double intermediates.
+/// In place of the TRCs, an RGB profile can instead have a 3D LUT to PCS Lab, as libjxl writes for the PQ
+/// and HLG encodings it tone-maps (<see cref="BuildLabLut"/>).
 /// </summary>
 /// <remarks>
 /// Invalid input throws <see cref="ArgumentException"/> with libjxl's message and no parameter name, because
@@ -152,6 +155,71 @@ internal static class IccProfileBuilder
         return Build(dataColorSpace, white, primaries, curves, adaptedWhite, renderingIntent, description, signature, cicp);
     }
 
+    /// <summary>
+    /// Builds an RGB profile whose colour transform is a 3D LUT from the encoded samples to PCS Lab, as libjxl
+    /// writes it for a PQ or HLG encoding it tone-maps: a Lab profile connection space, an <c>A2B0</c>
+    /// <c>mft1</c> (lut8) tag with an identity matrix, identity input and output tables and the caller's grid
+    /// (<c>CreateICCLutAtoBTagForHDR</c>), and a no-op <c>B2A0</c> <c>mBA </c> tag with three identity
+    /// parametric curves (<c>CreateICCNoOpBToATag</c>), which some software requires. There are no TRCs.
+    /// </summary>
+    /// <param name="white">The white point as CIE xy chromaticity.</param>
+    /// <param name="primaries">The red, green and blue primaries as CIE xy chromaticity.</param>
+    /// <param name="gridPoints">The number of grid points of each of the three inputs, from 2 to 255.</param>
+    /// <param name="pcsLab">
+    /// The grid, <paramref name="gridPoints"/>³ nodes of three PCS Lab bytes each (255 L* / 100, and a* and b*
+    /// plus 128). The first input varies slowest and the third fastest.
+    /// </param>
+    /// <param name="adaptedWhite">The white that <c>chad</c> and the colorants adapt the white point to.</param>
+    /// <param name="renderingIntent">The rendering intent of the header.</param>
+    /// <param name="description">The text of the <c>desc</c> tag.</param>
+    /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
+    /// <param name="cicp">The H.273 code points of a <c>cicp</c> tag, or null for no tag.</param>
+    /// <returns>The profile, written and read back.</returns>
+    /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
+    public static IccProfile BuildLabLut(
+        (double X, double Y) white,
+        (double X, double Y)[] primaries,
+        int gridPoints,
+        byte[] pcsLab,
+        Vector3 adaptedWhite,
+        IccRenderingIntent renderingIntent,
+        string description,
+        string signature,
+        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
+    {
+        Guard.NotNull(primaries, nameof(primaries));
+        Guard.NotNull(pcsLab, nameof(pcsLab));
+        Guard.MustBeBetweenOrEqualTo(gridPoints, 2, byte.MaxValue, nameof(gridPoints));
+        int nodes = gridPoints * gridPoints * gridPoints;
+        Guard.IsTrue(pcsLab.Length == nodes * 3, nameof(pcsLab), "The grid must hold three bytes for every node.");
+
+        // Input and output tables: the identity.
+        byte[] identity = new byte[256];
+        for (int i = 0; i < identity.Length; i++)
+        {
+            identity[i] = (byte)i;
+        }
+
+        IccLut table = new(identity);
+        IccLut[] tables = { table, table, table };
+
+        byte[][] clut = new byte[nodes][];
+        for (int i = 0; i < nodes; i++)
+        {
+            clut[i] = new[] { pcsLab[i * 3], pcsLab[(i * 3) + 1], pcsLab[(i * 3) + 2] };
+        }
+
+        // Matrix (per specification, must be identity if input is not XYZ); the entry's default is the identity.
+        byte grid = (byte)gridPoints;
+        IccTagDataEntry aToB = new IccLut8TagDataEntry(tables, new IccClut(clut, new[] { grid, grid, grid }), tables, IccProfileTag.AToB0);
+
+        // CreateICCCurvParaTag({1.0f}, 0): y = x.
+        IccTagDataEntry identityCurve = new IccParametricCurveTagDataEntry(new IccParametricCurve(1.0f));
+        IccTagDataEntry bToA = new IccLutBToATagDataEntry(new[] { identityCurve, identityCurve, identityCurve }, null, null, null, null, null, IccProfileTag.BToA0);
+
+        return Build(IccColorSpaceType.Rgb, IccColorSpaceType.CieLab, white, primaries, new[] { aToB, bToA }, adaptedWhite, renderingIntent, description, signature, cicp);
+    }
+
     // The TRCs are tag data entries: one for gray, red, green and blue for RGB, or null to check the other
     // values and build nothing.
     private static IccProfile Build(
@@ -159,6 +227,36 @@ internal static class IccProfileBuilder
         (double X, double Y) white,
         (double X, double Y)[] primaries,
         IccTagDataEntry[] curves,
+        Vector3 adaptedWhite,
+        IccRenderingIntent renderingIntent,
+        string description,
+        string signature,
+        (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
+    {
+        IccTagDataEntry[] transform = null;
+        if (curves is not null)
+        {
+            transform = dataColorSpace == IccColorSpaceType.Gray
+                ? new[] { curves[0].CloneWithTagSignature(IccProfileTag.GrayTrc) }
+                : new[]
+                {
+                    curves[0].CloneWithTagSignature(IccProfileTag.RedTrc),
+                    curves[1].CloneWithTagSignature(IccProfileTag.GreenTrc),
+                    curves[2].CloneWithTagSignature(IccProfileTag.BlueTrc),
+                };
+        }
+
+        return Build(dataColorSpace, IccColorSpaceType.CieXyz, white, primaries, transform, adaptedWhite, renderingIntent, description, signature, cicp);
+    }
+
+    // The colour transform is tag data entries with their tag signatures, written after the colorants, or
+    // null to check the other values and build nothing.
+    private static IccProfile Build(
+        IccColorSpaceType dataColorSpace,
+        IccColorSpaceType connectionSpace,
+        (double X, double Y) white,
+        (double X, double Y)[] primaries,
+        IccTagDataEntry[] transform,
         Vector3 adaptedWhite,
         IccRenderingIntent renderingIntent,
         string description,
@@ -224,25 +322,16 @@ internal static class IccProfileBuilder
             }
         }
 
-        if (curves is null)
+        if (transform is null)
         {
             return null;
         }
 
-        if (gray)
-        {
-            tags.Add(curves[0].CloneWithTagSignature(IccProfileTag.GrayTrc));
-        }
-        else
-        {
-            tags.Add(curves[0].CloneWithTagSignature(IccProfileTag.RedTrc));
-            tags.Add(curves[1].CloneWithTagSignature(IccProfileTag.GreenTrc));
-            tags.Add(curves[2].CloneWithTagSignature(IccProfileTag.BlueTrc));
-        }
+        tags.AddRange(transform);
 
         // Written and read back, so the header carries its size and the profile passes CheckIsValid,
         // which the encoders check before they write a profile.
-        return new IccProfile(new IccProfile(Header(dataColorSpace, renderingIntent, signature), tags.ToArray()).ToByteArray());
+        return new IccProfile(new IccProfile(Header(dataColorSpace, connectionSpace, renderingIntent, signature), tags.ToArray()).ToByteArray());
     }
 
     /// <summary>
@@ -278,14 +367,16 @@ internal static class IccProfileBuilder
         }
     }
 
-    // CreateICCHeader. The size is filled in when the profile is written.
-    private static IccProfileHeader Header(IccColorSpaceType dataColorSpace, IccRenderingIntent renderingIntent, string signature) => new()
+    // CreateICCHeader. The size is filled in when the profile is written. libjxl uses the Lab connection
+    // space for its tone-mapping 3D LUT: "8-bit XYZ would not be viable due to XYZ being linear, whereas it
+    // is fine with CIELAB's ~cube root."
+    private static IccProfileHeader Header(IccColorSpaceType dataColorSpace, IccColorSpaceType connectionSpace, IccRenderingIntent renderingIntent, string signature) => new()
     {
         CmmType = signature,
         Version = new IccVersion(4, 4, 0),
         Class = IccProfileClass.DisplayDevice,
         DataColorSpace = dataColorSpace,
-        ProfileConnectionSpace = IccColorSpaceType.CieXyz,
+        ProfileConnectionSpace = connectionSpace,
 
         // TODO(lode): encode actual date and time, this is a placeholder
         CreationDate = new DateTime(2019, 12, 1, 0, 0, 0, DateTimeKind.Utc),

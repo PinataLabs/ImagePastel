@@ -41,6 +41,8 @@ public class JxlColorEncodingTests
         IccProfileTag.GreenTrc,
         IccProfileTag.BlueTrc,
         IccProfileTag.GrayTrc,
+        IccProfileTag.AToB0,
+        IccProfileTag.BToA0,
     };
 
     private static string GeneratedDirectory => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated");
@@ -162,21 +164,46 @@ public class JxlColorEncodingTests
         Assert.Equal(new IccCicpTagDataEntry(1, 1, 0, 1), cicp);
     }
 
-    // An RGB PQ or HLG encoding that a cicp tag can name gets libjxl's 3D-LUT profile, which is not built
-    // yet (D11f). The values are JxlTransferFunction's Hlg (18) and Pq (16), which is internal.
+    // An RGB PQ or HLG encoding that a cicp tag can name gets libjxl's 3D-LUT profile: a Lab PCS, an mft1
+    // A2B0 that tone-maps to PCS Lab, and a no-op mBA B2A0. The values are JxlTransferFunction's Hlg (18) and
+    // Pq (16), which is internal.
+    // Measured: every LUT entry equal to djxl's (largest difference 0 of one 8-bit step).
     [Theory]
     [InlineData("hlg", 18)]
     [InlineData("pq", 16)]
     [InlineData("p3_hlg", 18)]
-    public void Load_RgbPqOrHlgThatACicpTagNames_HasNoPixelProfile(string name, int transferFunction)
+    public void Load_RgbPqOrHlgThatACicpTagNames_GivesA3DLutProfileLikeDjxls(string name, int transferFunction)
     {
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl"));
         using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath(name));
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
         Assert.Equal((JxlTransferFunction)transferFunction, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Tf.TransferFunction);
-        Assert.Null(image.Metadata.IccProfile);
+        AssertLutProfileLikeDjxls(DjxlProfile(name), image.Metadata.IccProfile);
     }
+
+    // Identify builds the profile from the header, as Load does.
+    [Theory]
+    [InlineData("hlg")]
+    [InlineData("pq")]
+    [InlineData("p3_hlg")]
+    public void Identify_RgbPqOrHlgThatACicpTagNames_GivesTheProfileLoadGives(string name)
+    {
+        string path = Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl");
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), path);
+
+        IccProfile identified = Identify(path).IccProfile;
+
+        Assert.NotNull(identified);
+        Assert.Equal(image.Metadata.IccProfile.ToByteArray(), identified.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData("hlg")]
+    [InlineData("pq")]
+    [InlineData("p3_hlg")]
+    public void SaveAsPng_3DLutProfile_IsWrittenToThePng(string name)
+        => AssertProfileIsWrittenToThePng<Rgba32>(Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl"));
 
     // A PQ or HLG encoding that no cicp tag can name (grey, or custom primaries) gets a 64-entry table curve.
     // Measured: every curve entry equal to djxl's (largest difference 0 steps).
@@ -291,6 +318,22 @@ public class JxlColorEncodingTests
                     TestContext.Current.TestOutputHelper?.WriteLine($"{tag}: largest difference {steps} steps");
                     Assert.True(steps <= 1, $"{tag}: an entry differs by {steps} steps.");
                     break;
+                case IccLut8TagDataEntry lut:
+                    int lutSteps = LargestLut8Difference(lut, Assert.IsType<IccLut8TagDataEntry>(a));
+                    TestContext.Current.TestOutputHelper?.WriteLine($"{tag}: largest LUT difference {lutSteps} steps");
+                    Assert.True(lutSteps <= 1, $"{tag}: a LUT entry differs by {lutSteps} steps.");
+                    break;
+                case IccLutBToATagDataEntry bToA:
+                    IccLutBToATagDataEntry actualBToA = Assert.IsType<IccLutBToATagDataEntry>(a);
+                    Assert.Equal(bToA.InputChannelCount, actualBToA.InputChannelCount);
+                    Assert.Equal(bToA.OutputChannelCount, actualBToA.OutputChannelCount);
+                    Assert.Equal(bToA.Matrix3x3, actualBToA.Matrix3x3);
+                    Assert.Equal(bToA.Matrix3x1, actualBToA.Matrix3x1);
+                    Assert.Equal(bToA.ClutValues, actualBToA.ClutValues);
+                    Assert.Equal(bToA.CurveA, actualBToA.CurveA);
+                    Assert.Equal(bToA.CurveM, actualBToA.CurveM);
+                    Assert.Equal(bToA.CurveB, actualBToA.CurveB);
+                    break;
                 default:
                     throw new InvalidOperationException($"No comparison for the {e.Signature} type of the {tag} tag.");
             }
@@ -305,6 +348,18 @@ public class JxlColorEncodingTests
         IccProfileTag trc = actual.Header.DataColorSpace == IccColorSpaceType.Gray ? IccProfileTag.GrayTrc : IccProfileTag.RedTrc;
         Assert.True(actual.TryGetTag(trc, out IccTagDataEntry curve));
         Assert.Equal(64, Assert.IsType<IccCurveTagDataEntry>(curve).CurveData.Length);
+        AssertSameColour(djxlProfile, actual);
+        AssertSameColour(djxlProfile, new IccProfile(actual.ToByteArray()));
+    }
+
+    // The built profile has the tags of djxl's 3D-LUT profile in the same order, a Lab PCS, matches it,
+    // passes CheckIsValid and survives being written and read back.
+    private static void AssertLutProfileLikeDjxls(IccProfile djxlProfile, IccProfile actual)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(IccColorSpaceType.CieLab, actual.Header.ProfileConnectionSpace);
+        Assert.Equal(djxlProfile.Entries.Select(e => e.TagSignature), actual.Entries.Select(e => e.TagSignature));
+        Assert.True(actual.CheckIsValid());
         AssertSameColour(djxlProfile, actual);
         AssertSameColour(djxlProfile, new IccProfile(actual.ToByteArray()));
     }
@@ -334,6 +389,30 @@ public class JxlColorEncodingTests
             int e = (int)MathF.Round(expected.CurveData[i] * 65535F);
             int a = (int)MathF.Round(actual.CurveData[i] * 65535F);
             largest = Math.Max(largest, Math.Abs(e - a));
+        }
+
+        return largest;
+    }
+
+    // The largest difference between the CLUTs of two lut8 tables, in 8-bit steps. The matrix, the input and
+    // output tables and the grid must be equal.
+    private static int LargestLut8Difference(IccLut8TagDataEntry expected, IccLut8TagDataEntry actual)
+    {
+        Assert.Equal(expected.Matrix, actual.Matrix);
+        Assert.Equal(expected.InputValues, actual.InputValues);
+        Assert.Equal(expected.OutputValues, actual.OutputValues);
+        Assert.Equal(expected.ClutValues.GridPointCount, actual.ClutValues.GridPointCount);
+        Assert.Equal(expected.ClutValues.Values.Length, actual.ClutValues.Values.Length);
+        int largest = 0;
+        for (int i = 0; i < expected.ClutValues.Values.Length; i++)
+        {
+            float[] e = expected.ClutValues.Values[i];
+            float[] a = actual.ClutValues.Values[i];
+            Assert.Equal(e.Length, a.Length);
+            for (int j = 0; j < e.Length; j++)
+            {
+                largest = Math.Max(largest, Math.Abs((int)MathF.Round(e[j] * 255F) - (int)MathF.Round(a[j] * 255F)));
+            }
         }
 
         return largest;

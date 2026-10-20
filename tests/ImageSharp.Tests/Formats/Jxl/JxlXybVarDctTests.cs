@@ -139,31 +139,49 @@ public class JxlXybVarDctTests
         Assert.True(worstInShadows * step <= JxlLossyComparer.PeakError, $"Largest difference {worstInShadows:G4} 16-bit steps below {shadows}");
     }
 
-    // The samples are HLG, which JxlMetadata reports, but the ICC builder cannot yet describe an RGB HLG
-    // encoding that a CICP tag names (its 3D LUT profile is slice D11f), so there is no pixel profile.
+    // The samples are HLG, which JxlMetadata reports.
     [Fact]
-    public void Load_RgbHlg_ReportsHlgAndHasNoPixelProfile()
+    public void Load_RgbHlg_ReportsHlg()
     {
         using Image<Rgb48> image = Image.Load<Rgb48>(CreateConfiguration(), InputPath("vardct_xyb_hlg"));
 
-        Assert.Null(image.Metadata.IccProfile);
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.Tf.TransferFunction);
+    }
+
+    // An XYB image renders to its own PQ or HLG encoding, so its pixels get that encoding's profile: the one
+    // the lossless file with the same encoding gets, a 3D-LUT profile for RGB and a table curve for grey.
+    // The PQ profile does not depend on the intensity target, so both PQ files get colour_pq's. Identify
+    // gives the same profile.
+    [Theory]
+    [InlineData("vardct_xyb_pq", "colour_pq")]
+    [InlineData("vardct_xyb_pq_1000", "colour_pq")]
+    [InlineData("vardct_xyb_hlg", "colour_hlg")]
+    [InlineData("vardct_xyb_grey_hlg", "colour_grey_hlg")]
+    public void Load_XybPqOrHlg_GivesTheProfileOfItsLosslessTwin(string name, string twin)
+    {
+        using Image<Rgb48> image = Image.Load<Rgb48>(CreateConfiguration(), InputPath(name));
+        using Image<Rgb48> lossless = Image.Load<Rgb48>(CreateConfiguration(), InputPath(twin));
+        IImageInfo info = Image.Identify(CreateConfiguration(), InputPath(name), out _);
+
+        Assert.NotNull(lossless.Metadata.IccProfile);
+        Assert.NotNull(image.Metadata.IccProfile);
+        Assert.Equal(lossless.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+        Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
     }
 
     // The PQ files at 16 bits. PQ is steep near 0, so the planes differ from djxl's by more than a 16-bit
     // step there (the peaks above), which libjxl's FMA causes (ADR 0004): this
     // port's TF_PQ applied to djxl's own linear output gives djxl's PQ output within 3.6e-7. So the image
     // is compared with this decoder's planes, clamped, which checks the 16-bit conversion, and with djxl's
-    // at the lossy peak threshold. A PQ image has no pixel profile until D11f, which builds its 3D-LUT
-    // profile; the pixels are still PQ-encoded.
+    // at the lossy peak threshold.
     // Measured: 0.50 of one 16-bit step from the planes, which is the rounding; from djxl's clamped
     // reference, 5.2e-4 (34 steps, vardct_xyb_pq) and 1.3e-3 (83 steps, vardct_xyb_pq_1000).
     [Theory]
     [InlineData("vardct_xyb_pq")]
     [InlineData("vardct_xyb_pq_1000")]
-    public void LoadRgb48_Pq_IsWithinOneStepOfTheClampedPlanesWithNoPixelProfileUntilD11f(string name)
+    public void LoadRgb48_Pq_IsWithinOneStepOfTheClampedPlanes(string name)
     {
         NpyArray djxl = LoadReference(name);
         NpyArray planes;
@@ -185,7 +203,6 @@ public class JxlXybVarDctTests
 
         TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference from djxl {peak:G3}, {peak * 65535:G3} 16-bit steps");
         Assert.True(peak <= JxlLossyComparer.PeakError, $"Largest difference from djxl {peak:G4}");
-        Assert.Null(image.Metadata.IccProfile);
     }
 
     // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.

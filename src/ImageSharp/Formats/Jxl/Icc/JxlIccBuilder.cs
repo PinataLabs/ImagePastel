@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // MaybeCreateProfileImpl (the parts specific to a JPEG XL colour encoding), MaybeCreateICCCICPTag,
-// ColorEncodingDescriptionImpl, CanToneMap, CreateTableCurve and ToneMapPixel in
-// lib/jxl/cms/jxl_cms_internal.h.
+// ColorEncodingDescriptionImpl, CanToneMap, CreateTableCurve, ToneMapPixel and the grid of
+// CreateICCLutAtoBTagForHDR in lib/jxl/cms/jxl_cms_internal.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -22,15 +22,17 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
 /// <see cref="IccProfileFactory"/>.
 /// </summary>
 /// <remarks>
-/// A PQ or HLG encoding gets libjxl's 64-entry table curve when <c>CanToneMap</c> is false (grey, or custom
-/// primaries or white point). Where the built profile differs from libjxl's: an encoding that
-/// <c>CanToneMap</c> accepts gets libjxl's 3D-LUT profile, which is not built yet (D11f); it is validated
-/// but gets no profile.
+/// A PQ or HLG RGB encoding that <c>CanToneMap</c> accepts gets libjxl's 3D-LUT profile: a Lab connection
+/// space and a 9 × 9 × 9 <c>A2B0</c> grid that tone-maps to PCS Lab (<see cref="ToneMapPixel"/>). Any other
+/// PQ or HLG encoding (grey, or custom primaries or white point) gets libjxl's 64-entry table curve.
 /// Unlike the public factory, it keeps libjxl's header signatures (<c>jxl </c>) and adapts to libjxl's
 /// CIE D50 (<see cref="IccProfileBuilder.LibjxlD50"/>), so its profiles match <c>djxl</c>'s.
 /// </remarks>
 internal static class JxlIccBuilder
 {
+    // k3DLutDim: the grid points per input of the tone-mapping 3D LUT.
+    private const int LutGridPoints = 9;
+
     /// <summary>
     /// Builds the profile for <paramref name="c"/>, checking it as libjxl's <c>CreateICC</c> does when it
     /// reads the header. Throws <see cref="InvalidImageContentException"/> for an encoding libjxl cannot
@@ -38,8 +40,7 @@ internal static class JxlIccBuilder
     /// </summary>
     /// <param name="c">The colour encoding, which does not signal an ICC profile.</param>
     /// <returns>
-    /// The profile, or null where none is built: the XYB colour space, and PQ and HLG RGB encodings that a
-    /// cicp tag can name.
+    /// The profile, or null for the XYB colour space, for which none is built.
     /// </returns>
     public static IccProfile Create(JxlColorEncoding c)
     {
@@ -145,9 +146,25 @@ internal static class JxlIccBuilder
             primaries = new[] { (rx, ry), (gx, gy), (bx, by) };
         }
 
+        // A PQ or HLG encoding that libjxl can tone map gets a 3D LUT to PCS Lab (kEnable3DToneMapping, which
+        // libjxl's default build sets).
+        if (CanToneMap(c))
+        {
+            return IccProfileBuilder.BuildLabLut(
+                c.WhitePointXy,
+                primaries,
+                LutGridPoints,
+                CreateLutAtoBGridForHdr(c),
+                IccProfileBuilder.LibjxlD50,
+                (IccRenderingIntent)(uint)c.RenderingIntent,
+                Description(c),
+                "jxl ",
+                Cicp(c));
+        }
+
         // A PQ or HLG encoding that libjxl cannot tone map gets a table curve, which the TRC tags share.
         bool pqOrHlg = c.ColorSpace != JxlColorSpace.Xyb && !c.Tf.HaveGamma && c.Tf.TransferFunction is (JxlTransferFunction.Pq or JxlTransferFunction.Hlg);
-        if (pqOrHlg && !CanToneMap(c))
+        if (pqOrHlg)
         {
             return IccProfileBuilder.Build(
                 dataColorSpace,
@@ -161,10 +178,10 @@ internal static class JxlIccBuilder
                 Cicp(c));
         }
 
-        // XYB gets a LUT-based profile, and the PQ and HLG encodings that libjxl can tone map a 3D-LUT one;
-        // neither is built here, but the white point and primaries are still checked.
+        // XYB gets a LUT-based profile, which is not built here, but the white point and primaries are
+        // still checked.
         IccParametricCurve[] curves = null;
-        if (c.ColorSpace != JxlColorSpace.Xyb && !pqOrHlg)
+        if (c.ColorSpace != JxlColorSpace.Xyb)
         {
             IccParametricCurve curve = Curve(c.Tf).Curve;
             curves = c.ColorSpace == JxlColorSpace.Gray ? new[] { curve } : new[] { curve, curve, curve };
@@ -180,6 +197,32 @@ internal static class JxlIccBuilder
             Description(c),
             "jxl ",
             Cicp(c));
+    }
+
+    // CreateICCLutAtoBTagForHDR: the grid of the mft1 tag, k3DLutDim nodes per input, each the PCS Lab bytes
+    // ToneMapPixel gives for the node's encoded samples. ix (red) varies slowest and ib (blue) fastest.
+    private static byte[] CreateLutAtoBGridForHdr(JxlColorEncoding c)
+    {
+        const int k3DLutDim = LutGridPoints;
+        byte[] grid = new byte[k3DLutDim * k3DLutDim * k3DLutDim * 3];
+        Span<float> f = stackalloc float[3];
+        int offset = 0;
+        for (int ix = 0; ix < k3DLutDim; ++ix)
+        {
+            for (int iy = 0; iy < k3DLutDim; ++iy)
+            {
+                for (int ib = 0; ib < k3DLutDim; ++ib)
+                {
+                    f[0] = ix * (1.0f / (k3DLutDim - 1));
+                    f[1] = iy * (1.0f / (k3DLutDim - 1));
+                    f[2] = ib * (1.0f / (k3DLutDim - 1));
+                    ToneMapPixel(c, f, grid.AsSpan(offset, 3));
+                    offset += 3;
+                }
+            }
+        }
+
+        return grid;
     }
 
     // CanToneMap: if the color space cannot be represented by a CICP tag in the ICC profile then the rest
