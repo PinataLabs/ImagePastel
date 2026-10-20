@@ -2,10 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -22,7 +24,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// field and a non-zero chroma-from-luma map; and D11a's <c>vardct_xyb_bt709</c> and <c>vardct_xyb_dci</c>,
 /// which render to the BT.709 and DCI curves; and D11b's <c>vardct_xyb_pq</c> and <c>vardct_xyb_pq_1000</c>,
 /// which render to PQ from intensity targets of 10,000 and 1,000 nits; and D11c's <c>vardct_xyb_hlg</c> and
-/// <c>vardct_xyb_grey_hlg</c>, which render to HLG through the OOTF to scene light. The planes are compared with
+/// <c>vardct_xyb_grey_hlg</c>, which render to HLG through the OOTF to scene light; and D12a's
+/// <c>vardct_xyb_grey_patches</c>, a grey VarDCT frame with patches from an XYB reference frame. The planes are compared with
 /// djxl's float output at the
 /// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
 /// measured when it was written.
@@ -53,6 +56,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_pq_1000", 3)] // PQ, intensity target 1000 nits, so linear 1.0 is PQ's 0.1: RMSE 3.1e-5, peak 1.3e-3
     [InlineData("vardct_xyb_hlg", 3)] // HLG (OpHlg), the OOTF with the BT.2100 luminances, steep in the shadows: RMSE 3.5e-6, peak 1.7e-4
     [InlineData("vardct_xyb_grey_hlg", 1)] // Grey HLG (OpHlg), the OOTF with the sRGB luminances: RMSE 1.8e-7, peak 2.5e-6
+    [InlineData("vardct_xyb_grey_patches", 1)] // Grey, with patches from a three-plane XYB reference frame: RMSE 1.4e-7, peak 7.2e-7
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -83,6 +87,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_pq_1000")] // 0.59 of one step
     [InlineData("vardct_xyb_hlg")]
     [InlineData("vardct_xyb_grey_hlg")]
+    [InlineData("vardct_xyb_grey_patches")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -351,6 +356,23 @@ public class JxlXybVarDctTests
         Assert.Equal((minQuant, maxQuant), dc.QuantFieldRange());
         Assert.Equal(nonZeroYtoX, dc.State.Cmap.YtoXMap.Count(v => v != 0));
         Assert.Equal(nonZeroYtoB, dc.State.Cmap.YtoBMap.Count(v => v != 0));
+    }
+
+    // The grey file cjxl made with --patches=1 has the frames the patches need: a Modular reference-only
+    // frame saved before its colour transform, so in XYB, then the displayed VarDCT frame with patches.
+    [Fact]
+    public void GreyPatches_IsAnXybReferenceFrameThenAVarDctFrameWithPatches()
+    {
+        List<JxlFrameHeader> frames = JxlCodestreamFrames.Read(File.ReadAllBytes(InputPath("vardct_xyb_grey_patches")));
+
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(JxlFrameType.ReferenceOnly, frames[0].FrameType);
+        Assert.Equal(JxlFrameEncoding.Modular, frames[0].Encoding);
+        Assert.True(frames[0].SaveBeforeColorTransform);
+        Assert.Equal(3, frames[0].NumDecodedColorPlanes);
+        Assert.Equal(JxlFrameEncoding.VarDct, frames[1].Encoding);
+        Assert.Equal(JxlFrameFlags.Patches, frames[1].Flags & JxlFrameFlags.Patches);
+        Assert.True(frames[1].IsLast);
     }
 
     // The 64 x 64 image with one of the features of a later slice each.
