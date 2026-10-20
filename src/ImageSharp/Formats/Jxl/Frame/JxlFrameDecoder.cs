@@ -248,12 +248,6 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
         }
 
-        // Patches on a Modular frame decode; on a VarDCT frame they come with D12.
-        if ((flags & JxlFrameFlags.Patches) != 0 && frameHeader.Encoding == JxlFrameEncoding.VarDct)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Patches on VarDCT frames");
-        }
-
         // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
         const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;
         if ((flags & ~knownFlags) != 0)

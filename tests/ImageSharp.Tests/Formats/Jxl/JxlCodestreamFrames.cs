@@ -1,0 +1,69 @@
+// Copyright (c) PinataLabs.
+// Licensed under the Apache License, Version 2.0.
+
+using System.Collections.Generic;
+using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Icc;
+using Xunit;
+
+namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+
+/// <summary>
+/// Reads the header of every frame of a bare codestream, displayed or not, without decoding the frames,
+/// so that a test can check that a generated file has the frames it is meant to test.
+/// </summary>
+internal static class JxlCodestreamFrames
+{
+    /// <summary>Reads the frame headers.</summary>
+    /// <param name="codestream">A bare codestream with no preview.</param>
+    /// <returns>The header of each frame, in codestream order.</returns>
+    public static List<JxlFrameHeader> Read(byte[] codestream)
+    {
+        Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
+
+        // The same steps as JxlDecoderCore.ReadHeaders and JxlFrameDecoder.DecodeFrame.
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        Assert.False(metadata.M.HavePreview);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        if (metadata.M.ColorEncoding.WantIcc)
+        {
+            JxlIccReader.Read(reader);
+        }
+
+        reader.JumpToByteBoundary();
+        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        reader.Close();
+
+        List<JxlFrameHeader> frames = new();
+        JxlFrameHeader frameHeader;
+        do
+        {
+            reader = new JxlBitReader(codestream, offset, codestream.Length - offset);
+            frameHeader = new JxlFrameHeader(metadata);
+            JxlBundle.Read(reader, frameHeader);
+            JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
+            long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
+            uint[] sizes = JxlToc.ReadToc(tocEntries, reader);
+            reader.EnsureAllReadsWithinBounds("frame header");
+            offset += (int)(reader.TotalBitsConsumed / 8);
+            reader.Close();
+            foreach (uint size in sizes)
+            {
+                offset += (int)size;
+            }
+
+            frames.Add(frameHeader);
+        }
+        while (!frameHeader.IsLast);
+
+        return frames;
+    }
+}
