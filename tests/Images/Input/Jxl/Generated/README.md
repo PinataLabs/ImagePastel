@@ -624,3 +624,25 @@ djxl jpeg_444_smoothing.jxl ../../../External/ReferenceOutput/JxlDecoderTests/jp
 - On the bike crop the smoothing changes nothing, as the DC steps between blocks are too large. On the gradient it moves `djxl`'s output by an RMSE of 7.4e-4, so a decoder that skipped it would fail.
 - `djxl` v0.12.0 rejects a subsampled VarDCT frame without the flag ("Non-444 chroma subsampling is not allowed when adaptive DC smoothing is enabled"). libjxl ef67fde2 dropped that check, and this decoder decodes such a frame, so no subsampled file here clears the flag.
 - The JPEG conformance vectors allow an RMSE of 1e-5, ten times less than the general lossy rule, so `JxlChromaSubsamplingTests` holds these files to that too. Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 3.1e-7 and 2.1e-6 (`jpeg_444`), 2.9e-7 and 2.1e-6 (`jpeg_420`), 2.9e-7 and 2.2e-6 (`jpeg_422`), 3.0e-7 and 2.1e-6 (`jpeg_440`), 2.6e-7 and 2.0e-6 (`jpeg_grey`), 2.7e-7 and 2.8e-6 (`jpeg_420_groups`), 9.2e-8 and 4.8e-7 (`jpeg_mixed`), and 4.2e-8 and 1.2e-7 (`jpeg_444_smoothing`). `Image.Load` is within one 8-bit step of the clamped reference.
+
+#### How the noise files were made
+
+Lossy VarDCT frames with XYB and the noise flag (D12c), which `cjxl` sets with `--photon_noise_iso`. Each reference is `External/ReferenceOutput/JxlDecoderTests/<name>.npy`. `JxlNoiseTests` checks them.
+
+| File | Why it is here |
+|---|---|
+| `noise_resampling_2x.jxl` | A 540 x 280 8-bit RGB image of gradients, coded at 270 x 140 and upsampled 2x, with photon noise at ISO 3200. The noise is made at the upsampled size: each of the frame's two groups covers 2 x 2 tiles of 256 x 256 pixels, each tile with a generator of its own, and the tiles of the second group are cut at the right and bottom edges. |
+| `noise_animation.jxl` | A 280 x 80 8-bit RGB animation of four frames, with photon noise at ISO 6400. Its second frame, a 120 x 50 rectangle at (10, 10), has no duration, so it is not shown; the third frame, a 120 x 50 rectangle at (150, 25), does not cover it. The three shown frames and the hidden one seed their noise with different frame counters. |
+
+```sh
+py -3 make_noise.py
+cjxl noise_source.ppm noise_resampling_2x.jxl -d 1 --resampling=2 --photon_noise_iso=3200
+cjxl noise_animation_source.png noise_animation.jxl -d 1 --photon_noise_iso=6400
+djxl noise_resampling_2x.jxl ../../../External/ReferenceOutput/JxlDecoderTests/noise_resampling_2x.npy
+djxl noise_animation.jxl ../../../External/ReferenceOutput/JxlDecoderTests/noise_animation.npy
+```
+
+- `make_noise.py` writes `noise_source.ppm` and the APNG `noise_animation_source.png`. Neither is committed; the script makes them again.
+- `jxlinfo -v noise_animation.jxl` lists the second frame as a "Layer" with a duration of 0. `djxl` writes the three shown frames to the `.npy`, coalesced onto the full canvas.
+- The noise comes from libjxl's `Xorshift128Plus`, seeded by the counts of shown and hidden frames and by the position of each tile, so a decoder that seeds a tile wrongly fails the comparison. A decoder that seeds the hidden frame's noise as a shown frame's misses `noise_animation`'s second frame by an RMSE of 9.0e-4; one that seeds every tile of a group with the group's position misses `noise_resampling_2x`.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.4e-6 and 4.2e-5 (`noise_resampling_2x`) and, in the worst frame, 1.5e-6 and 4.1e-5 (`noise_animation`). libjxl fuses the multiplies and adds of the noise stages on AVX2, and this port does not (ADR 0004). `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.

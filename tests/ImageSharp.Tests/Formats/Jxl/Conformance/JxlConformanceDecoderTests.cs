@@ -48,6 +48,8 @@ public class JxlConformanceDecoderTests
     [InlineData("upsampling_5")] // A Level 5 reference of its own. Measured: RMSE 2.6e-4, peak 1.6e-2, as for djxl v0.12.0 (2.6e-4, 1.6e-2).
     [InlineData("alpha_premultiplied")] // VarDCT with XYB, Gaborish and EPF; 12-bit, premultiplied 16-bit alpha. Measured: RMSE 2.2e-7, peak 3.1e-6 (threshold 3.8e-6).
     [InlineData("animation_icos4d")] // 48 VarDCT frames with alpha, Gaborish and EPF (2 iterations), cropped and blended. Measured, worst frame: RMSE 6.6e-7, peak 2.6e-5.
+    [InlineData("noise")] // XYB VarDCT with noise (D12c). Measured: RMSE 5.8e-7, peak 2.8e-5 (djxl v0.12.0: 3.8e-7, 9.2e-6).
+    [InlineData("noise_5")] // The same reference, at Level 5.
     [InlineData("animation_icos4d_5")] // A Level 5 reference of its own, which djxl v0.12.0 also misses by up to 5.6e-2. Measured, worst frame: RMSE 1.1e-3, peak 5.6e-2.
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {

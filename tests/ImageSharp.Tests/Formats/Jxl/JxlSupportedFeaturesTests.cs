@@ -17,7 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// The frame features of later slices: each is rejected on its own with
 /// <see cref="NotSupportedException"/>, so that a slice can lift one rejection at a time. The features
-/// that D10 and D11 lifted decode.
+/// that D10 and D11 lifted decode, and noise, which D12 lifted (JxlNoiseTests).
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlSupportedFeaturesTests
@@ -26,7 +26,6 @@ public class JxlSupportedFeaturesTests
     private const int Height = 16;
 
     [Theory]
-    [InlineData(1, "noise")]
     [InlineData(16, "splines")]
     [InlineData(32, "DC frame")]
     [InlineData(4, "frame flags")]

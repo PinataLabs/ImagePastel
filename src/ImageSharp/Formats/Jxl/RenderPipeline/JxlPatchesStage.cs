@@ -19,6 +19,7 @@ internal sealed class JxlPatchesStage : IDisposable
     private readonly JxlPatchDictionary patches;
     private readonly List<JxlExtraChannelInfo> extraChannelInfo;
     private readonly int numColorPlanes;
+    private readonly int numChannels;
     private readonly bool hasAlpha;
     private readonly Buffer2D<float> tmp;
     private readonly JxlBlendingRows rows;
@@ -37,9 +38,9 @@ internal sealed class JxlPatchesStage : IDisposable
         this.extraChannelInfo = metadata.ExtraChannelInfo;
         this.numColorPlanes = metadata.NumColorPlanes;
         this.hasAlpha = JxlBlending.HasAlpha(metadata.ExtraChannelInfo);
-        int numChannels = metadata.NumColorPlanes + metadata.NumExtraChannels;
-        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), numChannels);
-        this.rows = new JxlBlendingRows(new Buffer2D<float>[numChannels], Memory<float>.Empty);
+        this.numChannels = metadata.NumColorPlanes + metadata.NumExtraChannels;
+        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), this.numChannels);
+        this.rows = new JxlBlendingRows(new Buffer2D<float>[this.numChannels], Memory<float>.Empty);
     }
 
     /// <summary>Adds the patches to row <paramref name="ypos"/> of the frame.</summary>
@@ -48,7 +49,8 @@ internal sealed class JxlPatchesStage : IDisposable
     /// <param name="ypos">The row.</param>
     public void ProcessRow(Buffer2D<float>[] planes, int xsize, int ypos)
     {
-        for (int c = 0; c < planes.Length; c++)
+        // The planes may end with the three noise planes, which the patches do not take.
+        for (int c = 0; c < this.numChannels; c++)
         {
             this.rows.SetPlane(c, planes[c]);
         }

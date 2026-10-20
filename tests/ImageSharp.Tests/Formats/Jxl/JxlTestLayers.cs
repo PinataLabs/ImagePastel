@@ -377,6 +377,7 @@ internal sealed class JxlTestLayers
     {
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
         ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
+        flags = frame.NoiseLut != null ? flags | 1 : flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(frame.Encoding == JxlFrameEncoding.Modular);
         if (flags == 0)
@@ -483,18 +484,23 @@ internal sealed class JxlTestLayers
         w.Write(2, 0); // no extensions
 
         // The patch dictionary comes first in the DC global section, which a single group and pass puts
-        // at the start of the frame's only section.
+        // at the start of the frame's only section, then the noise look-up table.
         byte[] section = frame.Section;
-        if (frame.Patches != null)
+        if (frame.Patches != null || frame.NoiseLut != null)
         {
-            JxlTestBitWriter withPatches = new();
-            frame.Patches.Write(withPatches, this.numExtraChannels);
-            foreach (byte b in frame.Section)
+            JxlTestBitWriter withFeatures = new();
+            frame.Patches?.Write(withFeatures, this.numExtraChannels);
+            foreach (uint entry in frame.NoiseLut ?? Array.Empty<uint>())
             {
-                withPatches.Write(8, b);
+                withFeatures.Write(10, entry);
             }
 
-            section = withPatches.ToArray();
+            foreach (byte b in frame.Section)
+            {
+                withFeatures.Write(8, b);
+            }
+
+            section = withFeatures.ToArray();
         }
 
         // TOC: no permutation, then the size of each section as U32(Bits(10), BitsOffset(14, 1024),
@@ -605,6 +611,12 @@ internal sealed record JxlTestFrame(byte[] Section)
 
     /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
     public JxlTestPatchDictionary Patches { get; init; }
+
+    /// <summary>
+    /// Gets the eight entries of the noise look-up table, in units of 1/1024 (10 bits each); when set,
+    /// the noise flag is set too.
+    /// </summary>
+    public uint[] NoiseLut { get; init; }
 
     /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
     /// <param name="section">The frame's section.</param>

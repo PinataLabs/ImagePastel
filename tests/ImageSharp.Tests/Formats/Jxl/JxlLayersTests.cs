@@ -302,10 +302,9 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
 
+    // Noise decodes since D12c (JxlNoiseTests, with and without patches).
     [Theory]
-    [InlineData(1)] // noise
     [InlineData(16)] // splines
-    [InlineData(3)] // patches and noise
     [InlineData(18)] // patches and splines
     public void Decode_FrameWithNoiseOrSplines_IsNotSupported(ulong flags)
     {
