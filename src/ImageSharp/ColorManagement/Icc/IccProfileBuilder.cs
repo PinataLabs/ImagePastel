@@ -52,14 +52,14 @@ internal static class IccProfileBuilder
         { -0.0085287f, 0.0400428f, 0.9684867f },
     };
 
+    // The media white point libjxl writes for RGB profiles: the ICC D50.
+    private static readonly double[] IccD50MediaWhite = { 0.964203, 1.0, 0.824905 };
+
     /// <summary>
     /// The CIE D50 white libjxl adapts to. It is not quite the ICC PCS illuminant
     /// (<see cref="IccConnectionSpace.D50"/>), so the colorants of a libjxl profile add up to a white
     /// about 4e-4 bluer than the one the PCS defines.
     /// </summary>
-    // The media white point libjxl writes for RGB profiles: the ICC D50.
-    private static readonly double[] IccD50MediaWhite = { 0.964203, 1.0, 0.824905 };
-
     public static readonly Vector3 LibjxlD50 = new(0.96422f, 1.0f, 0.82521f);
 
     // libjxl writes its text tags in en-US. Under invariant globalization that culture can be missing,
@@ -70,75 +70,26 @@ internal static class IccProfileBuilder
     /// Builds the profile.
     /// </summary>
     /// <param name="dataColorSpace"><see cref="IccColorSpaceType.Rgb"/> or <see cref="IccColorSpaceType.Gray"/>.</param>
-    /// <param name="white">The white point as CIE xy chromaticity.</param>
-    /// <param name="primaries">
-    /// The red, green and blue primaries as CIE xy chromaticity; null for gray, or to check only the
-    /// white point of an RGB-like space.
-    /// </param>
+    /// <param name="header">The white point, primaries, adapted white and header fields.</param>
     /// <param name="curves">
     /// The tone curves: one for gray, red, green and blue for RGB. Null checks the other values and
     /// builds nothing.
     /// </param>
-    /// <param name="adaptedWhite">
-    /// The white that <c>chad</c> and the colorants adapt the white point to: <see cref="IccConnectionSpace.D50"/>,
-    /// as the ICC specification and Little CMS do, or <see cref="LibjxlD50"/>, as libjxl does.
-    /// </param>
-    /// <param name="renderingIntent">The rendering intent of the header.</param>
-    /// <param name="description">The text of the <c>desc</c> tag.</param>
-    /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
-    /// <param name="cicp">
-    /// The H.273 colour primaries and transfer characteristics that identify an RGB space, written to a
-    /// <c>cicp</c> tag with matrix coefficients 0 and full range, as libjxl's <c>MaybeCreateICCCICPTag</c>
-    /// does; null for no tag. Ignored for gray.
-    /// </param>
     /// <returns>The profile, written and read back; null when <paramref name="curves"/> is null.</returns>
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
-    public static IccProfile Build(
-        IccColorSpaceType dataColorSpace,
-        (double X, double Y) white,
-        (double X, double Y)[] primaries,
-        IccParametricCurve[] curves,
-        Vector3 adaptedWhite,
-        IccRenderingIntent renderingIntent,
-        string description,
-        string signature,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
-        => Build(
-            dataColorSpace,
-            white,
-            primaries,
-            curves?.Select(c => (IccTagDataEntry)new IccParametricCurveTagDataEntry(c)).ToArray(),
-            adaptedWhite,
-            renderingIntent,
-            description,
-            signature,
-            cicp);
+    public static IccProfile Build(IccColorSpaceType dataColorSpace, IccProfileBuilderHeader header, IccParametricCurve[] curves)
+        => Build(dataColorSpace, header, curves?.Select(c => (IccTagDataEntry)new IccParametricCurveTagDataEntry(c)).ToArray());
 
     /// <summary>
     /// Builds the profile with one table curve for every channel, as libjxl's <c>CreateICCCurvCurvTag</c>
     /// writes it for PQ and HLG: a <c>curv</c> tag that <c>rTRC</c>, <c>gTRC</c> and <c>bTRC</c> share.
     /// </summary>
     /// <param name="dataColorSpace"><see cref="IccColorSpaceType.Rgb"/> or <see cref="IccColorSpaceType.Gray"/>.</param>
-    /// <param name="white">The white point as CIE xy chromaticity.</param>
-    /// <param name="primaries">The red, green and blue primaries as CIE xy chromaticity; null for gray.</param>
+    /// <param name="header">The white point, primaries (null for gray), adapted white and header fields.</param>
     /// <param name="tableCurve">The entries of the curve, for encoded values from 0 to 1 in equal steps; 65535 is 1.</param>
-    /// <param name="adaptedWhite">The white that <c>chad</c> and the colorants adapt the white point to.</param>
-    /// <param name="renderingIntent">The rendering intent of the header.</param>
-    /// <param name="description">The text of the <c>desc</c> tag.</param>
-    /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
-    /// <param name="cicp">The H.273 code points of a <c>cicp</c> tag, or null for no tag. Ignored for gray.</param>
     /// <returns>The profile, written and read back.</returns>
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
-    public static IccProfile Build(
-        IccColorSpaceType dataColorSpace,
-        (double X, double Y) white,
-        (double X, double Y)[] primaries,
-        ushort[] tableCurve,
-        Vector3 adaptedWhite,
-        IccRenderingIntent renderingIntent,
-        string description,
-        string signature,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
+    public static IccProfile Build(IccColorSpaceType dataColorSpace, IccProfileBuilderHeader header, ushort[] tableCurve)
     {
         Guard.NotNull(tableCurve, nameof(tableCurve));
 
@@ -152,7 +103,7 @@ internal static class IccProfileBuilder
         // One entry for every channel; the writer stores equal tag data once, so the TRC tags share it.
         IccTagDataEntry curve = new IccCurveTagDataEntry(values);
         IccTagDataEntry[] curves = dataColorSpace == IccColorSpaceType.Gray ? new[] { curve } : new[] { curve, curve, curve };
-        return Build(dataColorSpace, white, primaries, curves, adaptedWhite, renderingIntent, description, signature, cicp);
+        return Build(dataColorSpace, header, curves);
     }
 
     /// <summary>
@@ -162,32 +113,18 @@ internal static class IccProfileBuilder
     /// (<c>CreateICCLutAtoBTagForHDR</c>), and a no-op <c>B2A0</c> <c>mBA </c> tag with three identity
     /// parametric curves (<c>CreateICCNoOpBToATag</c>), which some software requires. There are no TRCs.
     /// </summary>
-    /// <param name="white">The white point as CIE xy chromaticity.</param>
-    /// <param name="primaries">The red, green and blue primaries as CIE xy chromaticity.</param>
+    /// <param name="header">The white point, primaries (not null), adapted white and header fields.</param>
     /// <param name="gridPoints">The number of grid points of each of the three inputs, from 2 to 255.</param>
     /// <param name="pcsLab">
     /// The grid, <paramref name="gridPoints"/>³ nodes of three PCS Lab bytes each (255 L* / 100, and a* and b*
     /// plus 128). The first input varies slowest and the third fastest.
     /// </param>
-    /// <param name="adaptedWhite">The white that <c>chad</c> and the colorants adapt the white point to.</param>
-    /// <param name="renderingIntent">The rendering intent of the header.</param>
-    /// <param name="description">The text of the <c>desc</c> tag.</param>
-    /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
-    /// <param name="cicp">The H.273 code points of a <c>cicp</c> tag, or null for no tag.</param>
     /// <returns>The profile, written and read back.</returns>
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
-    public static IccProfile BuildLabLut(
-        (double X, double Y) white,
-        (double X, double Y)[] primaries,
-        int gridPoints,
-        byte[] pcsLab,
-        Vector3 adaptedWhite,
-        IccRenderingIntent renderingIntent,
-        string description,
-        string signature,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
+    public static IccProfile BuildLabLut(IccProfileBuilderHeader header, int gridPoints, byte[] pcsLab)
     {
-        Guard.NotNull(primaries, nameof(primaries));
+        Guard.NotNull(header, nameof(header));
+        Guard.NotNull(header.Primaries, nameof(header.Primaries));
         Guard.NotNull(pcsLab, nameof(pcsLab));
         Guard.MustBeBetweenOrEqualTo(gridPoints, 2, byte.MaxValue, nameof(gridPoints));
         int nodes = gridPoints * gridPoints * gridPoints;
@@ -217,21 +154,12 @@ internal static class IccProfileBuilder
         IccTagDataEntry identityCurve = new IccParametricCurveTagDataEntry(new IccParametricCurve(1.0f));
         IccTagDataEntry bToA = new IccLutBToATagDataEntry(new[] { identityCurve, identityCurve, identityCurve }, null, null, null, null, null, IccProfileTag.BToA0);
 
-        return Build(IccColorSpaceType.Rgb, IccColorSpaceType.CieLab, white, primaries, new[] { aToB, bToA }, adaptedWhite, renderingIntent, description, signature, cicp);
+        return Build(IccColorSpaceType.Rgb, IccColorSpaceType.CieLab, header, new[] { aToB, bToA });
     }
 
     // The TRCs are tag data entries: one for gray, red, green and blue for RGB, or null to check the other
     // values and build nothing.
-    private static IccProfile Build(
-        IccColorSpaceType dataColorSpace,
-        (double X, double Y) white,
-        (double X, double Y)[] primaries,
-        IccTagDataEntry[] curves,
-        Vector3 adaptedWhite,
-        IccRenderingIntent renderingIntent,
-        string description,
-        string signature,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
+    private static IccProfile Build(IccColorSpaceType dataColorSpace, IccProfileBuilderHeader header, IccTagDataEntry[] curves)
     {
         IccTagDataEntry[] transform = null;
         if (curves is not null)
@@ -246,7 +174,7 @@ internal static class IccProfileBuilder
                 };
         }
 
-        return Build(dataColorSpace, IccColorSpaceType.CieXyz, white, primaries, transform, adaptedWhite, renderingIntent, description, signature, cicp);
+        return Build(dataColorSpace, IccColorSpaceType.CieXyz, header, transform);
     }
 
     // The colour transform is tag data entries with their tag signatures, written after the colorants, or
@@ -254,20 +182,17 @@ internal static class IccProfileBuilder
     private static IccProfile Build(
         IccColorSpaceType dataColorSpace,
         IccColorSpaceType connectionSpace,
-        (double X, double Y) white,
-        (double X, double Y)[] primaries,
-        IccTagDataEntry[] transform,
-        Vector3 adaptedWhite,
-        IccRenderingIntent renderingIntent,
-        string description,
-        string signature,
-        (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
+        IccProfileBuilderHeader header,
+        IccTagDataEntry[] transform)
     {
+        Guard.NotNull(header, nameof(header));
         bool gray = dataColorSpace == IccColorSpaceType.Gray;
-        (double wx, double wy) = white;
+        (double wx, double wy) = header.White;
+        (double X, double Y)[] primaries = header.Primaries;
+        Vector3 adaptedWhite = header.AdaptedWhite;
         List<IccTagDataEntry> tags = new()
         {
-            new IccMultiLocalizedUnicodeTagDataEntry(new[] { new IccLocalizedString(EnUs, description) }, IccProfileTag.ProfileDescription),
+            new IccMultiLocalizedUnicodeTagDataEntry(new[] { new IccLocalizedString(EnUs, header.Description) }, IccProfileTag.ProfileDescription),
             new IccMultiLocalizedUnicodeTagDataEntry(new[] { new IccLocalizedString(EnUs, "CC0") }, IccProfileTag.Copyright),
         };
 
@@ -283,7 +208,7 @@ internal static class IccProfileBuilder
             // Chromatic adaptation matrix (CreateICCChadMatrix).
             if (wy == 0)
             {
-                throw new ArgumentException("Invalid WhitePoint", nameof(white)); // WhitePoint can not be pitch-black.
+                throw new ArgumentException("Invalid WhitePoint", "white"); // WhitePoint can not be pitch-black.
             }
 
             float[,] chad = AdaptToXyzD50((float)wx, (float)wy, adaptedWhite);
@@ -299,7 +224,7 @@ internal static class IccProfileBuilder
             tags.Add(new IccFix16ArrayTagDataEntry(values, IccProfileTag.ChromaticAdaptation));
 
             // MaybeCreateICCCICPTag: matrix coefficients 0 (identity, RGB) and full range.
-            if (cicp is (byte colorPrimaries, byte transferCharacteristics))
+            if (header.Cicp is (byte colorPrimaries, byte transferCharacteristics))
             {
                 tags.Add(new IccCicpTagDataEntry(colorPrimaries, transferCharacteristics, 0, 1, IccProfileTag.Cicp));
             }
@@ -331,7 +256,7 @@ internal static class IccProfileBuilder
 
         // Written and read back, so the header carries its size and the profile passes CheckIsValid,
         // which the encoders check before they write a profile.
-        return new IccProfile(new IccProfile(Header(dataColorSpace, connectionSpace, renderingIntent, signature), tags.ToArray()).ToByteArray());
+        return new IccProfile(new IccProfile(Header(dataColorSpace, connectionSpace, header.RenderingIntent, header.Signature), tags.ToArray()).ToByteArray());
     }
 
     /// <summary>

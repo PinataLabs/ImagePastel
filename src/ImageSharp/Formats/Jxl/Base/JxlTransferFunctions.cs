@@ -3,8 +3,7 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // TF_SRGB::EncodedFromDisplay, TF_709::EncodedFromDisplay, TF_PQ (the scaling factor of its constructor,
 // and EncodedFromDisplay) and TF_HLG::EncodedFromDisplay (the vector overloads) in
-// lib/jxl/cms/transfer_functions-inl.h, TF_HLG_Base's constants in lib/jxl/cms/transfer_functions.h,
-// kInvLog2e in lib/jxl/base/common.h, and the curve of OpGamma in
+// lib/jxl/cms/transfer_functions-inl.h, kInvLog2e in lib/jxl/base/common.h, and the curve of OpGamma in
 // lib/jxl/render_pipeline/stage_from_linear.cc, for one lane.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -38,11 +37,8 @@ internal static class JxlTransferFunctions
     // TF_PQ::EncodedFromDisplay switches to the low polynomials below this sample, before scaling.
     private const float PqLowThresh = 1e-4f;
 
-    // TF_HLG_Base's constants, which TF_HLG inherits, are doubles; kInvLog2e is a float.
-    private const double HlgA = 0.17883277;
-    private const double HlgB = 1 - (4 * HlgA);
-    private const double HlgC = 0.5599107295;
-    private const double HlgInv12 = 1.0 / 12.0;
+    // TF_HLG's own constant k3; the others it inherits from TF_HLG_Base (JxlTfHlgBase), as doubles.
+    // kInvLog2e is a float.
     private const double Hlg3 = 3.0;
     private const float InvLog2e = 0.6931471805599453f;
 
@@ -75,7 +71,7 @@ internal static class JxlTransferFunctions
             ? JxlFastMath.EvalRationalPolynomial(MathF.Sqrt(x), SrgbP, SrgbQ)
             : x * LowDiv;
 
-        return WithSignOf(magnitude, v);
+        return JxlScalarMath.CopySign(magnitude, v);
     }
 
     /// <summary>
@@ -133,7 +129,7 @@ internal static class JxlTransferFunctions
             ? JxlFastMath.EvalRationalPolynomial(xto025, PqPLow, PqQLow)
             : JxlFastMath.EvalRationalPolynomial(xto025, PqP, PqQ);
 
-        return WithSignOf(magnitude, x);
+        return JxlScalarMath.CopySign(magnitude, x);
     }
 
     /// <summary>
@@ -147,7 +143,7 @@ internal static class JxlTransferFunctions
     {
         float a = MathF.Abs(x);
         float magnitude;
-        if (a <= (float)HlgInv12)
+        if (a <= (float)JxlTfHlgBase.Inv12)
         {
             magnitude = MathF.Sqrt((float)Hlg3 * a);
         }
@@ -155,17 +151,10 @@ internal static class JxlTransferFunctions
         {
             // libjxl: MulAdd(Set(d, kA * kInvLog2e), FastLog2f(d, MulAdd(Set(d, 12), x, Set(d, -kB))),
             // Set(d, kC)). kA * kInvLog2e is a double product that Set rounds to float.
-            float log = JxlFastMath.FastLog2f((12f * a) + (float)-HlgB);
-            magnitude = ((float)(HlgA * InvLog2e) * log) + (float)HlgC;
+            float log = JxlFastMath.FastLog2f((12f * a) + (float)-JxlTfHlgBase.B);
+            magnitude = ((float)(JxlTfHlgBase.A * InvLog2e) * log) + (float)JxlTfHlgBase.C;
         }
 
-        return WithSignOf(magnitude, x);
-    }
-
-    // Or(AndNot(kSign, magnitude), original_sign): the magnitude with the sign of v.
-    private static float WithSignOf(float magnitude, float v)
-    {
-        int bits = (BitConverter.SingleToInt32Bits(magnitude) & 0x7fffffff) | (BitConverter.SingleToInt32Bits(v) & unchecked((int)0x80000000));
-        return BitConverter.Int32BitsToSingle(bits);
+        return JxlScalarMath.CopySign(magnitude, x);
     }
 }

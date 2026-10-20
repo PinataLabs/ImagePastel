@@ -39,7 +39,7 @@ internal sealed class JxlOutputEncoding
         // Set the inverse gamma based on color space transfer function.
         this.InverseGamma = tf is null ? 1.0f
             : tf.HaveGamma ? (float)(tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul))
-            : tf.TransferFunction == JxlTransferFunction.Dci ? 1.0f / 2.6f
+            : tf.IsDci ? 1.0f / 2.6f
             : 1.0f;
     }
 
@@ -86,7 +86,7 @@ internal sealed class JxlOutputEncoding
     /// primaries' XYZ matrix (not adapted to D50), or the sRGB luminances for sRGB primaries with a D65
     /// white point, for grey, and for the linear sRGB fallback. Only for an XYB image.
     /// </summary>
-    public float[] Luminances { get; } = (float[])SrgbLuminances.Clone();
+    public float[] Luminances { get; private set; } = (float[])SrgbLuminances.Clone();
 
     /// <summary>
     /// Gets the inverse opsin matrix, row-major, scaled so that 1.0 is the original intensity target: the
@@ -118,13 +118,13 @@ internal sealed class JxlOutputEncoding
         if (!m.XybEncoded)
         {
             // The samples are in the image's own encoding; only an XYB image needs the opsin parameters.
-            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), intensityTarget);
+            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, orig.Tf.IsLinear, intensityTarget);
         }
 
         // The fallback has sRGB primaries and a D65 white point, with the sRGB curve or none.
         bool origOk = IsOriginalOutput(m);
         JxlOutputEncoding output = origOk
-            ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), intensityTarget)
+            ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, orig.Tf.IsLinear, intensityTarget)
             : displayEncoded
                 ? new JxlOutputEncoding(orig.IsGray, false, new JxlCustomTransferFunction(), false, intensityTarget)
                 : new JxlOutputEncoding(orig.IsGray, false, null, true, intensityTarget);
@@ -150,7 +150,10 @@ internal sealed class JxlOutputEncoding
         {
             try
             {
-                inverseMatrix = AdaptToPrimaries(orig, inverseMatrix, output.Luminances);
+                // The luminances are the Y row of the primaries' XYZ matrix (original_to_xyz[1]).
+                (float[,] originalToXyz, float[] luminances) = orig.PrimariesToXyz();
+                output.Luminances = luminances;
+                inverseMatrix = AdaptToPrimaries(orig.WhitePointXy, originalToXyz, inverseMatrix);
             }
             catch (ArgumentException ex)
             {
@@ -221,12 +224,10 @@ internal sealed class JxlOutputEncoding
         return true;
     }
 
-    private static bool IsLinearTf(JxlCustomTransferFunction tf) => !tf.HaveGamma && tf.TransferFunction == JxlTransferFunction.Linear;
-
     // The primaries part of SetColorEncoding for an XYB image: the matrix from linear sRGB to the output
-    // primaries, through XYZ adapted to D50 with Bradford, is folded into the inverse opsin matrix, and
-    // the luminances are the Y row of the primaries' XYZ matrix (original_to_xyz[1]).
-    private static float[,] AdaptToPrimaries(JxlColorEncoding c, float[,] origInverseMatrix, float[] luminances)
+    // primaries, through XYZ adapted to D50 with Bradford, is folded into the inverse opsin matrix.
+    // originalToXyz is the output primaries' XYZ matrix (original_to_xyz), and w their white point.
+    private static float[,] AdaptToPrimaries((double X, double Y) w, float[,] originalToXyz, float[,] origInverseMatrix)
     {
         // The default colour encoding is sRGB.
         JxlColorEncoding srgbEncoding = new();
@@ -234,15 +235,6 @@ internal sealed class JxlOutputEncoding
         (double X, double Y) d65 = srgbEncoding.WhitePointXy;
         float[,] srgbToXyzD50 = IccProfileBuilder.PrimariesToXyzD50(
             (float)srgb.R.X, (float)srgb.R.Y, (float)srgb.G.X, (float)srgb.G.Y, (float)srgb.B.X, (float)srgb.B.Y, (float)d65.X, (float)d65.Y, IccProfileBuilder.LibjxlD50);
-
-        ((double X, double Y) R, (double X, double Y) G, (double X, double Y) B) p = c.PrimariesXy;
-        (double X, double Y) w = c.WhitePointXy;
-        float[,] originalToXyz = IccProfileBuilder.PrimariesToXyz(
-            (float)p.R.X, (float)p.R.Y, (float)p.G.X, (float)p.G.Y, (float)p.B.X, (float)p.B.Y, (float)w.X, (float)w.Y);
-        for (int i = 0; i < 3; i++)
-        {
-            luminances[i] = originalToXyz[1, i];
-        }
 
         float[,] adaptToD50 = IccProfileBuilder.AdaptToXyzD50((float)w.X, (float)w.Y, IccProfileBuilder.LibjxlD50);
         float[,] xyzd50ToOriginal = IccProfileBuilder.Inv3x3Matrix(IccProfileBuilder.Mul3x3Matrix(adaptToD50, originalToXyz));

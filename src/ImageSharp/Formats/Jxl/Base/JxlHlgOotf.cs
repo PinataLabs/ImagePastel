@@ -16,13 +16,19 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 /// <remarks>
 /// A deliberate departure from libjxl (ADR 0004): each <c>MulAdd</c> is split into a multiply and an add,
 /// and <see cref="JxlFastMath.FastPowf"/> stands for libjxl's fast power.
+/// <para>
+/// libjxl's <c>HlgOOTF</c> inherits <c>HlgOOTF_Base</c> privately, so that class's scalar <c>Apply</c>,
+/// which gives other values, is not part of it. C# has no private inheritance, so this class holds a
+/// <see cref="JxlHlgOotfBase"/> for the state they share and does not derive from it.
+/// </para>
 /// </remarks>
-internal sealed class JxlHlgOotf : JxlHlgOotfBase
+internal sealed class JxlHlgOotf
 {
+    // HlgOOTF_Base's state: the exponent, whether to apply the OOTF, and the luminances of the primaries.
+    private readonly JxlHlgOotfBase state;
+
     private JxlHlgOotf(float gamma, ReadOnlySpan<float> luminances)
-        : base(gamma, luminances)
-    {
-    }
+        => this.state = new JxlHlgOotfBase(gamma, luminances);
 
     /// <summary>
     /// Returns the OOTF that takes display light on a display of <paramref name="displayLuminance"/> nits
@@ -32,7 +38,7 @@ internal sealed class JxlHlgOotf : JxlHlgOotfBase
     /// <param name="primariesLuminances">The luminances of the red, green and blue primaries.</param>
     /// <returns>The OOTF.</returns>
     public static JxlHlgOotf ToSceneLight(float displayLuminance, ReadOnlySpan<float> primariesLuminances)
-        => new((1 / 1.2f) * MathF.Pow(1.111f, -Log2(displayLuminance / 1000.0f)), primariesLuminances);
+        => new((1 / 1.2f) * MathF.Pow(1.111f, -JxlHlgOotfBase.Log2(displayLuminance / 1000.0f)), primariesLuminances);
 
     /// <summary>Applies the OOTF to one pixel.</summary>
     /// <param name="red">The red sample.</param>
@@ -41,16 +47,17 @@ internal sealed class JxlHlgOotf : JxlHlgOotfBase
     [MethodImpl(InliningOptions.ShortMethod)]
     public void Apply(ref float red, ref float green, ref float blue)
     {
-        if (!this.ApplyOotf)
+        JxlHlgOotfBase s = this.state;
+        if (!s.ApplyOotf)
         {
             return;
         }
 
         // libjxl: MulAdd(Set(df, red_Y_), *red, MulAdd(Set(df, green_Y_), *green, Mul(Set(df, blue_Y_), *blue))).
-        float luminance = this.BlueY * blue;
-        luminance = (this.GreenY * green) + luminance;
-        luminance = (this.RedY * red) + luminance;
-        float ratio = MathF.Min(JxlFastMath.FastPowf(luminance, this.Exponent), 1e9f);
+        float luminance = s.BlueY * blue;
+        luminance = (s.GreenY * green) + luminance;
+        luminance = (s.RedY * red) + luminance;
+        float ratio = MathF.Min(JxlFastMath.FastPowf(luminance, s.Exponent), 1e9f);
         red *= ratio;
         green *= ratio;
         blue *= ratio;

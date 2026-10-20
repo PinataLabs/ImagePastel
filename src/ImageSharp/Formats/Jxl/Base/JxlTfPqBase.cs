@@ -49,7 +49,7 @@ internal static class JxlTfPqBase
         double d = Math.Pow(num / den, 1.0 / M1);
 
         // 10000.0f / display_intensity_target is a float division; the product is double.
-        return CopySignF(d * (10000.0f / displayIntensityTarget), originalSign);
+        return JxlScalarMath.CopySign((float)(d * (10000.0f / displayIntensityTarget)), (float)originalSign);
     }
 
     /// <summary>
@@ -74,13 +74,6 @@ internal static class JxlTfPqBase
         double num = C1 + (xp * C2);
         double den = 1.0 + (xp * C3);
         double e = Math.Pow(num / den, M2);
-        return CopySignF(e, originalSign);
-    }
-
-    // C's copysignf on doubles: both are converted to float, so the result is a float.
-    private static double CopySignF(double magnitude, double sign)
-    {
-        float m = Math.Abs((float)magnitude);
-        return float.IsNegative((float)sign) ? -m : m;
+        return JxlScalarMath.CopySign((float)e, (float)originalSign);
     }
 }

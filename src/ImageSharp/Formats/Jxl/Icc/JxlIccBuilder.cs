@@ -73,10 +73,7 @@ internal static class JxlIccBuilder
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
     internal static void ToneMapPixel(JxlColorEncoding c, ReadOnlySpan<float> input, Span<byte> pcsLabOut)
     {
-        ((double rx, double ry), (double gx, double gy), (double bx, double by)) = c.PrimariesXy;
-        (double wx, double wy) = c.WhitePointXy;
-        float[,] primariesXyz = IccProfileBuilder.PrimariesToXyz((float)rx, (float)ry, (float)gx, (float)gy, (float)bx, (float)by, (float)wx, (float)wy);
-        ReadOnlySpan<float> luminances = stackalloc float[3] { primariesXyz[1, 0], primariesXyz[1, 1], primariesXyz[1, 2] };
+        (float[,] primariesXyz, float[] luminances) = c.PrimariesToXyz();
         Span<float> linear = stackalloc float[3];
         bool pq = c.Tf.TransferFunction == JxlTransferFunction.Pq;
         for (int i = 0; i < 3; i++)
@@ -99,6 +96,7 @@ internal static class JxlIccBuilder
 
         // The Bradford adaptation is to libjxl's D50 white (IccProfileBuilder.LibjxlD50); the Lab conversion
         // below uses a third D50 white, neither that one nor the wtpt tag's.
+        (double wx, double wy) = c.WhitePointXy;
         float[,] chad = IccProfileBuilder.AdaptToXyzD50((float)wx, (float)wy, IccProfileBuilder.LibjxlD50);
         float[,] toXyzD50 = IccProfileBuilder.Mul3x3Matrix(chad, primariesXyz);
 
@@ -119,9 +117,9 @@ internal static class JxlIccBuilder
         float fY = LabF(xyz[1] / yn);
         float fZ = LabF(xyz[2] / zn);
 
-        pcsLabOut[0] = (byte)MathF.Round(255.0f * Clamp1((1.16f * fY) - .16f, 0.0f, 1.0f), MidpointRounding.AwayFromZero);
-        pcsLabOut[1] = (byte)MathF.Round(128.0f + Clamp1(500 * (fX - fY), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
-        pcsLabOut[2] = (byte)MathF.Round(128.0f + Clamp1(200 * (fY - fZ), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
+        pcsLabOut[0] = (byte)MathF.Round(255.0f * JxlScalarMath.Clamp1((1.16f * fY) - .16f, 0.0f, 1.0f), MidpointRounding.AwayFromZero);
+        pcsLabOut[1] = (byte)MathF.Round(128.0f + JxlScalarMath.Clamp1(500 * (fX - fY), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
+        pcsLabOut[2] = (byte)MathF.Round(128.0f + JxlScalarMath.Clamp1(200 * (fY - fZ), -128.0f, 127.0f), MidpointRounding.AwayFromZero);
 
         static float LabF(float x)
         {
@@ -131,9 +129,6 @@ internal static class JxlIccBuilder
                 ? (x * (1 / (3 * delta * delta))) + (4.0f / 29)
                 : MathF.Cbrt(x);
         }
-
-        // libjxl's Clamp1.
-        static float Clamp1(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
     }
 
     private static IccProfile Build(JxlColorEncoding c)
@@ -146,36 +141,28 @@ internal static class JxlIccBuilder
             primaries = new[] { (rx, ry), (gx, gy), (bx, by) };
         }
 
+        // libjxl's header signatures, and its D50 white.
+        IccProfileBuilderHeader header = new(
+            c.WhitePointXy,
+            primaries,
+            IccProfileBuilder.LibjxlD50,
+            (IccRenderingIntent)(uint)c.RenderingIntent,
+            Description(c),
+            "jxl ",
+            Cicp(c));
+
         // A PQ or HLG encoding that libjxl can tone map gets a 3D LUT to PCS Lab (kEnable3DToneMapping, which
         // libjxl's default build sets).
         if (CanToneMap(c))
         {
-            return IccProfileBuilder.BuildLabLut(
-                c.WhitePointXy,
-                primaries,
-                LutGridPoints,
-                CreateLutAtoBGridForHdr(c),
-                IccProfileBuilder.LibjxlD50,
-                (IccRenderingIntent)(uint)c.RenderingIntent,
-                Description(c),
-                "jxl ",
-                Cicp(c));
+            return IccProfileBuilder.BuildLabLut(header, LutGridPoints, CreateLutAtoBGridForHdr(c));
         }
 
         // A PQ or HLG encoding that libjxl cannot tone map gets a table curve, which the TRC tags share.
-        bool pqOrHlg = c.ColorSpace != JxlColorSpace.Xyb && !c.Tf.HaveGamma && c.Tf.TransferFunction is (JxlTransferFunction.Pq or JxlTransferFunction.Hlg);
+        bool pqOrHlg = c.ColorSpace != JxlColorSpace.Xyb && (c.Tf.IsPq || c.Tf.IsHlg);
         if (pqOrHlg)
         {
-            return IccProfileBuilder.Build(
-                dataColorSpace,
-                c.WhitePointXy,
-                primaries,
-                CreateTableCurve(c.Tf.TransferFunction == JxlTransferFunction.Hlg),
-                IccProfileBuilder.LibjxlD50,
-                (IccRenderingIntent)(uint)c.RenderingIntent,
-                Description(c),
-                "jxl ",
-                Cicp(c));
+            return IccProfileBuilder.Build(dataColorSpace, header, CreateTableCurve(c.Tf.IsHlg));
         }
 
         // XYB gets a LUT-based profile, which is not built here, but the white point and primaries are
@@ -187,16 +174,7 @@ internal static class JxlIccBuilder
             curves = c.ColorSpace == JxlColorSpace.Gray ? new[] { curve } : new[] { curve, curve, curve };
         }
 
-        return IccProfileBuilder.Build(
-            dataColorSpace,
-            c.WhitePointXy,
-            primaries,
-            curves,
-            IccProfileBuilder.LibjxlD50,
-            (IccRenderingIntent)(uint)c.RenderingIntent,
-            Description(c),
-            "jxl ",
-            Cicp(c));
+        return IccProfileBuilder.Build(dataColorSpace, header, curves);
     }
 
     // CreateICCLutAtoBTagForHDR: the grid of the mft1 tag, k3DLutDim nodes per input, each the PCS Lab bytes
@@ -230,8 +208,7 @@ internal static class JxlIccBuilder
     // libjxl's default build (JXL_ENABLE_3D_ICC_TONEMAPPING) gives these encodings a 3D-LUT profile.
     private static bool CanToneMap(JxlColorEncoding c)
         => c.ColorSpace == JxlColorSpace.Rgb
-        && !c.Tf.HaveGamma
-        && c.Tf.TransferFunction is (JxlTransferFunction.Pq or JxlTransferFunction.Hlg)
+        && (c.Tf.IsPq || c.Tf.IsHlg)
         && ((c.Primaries == JxlPrimaries.P3 && c.WhitePoint is (JxlWhitePoint.D65 or JxlWhitePoint.Dci))
             || (c.Primaries != JxlPrimaries.Custom && c.WhitePoint == JxlWhitePoint.D65));
 

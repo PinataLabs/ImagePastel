@@ -64,7 +64,9 @@ public class JxlXybVarDctTests
         Assert.Single(JxlLossyComparer.AssertWithinThresholds(expected, JxlConformanceImages.ToNpy(decoded)));
     }
 
-    // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
+    // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding, except for PQ,
+    // which is steep near 0 and so magnifies the peaks above: 0.58 (vardct_xyb_pq) and 0.59
+    // (vardct_xyb_pq_1000).
     [Theory]
     [InlineData("vardct_xyb_64")]
     [InlineData("vardct_xyb_300x200_d05")]
@@ -77,6 +79,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_identity_afv")]
     [InlineData("vardct_xyb_bt709")]
     [InlineData("vardct_xyb_dci")]
+    [InlineData("vardct_xyb_pq")] // 0.58 of one step
+    [InlineData("vardct_xyb_pq_1000")] // 0.59 of one step
     [InlineData("vardct_xyb_hlg")]
     [InlineData("vardct_xyb_grey_hlg")]
     public void LoadRgb24_IsWithinOneStepOfTheClampedReference(string name)
@@ -168,6 +172,21 @@ public class JxlXybVarDctTests
         Assert.NotNull(lossless.Metadata.IccProfile);
         Assert.NotNull(image.Metadata.IccProfile);
         Assert.Equal(lossless.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
+        Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
+    }
+
+    // An XYB image renders to its own BT.709 or DCI encoding, so its pixels get that encoding's parametric
+    // profile, and Identify, which reads only the headers, gives the same profile.
+    [Theory]
+    [InlineData("vardct_xyb_bt709")]
+    [InlineData("vardct_xyb_dci")]
+    public void LoadAndIdentify_XybBt709OrDci_GiveTheSamePixelProfile(string name)
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
+        IImageInfo info = Image.Identify(CreateConfiguration(), InputPath(name), out _);
+
+        Assert.NotNull(image.Metadata.IccProfile);
+        Assert.NotNull(info.Metadata.IccProfile);
         Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
     }
 

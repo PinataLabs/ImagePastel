@@ -9,13 +9,19 @@ using System;
 namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 
 /// <summary>
-/// The state of BT.2100's HLG OOTF, which libjxl shares between two OOTFs: the render pipeline's
-/// <see cref="JxlHlgOotf"/>, and the ICC builder's scalar one, which tone-maps an HLG profile. They keep
-/// libjxl's two separate <c>Apply</c> methods, because they give different values: the pipeline's uses the
-/// fast power and sums the luminance from blue to red, the ICC builder's uses <c>powf</c> and sums from red
-/// to blue.
+/// BT.2100's HLG OOTF as libjxl's ICC builder applies it to tone-map an HLG profile, and the state that
+/// libjxl shares with the render pipeline's OOTF, <see cref="JxlHlgOotf"/>. They keep libjxl's two separate
+/// <c>Apply</c> methods, because they give different values: the pipeline's uses the fast power and sums the
+/// luminance from blue to red, this one uses <c>powf</c> and sums from red to blue.
 /// </summary>
-internal class JxlHlgOotfBase
+/// <remarks>
+/// The name keeps libjxl's: the "Base" suffix is libjxl's <c>HlgOOTF_Base</c>, as in the port's other scalar
+/// classes (<see cref="JxlTfPqBase"/>, <see cref="JxlTfHlgBase"/>, <see cref="JxlRec2408ToneMapperBase"/>).
+/// It is not a C# base class. libjxl's <c>HlgOOTF</c> inherits it privately (a C++ <c>class</c> inherits
+/// privately by default), so this <c>Apply</c> cannot be called on the pipeline's OOTF. C# has no private
+/// inheritance, so <see cref="JxlHlgOotf"/> holds an instance of this class instead and reads its state.
+/// </remarks>
+internal sealed class JxlHlgOotfBase
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlHlgOotfBase"/> class: the OOTF that takes display
@@ -35,7 +41,8 @@ internal class JxlHlgOotfBase
     /// </summary>
     /// <param name="gamma">The system gamma.</param>
     /// <param name="luminances">The luminances of the red, green and blue primaries: the Y row of their XYZ matrix.</param>
-    protected JxlHlgOotfBase(float gamma, ReadOnlySpan<float> luminances)
+    /// <remarks>libjxl's constructor is protected, for <c>HlgOOTF</c>; <see cref="JxlHlgOotf"/> calls this one.</remarks>
+    internal JxlHlgOotfBase(float gamma, ReadOnlySpan<float> luminances)
     {
         this.Exponent = gamma - 1;
         this.ApplyOotf = this.Exponent < -0.01f || this.Exponent > 0.01f;
@@ -45,21 +52,21 @@ internal class JxlHlgOotfBase
     }
 
     /// <summary>Gets the exponent of the luminance, the system gamma minus 1.</summary>
-    protected float Exponent { get; }
+    internal float Exponent { get; }
 
     /// <summary>
     /// Gets a value indicating whether the OOTF changes the samples: its exponent is not within 0.01 of 0.
     /// </summary>
-    protected bool ApplyOotf { get; }
+    internal bool ApplyOotf { get; }
 
     /// <summary>Gets the luminance of the red primary.</summary>
-    protected float RedY { get; }
+    internal float RedY { get; }
 
     /// <summary>Gets the luminance of the green primary.</summary>
-    protected float GreenY { get; }
+    internal float GreenY { get; }
 
     /// <summary>Gets the luminance of the blue primary.</summary>
-    protected float BlueY { get; }
+    internal float BlueY { get; }
 
     /// <summary>
     /// Applies the OOTF to one pixel in place, as libjxl's ICC builder does: with <c>powf</c> and the
@@ -75,9 +82,7 @@ internal class JxlHlgOotfBase
 
         float luminance = (this.RedY * rgb[0]) + (this.GreenY * rgb[1]) + (this.BlueY * rgb[2]);
 
-        // std::min<float>(powf(luminance, exponent_), 1e9): the second argument unless it is smaller.
-        float power = MathF.Pow(luminance, this.Exponent);
-        float ratio = power > 1e9f ? 1e9f : power;
+        float ratio = JxlScalarMath.StdMin(MathF.Pow(luminance, this.Exponent), 1e9f);
         rgb[0] *= ratio;
         rgb[1] *= ratio;
         rgb[2] *= ratio;
@@ -87,7 +92,7 @@ internal class JxlHlgOotfBase
     /// <param name="x">The value.</param>
     /// <returns>The logarithm.</returns>
     /// <remarks><c>MathF.Log2</c> is not in .NET Standard 2.1.</remarks>
-    protected static float Log2(float x)
+    internal static float Log2(float x)
 #if NETCOREAPP3_0_OR_GREATER
         => MathF.Log2(x);
 #else

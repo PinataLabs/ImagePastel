@@ -61,32 +61,30 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
             return null;
         }
 
-        // libjxl's order: linear, sRGB, PQ, HLG, BT.709, then a gamma or DCI. Each of libjxl's IsX()
-        // means no gamma and the transfer function X.
+        // libjxl's order: linear, sRGB, PQ, HLG, BT.709, then a gamma or DCI.
         JxlCustomTransferFunction tf = output.Tf;
-        JxlTransferFunction named = tf.HaveGamma ? JxlTransferFunction.Unknown : tf.TransferFunction;
-        if (named == JxlTransferFunction.Srgb)
+        if (tf.IsSrgb)
         {
             return new JxlFromLinearStage(Op.Rgb, output);
         }
 
-        if (named == JxlTransferFunction.Pq)
+        if (tf.IsPq)
         {
             return new JxlFromLinearStage(Op.Pq, output);
         }
 
-        if (named == JxlTransferFunction.Hlg)
+        if (tf.IsHlg)
         {
             JxlHlgOotf ootf = JxlHlgOotf.ToSceneLight(output.DesiredIntensityTarget, output.Luminances);
             return new JxlFromLinearStage(Op.Hlg, output, ootf);
         }
 
-        if (named == JxlTransferFunction.Bt709)
+        if (tf.IsBt709)
         {
             return new JxlFromLinearStage(Op.Bt709, output);
         }
 
-        if (tf.HaveGamma || named == JxlTransferFunction.Dci)
+        if (tf.HaveGamma || tf.IsDci)
         {
             return new JxlFromLinearStage(Op.Gamma, output);
         }

@@ -3,7 +3,6 @@
 
 using System;
 using System.IO;
-using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -130,7 +129,7 @@ public class JxlSupportedFeaturesTests
     {
         using MemoryStream stream = new(new JxlTestLayers(Width, Height) { TransferFunction = Enum.Parse<JxlTransferFunction>(transferFunction) }.Add(JxlTestFrame.Last(JxlTestLayers.Ramp)).ToArray());
 
-        using Image<Rgba32> image = new JxlDecoder().Decode<Rgba32>(Configuration.Default, stream, CancellationToken.None);
+        using Image<Rgba32> image = new JxlDecoder().Decode<Rgba32>(Configuration.Default, stream, TestContext.Current.CancellationToken);
 
         IccProfile profile = image.Metadata.IccProfile;
         Assert.NotNull(profile);
@@ -146,7 +145,7 @@ public class JxlSupportedFeaturesTests
         byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = 128 }).ToArray();
         using MemoryStream stream = new(codestream);
 
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken);
         Assert.Single(decoded.Frames);
     }
 
@@ -155,7 +154,7 @@ public class JxlSupportedFeaturesTests
     private static NpyArray DecodeToNpy(JxlTestLayers layers, JxlTestFrame frame)
     {
         using MemoryStream stream = new(layers.Add(frame).ToArray());
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken);
         return JxlConformanceImages.ToNpy(decoded);
     }
 
@@ -164,7 +163,7 @@ public class JxlSupportedFeaturesTests
         byte[] codestream = layers.Add(frame).ToArray();
         using MemoryStream stream = new(codestream);
 
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None));
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, TestContext.Current.CancellationToken));
         Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 }

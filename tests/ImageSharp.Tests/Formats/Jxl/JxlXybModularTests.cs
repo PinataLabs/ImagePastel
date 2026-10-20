@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
@@ -104,6 +105,45 @@ public class JxlXybModularTests
     [Fact]
     public void DecodeToPlanes_GammaTransferFunction_MatchesDjxl()
         => AssertPlanesMatchDjxl("xyb_modular_gamma22").Dispose();
+
+    // The file keeps the 8-bit samples of its source, so Image.Load picks an 8-bit pixel type.
+    [Fact]
+    public void Load_GammaTransferFunction_PicksRgb24()
+    {
+        using Image image = Image.Load(CreateConfiguration(), InputPath("xyb_modular_gamma22"));
+
+        Assert.IsType<Image<Rgb24>>(image);
+    }
+
+    // RGB_D65_SRG_Per_g0.45455: the gamma is stored as 1 / 2.2 times 10^7.
+    [Fact]
+    public void Identify_GammaTransferFunction_ReportsSizeChannelsAndGamma()
+    {
+        IImageInfo info = Image.Identify(CreateConfiguration(), InputPath("xyb_modular_gamma22"), out _);
+
+        Assert.Equal(32, info.Width);
+        Assert.Equal(32, info.Height);
+        Assert.Equal(24, info.PixelType.BitsPerPixel);
+        JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.True(metadata.IsXybEncoded);
+        Assert.Equal(JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
+        Assert.True(metadata.ColorEncoding.Tf.HaveGamma);
+        Assert.Equal(4545500U, metadata.ColorEncoding.Tf.Gamma);
+        Assert.Null(metadata.OriginalIccProfile);
+    }
+
+    // The image renders to its own gamma encoding, so its pixels get that encoding's parametric profile,
+    // and Identify, which reads only the headers, gives the same profile.
+    [Fact]
+    public void LoadAndIdentify_GammaTransferFunction_GiveTheSamePixelProfile()
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath("xyb_modular_gamma22"));
+        IImageInfo info = Image.Identify(CreateConfiguration(), InputPath("xyb_modular_gamma22"), out _);
+
+        Assert.NotNull(image.Metadata.IccProfile);
+        Assert.NotNull(info.Metadata.IccProfile);
+        Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
+    }
 
     // Compares each sample with the clamped reference, which reference(pixel, channel) gives.
     private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, Func<int, int, float> reference)

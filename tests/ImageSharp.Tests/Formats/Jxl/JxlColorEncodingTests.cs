@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata;
@@ -270,7 +269,7 @@ public class JxlColorEncodingTests
     {
         using FileStream stream = File.OpenRead(Path.Combine(GeneratedDirectory, "colour_display_p3.jxl"));
 
-        using Image<Rgba32> image = new JxlDecoder { IgnoreMetadata = true }.Decode<Rgba32>(Configuration.Default, stream, CancellationToken.None);
+        using Image<Rgba32> image = new JxlDecoder { IgnoreMetadata = true }.Decode<Rgba32>(Configuration.Default, stream, TestContext.Current.CancellationToken);
 
         Assert.Null(image.Metadata.IccProfile);
         Assert.Equal(JxlPrimaries.P3, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Primaries);
@@ -450,7 +449,7 @@ public class JxlColorEncodingTests
     private static ImageMetadata Identify(string path)
     {
         using FileStream stream = File.OpenRead(path);
-        return new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None).Metadata;
+        return new JxlDecoder().Identify(Configuration.Default, stream, TestContext.Current.CancellationToken).Metadata;
     }
 
     // The profile libjxl built, from the iCCP chunk of djxl's PNG. For spaces that ITU-T H.273 names, djxl

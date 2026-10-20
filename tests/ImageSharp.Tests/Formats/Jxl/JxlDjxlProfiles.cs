@@ -6,7 +6,6 @@ using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -31,7 +30,7 @@ internal static class JxlDjxlProfiles
     {
         string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "colour_" + name + ".jxl");
         using FileStream stream = File.OpenRead(path);
-        JxlColorEncoding c = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken.None)
+        JxlColorEncoding c = new JxlDecoder().Identify(Configuration.Default, stream, TestContext.Current.CancellationToken)
             .Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding;
         Assert.NotNull(c);
         return c;

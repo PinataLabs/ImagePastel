@@ -11,7 +11,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 /// <summary>
 /// libjxl's scalar double-precision Hybrid Log-Gamma curve (ITU-R BT.2100), which its ICC code uses: the
 /// table curve of an HLG profile, and the tone mapping of the 3D-LUT profile. The render pipeline uses
-/// the float version instead (<c>TF_HLG</c>); the two are kept apart, as in libjxl.
+/// the float version instead (<c>TF_HLG</c>, in <see cref="JxlTransferFunctions"/>); its curve is kept apart,
+/// as in libjxl, but it takes these constants, which libjxl's <c>TF_HLG</c> inherits from <c>TF_HLG_Base</c>.
 /// </summary>
 /// <remarks>
 /// libjxl returns the double through <c>copysignf</c>, so every result is rounded to float; this keeps
@@ -54,11 +55,11 @@ internal static class JxlTfHlgBase
 
         if (e <= 0.5)
         {
-            return CopySignF(e * e * (1.0 / 3), originalSign);
+            return JxlScalarMath.CopySign((float)(e * e * (1.0 / 3)), (float)originalSign);
         }
 
         double s = (Math.Exp((e - C) * RA) + B) * Inv12;
-        return CopySignF(s, originalSign);
+        return JxlScalarMath.CopySign((float)s, (float)originalSign);
     }
 
     // s = scene, returns display.
@@ -70,12 +71,5 @@ internal static class JxlTfHlgBase
         // interface does not allow a dependency on YS. Fortunately, the system
         // gamma at 334 nits is 1.0, so this reduces to RD = RS.
         return s;
-    }
-
-    // C's copysignf on doubles: both are converted to float, so the result is a float.
-    private static double CopySignF(double magnitude, double sign)
-    {
-        float m = Math.Abs((float)magnitude);
-        return float.IsNegative((float)sign) ? -m : m;
     }
 }

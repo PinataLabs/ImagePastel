@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using static SixLabors.ImageSharp.Formats.Jxl.Base.JxlScalarMath;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 
@@ -65,7 +66,7 @@ internal sealed class JxlRec2408ToneMapperBase
         this.maxLum = (InvEotf(targetRange.Max) - this.pqMasteringMin) * this.invPqMasteringRange;
         this.ks = (1.5f * this.maxLum) - 0.5f;
 
-        this.invOneMinusKs = 1.0f / Max(1e-6f, 1.0f - this.ks);
+        this.invOneMinusKs = 1.0f / StdMax(1e-6f, 1.0f - this.ks);
 
         this.normalizer = sourceRange.Max / targetRange.Max;
         this.invTargetPeak = 1.0f / targetRange.Max;
@@ -79,7 +80,7 @@ internal sealed class JxlRec2408ToneMapperBase
     public void ToneMap(Span<float> rgb)
     {
         float luminance = this.sourceRange.Max * ((this.redY * rgb[0]) + (this.greenY * rgb[1]) + (this.blueY * rgb[2]));
-        float normalizedPq = Min(1.0f, (InvEotf(luminance) - this.pqMasteringMin) * this.invPqMasteringRange);
+        float normalizedPq = StdMin(1.0f, (InvEotf(luminance) - this.pqMasteringMin) * this.invPqMasteringRange);
         float e2 = normalizedPq < this.ks ? normalizedPq : this.P(normalizedPq);
         float oneMinusE2 = 1 - e2;
         float oneMinusE2Squared = oneMinusE2 * oneMinusE2;
@@ -90,7 +91,7 @@ internal sealed class JxlRec2408ToneMapperBase
         float newLuminance = Clamp1(d4, 0.0f, this.targetRange.Max);
         const float minLuminance = 1e-6f;
         bool useCap = luminance <= minLuminance;
-        float ratio = newLuminance / Max(luminance, minLuminance);
+        float ratio = newLuminance / StdMax(luminance, minLuminance);
         float cap = newLuminance * this.invTargetPeak;
         float multiplier = ratio * this.normalizer;
         for (int i = 0; i < 3; i++)
@@ -100,14 +101,6 @@ internal sealed class JxlRec2408ToneMapperBase
     }
 
     private static float InvEotf(float luminance) => (float)JxlTfPqBase.EncodedFromDisplay(1.0f, luminance);
-
-    // std::min and std::max, which return their first argument unless the second is smaller or larger.
-    private static float Min(float a, float b) => b < a ? b : a;
-
-    private static float Max(float a, float b) => a < b ? b : a;
-
-    // libjxl's Clamp1.
-    private static float Clamp1(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
 
     private float T(float a) => (a - this.ks) * this.invOneMinusKs;
 

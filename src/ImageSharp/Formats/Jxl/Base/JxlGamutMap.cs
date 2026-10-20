@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using static SixLabors.ImageSharp.Formats.Jxl.Base.JxlScalarMath;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 
@@ -46,8 +47,8 @@ internal static class JxlGamutMap
             float valOverValMinusGray = val * invValMinusGray;
             grayMixSaturation = (valMinusGray >= 0.0f)
                 ? grayMixSaturation
-                : Max(grayMixSaturation, valOverValMinusGray);
-            grayMixLuminance = Max(
+                : StdMax(grayMixSaturation, valOverValMinusGray);
+            grayMixLuminance = StdMax(
                 grayMixLuminance,
                 (valMinusGray <= 0.0f) ? grayMixSaturation : (valOverValMinusGray - invValMinusGray));
         }
@@ -60,17 +61,11 @@ internal static class JxlGamutMap
         }
 
         // std::max({1.0f, r, g, b}).
-        float maxClr = Max(Max(Max(1.0f, rgb[0]), rgb[1]), rgb[2]);
+        float maxClr = StdMax(StdMax(StdMax(1.0f, rgb[0]), rgb[1]), rgb[2]);
         float normalizer = 1.0f / maxClr;
         for (int i = 0; i < 3; i++)
         {
             rgb[i] *= normalizer;
         }
     }
-
-    // std::max, which returns its first argument unless the second is larger.
-    private static float Max(float a, float b) => a < b ? b : a;
-
-    // libjxl's Clamp1.
-    private static float Clamp1(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
 }
