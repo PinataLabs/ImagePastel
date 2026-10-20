@@ -232,6 +232,26 @@ public class JxlColorEncodingTests
         AssertTableCurveProfileLikeDjxls(PngProfile(referencePath), image.Metadata.IccProfile);
     }
 
+    // pq_gradient's samples are 16-bit grey, so Image.Load picks L16, and Identify gives the profile Load gives.
+    [Fact]
+    public void LoadAndIdentify_PqGradient_ReportSizeChannelsAndColourEncoding()
+    {
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", "pq_gradient.jxl");
+
+        using Image image = Image.Load(CreateConfiguration(), path);
+        IImageInfo info = Image.Identify(CreateConfiguration(), path, out _);
+
+        Assert.IsType<Image<L16>>(image);
+        Assert.Equal(1088, info.Width);
+        Assert.Equal(64, info.Height);
+        Assert.Equal(16, info.PixelType.BitsPerPixel);
+        JxlMetadata jxl = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.False(jxl.IsXybEncoded);
+        Assert.Equal(JxlColorSpace.Gray, jxl.ColorEncoding.ColorSpace);
+        Assert.Equal(JxlTransferFunction.Pq, jxl.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
+    }
+
     // The PNG encoder writes only a profile that passes CheckIsValid, and a grey profile only to a grey PNG.
     [Fact]
     public void SaveAsPng_GreyHlgProfile_IsWrittenToThePng()

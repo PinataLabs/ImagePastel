@@ -263,13 +263,34 @@ public class JxlXybVarDctTests
         Assert.IsType<Image<L8>>(image);
     }
 
+    // The D11 files keep the 8-bit samples of their sources, so Image.Load picks an 8-bit pixel type.
     [Theory]
-    [InlineData("vardct_xyb_64", 64, 64, 24, false)]
-    [InlineData("vardct_xyb_300x200_d05", 300, 200, 24, false)]
-    [InlineData("vardct_xyb_600x400_d3", 600, 400, 24, false)]
-    [InlineData("vardct_xyb_grey", 300, 200, 8, true)]
-    [InlineData("vardct_xyb_alpha", 72, 56, 32, false)]
-    public void Identify_ReportsSizeChannelsAndColourEncoding(string name, int width, int height, int bitsPerPixel, bool grey)
+    [InlineData("vardct_xyb_bt709", typeof(Rgb24))]
+    [InlineData("vardct_xyb_dci", typeof(Rgb24))]
+    [InlineData("vardct_xyb_pq", typeof(Rgb24))]
+    [InlineData("vardct_xyb_pq_1000", typeof(Rgb24))]
+    [InlineData("vardct_xyb_hlg", typeof(Rgb24))]
+    [InlineData("vardct_xyb_grey_hlg", typeof(L8))]
+    public void Load_TransferFunction_PicksThePixelType(string name, Type pixelType)
+    {
+        using Image image = Image.Load(CreateConfiguration(), InputPath(name));
+
+        Assert.Equal(typeof(Image<>).MakeGenericType(pixelType), image.GetType());
+    }
+
+    [Theory]
+    [InlineData("vardct_xyb_64", 64, 64, 24, false, "Srgb")]
+    [InlineData("vardct_xyb_300x200_d05", 300, 200, 24, false, "Srgb")]
+    [InlineData("vardct_xyb_600x400_d3", 600, 400, 24, false, "Srgb")]
+    [InlineData("vardct_xyb_grey", 300, 200, 8, true, "Srgb")]
+    [InlineData("vardct_xyb_alpha", 72, 56, 32, false, "Srgb")]
+    [InlineData("vardct_xyb_bt709", 64, 64, 24, false, "Bt709")]
+    [InlineData("vardct_xyb_dci", 64, 64, 24, false, "Dci")]
+    [InlineData("vardct_xyb_pq", 64, 64, 24, false, "Pq")]
+    [InlineData("vardct_xyb_pq_1000", 64, 64, 24, false, "Pq")]
+    [InlineData("vardct_xyb_hlg", 64, 64, 24, false, "Hlg")]
+    [InlineData("vardct_xyb_grey_hlg", 300, 200, 8, true, "Hlg")]
+    public void Identify_ReportsSizeChannelsAndColourEncoding(string name, int width, int height, int bitsPerPixel, bool grey, string transferFunction)
     {
         IImageInfo info = Image.Identify(CreateConfiguration(), InputPath(name), out _);
 
@@ -279,7 +300,7 @@ public class JxlXybVarDctTests
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(grey ? JxlColorSpace.Gray : JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.Equal(JxlTransferFunction.Srgb, metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(Enum.Parse<JxlTransferFunction>(transferFunction), metadata.ColorEncoding.Tf.TransferFunction);
         Assert.Null(metadata.OriginalIccProfile);
     }
 

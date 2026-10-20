@@ -82,6 +82,15 @@ internal sealed class JxlTestLayers
     public bool Xyb { get; init; }
 
     /// <summary>
+    /// Gets the transfer function of the colour encoding: RGB, D65, sRGB primaries, relative intent.
+    /// <see langword="null"/> with no <see cref="Gamma"/> writes the all-default sRGB encoding.
+    /// </summary>
+    public JxlTransferFunction? TransferFunction { get; init; }
+
+    /// <summary>Gets the gamma of the colour encoding times 10^7, or 0 for none; it replaces <see cref="TransferFunction"/>.</summary>
+    public uint Gamma { get; init; }
+
+    /// <summary>
     /// Returns layers that keep the image header of a single-frame, single-group Modular file, which
     /// must not be XYB or animated, and gives that frame's section. The section only decodes in a
     /// full-size frame.
@@ -179,7 +188,32 @@ internal sealed class JxlTestLayers
             w.Write(2, 1).Bit(false).Write(2, 0).Bit(false).Write(2, 0).Write(2, 0).Write(2, 0).Bit(true); // 8-bit premultiplied alpha
         }
 
-        w.Bit(this.Xyb).Bit(true); // XYB or not, sRGB
+        w.Bit(this.Xyb);
+        if (this.TransferFunction == null && this.Gamma == 0)
+        {
+            w.Bit(true); // sRGB
+        }
+        else
+        {
+            // ColorEncoding: not all default, no ICC, RGB, D65, sRGB primaries, then the transfer
+            // function and the relative intent.
+            w.Bit(false).Bit(false);
+            WriteEnum(w, (uint)JxlColorSpace.Rgb);
+            WriteEnum(w, (uint)JxlWhitePoint.D65);
+            WriteEnum(w, (uint)JxlPrimaries.Srgb);
+            w.Bit(this.Gamma != 0);
+            if (this.Gamma != 0)
+            {
+                w.Write(24, this.Gamma);
+            }
+            else
+            {
+                WriteEnum(w, (uint)this.TransferFunction.Value);
+            }
+
+            WriteEnum(w, (uint)JxlRenderingIntent.Relative);
+        }
+
         if (this.Animation)
         {
             w.Bit(true); // default tone mapping
@@ -194,6 +228,23 @@ internal sealed class JxlTestLayers
         }
 
         return w.ToArray();
+    }
+
+    // An enum field: U32(Val(0), Val(1), BitsOffset(4, 2), BitsOffset(6, 18)).
+    private static void WriteEnum(JxlTestBitWriter w, uint value)
+    {
+        if (value < 2)
+        {
+            w.Write(2, value);
+        }
+        else if (value < 18)
+        {
+            w.Write(2, 2).Write(4, value - 2);
+        }
+        else
+        {
+            w.Write(2, 3).Write(6, value - 18);
+        }
     }
 
     private static void WriteSide(JxlTestBitWriter w, int size)

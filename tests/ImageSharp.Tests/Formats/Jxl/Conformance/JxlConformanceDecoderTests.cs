@@ -67,9 +67,26 @@ public class JxlConformanceDecoderTests
         JxlConformanceComparer.AssertWithinThresholds(vector, expected, actual);
     }
 
+    // libjxl test data that no conformance vector covers, against a djxl v0.12.0 .npy reference (see the
+    // README next to the file). A lossless file decodes exactly.
+    [Theory]
+    [InlineData("pq_gradient")] // PQ, 16-bit grey, lossless Modular, not XYB: the samples are the PQ-encoded ones. Measured: exact.
+    public void DecodeToPlanes_LibjxlTestData_MatchesDjxlExactly(string name)
+    {
+        NpyArray expected = NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".npy"));
+
+        using FileStream stream = File.OpenRead(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", name + ".jxl"));
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        NpyArray actual = JxlConformanceImages.ToNpy(decoded);
+
+        Assert.Equal(expected.Shape, actual.Shape);
+        Assert.Equal(expected.Data, actual.Data);
+    }
+
     // A vector that needs a feature of a later slice, which the spec lists under that slice. patches is a
     // VarDCT frame with patches (D12). bike is XYB with the BT.709 transfer function, which XYB output has
-    // since D11a; it also has patches on a VarDCT frame, so it waits for D12 too.
+    // since D11a, but its VarDCT frame also has patches, so bike and bike_5 moved from D11 to D12 at D11's
+    // done-check.
     [Theory]
     [InlineData("bike", "Patches on VarDCT frames")]
     [InlineData("bike_5", "Patches on VarDCT frames")]
