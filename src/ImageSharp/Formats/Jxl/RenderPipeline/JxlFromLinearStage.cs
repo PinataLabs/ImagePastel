@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// FromLinearStage with OpRgb, OpHlg, Op709 and OpGamma, and the choice of GetFromLinearStage, in
+// FromLinearStage with OpRgb, OpPq, OpHlg, Op709 and OpGamma, and the choice of GetFromLinearStage, in
 // lib/jxl/render_pipeline/stage_from_linear.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -13,7 +13,7 @@ using SixLabors.ImageSharp.Memory;
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 
 /// <summary>
-/// Encodes the linear colour planes with the output transfer function: sRGB, HLG, BT.709, or a gamma,
+/// Encodes the linear colour planes with the output transfer function: sRGB, PQ, HLG, BT.709, or a gamma,
 /// which DCI also is. The linear one changes nothing, so it needs no stage.
 /// </summary>
 internal sealed class JxlFromLinearStage : IJxlColorStage
@@ -23,13 +23,18 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
     // OpGamma's exponent, libjxl's inverse_gamma.
     private readonly float inverseGamma;
 
+    // OpPq's TF_PQ, built from the original intensity target: in linear XYB output 1.0 is that target,
+    // and PQ's 1.0 is 10,000 nits.
+    private readonly float pqScaleTo10000Nits;
+
     // OpHlg's OOTF to scene light; null for the other operations.
     private readonly JxlHlgOotf hlgOotf;
 
-    private JxlFromLinearStage(Op op, float inverseGamma, JxlHlgOotf hlgOotf = null)
+    private JxlFromLinearStage(Op op, JxlOutputEncoding output, JxlHlgOotf hlgOotf = null)
     {
         this.op = op;
-        this.inverseGamma = inverseGamma;
+        this.inverseGamma = output.InverseGamma;
+        this.pqScaleTo10000Nits = JxlTransferFunctions.PqScaleTo10000Nits(output.OrigIntensityTarget);
         this.hlgOotf = hlgOotf;
     }
 
@@ -37,6 +42,7 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
     private enum Op
     {
         Rgb,
+        Pq,
         Hlg,
         Bt709,
         Gamma,
@@ -44,8 +50,7 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
 
     /// <summary>
     /// Returns the stage for the output transfer function, as libjxl's <c>GetFromLinearStage</c>, or
-    /// <see langword="null"/> for a linear output (libjxl's <c>OpLinear</c>, which does nothing). Throws
-    /// <see cref="NotSupportedException"/> for PQ, whose operation is not ported yet.
+    /// <see langword="null"/> for a linear output (libjxl's <c>OpLinear</c>, which does nothing).
     /// </summary>
     /// <param name="output">The output encoding.</param>
     /// <returns>The stage, or <see langword="null"/>.</returns>
@@ -62,28 +67,28 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
         JxlTransferFunction named = tf.HaveGamma ? JxlTransferFunction.Unknown : tf.TransferFunction;
         if (named == JxlTransferFunction.Srgb)
         {
-            return new JxlFromLinearStage(Op.Rgb, output.InverseGamma);
+            return new JxlFromLinearStage(Op.Rgb, output);
         }
 
         if (named == JxlTransferFunction.Pq)
         {
-            JxlThrowHelper.ThrowNotSupportedException($"XYB output with the {named} transfer function");
+            return new JxlFromLinearStage(Op.Pq, output);
         }
 
         if (named == JxlTransferFunction.Hlg)
         {
             JxlHlgOotf ootf = JxlHlgOotf.ToSceneLight(output.DesiredIntensityTarget, output.Luminances);
-            return new JxlFromLinearStage(Op.Hlg, output.InverseGamma, ootf);
+            return new JxlFromLinearStage(Op.Hlg, output, ootf);
         }
 
         if (named == JxlTransferFunction.Bt709)
         {
-            return new JxlFromLinearStage(Op.Bt709, output.InverseGamma);
+            return new JxlFromLinearStage(Op.Bt709, output);
         }
 
         if (tf.HaveGamma || named == JxlTransferFunction.Dci)
         {
-            return new JxlFromLinearStage(Op.Gamma, output.InverseGamma);
+            return new JxlFromLinearStage(Op.Gamma, output);
         }
 
         // libjxl: JXL_DEBUG_ABORT("Invalid target encoding"), a programming error. An unknown transfer
@@ -110,6 +115,14 @@ internal sealed class JxlFromLinearStage : IJxlColorStage
                         // OpRgb: libjxl builds with JXL_HIGH_PRECISION set by default, so it takes
                         // TF_SRGB().EncodedFromDisplay rather than FastLinearToSRGB.
                         row[x] = JxlTransferFunctions.SrgbEncodedFromDisplay(row[x]);
+                    }
+
+                    break;
+
+                case Op.Pq:
+                    for (int x = 0; x < row.Length; x++)
+                    {
+                        row[x] = JxlTransferFunctions.PqEncodedFromDisplay(row[x], this.pqScaleTo10000Nits);
                     }
 
                     break;

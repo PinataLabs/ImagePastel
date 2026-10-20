@@ -100,6 +100,45 @@ public class JxlTransferFunctionsTests
     public void GammaEncodedFromDisplay_AtOrBelowTheThreshold_IsZero(float linear)
         => Assert.Equal(0F, JxlTransferFunctions.GammaEncodedFromDisplay(linear, 0.45455F));
 
+    // libjxl's TF_PQ, for an image whose intensity target is 10,000 nits (PQ's 1.0) and one whose target
+    // is 1,000 nits. At 0 the low polynomial gives 2.925e-7, not 0. The polynomial switches where the
+    // unscaled sample reaches 1e-4 (libjxl's test is x < 1e-4), whatever the target: 9.99e-5 takes the
+    // low one and 1e-4 the high one. A sample above 1 gives a value above PQ's 1.0.
+    // Measured: exact.
+    [Theory]
+    [InlineData(10000F, 0F, 2.92520525e-07F)]
+    [InlineData(10000F, 1e-6F, 0.0214862116F)]
+    [InlineData(10000F, 1e-5F, 0.0623368621F)]
+    [InlineData(10000F, 9.99e-5F, 0.149894714F)]
+    [InlineData(10000F, 1e-4F, 0.149946406F)]
+    [InlineData(10000F, 5e-4F, 0.247847825F)]
+    [InlineData(10000F, 0.018F, 0.56815666F)]
+    [InlineData(10000F, 0.1F, 0.751826882F)]
+    [InlineData(10000F, 0.5F, 0.926546633F)]
+    [InlineData(10000F, 1F, 0.999999881F)]
+    [InlineData(10000F, 1.5F, 1.04207802F)]
+    [InlineData(1000F, 0F, 2.92520525e-07F)]
+    [InlineData(1000F, 1e-6F, 0.00630233111F)]
+    [InlineData(1000F, 1e-5F, 0.0214862078F)]
+    [InlineData(1000F, 9.99e-5F, 0.0623105094F)]
+    [InlineData(1000F, 1e-4F, 0.0624340139F)]
+    [InlineData(1000F, 5e-4F, 0.117466465F)]
+    [InlineData(1000F, 0.018F, 0.347966641F)]
+    [InlineData(1000F, 0.1F, 0.508078337F)]
+    [InlineData(1000F, 0.5F, 0.676584661F)]
+    [InlineData(1000F, 1F, 0.751826882F)]
+    [InlineData(1000F, 1.5F, 0.796058953F)]
+    public void PqEncodedFromDisplay_GivesLibjxlsValue(float intensityTarget, float linear, float expected)
+        => Assert.Equal(expected, JxlTransferFunctions.PqEncodedFromDisplay(linear, JxlTransferFunctions.PqScaleTo10000Nits(intensityTarget)));
+
+    // libjxl restores the sign with bit operations, so -0 gives the negated value at 0.
+    [Theory]
+    [InlineData(10000F, -0.25F, -0.851702571F)]
+    [InlineData(1000F, -0.25F, -0.602559149F)]
+    [InlineData(10000F, -0F, -2.92520525e-07F)]
+    public void PqEncodedFromDisplay_OfANegativeSample_GivesLibjxlsValue(float intensityTarget, float linear, float expected)
+        => Assert.Equal(expected, JxlTransferFunctions.PqEncodedFromDisplay(linear, JxlTransferFunctions.PqScaleTo10000Nits(intensityTarget)));
+
     // libjxl's TF_HLG at 0, on the square-root segment, at its threshold 1/12 (which is still on it:
     // libjxl's test is x <= 1/12, and it gives 0.5), just above it, on the log segment, and above 1.
     // Measured: exact.

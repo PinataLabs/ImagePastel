@@ -20,8 +20,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// to 64x64, with their library quant tables and custom coefficient orders; and D9f's
 /// <c>vardct_xyb_identity_afv</c>, at the same settings, which adds Identity and AFV blocks, an adaptive quant
 /// field and a non-zero chroma-from-luma map; and D11a's <c>vardct_xyb_bt709</c> and <c>vardct_xyb_dci</c>,
-/// which render to the BT.709 and DCI curves; and D11c's <c>vardct_xyb_hlg</c> and <c>vardct_xyb_grey_hlg</c>,
-/// which render to HLG through the OOTF to scene light. The planes are compared with djxl's float output at the
+/// which render to the BT.709 and DCI curves; and D11b's <c>vardct_xyb_pq</c> and <c>vardct_xyb_pq_1000</c>,
+/// which render to PQ from intensity targets of 10,000 and 1,000 nits; and D11c's <c>vardct_xyb_hlg</c> and
+/// <c>vardct_xyb_grey_hlg</c>, which render to HLG through the OOTF to scene light. The planes are compared with
+/// djxl's float output at the
 /// lossy thresholds (docs/jxl/spec.md, "Tolerance for lossy output"), and each case records the error
 /// measured when it was written.
 /// </summary>
@@ -47,6 +49,8 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_e7", 3)] // Gaborish, EPF (1 iteration) and other block sizes: RMSE 1.1e-6, peak 1.7e-5
     [InlineData("vardct_xyb_bt709", 3)] // The BT.709 curve (Op709): RMSE 6.9e-7, peak 6.0e-6
     [InlineData("vardct_xyb_dci", 3)] // The DCI curve (OpGamma, 1 / 2.6), steep near 0: RMSE 2.7e-6, peak 1.1e-4
+    [InlineData("vardct_xyb_pq", 3)] // PQ (OpPq), intensity target 10000 nits, steep near 0: RMSE 2.1e-5, peak 7.1e-4
+    [InlineData("vardct_xyb_pq_1000", 3)] // PQ, intensity target 1000 nits, so linear 1.0 is PQ's 0.1: RMSE 3.1e-5, peak 1.3e-3
     [InlineData("vardct_xyb_hlg", 3)] // HLG (OpHlg), the OOTF with the BT.2100 luminances, steep in the shadows: RMSE 3.5e-6, peak 1.7e-4
     [InlineData("vardct_xyb_grey_hlg", 1)] // Grey HLG (OpHlg), the OOTF with the sRGB luminances: RMSE 1.8e-7, peak 2.5e-6
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
@@ -146,6 +150,42 @@ public class JxlXybVarDctTests
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.Tf.TransferFunction);
+    }
+
+    // The PQ files at 16 bits. PQ is steep near 0, so the planes differ from djxl's by more than a 16-bit
+    // step there (the peaks above), which libjxl's FMA causes (ADR 0004): this
+    // port's TF_PQ applied to djxl's own linear output gives djxl's PQ output within 3.6e-7. So the image
+    // is compared with this decoder's planes, clamped, which checks the 16-bit conversion, and with djxl's
+    // at the lossy peak threshold. A PQ image has no pixel profile until D11f, which builds its 3D-LUT
+    // profile; the pixels are still PQ-encoded.
+    // Measured: 0.50 of one 16-bit step from the planes, which is the rounding; from djxl's clamped
+    // reference, 5.2e-4 (34 steps, vardct_xyb_pq) and 1.3e-3 (83 steps, vardct_xyb_pq_1000).
+    [Theory]
+    [InlineData("vardct_xyb_pq")]
+    [InlineData("vardct_xyb_pq_1000")]
+    public void LoadRgb48_Pq_IsWithinOneStepOfTheClampedPlanesWithNoPixelProfileUntilD11f(string name)
+    {
+        NpyArray djxl = LoadReference(name);
+        NpyArray planes;
+        using (FileStream stream = File.OpenRead(InputPath(name)))
+        {
+            using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+            planes = JxlConformanceImages.ToNpy(decoded);
+        }
+
+        using Image<Rgb48> image = Image.Load<Rgb48>(CreateConfiguration(), InputPath(name));
+        NpyArray actual = JxlConformanceImages.ToNpy(image, 3);
+
+        AssertWithinOneStep(planes, actual, 3, (i, c) => planes.Data[(i * 3) + c], 16);
+        double peak = 0;
+        for (int i = 0; i < actual.Data.Length; i++)
+        {
+            peak = Math.Max(peak, Math.Abs(actual.Data[i] - Math.Clamp(djxl.Data[i], 0F, 1F)));
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference from djxl {peak:G3}, {peak * 65535:G3} 16-bit steps");
+        Assert.True(peak <= JxlLossyComparer.PeakError, $"Largest difference from djxl {peak:G4}");
+        Assert.Null(image.Metadata.IccProfile);
     }
 
     // Measured: the largest difference is 0.50 of one 8-bit step, which is the rounding.
@@ -260,7 +300,6 @@ public class JxlXybVarDctTests
     [Theory]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
-    [InlineData("vardct_xyb_pq", "XYB output with the Pq transfer function")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
     {
         using FileStream stream = File.OpenRead(InputPath(name));
@@ -269,9 +308,11 @@ public class JxlXybVarDctTests
         Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 
-    // Compares each sample with the clamped reference, which reference(pixel, channel) gives.
-    private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, int channels, Func<int, int, float> reference)
+    // Compares each sample with the clamped reference, which reference(pixel, channel) gives, in steps of
+    // the given bit depth.
+    private static void AssertWithinOneStep(NpyArray expected, NpyArray actual, int channels, Func<int, int, float> reference, int bits = 8)
     {
+        double steps = (1 << bits) - 1;
         Assert.Equal(expected.Shape[1], actual.Shape[1]);
         Assert.Equal(expected.Shape[2], actual.Shape[2]);
         int pixels = actual.Shape[1] * actual.Shape[2];
@@ -281,12 +322,12 @@ public class JxlXybVarDctTests
             for (int c = 0; c < channels; c++)
             {
                 double e = Math.Clamp(reference(i, c), 0F, 1F);
-                worst = Math.Max(worst, Math.Abs(actual.Data[(i * channels) + c] - e) * 255);
+                worst = Math.Max(worst, Math.Abs(actual.Data[(i * channels) + c] - e) * steps);
             }
         }
 
-        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one 8-bit step");
-        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} 8-bit steps");
+        TestContext.Current.TestOutputHelper?.WriteLine($"Largest difference {worst:G3} of one {bits}-bit step");
+        Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} {bits}-bit steps");
     }
 
     // The sRGB encoding of IEC 61966-2-1, in double precision.

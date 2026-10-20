@@ -70,7 +70,7 @@ internal sealed class JxlOutputEncoding
 
     /// <summary>
     /// Gets the image's intensity target, in nits, libjxl's <c>orig_intensity_target</c>: the luminance
-    /// of a linear sample of 1.0.
+    /// of a linear sample of 1.0. The PQ curve scales by it.
     /// </summary>
     public float OrigIntensityTarget { get; }
 
@@ -114,15 +114,15 @@ internal sealed class JxlOutputEncoding
     {
         JxlImageMetadata m = metadata.M;
         JxlColorEncoding orig = m.ColorEncoding;
+        float intensityTarget = m.ToneMapping.IntensityTarget;
         if (!m.XybEncoded)
         {
             // The samples are in the image's own encoding; only an XYB image needs the opsin parameters.
-            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), m.ToneMapping.IntensityTarget);
+            return new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), intensityTarget);
         }
 
         // The fallback has sRGB primaries and a D65 white point, with the sRGB curve or none.
         bool origOk = IsOriginalOutput(m);
-        float intensityTarget = m.ToneMapping.IntensityTarget;
         JxlOutputEncoding output = origOk
             ? new JxlOutputEncoding(orig.IsGray, true, orig.Tf, IsLinearTf(orig.Tf), intensityTarget)
             : displayEncoded
