@@ -2,13 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // MaybeCreateProfileImpl and its helpers (PrimariesToXYZ, AdaptToXYZD50, CIEXYZFromWhiteCIExy,
-// WriteICCS15Fixed16, CreateICCHeader, MaybeCreateICCCICPTag) in lib/jxl/cms/jxl_cms_internal.h,
+// WriteICCS15Fixed16, CreateICCHeader, MaybeCreateICCCICPTag, CreateICCCurvCurvTag) in
+// lib/jxl/cms/jxl_cms_internal.h,
 // and Mul3x3Matrix, Mul3x3Vector and Inv3x3Matrix in lib/jxl/base/matrix_ops.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
@@ -26,7 +28,8 @@ namespace SixLabors.ImageSharp.ColorManagement.Icc;
 /// <see cref="IccProfileFactory"/> lets it through; the JPEG XL decoder turns it into
 /// <see cref="InvalidImageContentException"/>.
 /// <para>
-/// Where the built profile differs from libjxl's: table curves (PQ, HLG) are not built.
+/// A TRC is a parametric curve, or a table curve (<c>curv</c>) such as libjxl builds for PQ and HLG; the
+/// caller computes the table.
 /// </para>
 /// </remarks>
 internal static class IccProfileBuilder
@@ -97,6 +100,70 @@ internal static class IccProfileBuilder
         string description,
         string signature,
         (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
+        => Build(
+            dataColorSpace,
+            white,
+            primaries,
+            curves?.Select(c => (IccTagDataEntry)new IccParametricCurveTagDataEntry(c)).ToArray(),
+            adaptedWhite,
+            renderingIntent,
+            description,
+            signature,
+            cicp);
+
+    /// <summary>
+    /// Builds the profile with one table curve for every channel, as libjxl's <c>CreateICCCurvCurvTag</c>
+    /// writes it for PQ and HLG: a <c>curv</c> tag that <c>rTRC</c>, <c>gTRC</c> and <c>bTRC</c> share.
+    /// </summary>
+    /// <param name="dataColorSpace"><see cref="IccColorSpaceType.Rgb"/> or <see cref="IccColorSpaceType.Gray"/>.</param>
+    /// <param name="white">The white point as CIE xy chromaticity.</param>
+    /// <param name="primaries">The red, green and blue primaries as CIE xy chromaticity; null for gray.</param>
+    /// <param name="tableCurve">The entries of the curve, for encoded values from 0 to 1 in equal steps; 65535 is 1.</param>
+    /// <param name="adaptedWhite">The white that <c>chad</c> and the colorants adapt the white point to.</param>
+    /// <param name="renderingIntent">The rendering intent of the header.</param>
+    /// <param name="description">The text of the <c>desc</c> tag.</param>
+    /// <param name="signature">The CMM type and creator signature of the header, or null for none.</param>
+    /// <param name="cicp">The H.273 code points of a <c>cicp</c> tag, or null for no tag. Ignored for gray.</param>
+    /// <returns>The profile, written and read back.</returns>
+    /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
+    public static IccProfile Build(
+        IccColorSpaceType dataColorSpace,
+        (double X, double Y) white,
+        (double X, double Y)[] primaries,
+        ushort[] tableCurve,
+        Vector3 adaptedWhite,
+        IccRenderingIntent renderingIntent,
+        string description,
+        string signature,
+        (byte ColorPrimaries, byte TransferCharacteristics)? cicp = null)
+    {
+        Guard.NotNull(tableCurve, nameof(tableCurve));
+
+        // The writer stores each value as round(value * 65535), which gives back the entry.
+        float[] values = new float[tableCurve.Length];
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = tableCurve[i] / 65535F;
+        }
+
+        // One entry for every channel; the writer stores equal tag data once, so the TRC tags share it.
+        IccTagDataEntry curve = new IccCurveTagDataEntry(values);
+        IccTagDataEntry[] curves = dataColorSpace == IccColorSpaceType.Gray ? new[] { curve } : new[] { curve, curve, curve };
+        return Build(dataColorSpace, white, primaries, curves, adaptedWhite, renderingIntent, description, signature, cicp);
+    }
+
+    // The TRCs are tag data entries: one for gray, red, green and blue for RGB, or null to check the other
+    // values and build nothing.
+    private static IccProfile Build(
+        IccColorSpaceType dataColorSpace,
+        (double X, double Y) white,
+        (double X, double Y)[] primaries,
+        IccTagDataEntry[] curves,
+        Vector3 adaptedWhite,
+        IccRenderingIntent renderingIntent,
+        string description,
+        string signature,
+        (byte ColorPrimaries, byte TransferCharacteristics)? cicp)
     {
         bool gray = dataColorSpace == IccColorSpaceType.Gray;
         (double wx, double wy) = white;
@@ -164,13 +231,13 @@ internal static class IccProfileBuilder
 
         if (gray)
         {
-            tags.Add(new IccParametricCurveTagDataEntry(curves[0], IccProfileTag.GrayTrc));
+            tags.Add(curves[0].CloneWithTagSignature(IccProfileTag.GrayTrc));
         }
         else
         {
-            tags.Add(new IccParametricCurveTagDataEntry(curves[0], IccProfileTag.RedTrc));
-            tags.Add(new IccParametricCurveTagDataEntry(curves[1], IccProfileTag.GreenTrc));
-            tags.Add(new IccParametricCurveTagDataEntry(curves[2], IccProfileTag.BlueTrc));
+            tags.Add(curves[0].CloneWithTagSignature(IccProfileTag.RedTrc));
+            tags.Add(curves[1].CloneWithTagSignature(IccProfileTag.GreenTrc));
+            tags.Add(curves[2].CloneWithTagSignature(IccProfileTag.BlueTrc));
         }
 
         // Written and read back, so the header carries its size and the profile passes CheckIsValid,

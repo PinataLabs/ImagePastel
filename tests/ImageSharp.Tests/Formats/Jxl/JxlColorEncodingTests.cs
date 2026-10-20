@@ -162,8 +162,10 @@ public class JxlColorEncodingTests
         Assert.Equal(new IccCicpTagDataEntry(1, 1, 0, 1), cicp);
     }
 
+    // An RGB PQ or HLG encoding that a cicp tag can name gets libjxl's 3D-LUT profile, which is not built
+    // yet (D11f).
     [Fact]
-    public void Load_Hlg_DecodesWithNoPixelProfileUntilD11()
+    public void Load_RgbHlgThatACicpTagNames_HasNoPixelProfile()
     {
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_hlg.jxl"));
         using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath("hlg"));
@@ -172,6 +174,46 @@ public class JxlColorEncodingTests
         Assert.Equal(JxlTransferFunction.Hlg, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Tf.TransferFunction);
         Assert.Null(image.Metadata.IccProfile);
     }
+
+    // A PQ or HLG encoding that no cicp tag can name (grey, or custom primaries) gets a 64-entry table curve.
+    // Measured: every curve entry equal to djxl's (largest difference 0 steps).
+    [Theory]
+    [InlineData("grey_hlg")]
+    [InlineData("custom_pq")]
+    public void Load_PqOrHlgThatNoCicpTagNames_GivesATableCurveProfileLikeDjxls(string name)
+    {
+        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl"));
+        using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath(name));
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+        AssertTableCurveProfileLikeDjxls(DjxlProfile(name), image.Metadata.IccProfile);
+    }
+
+    // Measured: every curve entry equal to djxl's (largest difference 0 steps).
+    [Fact]
+    public void Load_PqGradient_GivesATableCurveProfileLikeDjxls()
+    {
+        string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", "pq_gradient.jxl");
+        string referencePath = Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", "pq_gradient.png");
+        using Image<L16> image = Image.Load<L16>(CreateConfiguration(), path);
+        using Image<L16> reference = Image.Load<L16>(referencePath);
+
+        ImageComparer.Exact.VerifySimilarity(reference, image);
+        AssertTableCurveProfileLikeDjxls(PngProfile(referencePath), image.Metadata.IccProfile);
+    }
+
+    // The PNG encoder writes only a profile that passes CheckIsValid, and a grey profile only to a grey PNG.
+    [Fact]
+    public void SaveAsPng_GreyHlgProfile_IsWrittenToThePng()
+        => AssertProfileIsWrittenToThePng<L8>(Path.Combine(GeneratedDirectory, "colour_grey_hlg.jxl"));
+
+    [Fact]
+    public void SaveAsPng_CustomPqProfile_IsWrittenToThePng()
+        => AssertProfileIsWrittenToThePng<Rgba32>(Path.Combine(GeneratedDirectory, "colour_custom_pq.jxl"));
+
+    [Fact]
+    public void SaveAsPng_PqGradientProfile_IsWrittenToThePng()
+        => AssertProfileIsWrittenToThePng<L16>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", "pq_gradient.jxl"));
 
     [Fact]
     public void Decode_IgnoreMetadata_BuildsNoProfileButKeepsTheColourEncoding()
@@ -241,10 +283,57 @@ public class JxlColorEncodingTests
                     Assert.Equal(c.Type, d.Type);
                     AssertClose(tag, new[] { c.G, c.A, c.B, c.C, c.D, c.E, c.F }, new[] { d.G, d.A, d.B, d.C, d.D, d.E, d.F });
                     break;
+                case IccCurveTagDataEntry table:
+                    int steps = LargestTableDifference(table, Assert.IsType<IccCurveTagDataEntry>(a));
+                    TestContext.Current.TestOutputHelper?.WriteLine($"{tag}: largest difference {steps} steps");
+                    Assert.True(steps <= 1, $"{tag}: an entry differs by {steps} steps.");
+                    break;
                 default:
                     throw new InvalidOperationException($"No comparison for the {e.Signature} type of the {tag} tag.");
             }
         }
+    }
+
+    // The built profile has a table curve where djxl's does, matches it, and survives being written and
+    // read back.
+    private static void AssertTableCurveProfileLikeDjxls(IccProfile djxlProfile, IccProfile actual)
+    {
+        Assert.NotNull(actual);
+        IccProfileTag trc = actual.Header.DataColorSpace == IccColorSpaceType.Gray ? IccProfileTag.GrayTrc : IccProfileTag.RedTrc;
+        Assert.True(actual.TryGetTag(trc, out IccTagDataEntry curve));
+        Assert.Equal(64, Assert.IsType<IccCurveTagDataEntry>(curve).CurveData.Length);
+        AssertSameColour(djxlProfile, actual);
+        AssertSameColour(djxlProfile, new IccProfile(actual.ToByteArray()));
+    }
+
+    private static void AssertProfileIsWrittenToThePng<TPixel>(string path)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = Image.Load<TPixel>(CreateConfiguration(), path);
+        Assert.True(image.Metadata.IccProfile.CheckIsValid());
+
+        using MemoryStream png = new();
+        image.SaveAsPng(png);
+        png.Position = 0;
+        using Image<TPixel> saved = Image.Load<TPixel>(png);
+
+        Assert.NotNull(saved.Metadata.IccProfile);
+        AssertSameColour(image.Metadata.IccProfile, saved.Metadata.IccProfile);
+    }
+
+    // The largest difference between two table curves, in steps of the 16-bit table.
+    private static int LargestTableDifference(IccCurveTagDataEntry expected, IccCurveTagDataEntry actual)
+    {
+        Assert.Equal(expected.CurveData.Length, actual.CurveData.Length);
+        int largest = 0;
+        for (int i = 0; i < expected.CurveData.Length; i++)
+        {
+            int e = (int)MathF.Round(expected.CurveData[i] * 65535F);
+            int a = (int)MathF.Round(actual.CurveData[i] * 65535F);
+            largest = Math.Max(largest, Math.Abs(e - a));
+        }
+
+        return largest;
     }
 
     private static void AssertClose(IccProfileTag tag, float[] expected, float[] actual)
@@ -264,9 +353,11 @@ public class JxlColorEncodingTests
 
     // The profile libjxl built, from the iCCP chunk of djxl's PNG. For spaces that ITU-T H.273 names, djxl
     // also writes a cICP chunk, which takes precedence over iCCP when the PNG decodes, so it is dropped here.
-    private static IccProfile DjxlProfile(string name)
+    private static IccProfile DjxlProfile(string name) => PngProfile(ReferencePath(name));
+
+    private static IccProfile PngProfile(string path)
     {
-        byte[][] chunks = PngTestFileBuilder.ReadChunks(File.ReadAllBytes(ReferencePath(name)))
+        byte[][] chunks = PngTestFileBuilder.ReadChunks(File.ReadAllBytes(path))
             .Where(c => c.Type != "cICP")
             .Select(c => PngTestFileBuilder.Chunk(c.Type, c.Data))
             .ToArray();

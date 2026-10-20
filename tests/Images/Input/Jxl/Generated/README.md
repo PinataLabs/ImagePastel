@@ -22,7 +22,9 @@ These files cover features that no conformance vector checks. They were made for
 | `colour_grey_linear.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Gra_D65_Rel_Lin`: grey, linear. | `External/ReferenceOutput/JxlDecoderTests/colour_grey_linear.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `colour_custom.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_0.3457;0.3585_0.7;0.29;0.18;0.72;0.14;0.05_Abs_SRG`: custom white point and primaries, absolute intent. | `External/ReferenceOutput/JxlDecoderTests/colour_custom.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `colour_dci.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_DCI_DCI_Rel_DCI`: DCI white point, P3 primaries, DCI curve. | `External/ReferenceOutput/JxlDecoderTests/colour_dci.png`, whose `iCCP` chunk is the profile `djxl` builds |
-| `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG: no pixel profile until D11. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Rec2100HLG`: HLG with primaries a `cicp` tag names, which libjxl gives a 3D-LUT profile: no pixel profile until D11f. Its intensity target is 1000 nits. | `External/ReferenceOutput/JxlDecoderTests/colour_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_grey_hlg.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `Gra_D65_Rel_HLG`: grey HLG, intensity target 1000 nits: a pixel profile with libjxl's 64-entry HLG table curve (D11d). | `External/ReferenceOutput/JxlDecoderTests/colour_grey_hlg.png`, whose `iCCP` chunk is the profile `djxl` builds |
+| `colour_custom_pq.jxl` | Lossless Modular, 32 x 32 8-bit, with the colour encoding `RGB_D65_0.7;0.29;0.18;0.72;0.14;0.05_Rel_PeQ`: PQ with custom primaries, intensity target 10000 nits: a pixel profile with libjxl's 64-entry PQ table curve (D11d). | `External/ReferenceOutput/JxlDecoderTests/colour_custom_pq.png`, whose `iCCP` chunk is the profile `djxl` builds |
 | `orientation_1.jxl` to `orientation_8.jxl` | Lossless Modular, 37 x 23 8-bit RGBA, with codestream orientations 1 to 8. The files differ only in the three orientation bits; every pixel differs, so a wrong flip or transpose shows. Orientations 5 to 8 decode to 23 x 37. | `External/ReferenceOutput/JxlDecoderTests/orientation_1.png` to `orientation_8.png` |
 | `orientation_exif.jxl` | The same image with orientation 6, in a container with an uncompressed `Exif` box whose orientation tag is also 6. | `External/ReferenceOutput/JxlDecoderTests/orientation_exif.png`, whose Exif (a `zTXt` "Raw profile type exif" chunk) has the orientation reset to 1 |
 | `two_alpha_a.jxl`, `two_alpha_b.jxl` | Lossless Modular, 16 x 16 8-bit RGB with two alpha extra channels, one colour each: (200, 100, 50) with alphas 128 and 255, and (40, 220, 160) with alphas 64 and 192. Their image headers are equal, so the layer tests stack the frame of one on the other and blend the second alpha channel with the first as its alpha. | `djxl` on each layered codestream, in `JxlLayersTests` |
@@ -110,6 +112,8 @@ cjxl colour_grey_source.pgm colour_grey_linear.jxl -d 0 -x "color_space=Gra_D65_
 cjxl colour_source.ppm colour_custom.jxl -d 0 -x "color_space=RGB_0.3457;0.3585_0.7;0.29;0.18;0.72;0.14;0.05_Abs_SRG"
 cjxl colour_source.ppm colour_dci.jxl -d 0 -x "color_space=RGB_DCI_DCI_Rel_DCI"
 cjxl colour_source.ppm colour_hlg.jxl -d 0 -x "color_space=Rec2100HLG"
+cjxl colour_grey_source.pgm colour_grey_hlg.jxl -d 0 -x "color_space=Gra_D65_Rel_HLG"
+cjxl colour_source.ppm colour_custom_pq.jxl -d 0 -x "color_space=RGB_D65_0.7;0.29;0.18;0.72;0.14;0.05_Rel_PeQ"
 djxl colour_srgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_srgb.png
 djxl colour_grey_srgb.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_grey_srgb.png
 djxl colour_rec2020.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_rec2020.png
@@ -120,11 +124,16 @@ djxl colour_grey_linear.jxl ../../../External/ReferenceOutput/JxlDecoderTests/co
 djxl colour_custom.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_custom.png
 djxl colour_dci.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_dci.png
 djxl colour_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_hlg.png
+djxl colour_grey_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_grey_hlg.png
+djxl colour_custom_pq.jxl ../../../External/ReferenceOutput/JxlDecoderTests/colour_custom_pq.png
 ```
 
 - `make_colour_encodings.py` writes `colour_source.ppm` and `colour_grey_source.pgm`. PPM and PGM carry no colour information, so `cjxl` takes the colour encoding from `-x color_space`. They are not committed; the script makes them again.
 - Each file stores its colour encoding as enumerated fields, not as an ICC profile.
 - `djxl` writes the profile it builds from the colour encoding into the PNG's `iCCP` chunk; it equals `djxl --icc_out`. For `colour_srgb` and `colour_grey_srgb` it writes an `sRGB` chunk instead.
+- `cjxl` writes an intensity target of 1000 nits for HLG and 10000 for PQ by default (`--intensity_target=N` changes it). The PQ and HLG table curves do not depend on it.
+- The PQ file uses the primaries of `colour_custom`. The primaries `0.68;0.32;0.265;0.69;0.15;0.06` would not do: they are P3, `cjxl` stores them as the P3 enum, and `djxl` builds the 3D-LUT profile for them (D11f).
+- Measured: the table curves of `colour_grey_hlg` and `colour_custom_pq` equal `djxl`'s entry by entry (largest difference 0 steps). The curve, `wtpt`, `chad` and colorant tags are byte-identical to `djxl`'s; the `desc` and `cprt` tags differ in their padding and the custom primaries' number format, as for the other colour files.
 
 #### How the orientation files were made
 
