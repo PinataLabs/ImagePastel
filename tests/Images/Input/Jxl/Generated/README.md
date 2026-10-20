@@ -375,23 +375,27 @@ djxl vardct_xyb_grey_hlg.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - Each PQ and HLG file renders to its own encoding, so its pixel profile is the one its lossless twin gets (D11f), byte for byte: `colour_pq.jxl`'s 3D-LUT profile for both PQ files (the profile does not depend on the intensity target), `colour_hlg.jxl`'s for `vardct_xyb_hlg`, and `colour_grey_hlg.jxl`'s table-curve profile for `vardct_xyb_grey_hlg`.
 - D11 decodes every file in this section and `xyb_modular_gamma22.jxl`; none throws. `Image.Load` picks `Rgb24` for each `vardct_xyb_*` file here but `vardct_xyb_grey_hlg`, which gets `L8`, and `Identify` reports each transfer function (D11g).
 
-#### How the VarDCT patches file was made
+#### How the VarDCT patches files were made
 
-`cjxl` stores repeated content once in a reference frame and pastes it with patches, also in a lossy file (D12a). The conformance vectors `patches` and `bike` are RGB, so this grey file checks that a grey XYB image keeps three XYB planes in its reference slot and its patches until the colour transform, as libjxl does.
+`cjxl` stores repeated content once in a reference frame and pastes it with patches, also in a lossy file (D12a). The conformance vectors `patches` and `bike` are RGB, so the grey file checks that a grey XYB image keeps three XYB planes in its reference slot and its patches until the colour transform, as libjxl does. The colour file adds noise to the patches (D12d): no conformance vector has both.
 
 | File | Why it is here | Reference |
 |---|---|---|
 | `vardct_xyb_grey_patches.jxl` | `cjxl -d 1 --patches=1` (default effort), 200 x 120 8-bit grey, sRGB curve, 964 bytes: five lines of four repeated glyphs on a flat background, and a gradient band. A Modular reference-only frame holds the glyphs, saved before its colour transform, so in XYB with three planes; the displayed VarDCT frame pastes them with patches. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_grey_patches.npy`, one channel |
+| `vardct_xyb_patches_noise.jxl` | `cjxl -d 1 --patches=1 --photon_noise_iso=3200` (default effort), 200 x 120 8-bit RGB, sRGB, 1913 bytes: the same layout with each line of glyphs in a colour of its own, and a colour gradient band. Both frames have the noise flag: the Modular reference-only frame that holds the glyphs, and the displayed VarDCT frame, which pastes them with patches. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_patches_noise.npy` |
 
 ```sh
 py -3 make_vardct_patches.py
 cjxl vardct_xyb_grey_patches_source.pgm vardct_xyb_grey_patches.jxl -d 1 --patches=1
+cjxl vardct_xyb_patches_noise_source.ppm vardct_xyb_patches_noise.jxl -d 1 --patches=1 --photon_noise_iso=3200
 djxl vardct_xyb_grey_patches.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_grey_patches.npy
+djxl vardct_xyb_patches_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_patches_noise.npy
 ```
 
-- `make_vardct_patches.py` writes `vardct_xyb_grey_patches_source.pgm`, which is not committed. Each glyph is 5 x 7 pixels drawn at twice its size, in ink 30 on background 235.
+- `make_vardct_patches.py` writes `vardct_xyb_grey_patches_source.pgm` and `vardct_xyb_patches_noise_source.ppm`, which are not committed. Each glyph is 5 x 7 pixels drawn at twice its size, in ink 30 on background 235 (grey), or in the line's colour on (235, 235, 235) (colour).
 - The frames, read from their headers (`GreyPatches_IsAnXybReferenceFrameThenAVarDctFrameWithPatches` in `JxlXybVarDctTests`): a Modular reference-only frame with the save-before-colour-transform flag, which decodes three colour planes, then the last frame, VarDCT with the patches flag.
 - `djxl` writes float32 `.npy`, not clamped. Measured on x64 against `djxl` with AVX2, the RMSE is 1.4e-7 and the peak error 7.2e-7. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
+- `vardct_xyb_patches_noise`: the frame headers are checked in `JxlNoiseTests` (`PatchesAndNoise_IsAReferenceFrameThenAVarDctFrameWithPatchesAndNoise`). The reference frame's noise is seeded by the non-visible frame counter and saved with the glyphs, so the patches paste it, and the displayed frame adds its own. The worst channel RMSE is 5.8e-7 and the peak error 1.4e-5; `Image.Load<Rgb24>` is within 0.50 of one 8-bit step.
 
 #### How the Gaborish files were made
 

@@ -43,7 +43,8 @@ public class JxlConformanceLoadTests
 
     // Measured: opsin_inverse, animation_icos4d, grayscale_public_university, cafe, grayscale_jpeg and
     // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. patches
-    // (linear sRGB planes, sRGB pixels) is within 0.50 and bike (BT.709) within 0.501. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
+    // (linear sRGB planes, sRGB pixels) is within 0.50 and bike (BT.709) within 0.501. noise is within 0.50
+    // and animation_spline (all 60 frames) within 0.502. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
     // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
     // light, and the sRGB curve magnifies that in the shadows.
     [Theory]
@@ -58,6 +59,8 @@ public class JxlConformanceLoadTests
     [InlineData("bench_oriented_brg", typeof(Rgb24), ReferenceSpace.AsCoded)]
     [InlineData("patches", typeof(Rgba32), ReferenceSpace.LinearSrgb)]
     [InlineData("bike", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("noise", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("animation_spline", typeof(Rgb24), ReferenceSpace.AsCoded)]
     public async Task Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference(string id, Type pixelType, ReferenceSpace space)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
@@ -98,6 +101,9 @@ public class JxlConformanceLoadTests
     [InlineData("cafe", 1280, 1600, 24, null, null, 0, false)]
     [InlineData("grayscale_jpeg", 200, 200, 8, null, null, 0, false)]
     [InlineData("bench_oriented_brg", 606, 500, 24, null, null, 0, false)] // Orientation 5: the coded 500x606 is transposed.
+    [InlineData("patches", 1600, 1096, 32, null, null, 1, true)]
+    [InlineData("noise", 500, 606, 24, "Rgb", "Srgb", 0, true)]
+    [InlineData("animation_spline", 320, 320, 24, "Rgb", "Srgb", 0, true)]
     public async Task Identify_ReportsSizeChannelsAndColourEncoding(string id, int width, int height, int bitsPerPixel, string colorSpace, string transferFunction, int extraChannels, bool xyb)
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
@@ -122,6 +128,24 @@ public class JxlConformanceLoadTests
             Assert.Equal(transferFunction, metadata.ColorEncoding.Tf.TransferFunction.ToString());
             Assert.Null(metadata.OriginalIccProfile);
         }
+    }
+
+    // IImageInfo has no frame count, so Identify cannot report one: Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference
+    // checks that Image.Load gives every frame of the reference. Identify reports the animation header of
+    // animation_spline (60 frames of 2 ticks of 10 ms each), and none for a still image.
+    [Theory]
+    [InlineData("animation_spline", 100u, 1u, 0)]
+    [InlineData("noise", 0u, 0u, 0)]
+    public async Task Identify_ReportsTheAnimationHeader(string id, uint ticksNumerator, uint ticksDenominator, int loopCount)
+    {
+        string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
+
+        IImageInfo info = Image.Identify(CreateConfiguration(), input, out _);
+
+        JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
+        Assert.Equal(ticksNumerator, metadata.TicksPerSecondNumerator);
+        Assert.Equal(ticksDenominator, metadata.TicksPerSecondDenominator);
+        Assert.Equal(loopCount, metadata.LoopCount);
     }
 
     // bench_oriented_brg has codestream orientation 5 and an Exif box. Identify reports the image as Load

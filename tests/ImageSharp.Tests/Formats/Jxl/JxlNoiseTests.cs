@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -37,6 +38,7 @@ public class JxlNoiseTests
     [Theory]
     [InlineData("noise_resampling_2x", 1)] // 1.4e-6, 4.2e-5
     [InlineData("noise_animation", 3)] // Worst frame: 1.5e-6, 4.1e-5
+    [InlineData("vardct_xyb_patches_noise", 1)] // Patches and noise (D12d): 5.8e-7, 1.4e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int frames)
     {
         NpyArray expected = LoadReference(name);
@@ -52,6 +54,7 @@ public class JxlNoiseTests
     [Theory]
     [InlineData("noise_resampling_2x")]
     [InlineData("noise_animation")]
+    [InlineData("vardct_xyb_patches_noise")]
     public void Load_Rgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -67,6 +70,24 @@ public class JxlNoiseTests
             TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: peak error {result.PeakError * 255:G3} of one 8-bit step");
             Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Frame {result.Frame}: peak error {result.PeakError * 255:G4} steps");
         }
+    }
+
+    // The file cjxl made with --patches=1 --photon_noise_iso=3200 has both features on its displayed frame.
+    // A Modular reference-only frame holds the glyphs; cjxl sets the noise flag on it too, so its noise,
+    // seeded by the non-visible frame counter, is saved with the glyphs. Then the VarDCT frame pastes them
+    // with patches and adds noise of its own over the whole frame.
+    [Fact]
+    public void PatchesAndNoise_IsAReferenceFrameThenAVarDctFrameWithPatchesAndNoise()
+    {
+        List<JxlFrameHeader> frames = JxlCodestreamFrames.Read(File.ReadAllBytes(InputPath("vardct_xyb_patches_noise")));
+
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(JxlFrameType.ReferenceOnly, frames[0].FrameType);
+        Assert.Equal(JxlFrameEncoding.Modular, frames[0].Encoding);
+        Assert.Equal(JxlFrameFlags.Noise, frames[0].Flags & JxlFrameFlags.Noise);
+        Assert.Equal(JxlFrameEncoding.VarDct, frames[1].Encoding);
+        Assert.Equal(JxlFrameFlags.Patches | JxlFrameFlags.Noise, frames[1].Flags & (JxlFrameFlags.Patches | JxlFrameFlags.Noise));
+        Assert.True(frames[1].IsLast);
     }
 
     // A noise look-up table whose entries are all 0 adds nothing (libjxl's HasAny), so the frame decodes

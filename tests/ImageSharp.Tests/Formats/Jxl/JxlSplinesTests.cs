@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
@@ -50,6 +51,30 @@ public class JxlSplinesTests
         foreach (JxlConformanceFrameResult result in JxlLossyComparer.AssertWithinThresholds(expected, actual))
         {
             TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: worst channel RMSE {result.WorstChannelRmse:G3}, peak {result.PeakError:G3}");
+        }
+    }
+
+    // Measured: largest difference 0.50 of one 8-bit step (both files), which is the rounding.
+    [Theory]
+    [InlineData("splines")]
+    [InlineData("spline_on_first_frame")]
+    public void Load_LibjxlSplineData_IsRgb24WithinOneStepOfTheClampedReference(string name)
+    {
+        NpyArray expected = NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".npy"));
+
+        Configuration configuration = Configuration.CreateDefaultInstance();
+        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
+        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
+        using Image image = Image.Load(configuration, Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "jxl", name + ".jxl"));
+
+        Assert.IsType<Image<Rgb24>>(image);
+        using Image<Rgb24> pixels = image.CloneAs<Rgb24>();
+        JxlConformanceFrameResult[] results = JxlConformanceComparer.Measure(expected, JxlConformanceImages.ToNpy(pixels, expected.Shape[3]), JxlConformanceComparison.ClampToUnitRange);
+        Assert.Equal(expected.Shape[0], results.Length);
+        foreach (JxlConformanceFrameResult result in results)
+        {
+            TestContext.Current.TestOutputHelper?.WriteLine($"Frame {result.Frame}: peak error {result.PeakError * 255:G3} of one 8-bit step");
+            Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Frame {result.Frame}: peak error {result.PeakError * 255:G4} steps");
         }
     }
 

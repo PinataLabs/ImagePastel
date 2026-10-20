@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -72,6 +73,21 @@ public class JxlConformanceDecoderTests
         }
 
         JxlConformanceComparer.AssertWithinThresholds(vector, expected, actual);
+    }
+
+    // A vector that needs a feature of a later slice, which the spec lists under that slice. progressive
+    // (fetched) starts with a DC frame (D13), which is rejected before its passes are reached.
+    [Theory]
+    [InlineData("progressive", "DC frames")]
+    [InlineData("progressive_5", "DC frames")]
+    public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
+    {
+        JxlConformanceVector vector = JxlConformanceVector.Load(id);
+        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
+
+        await using FileStream stream = File.OpenRead(input);
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
+        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 
     // libjxl test data that no conformance vector covers, against a djxl v0.12.0 .npy reference (see the
