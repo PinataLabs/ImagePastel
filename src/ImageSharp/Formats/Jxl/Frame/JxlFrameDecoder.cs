@@ -4,7 +4,7 @@
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
 // ProcessDCGroup, FinalizeDC, AllocateOutput, ProcessACGlobal, ProcessACGroup, ProcessSections, FinalizeFrame), the
 // per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc), and the
-// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc).
+// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc), with its spline stage.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -104,6 +104,10 @@ internal sealed class JxlFrameDecoder
         using JxlPatchesStage patchesStage = patches != null
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSize)
             : null;
+
+        // The splines are read with the DC global section too, and drawn after the patches.
+        JxlSplines splines = (frameHeader.Flags & JxlFrameFlags.Splines) != 0 ? new JxlSplines() : null;
+        JxlSplinesStage splinesStage = splines != null ? new JxlSplinesStage(splines) : null;
         IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
@@ -121,7 +125,7 @@ internal sealed class JxlFrameDecoder
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, channelShifts);
         using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
-        ProcessSections(frameHeader, frameDim, sections, patches, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
+        ProcessSections(frameHeader, frameDim, sections, patches, splines, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
 
         foreach (JxlBitReader section in sections)
         {
@@ -134,7 +138,7 @@ internal sealed class JxlFrameDecoder
         // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
         // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
         IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, upsampling.AfterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -157,7 +161,7 @@ internal sealed class JxlFrameDecoder
 
     // Internal, as ProcessDcGroup, so that tests can read the state the DC sections fill (the AC
     // metadata, the quant field and the chroma-from-luma maps), which no output shows on its own.
-    internal static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
+    internal static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlSplines splines, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
     {
         // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
         // frame without the flag has no dictionary, so the caller passes null.
@@ -181,9 +185,21 @@ internal sealed class JxlFrameDecoder
             }
         }
 
-        // Splines and noise are rejected by CheckSupported.
+        // libjxl clears its splines on every frame; here a frame without the flag has none.
+        splines?.Decode(br, frameDim.XSize * frameDim.YSize, cancellationToken);
+
+        // Noise is rejected by CheckSupported.
         matrices.DecodeDc(br);
         varDct?.DecodeGlobalDcInfo(br);
+
+        // Splines' draw cache uses the color correlation map: the one the frame decodes on a VarDCT
+        // frame, and the default one on a Modular frame.
+        if (splines != null)
+        {
+            JxlColorCorrelation cmap = varDct?.Cmap ?? new JxlColorCorrelation(0, 0);
+            splines.InitializeDrawCache(frameDim.XSizeUpsampled, frameDim.YSizeUpsampled, cmap.YtoXRatio(0), cmap.YtoBRatio(0), cancellationToken);
+        }
+
         modularFrameDecoder.DecodeGlobalInfo(br, frameHeader);
     }
 
@@ -238,11 +254,6 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (noise)");
         }
 
-        if ((flags & JxlFrameFlags.Splines) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (splines)");
-        }
-
         if ((flags & JxlFrameFlags.UseDcFrame) != 0)
         {
             JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
@@ -267,7 +278,7 @@ internal sealed class JxlFrameDecoder
         }
     }
 
-    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
+    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlSplines splines, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
     {
         int numPasses = (int)frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -280,7 +291,7 @@ internal sealed class JxlFrameDecoder
         JxlBitReader AcGlobal() => singleSection ? sections[0] : sections[1 + numDcGroups];
         JxlBitReader AcGroup(long g, int p) => singleSection ? sections[0] : sections[JxlToc.AcGroupIndex(p, g, numGroups, numDcGroups)];
 
-        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, matrices, modularFrameDecoder, varDct, cancellationToken);
+        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, splines, matrices, modularFrameDecoder, varDct, cancellationToken);
 
         for (long i = 0; i < numDcGroups; i++)
         {

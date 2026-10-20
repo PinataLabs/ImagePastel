@@ -377,6 +377,7 @@ internal sealed class JxlTestLayers
     {
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
         ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
+        flags = frame.Splines != null ? flags | 16 : flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(frame.Encoding == JxlFrameEncoding.Modular);
         if (flags == 0)
@@ -482,19 +483,20 @@ internal sealed class JxlTestLayers
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
-        // The patch dictionary comes first in the DC global section, which a single group and pass puts
-        // at the start of the frame's only section.
+        // The patch dictionary, then the spline dictionary, come first in the DC global section, which a
+        // single group and pass puts at the start of the frame's only section.
         byte[] section = frame.Section;
-        if (frame.Patches != null)
+        if (frame.Patches != null || frame.Splines != null)
         {
-            JxlTestBitWriter withPatches = new();
-            frame.Patches.Write(withPatches, this.numExtraChannels);
+            JxlTestBitWriter withDictionaries = new();
+            frame.Patches?.Write(withDictionaries, this.numExtraChannels);
+            frame.Splines?.Write(withDictionaries);
             foreach (byte b in frame.Section)
             {
-                withPatches.Write(8, b);
+                withDictionaries.Write(8, b);
             }
 
-            section = withPatches.ToArray();
+            section = withDictionaries.ToArray();
         }
 
         // TOC: no permutation, then the size of each section as U32(Bits(10), BitsOffset(14, 1024),
@@ -599,12 +601,15 @@ internal sealed record JxlTestFrame(byte[] Section)
 
     /// <summary>
     /// Gets the frame's sections in TOC order, for a frame of more than one section; when set, it
-    /// replaces <see cref="Section"/>, and the frame cannot have patches.
+    /// replaces <see cref="Section"/>, and the frame cannot have patches or splines.
     /// </summary>
     public byte[][] Sections { get; init; }
 
     /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
     public JxlTestPatchDictionary Patches { get; init; }
+
+    /// <summary>Gets the spline dictionary; when set, the splines flag is set too.</summary>
+    public JxlTestSplines Splines { get; init; }
 
     /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
     /// <param name="section">The frame's section.</param>

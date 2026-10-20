@@ -131,7 +131,7 @@ public class JxlRenderPipelineTests
         }
 
         IJxlColorStage[] colorStages = colorStage != null ? new[] { colorStage } : Array.Empty<IJxlColorStage>();
-        return pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, Array.Empty<IJxlNeighbourStage>(), colorStages, null, sink, CancellationToken.None);
+        return pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, null, Array.Empty<IJxlNeighbourStage>(), colorStages, null, sink, CancellationToken.None);
     }
 
     // The planes may keep their padding, so only the frame's samples are checked.

@@ -193,7 +193,7 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <summary>
     /// Runs the stages over the whole frame, in libjxl's order: the neighbour stages before the patches
     /// (the chroma upsampling, the loop filters, then the early upsampling of the extra channels), the
-    /// patches, the neighbour stages after them (the upsampling), the save before the
+    /// patches, the splines, the neighbour stages after them (the upsampling), the save before the
     /// colour transform, the colour-transform stages, the blending, the save after blending, and the
     /// output. Returns the frame to keep in its reference slot, if it can be referenced; the caller saves
     /// it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
@@ -205,13 +205,14 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// Gaborish then the EPF passes, and the early upsampling of the extra channels. Possibly none.
     /// </param>
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
+    /// <param name="splines">The splines stage, or <see langword="null"/> if the frame has no splines.</param>
     /// <param name="afterPatches">The neighbour stages after the patches, in the order they run. Possibly none.</param>
     /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
-    /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages and the patches.</param>
+    /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages, the patches and the splines.</param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, IJxlNeighbourStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, JxlSplinesStage splines, IJxlNeighbourStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -250,6 +251,18 @@ internal sealed class JxlRenderPipeline : IDisposable
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     patches.ProcessRow(this.planes, xsize, y);
+                }
+            }
+
+            if (splines != null)
+            {
+                // The splines run at the coded size, on the colour channels only.
+                int xsize = this.ChannelXSize(0);
+                int ysize = this.ChannelYSize(0);
+                for (int y = 0; y < ysize; y++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    splines.ProcessRow(this.planes, this.numColorPlanes, xsize, y);
                 }
             }
 

@@ -304,10 +304,9 @@ public class JxlLayersTests
 
     [Theory]
     [InlineData(1)] // noise
-    [InlineData(16)] // splines
     [InlineData(3)] // patches and noise
-    [InlineData(18)] // patches and splines
-    public void Decode_FrameWithNoiseOrSplines_IsNotSupported(ulong flags)
+    [InlineData(17)] // splines and noise
+    public void Decode_FrameWithNoise_IsNotSupported(ulong flags)
     {
         byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }).ToArray();
 

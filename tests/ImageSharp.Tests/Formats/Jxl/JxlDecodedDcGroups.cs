@@ -79,7 +79,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         JxlDequantMatrices matrices = new();
         JxlModularFrameDecoder modularFrameDecoder = new(Configuration.Default.MemoryAllocator, frameDim, matrices);
         JxlVarDctFrameState state = new(Configuration.Default.MemoryAllocator, frameHeader, frameDim, matrices);
-        JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, null, matrices, modularFrameDecoder, state, CancellationToken.None);
+        JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, null, null, matrices, modularFrameDecoder, state, CancellationToken.None);
         for (long i = 0; i < frameDim.NumDcGroups; i++)
         {
             JxlFrameDecoder.ProcessDcGroup(i, singleSection ? sections[0] : sections[1 + i], frameHeader, frameDim, modularFrameDecoder, state);

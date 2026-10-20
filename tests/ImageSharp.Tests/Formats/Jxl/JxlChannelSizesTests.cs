@@ -126,7 +126,7 @@ public class JxlChannelSizesTests
         DiagonalUpsamplingStage stage = new();
         using RecordingSink sink = new();
 
-        pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, new IJxlNeighbourStage[] { stage }, Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None)?.Dispose();
+        pipeline.Finish(frameHeader, Array.Empty<IJxlNeighbourStage>(), null, null, new IJxlNeighbourStage[] { stage }, Array.Empty<IJxlColorStage>(), null, sink, CancellationToken.None)?.Dispose();
 
         // The stage ran over the channel's 5x7, wrote 10x14, and the channel shrank to the frame's 10x13.
         Assert.Equal((5, 7), (stage.XSize, stage.Rows));
