@@ -3,8 +3,10 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
 // ProcessDCGroup, FinalizeDC, AllocateOutput, ProcessACGlobal, ProcessACGroup, ProcessSections, FinalizeFrame), the
-// per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc), and the
-// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc), with its spline stage.
+// per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc), the
+// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc) with its spline stage,
+// and the frame counters that seed the noise (visible_frame_index and nonvisible_frame_index in
+// lib/jxl/dec_cache.h).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -34,6 +36,11 @@ internal sealed class JxlFrameDecoder
     private readonly JxlCodecMetadata metadata;
     private readonly JxlReferenceFrames references;
 
+    // Used for seeding noise: libjxl's visible_frame_index and nonvisible_frame_index, which its
+    // PassesDecoderState keeps across the frames of an image.
+    private long visibleFrameIndex;
+    private long nonvisibleFrameIndex;
+
     public JxlFrameDecoder(Configuration configuration, JxlCodecMetadata metadata, JxlReferenceFrames references)
     {
         this.configuration = configuration;
@@ -62,6 +69,19 @@ internal sealed class JxlFrameDecoder
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
         CheckSupported(frameHeader);
+
+        // InitFrame counts the shown frames, and the frames since the last shown one. libjxl also counts a
+        // preview frame as not shown; JxlDecoderCore rejects images with a preview.
+        if ((frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0) &&
+            (frameHeader.FrameType == JxlFrameType.Regular || frameHeader.FrameType == JxlFrameType.SkipProgressive))
+        {
+            this.visibleFrameIndex++;
+            this.nonvisibleFrameIndex = 0;
+        }
+        else
+        {
+            this.nonvisibleFrameIndex++;
+        }
 
         // The pixel cap is checked before anything is allocated for the frame. It also covers libjxl's
         // CheckSizeLimit in decode.cc, which only guards against size_t overflow.
@@ -101,6 +121,7 @@ internal sealed class JxlFrameDecoder
         // The patch dictionary is read with the DC global section, and the patches stage uses it then.
         // The patches run at the coded size, before the upsampling; the blending at the upsampled size.
         JxlPatchDictionary patches = (frameHeader.Flags & JxlFrameFlags.Patches) != 0 ? new JxlPatchDictionary(this.references) : null;
+        JxlNoiseParams noise = (frameHeader.Flags & JxlFrameFlags.Noise) != 0 ? new JxlNoiseParams() : null;
         using JxlPatchesStage patchesStage = patches != null
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, patches, this.metadata.M, (int)frameDim.XSize)
             : null;
@@ -122,10 +143,21 @@ internal sealed class JxlFrameDecoder
         JxlUpsamplingStages upsampling = JxlUpsamplingStages.Create(frameHeader);
         int numColorPlanes = frameHeader.NumDecodedColorPlanes;
         JxlChannelShift[] channelShifts = JxlRenderPipeline.ChannelShifts(numColorPlanes, frameHeader.ExtraChannelUpsampling.Count, upsampling.Chroma, upsampling.BeforePatches, upsampling.AfterPatches);
-        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, channelShifts);
+        using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, channelShifts, withNoisePlanes: noise != null);
         using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
 
-        ProcessSections(frameHeader, frameDim, sections, patches, splines, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
+        ProcessSections(frameHeader, frameDim, sections, patches, splines, noise, matrices, modularFrameDecoder, varDct, pipeline, cancellationToken);
+
+        // libjxl's ProcessACGroup fills each group's noise planes once the group is decoded. Each group
+        // seeds generators of its own, so filling them once every group is in gives the same planes.
+        if (noise != null)
+        {
+            for (long g = 0; g < numGroups; g++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                JxlNoise.PrepareNoiseInput(pipeline, frameDim, frameHeader.Upsampling, g, this.visibleFrameIndex, this.nonvisibleFrameIndex);
+            }
+        }
 
         foreach (JxlBitReader section in sections)
         {
@@ -138,7 +170,13 @@ internal sealed class JxlFrameDecoder
         // the EPF sigma image once the groups are in. Here they are built once every section is decoded,
         // so a stage can take what the sections decoded (the quant field, the EPF sharpness) as it is built.
         IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+
+        // The add-noise stage takes the base ratios of the colour-correlation map, which a VarDCT frame
+        // decodes and a Modular frame has at their defaults: libjxl makes a new map for each frame.
+        JxlNoiseStages noiseStages = noise != null
+            ? new JxlNoiseStages(noise, this.metadata.M, varDct?.Cmap ?? new JxlColorCorrelation(frameDim.XSize, frameDim.YSize))
+            : null;
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, colorStages, blending, isLastOfStill ? sink : null, cancellationToken, noiseStages);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -161,7 +199,7 @@ internal sealed class JxlFrameDecoder
 
     // Internal, as ProcessDcGroup, so that tests can read the state the DC sections fill (the AC
     // metadata, the quant field and the chroma-from-luma maps), which no output shows on its own.
-    internal static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlSplines splines, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken)
+    internal static void ProcessDcGlobal(JxlBitReader br, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlPatchDictionary patches, JxlSplines splines, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, CancellationToken cancellationToken, JxlNoiseParams noise = null)
     {
         // libjxl clears the dictionary it keeps across frames when the frame has no patches; here a
         // frame without the flag has no dictionary, so the caller passes null.
@@ -187,8 +225,7 @@ internal sealed class JxlFrameDecoder
 
         // libjxl clears its splines on every frame; here a frame without the flag has none.
         splines?.Decode(br, frameDim.XSize * frameDim.YSize, cancellationToken);
-
-        // Noise is rejected by CheckSupported.
+        noise?.Decode(br);
         matrices.DecodeDc(br);
         varDct?.DecodeGlobalDcInfo(br);
 
@@ -245,24 +282,13 @@ internal sealed class JxlFrameDecoder
 
         if (frameHeader.FrameType == JxlFrameType.Dc)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (a DC frame)");
+            JxlThrowHelper.ThrowNotSupportedException("DC frames (a DC frame)");
         }
 
         JxlFrameFlags flags = frameHeader.Flags;
-        if ((flags & JxlFrameFlags.Noise) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (noise)");
-        }
-
         if ((flags & JxlFrameFlags.UseDcFrame) != 0)
         {
-            JxlThrowHelper.ThrowNotSupportedException("Splines, noise or DC frames (the frame uses a DC frame)");
-        }
-
-        // Patches on a Modular frame decode; on a VarDCT frame they come with D12.
-        if ((flags & JxlFrameFlags.Patches) != 0 && frameHeader.Encoding == JxlFrameEncoding.VarDct)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Patches on VarDCT frames");
+            JxlThrowHelper.ThrowNotSupportedException("DC frames (the frame uses a DC frame)");
         }
 
         // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
@@ -278,7 +304,7 @@ internal sealed class JxlFrameDecoder
         }
     }
 
-    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlSplines splines, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
+    private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlPatchDictionary patches, JxlSplines splines, JxlNoiseParams noise, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
     {
         int numPasses = (int)frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -291,7 +317,7 @@ internal sealed class JxlFrameDecoder
         JxlBitReader AcGlobal() => singleSection ? sections[0] : sections[1 + numDcGroups];
         JxlBitReader AcGroup(long g, int p) => singleSection ? sections[0] : sections[JxlToc.AcGroupIndex(p, g, numGroups, numDcGroups)];
 
-        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, splines, matrices, modularFrameDecoder, varDct, cancellationToken);
+        ProcessDcGlobal(DcGlobal(), frameHeader, frameDim, patches, splines, matrices, modularFrameDecoder, varDct, cancellationToken, noise);
 
         for (long i = 0; i < numDcGroups; i++)
         {

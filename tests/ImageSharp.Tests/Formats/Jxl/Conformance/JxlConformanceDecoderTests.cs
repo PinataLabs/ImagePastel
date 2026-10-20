@@ -1,7 +1,6 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,7 +47,13 @@ public class JxlConformanceDecoderTests
     [InlineData("upsampling_5")] // A Level 5 reference of its own. Measured: RMSE 2.6e-4, peak 1.6e-2, as for djxl v0.12.0 (2.6e-4, 1.6e-2).
     [InlineData("alpha_premultiplied")] // VarDCT with XYB, Gaborish and EPF; 12-bit, premultiplied 16-bit alpha. Measured: RMSE 2.2e-7, peak 3.1e-6 (threshold 3.8e-6).
     [InlineData("animation_icos4d")] // 48 VarDCT frames with alpha, Gaborish and EPF (2 iterations), cropped and blended. Measured, worst frame: RMSE 6.6e-7, peak 2.6e-5.
+    [InlineData("noise")] // XYB VarDCT with noise (D12c). Measured: RMSE 5.8e-7, peak 2.8e-5 (djxl v0.12.0: 3.8e-7, 9.2e-6).
+    [InlineData("noise_5")] // The same reference, at Level 5.
     [InlineData("animation_icos4d_5")] // A Level 5 reference of its own, which djxl v0.12.0 also misses by up to 5.6e-2. Measured, worst frame: RMSE 1.1e-3, peak 5.6e-2.
+    [InlineData("patches")] // XYB VarDCT with alpha and patches from a Modular reference-only frame saved before its colour transform, so in XYB. Measured: RMSE 1.5e-7, peak 6.6e-6 (djxl v0.12.0: 9.2e-8, 2.7e-6).
+    [InlineData("patches_5")] // A Level 5 reference of its own, which djxl v0.12.0 misses by as much. Measured: RMSE 2.6e-4, peak 2.4e-2 (djxl v0.12.0: 2.6e-4, 2.4e-2).
+    [InlineData("bike")] // Fetched. XYB VarDCT with patches, rendered to the BT.709 curve. Measured: RMSE 4.7e-7, peak 2.5e-4 (djxl v0.12.0: 3.0e-7, 6.3e-6). The peak is one sample at the curve's switch from 4.5x to the power segment, where it jumps from 0.0810 to 0.0812 between two adjacent floats: the FMA differences (ADR 0004) put the linear sample on the other side of 0.018. No other sample is more than 1.6e-5 away.
+    [InlineData("bike_5")] // The same reference, at Level 5.
     [InlineData("animation_spline")] // 60 VarDCT frames with XYB and splines, each drawn with the frame's chroma-from-luma base. Measured, worst frame: RMSE 2.8e-7, peak 1.4e-5 (djxl v0.12.0: 2.8e-7, 1.4e-5).
     [InlineData("animation_spline_5")] // The same reference, at Level 5.
     public async Task DecodeToPlanes_PassesThresholds(string id)
@@ -83,23 +88,5 @@ public class JxlConformanceDecoderTests
 
         Assert.Equal(expected.Shape, actual.Shape);
         Assert.Equal(expected.Data, actual.Data);
-    }
-
-    // A vector that needs a feature of a later slice, which the spec lists under that slice. patches is a
-    // VarDCT frame with patches (D12). bike is XYB with the BT.709 transfer function, which XYB output has
-    // since D11a, but its VarDCT frame also has patches, so bike and bike_5 moved from D11 to D12 at D11's
-    // done-check.
-    [Theory]
-    [InlineData("bike", "Patches on VarDCT frames")]
-    [InlineData("bike_5", "Patches on VarDCT frames")]
-    [InlineData("patches", "Patches on VarDCT frames")]
-    public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
-    {
-        JxlConformanceVector vector = JxlConformanceVector.Load(id);
-        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
-
-        await using FileStream stream = File.OpenRead(input);
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 }

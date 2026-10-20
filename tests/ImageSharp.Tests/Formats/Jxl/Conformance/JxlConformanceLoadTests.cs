@@ -42,7 +42,8 @@ public class JxlConformanceLoadTests
     }
 
     // Measured: opsin_inverse, animation_icos4d, grayscale_public_university, cafe, grayscale_jpeg and
-    // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
+    // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. patches
+    // (linear sRGB planes, sRGB pixels) is within 0.50 and bike (BT.709) within 0.501. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
     // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
     // light, and the sRGB curve magnifies that in the shadows.
     [Theory]
@@ -55,6 +56,8 @@ public class JxlConformanceLoadTests
     [InlineData("cafe", typeof(Rgb24), ReferenceSpace.AsCoded)]
     [InlineData("grayscale_jpeg", typeof(L8), ReferenceSpace.AsCoded)]
     [InlineData("bench_oriented_brg", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("patches", typeof(Rgba32), ReferenceSpace.LinearSrgb)]
+    [InlineData("bike", typeof(Rgb24), ReferenceSpace.AsCoded)]
     public async Task Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference(string id, Type pixelType, ReferenceSpace space)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

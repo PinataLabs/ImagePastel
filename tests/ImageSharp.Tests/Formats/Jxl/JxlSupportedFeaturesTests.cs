@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
@@ -17,7 +16,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// The frame features of later slices: each is rejected on its own with
 /// <see cref="NotSupportedException"/>, so that a slice can lift one rejection at a time. The features
-/// that D10 and D11 lifted decode, and splines since D12 (JxlSplinesTests).
+/// that D10 and D11 lifted decode. Patches on VarDCT frames, which D12a lifted, are checked against djxl
+/// in JxlXybVarDctTests and the conformance tests, noise, which D12c lifted, in JxlNoiseTests, and
+/// splines, which D12b lifted, in JxlSplinesTests.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlSupportedFeaturesTests
@@ -26,7 +27,6 @@ public class JxlSupportedFeaturesTests
     private const int Height = 16;
 
     [Theory]
-    [InlineData(1, "noise")]
     [InlineData(32, "DC frame")]
     [InlineData(4, "frame flags")]
     [InlineData(8, "frame flags")]
@@ -34,11 +34,6 @@ public class JxlSupportedFeaturesTests
     [InlineData(256, "frame flags")]
     public void Decode_FrameFlag_IsNotSupported(ulong flags, string feature)
         => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }, feature);
-
-    // Patches on a VarDCT frame come with D12; on a Modular frame they decode (JxlLayersTests).
-    [Fact]
-    public void Decode_VarDctFrameWithPatches_IsNotSupported()
-        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Encoding = JxlFrameEncoding.VarDct, Flags = 2 }, "Patches on VarDCT frames");
 
     // The D10 features, which threw until D10, decode: YCbCr, chroma subsampling (the modes are Cb, Y,
     // Cr), colour upsampling and extra-channel upsampling. ColourA is one colour, and upsampling and

@@ -61,9 +61,13 @@ public class JxlSplinesTests
     [InlineData("quantization")]
     [InlineData("outside")]
     [InlineData("point")]
+    [InlineData("noise")]
     public async Task DecodeToPlanes_HandBuiltSplines_MatchDjxl(string name)
     {
-        byte[] codestream = Layers(Case(name));
+        // "noise": the curve on a frame with noise too, which the pipeline adds after the splines.
+        byte[] codestream = name == "noise"
+            ? new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Splines = Case("curve"), NoiseLut = new uint[] { 0, 40, 80, 120, 160, 200, 240, 280 } }).ToArray()
+            : Layers(Case(name));
         string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlSplinesTests));
         string input = Path.Combine(directory, name + ".jxl");
         string output = Path.Combine(directory, name + ".npy");

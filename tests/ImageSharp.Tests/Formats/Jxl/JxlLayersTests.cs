@@ -302,18 +302,6 @@ public class JxlLayersTests
         AssertEveryPixel(DecodeToPlanes(codestream), (x, y) => (200, 100, 50, 128));
     }
 
-    [Theory]
-    [InlineData(1)] // noise
-    [InlineData(3)] // patches and noise
-    [InlineData(17)] // splines and noise
-    public void Decode_FrameWithNoise_IsNotSupported(ulong flags)
-    {
-        byte[] codestream = new JxlTestLayers(Width, Height).Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }).ToArray();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => DecodeToPlanes(codestream));
-        Assert.Contains("Splines, noise", ex.Message, StringComparison.Ordinal);
-    }
-
     // Each allocation of a decode, in turn, fails. Whichever it is, the decode throws and every buffer it
     // took is released: the frame planes, the image-sized planes of a blended frame, the copies kept in
     // reference slots and the image itself.

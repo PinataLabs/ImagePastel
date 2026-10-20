@@ -378,6 +378,7 @@ internal sealed class JxlTestLayers
         bool regular = frame.Type is JxlFrameType.Regular or JxlFrameType.SkipProgressive;
         ulong flags = frame.Patches != null ? frame.Flags | 2 : frame.Flags;
         flags = frame.Splines != null ? flags | 16 : flags;
+        flags = frame.NoiseLut != null ? flags | 1 : flags;
         w.Bit(false).Write(2, (ulong)frame.Type);
         w.Bit(frame.Encoding == JxlFrameEncoding.Modular);
         if (flags == 0)
@@ -483,20 +484,25 @@ internal sealed class JxlTestLayers
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
-        // The patch dictionary, then the spline dictionary, come first in the DC global section, which a
-        // single group and pass puts at the start of the frame's only section.
+        // The patch dictionary, the spline dictionary, then the noise look-up table come first in the DC
+        // global section, which a single group and pass puts at the start of the frame's only section.
         byte[] section = frame.Section;
-        if (frame.Patches != null || frame.Splines != null)
+        if (frame.Patches != null || frame.Splines != null || frame.NoiseLut != null)
         {
-            JxlTestBitWriter withDictionaries = new();
-            frame.Patches?.Write(withDictionaries, this.numExtraChannels);
-            frame.Splines?.Write(withDictionaries);
-            foreach (byte b in frame.Section)
+            JxlTestBitWriter withFeatures = new();
+            frame.Patches?.Write(withFeatures, this.numExtraChannels);
+            frame.Splines?.Write(withFeatures);
+            foreach (uint entry in frame.NoiseLut ?? Array.Empty<uint>())
             {
-                withDictionaries.Write(8, b);
+                withFeatures.Write(10, entry);
             }
 
-            section = withDictionaries.ToArray();
+            foreach (byte b in frame.Section)
+            {
+                withFeatures.Write(8, b);
+            }
+
+            section = withFeatures.ToArray();
         }
 
         // TOC: no permutation, then the size of each section as U32(Bits(10), BitsOffset(14, 1024),
@@ -610,6 +616,12 @@ internal sealed record JxlTestFrame(byte[] Section)
 
     /// <summary>Gets the spline dictionary; when set, the splines flag is set too.</summary>
     public JxlTestSplines Splines { get; init; }
+
+    /// <summary>
+    /// Gets the eight entries of the noise look-up table, in units of 1/1024 (10 bits each); when set,
+    /// the noise flag is set too.
+    /// </summary>
+    public uint[] NoiseLut { get; init; }
 
     /// <summary>Returns a frame of <paramref name="section"/> that is the last of the codestream.</summary>
     /// <param name="section">The frame's section.</param>
