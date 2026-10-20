@@ -4,7 +4,6 @@
 // of PassesDecoderState::PreparePipeline in lib/jxl/dec_cache.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
@@ -17,17 +16,18 @@ internal sealed class JxlNoiseStages
 {
     /// <summary>Initializes a new instance of the <see cref="JxlNoiseStages"/> class.</summary>
     /// <param name="noiseParams">The noise parameters, from the frame's DC global section.</param>
-    /// <param name="metadata">The image metadata.</param>
     /// <param name="cmap">
     /// The colour-correlation map of the frame: the decoded one of a VarDCT frame, and the default one of
     /// a Modular frame, as libjxl makes a new map for each frame.
     /// </param>
-    public JxlNoiseStages(JxlNoiseParams noiseParams, JxlImageMetadata metadata, JxlColorCorrelation cmap)
+    /// <param name="firstChannel">
+    /// The first noise channel, libjxl's <c>num_c</c>, after the colour channels and the extra channels:
+    /// the pipeline's <see cref="JxlRenderPipeline.NoiseChannel"/>.
+    /// </param>
+    public JxlNoiseStages(JxlNoiseParams noiseParams, JxlColorCorrelation cmap, int firstChannel)
     {
-        // libjxl's num_c: the noise channels follow the colour channels and the extra channels.
-        int firstC = 3 + metadata.NumExtraChannels;
-        this.Convolve = new JxlConvolveNoiseStage(firstC);
-        this.Add = new JxlAddNoiseStage(noiseParams, cmap.YtoXRatio(0), cmap.YtoBRatio(0), firstC);
+        this.Convolve = new JxlConvolveNoiseStage(firstChannel);
+        this.Add = new JxlAddNoiseStage(noiseParams, cmap.YtoXRatio(0), cmap.YtoBRatio(0), firstChannel);
     }
 
     /// <summary>Gets the convolve-noise stage.</summary>

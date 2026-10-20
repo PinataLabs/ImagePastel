@@ -79,7 +79,8 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// </param>
     /// <param name="withNoisePlanes">
     /// Whether the frame has noise: then three noise planes follow the extra channels, at the upsampled
-    /// frame size (libjxl's three temporary channels, which no stage upsamples).
+    /// frame size (libjxl's three temporary channels, which no stage upsamples). See
+    /// <see cref="NoisePlaneStart"/> and <see cref="NoiseChannel"/>.
     /// </param>
     public JxlRenderPipeline(MemoryAllocator allocator, JxlFrameDimensions frameDim, int numColorPlanes, JxlChannelShift[] channelShifts, bool withNoisePlanes = false)
     {
@@ -89,6 +90,7 @@ internal sealed class JxlRenderPipeline : IDisposable
         if (withNoisePlanes)
         {
             this.NoisePlaneStart = channelShifts.Length;
+            this.NoiseChannel = 3 + (channelShifts.Length - numColorPlanes);
             Array.Resize(ref channelShifts, channelShifts.Length + NumNoisePlanes);
         }
 
@@ -124,6 +126,14 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <see cref="GetPlane"/> and <see cref="GetGroupRect"/>, or -1 if the frame has no noise.
     /// </summary>
     public int NoisePlaneStart { get; } = -1;
+
+    /// <summary>
+    /// Gets the first of the three noise channels as the noise stages number them, libjxl's <c>num_c</c>:
+    /// three colour channels, then the extra channels. It differs from <see cref="NoisePlaneStart"/> for a
+    /// grey image that is not XYB, which may start with one colour plane but has three by the noise stages
+    /// (<see cref="Finish"/>). -1 if the frame has no noise.
+    /// </summary>
+    public int NoiseChannel { get; } = -1;
 
     /// <summary>Gets the number of colour planes, which come before the extra channels.</summary>
     public int NumColorPlanes => this.numColorPlanes;
@@ -225,16 +235,16 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <param name="patches">The patches stage, or <see langword="null"/> if the frame has no patches.</param>
     /// <param name="splines">The splines stage, or <see langword="null"/> if the frame has no splines.</param>
     /// <param name="afterPatches">The neighbour stages after the patches, in the order they run. Possibly none.</param>
+    /// <param name="noise">
+    /// The noise stages, or <see langword="null"/> if the frame has no noise. The pipeline must have been
+    /// built with its noise planes, and the stages with <see cref="NoiseChannel"/>.
+    /// </param>
     /// <param name="colorStages">The colour-transform stages (<see cref="JxlColorStages.Create"/>), possibly none.</param>
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
     /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages, the patches and the splines.</param>
-    /// <param name="noise">
-    /// The noise stages, or <see langword="null"/> if the frame has no noise. The pipeline must have been
-    /// built with its noise planes.
-    /// </param>
     /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, JxlSplinesStage splines, IJxlNeighbourStage[] afterPatches, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken, JxlNoiseStages noise = null)
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, JxlSplinesStage splines, IJxlNeighbourStage[] afterPatches, JxlNoiseStages noise, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -243,20 +253,32 @@ internal sealed class JxlRenderPipeline : IDisposable
             this.RunNeighbourStages(beforePatches, cancellationToken);
 
             // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
-            // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its patches,
-            // reference frames and blending. So the frame drops to grey before them, where libjxl keeps
-            // three planes to the output, which takes the first. Every stage from here to the output works
-            // on each colour channel alone, so the first plane comes out the same. EPF mixes the colour
-            // channels, so the loop filters run on all three before the drop; a Modular frame of such an
-            // image is given three planes for them (RunNeighbourStages), and drops back to one here.
-            // A YCbCr frame mixes the colour channels too, so it keeps three planes through the colour
-            // transform and drops to its first plane, R, after it (JxlFrameHeader.DropsToGreyAfterColorTransform).
+            // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its reference
+            // frames, blending and output. libjxl keeps three planes to the output, which takes the first.
+            // EPF mixes the colour channels, so the loop filters run on all three; a Modular frame of such
+            // an image is given three for them (RunNeighbourStages), copies of its grey plane, as libjxl's
+            // rgb_from_gray makes them.
+            // The add-noise stage mixes the colour channels too: it takes the noise strength from the
+            // first two. So a frame with noise keeps three planes up to it, and a Modular frame is given
+            // three here if it has none yet. The patches blend each of them with the reference's one grey
+            // plane (JxlPatchesStage), and the splines add their X, Y and B colours to them, as in libjxl.
+            // The frame drops to grey after the noise.
+            // Without noise, the patches, the splines and the upsampling work on each colour channel alone,
+            // so the frame drops to grey before them, and the first plane comes out the same.
+            // A YCbCr frame mixes the colour channels in its colour transform, so it keeps three planes
+            // through it and drops to its first plane, R, after it (JxlFrameHeader.DropsToGreyAfterColorTransform).
             // JxlFrameDecoder.CheckSupported rejects the grey YCbCr frames that would need three planes
-            // earlier: patches and a save before the colour transform, as grey patches and reference
-            // slots hold one plane.
+            // earlier: patches and a save before the colour transform, as grey reference slots hold one plane.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
             bool dropsToGreyAfterColorTransform = frameHeader.DropsToGreyAfterColorTransform;
-            if (!dropsToGreyAfterColorTransform)
+            if (noise != null)
+            {
+                if (this.numColorPlanes == 1)
+                {
+                    this.ExpandGreyToThree();
+                }
+            }
+            else if (!dropsToGreyAfterColorTransform)
             {
                 this.DropToGreyIfGreyImage(metadata);
             }
@@ -272,7 +294,7 @@ internal sealed class JxlRenderPipeline : IDisposable
                 for (int y = 0; y < ysize; y++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    patches.ProcessRow(this.planes, xsize, y);
+                    patches.ProcessRow(this.planes, this.numColorPlanes, xsize, y);
                 }
             }
 
@@ -371,7 +393,7 @@ internal sealed class JxlRenderPipeline : IDisposable
             return;
         }
 
-        // A grey image that is not XYB has one colour plane here. libjxl's Modular decoding copies the
+        // A grey image that is not XYB may have one colour plane here. libjxl's Modular decoding copies the
         // grey channel into all three (rgb_from_gray in ModularFrameDecoder::ModularImageToDecodedRect),
         // and its stages see three colour channels: Gaborish has weights for each, and EPF sums its
         // distances over all three, with a scale for each. So the plane is copied into three before the
@@ -464,13 +486,12 @@ internal sealed class JxlRenderPipeline : IDisposable
     }
 
     // The convolve-noise stage, then the add-noise stage, which libjxl's PreparePipeline adds after the
-    // upsampling. The convolve-noise stage runs as the other neighbour stages, so a grey image has three
-    // colour planes for the add-noise stage, as in libjxl. No later stage reads the noise planes (libjxl's
-    // kIgnored), so they are disposed of after it, and the planes are the colour planes and the extra
-    // channels again.
+    // upsampling. A frame with noise has three colour planes here (Finish), so the planes are numbered as
+    // the stages number the channels. No later stage reads the noise planes (libjxl's kIgnored), so they
+    // are disposed of after it, and the planes are the colour planes and the extra channels again.
     private void AddNoise(JxlNoiseStages noise, CancellationToken cancellationToken)
     {
-        DebugGuard.IsTrue(this.NoisePlaneStart >= 0, "The pipeline has noise planes");
+        DebugGuard.IsTrue(this.numColorPlanes == 3 && this.planes.Length == this.NoiseChannel + NumNoisePlanes, "The noise planes follow three colour planes and the extra channels");
         this.RunNeighbourStages(new[] { noise.Convolve }, cancellationToken);
         for (int y = 0; y < this.height; y++)
         {

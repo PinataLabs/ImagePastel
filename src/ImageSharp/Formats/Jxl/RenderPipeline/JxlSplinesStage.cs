@@ -30,7 +30,7 @@ internal sealed class JxlSplinesStage
 
     /// <summary>Adds the splines to row <paramref name="ypos"/> of the frame.</summary>
     /// <param name="planes">The frame planes: the colour planes, then the extra channels, which it ignores.</param>
-    /// <param name="numColorPlanes">The number of colour planes: three, or one for a grey image that is not XYB.</param>
+    /// <param name="numColorPlanes">The number of colour planes: three, or one for a grey image that is not XYB and a frame without noise.</param>
     /// <param name="xsize">The width of the frame.</param>
     /// <param name="ypos">The row.</param>
     public void ProcessRow(Buffer2D<float>[] planes, int numColorPlanes, int xsize, int ypos)
@@ -42,8 +42,9 @@ internal sealed class JxlSplinesStage
             return;
         }
 
-        // A grey image that is not XYB has one colour plane here, where libjxl has three copies of it and
-        // outputs the first. So only the first colour of each spline is kept.
+        // A grey image that is not XYB has one colour plane here unless the frame has noise
+        // (JxlRenderPipeline.Finish). libjxl has three and outputs the first, and no later stage of a frame
+        // without noise mixes them, so only the first colour of each spline is kept.
         if (this.discard.Length < 2 * xsize)
         {
             this.discard = new float[2 * xsize];

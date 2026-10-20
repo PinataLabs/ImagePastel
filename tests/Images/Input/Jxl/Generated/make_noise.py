@@ -6,6 +6,9 @@
 #   noise_source.ppm: a 540 x 280 8-bit RGB image of smooth gradients over the whole intensity range,
 #   so that the noise strength comes from every entry of the noise look-up table.
 #
+#   noise_grey_source.pgm: a 200 x 120 8-bit grey image, the mean of noise_source.ppm's gradient, with a
+#   small 17-step ripple so that the VarDCT blocks are not flat.
+#
 #   noise_animation_source.png: a 280 x 80 8-bit RGB APNG with four frames, two groups wide:
 #     frame 0: the full canvas, shown for 100 ms;
 #     frame 1: a 120 x 50 rectangle at (10, 10), with a delay of 0;
@@ -33,6 +36,17 @@ def write_ppm(path, width, height):
             pixels.extend(gradient(x, y, width, height, 0))
     with open(path, "wb") as f:
         f.write(b"P6\n%d %d\n255\n" % (width, height))
+        f.write(bytes(pixels))
+
+
+def write_pgm(path, width, height):
+    pixels = bytearray()
+    for y in range(height):
+        for x in range(width):
+            r, g, b = gradient(x, y, width, height, 0)
+            pixels.append(min(255, (r + g + b) // 3 + (x * y) % 17))
+    with open(path, "wb") as f:
+        f.write(b"P5\n%d %d\n255\n" % (width, height))
         f.write(bytes(pixels))
 
 
@@ -65,6 +79,7 @@ def write_apng(path, width, height, frames):
 
 def main():
     write_ppm("noise_source.ppm", 540, 280)
+    write_pgm("noise_grey_source.pgm", 200, 120)
     write_apng("noise_animation_source.png", 280, 80, [
         (0, 0, 280, 80, 100),
         (10, 10, 120, 50, 0),

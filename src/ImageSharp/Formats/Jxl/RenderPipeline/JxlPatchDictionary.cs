@@ -21,7 +21,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// positions in the frame and blended there.
 /// </summary>
 /// <remarks>
-/// Deliberate departure from libjxl: libjxl keeps one dictionary across frames and clears it for a
+/// A deliberate departure from libjxl: libjxl keeps one dictionary across frames and clears it for a
 /// frame without patches. Here each frame with the patches flag decodes its own, and a frame without
 /// the flag has none.
 /// </remarks>
@@ -320,7 +320,10 @@ internal sealed class JxlPatchDictionary
     /// <param name="y">The row.</param>
     /// <param name="x0">The first column of the segment.</param>
     /// <param name="xsize">The number of pixels of the segment.</param>
-    /// <param name="numColorPlanes">The number of colour planes: 1 or 3.</param>
+    /// <param name="numColorPlanes">
+    /// The number of colour planes of <paramref name="inout"/>: 1 or 3, the same on every call. It may be 3
+    /// where the reference slots hold 1, for a grey image that is not XYB.
+    /// </param>
     /// <param name="extraChannelInfo">The extra channels of the image.</param>
     /// <param name="hasAlpha">Whether any extra channel is an alpha channel: <see cref="JxlBlending.HasAlpha"/>.</param>
     /// <param name="tmp">Scratch rows for the blending: one per channel, each at least <paramref name="xsize"/> long.</param>
@@ -358,9 +361,16 @@ internal sealed class JxlPatchDictionary
             JxlReferenceFrame reference = this.referenceFrames[(uint)refPos.Ref];
             if (reference != this.fgReference)
             {
+                // A departure from libjxl: a grey image that is not XYB keeps one colour plane in its
+                // reference slots, where libjxl keeps three. A frame with noise blends three colour
+                // planes (JxlRenderPipeline.Finish), so each takes the slot's grey plane. That is libjxl's
+                // result whenever the reference's three planes are equal, as rgb_from_gray makes them for a
+                // Modular frame without splines or noise.
+                int refColorPlanes = reference.Planes.Length - numEc;
                 for (int c = 0; c < numChannels; c++)
                 {
-                    this.fgRows.SetPlane(c, reference.Planes[c]);
+                    int refC = c < numColorPlanes ? Math.Min(c, refColorPlanes - 1) : refColorPlanes + (c - numColorPlanes);
+                    this.fgRows.SetPlane(c, reference.Planes[refC]);
                 }
 
                 this.fgReference = reference;

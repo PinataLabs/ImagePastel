@@ -88,6 +88,46 @@ public class JxlSplineMathsTests
         Assert.Equal(expectedB, rowB[x]);
     }
 
+    // libjxl rounds the span of a segment with std::llround, which on x86-64 gives LONG_MIN for a NaN, an
+    // infinity or a value out of range. A NaN maximum distance (an infinite colour and a sigma whose square
+    // is 0) or an infinite one (a sigma whose square overflows) then gives an empty span, and libjxl adds no
+    // segment. .NET 9 and later convert a NaN to 0 and an infinity to long.MaxValue, so a plain cast would
+    // add one. The spline bounds keep such colours and sigmas out of a stream: the port must not depend
+    // on the runtime all the same. Measured with the harness: no segment for either.
+    [Theory]
+    [InlineData(float.PositiveInfinity, 1e-23F)] // NaN maximum distance
+    [InlineData(1F, 1e20F)] // Infinite maximum distance
+    public void ComputeSegments_WithANonFiniteMaximumDistance_AddsNoSegment(float color, float sigma)
+    {
+        List<JxlSplineSegment> segments = new();
+        List<(long Start, long End)> spans = new();
+
+        JxlSplines.ComputeSegments(32, 10.3F, 5.7F, 1F, new[] { color, 0F, 0F }, sigma, segments, spans);
+
+        Assert.Empty(segments);
+        Assert.Empty(spans);
+    }
+
+    // The same rounding in DrawSegment: libjxl draws nothing for a segment whose maximum distance is NaN,
+    // infinite, or so large that the span is out of range. Measured with the harness: no pixel changed.
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(1e19F)]
+    public void DrawSegment_WithAMaximumDistanceOutOfRange_DrawsNothing(float maximumDistance)
+    {
+        JxlSplineSegment segment = new(10.3F, 5.7F, maximumDistance, 0.4F, 0.5F, 1F, 0.5F, -0.25F);
+        float[] rowX = new float[32];
+        float[] rowY = new float[32];
+        float[] rowB = new float[32];
+
+        JxlSplines.DrawSegment(segment, 5, 0, 32, rowX, rowY, rowB);
+
+        Assert.All(rowX, v => Assert.Equal(0F, v));
+        Assert.All(rowY, v => Assert.Equal(0F, v));
+        Assert.All(rowB, v => Assert.Equal(0F, v));
+    }
+
     // A segment adds to what the row holds.
     [Fact]
     public void DrawSegment_AddsToTheRow()

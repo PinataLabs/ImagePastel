@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
@@ -201,6 +203,32 @@ public class JxlSplinesTests
     [Fact]
     public void DecodeToPlanes_TotalSplineArea_IsBounded()
         => AssertInvalid(new JxlTestSplines(new JxlTestSpline(4, 4, (1, 0)) { Sigma = Enumerable.Repeat(8192, 32).ToArray() }), "Total spline area is too large");
+
+    // A guard of this port, not of libjxl: the draw cache indexes the segments of each row with ints, so
+    // their total must fit an array. Within the 2^30 spline area the total stays far below Array.MaxLength,
+    // so the test lowers the limit: the segments of the curve cover 199 rows in all on a 16 x 16 frame.
+    [Theory]
+    [InlineData(198, true)]
+    [InlineData(199, false)]
+    public void InitializeDrawCache_SegmentRowsAboveTheLimit_Throw(long maxSegmentRows, bool throws)
+    {
+        JxlTestBitWriter w = new();
+        Case("curve").Write(w);
+        JxlSplines splines = new(maxSegmentRows);
+        splines.Decode(w.ToReader(), Width * Height, CancellationToken);
+
+        void Initialize() => splines.InitializeDrawCache(Width, Height, 0, 1, CancellationToken);
+
+        if (throws)
+        {
+            InvalidMemoryOperationException ex = Assert.Throws<InvalidMemoryOperationException>(Initialize);
+            Assert.Contains("segment rows", ex.Message, StringComparison.Ordinal);
+        }
+        else
+        {
+            Initialize();
+        }
+    }
 
     // The control points (4, 4), (4, 4); and (4, 4), (5, 4), (5, 4).
     [Theory]

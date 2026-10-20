@@ -23,30 +23,14 @@ internal static class JxlCodestreamFrames
     /// <returns>The header of each frame, in codestream order.</returns>
     public static List<JxlFrameHeader> Read(byte[] codestream)
     {
-        Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
-
-        // The same steps as JxlDecoderCore.ReadHeaders and JxlFrameDecoder.DecodeFrame.
-        JxlCodecMetadata metadata = new();
-        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
-        JxlBundle.Read(reader, metadata.Size);
-        JxlBundle.Read(reader, metadata.M);
+        JxlCodecMetadata metadata = ReadImageHeader(codestream, out int offset);
         Assert.False(metadata.M.HavePreview);
-        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
-        JxlBundle.Read(reader, metadata.TransformData);
-        if (metadata.M.ColorEncoding.WantIcc)
-        {
-            JxlIccReader.Read(reader);
-        }
-
-        reader.JumpToByteBoundary();
-        int offset = 2 + (int)(reader.TotalBitsConsumed / 8);
-        reader.Close();
 
         List<JxlFrameHeader> frames = new();
         JxlFrameHeader frameHeader;
         do
         {
-            reader = new JxlBitReader(codestream, offset, codestream.Length - offset);
+            JxlBitReader reader = new(codestream, offset, codestream.Length - offset);
             frameHeader = new JxlFrameHeader(metadata);
             JxlBundle.Read(reader, frameHeader);
             JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
@@ -65,5 +49,32 @@ internal static class JxlCodestreamFrames
         while (!frameHeader.IsLast);
 
         return frames;
+    }
+
+    /// <summary>
+    /// Reads the image header of a bare codestream, as <c>JxlDecoderCore.ReadHeaders</c> does: the size
+    /// header, the image metadata, the transform data and the ICC profile, if any, which it skips.
+    /// </summary>
+    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="frameOffset">The byte at which the first frame header (or the preview) starts.</param>
+    /// <returns>The metadata.</returns>
+    public static JxlCodecMetadata ReadImageHeader(byte[] codestream, out int frameOffset)
+    {
+        Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
+        JxlCodecMetadata metadata = new();
+        JxlBitReader reader = new(codestream, 2, codestream.Length - 2);
+        JxlBundle.Read(reader, metadata.Size);
+        JxlBundle.Read(reader, metadata.M);
+        metadata.TransformData.NonserializedXybEncoded = metadata.M.XybEncoded;
+        JxlBundle.Read(reader, metadata.TransformData);
+        if (metadata.M.ColorEncoding.WantIcc)
+        {
+            JxlIccReader.Read(reader);
+        }
+
+        reader.JumpToByteBoundary();
+        frameOffset = 2 + (int)(reader.TotalBitsConsumed / 8);
+        reader.Close();
+        return metadata;
     }
 }

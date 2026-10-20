@@ -18,8 +18,7 @@ internal sealed class JxlPatchesStage : IDisposable
 {
     private readonly JxlPatchDictionary patches;
     private readonly List<JxlExtraChannelInfo> extraChannelInfo;
-    private readonly int numColorPlanes;
-    private readonly int numChannels;
+    private readonly int numExtraChannels;
     private readonly bool hasAlpha;
     private readonly Buffer2D<float> tmp;
     private readonly JxlBlendingRows rows;
@@ -36,26 +35,34 @@ internal sealed class JxlPatchesStage : IDisposable
     {
         this.patches = patches;
         this.extraChannelInfo = metadata.ExtraChannelInfo;
-        this.numColorPlanes = metadata.NumColorPlanes;
+        this.numExtraChannels = metadata.NumExtraChannels;
         this.hasAlpha = JxlBlending.HasAlpha(metadata.ExtraChannelInfo);
-        this.numChannels = metadata.NumColorPlanes + metadata.NumExtraChannels;
-        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), this.numChannels);
-        this.rows = new JxlBlendingRows(new Buffer2D<float>[this.numChannels], Memory<float>.Empty);
+
+        // Room for three colour planes, which a grey image that is not XYB has here when the frame has
+        // noise (JxlRenderPipeline.Finish).
+        int maxChannels = 3 + metadata.NumExtraChannels;
+        this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), maxChannels);
+        this.rows = new JxlBlendingRows(new Buffer2D<float>[maxChannels], Memory<float>.Empty);
     }
 
     /// <summary>Adds the patches to row <paramref name="ypos"/> of the frame.</summary>
     /// <param name="planes">The frame planes, one per channel.</param>
+    /// <param name="numColorPlanes">
+    /// The number of colour planes: three, or one for a grey image that is not XYB, unless the frame has
+    /// noise, which needs three. The same for every row of a frame.
+    /// </param>
     /// <param name="xsize">The width of the frame.</param>
     /// <param name="ypos">The row.</param>
-    public void ProcessRow(Buffer2D<float>[] planes, int xsize, int ypos)
+    public void ProcessRow(Buffer2D<float>[] planes, int numColorPlanes, int xsize, int ypos)
     {
         // The planes may end with the three noise planes, which the patches do not take.
-        for (int c = 0; c < this.numChannels; c++)
+        int numChannels = numColorPlanes + this.numExtraChannels;
+        for (int c = 0; c < numChannels; c++)
         {
             this.rows.SetPlane(c, planes[c]);
         }
 
-        this.patches.AddOneRow(this.rows, ypos, 0, xsize, this.numColorPlanes, this.extraChannelInfo, this.hasAlpha, this.tmp);
+        this.patches.AddOneRow(this.rows, ypos, 0, xsize, numColorPlanes, this.extraChannelInfo, this.hasAlpha, this.tmp);
     }
 
     public void Dispose() => this.tmp.Dispose();

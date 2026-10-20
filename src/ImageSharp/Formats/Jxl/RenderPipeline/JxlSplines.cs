@@ -24,7 +24,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberate departure from libjxl: libjxl keeps one <c>Splines</c> object across frames and clears it
+/// A deliberate departure from libjxl: libjxl keeps one <c>Splines</c> object across frames and clears it
 /// at the start of every frame. Here each frame with the splines flag decodes its own, and a frame
 /// without the flag has none, so one frame's splines never reach the next.
 /// </para>
@@ -46,6 +46,9 @@ internal sealed class JxlSplines
     private const int NumSplineContexts = 6;
 
     private const float DesiredRenderingDistance = 1f;
+
+    // The number of DCT coefficients of each colour and of sigma: libjxl's Dct32.
+    private const int DctSize = 32;
 
     // Maximum number of spline control points per frame is
     //   std::min(kMaxNumControlPoints, xsize * ysize / 2)
@@ -79,7 +82,23 @@ internal sealed class JxlSplines
     private readonly List<JxlSplineSegment> segments = new();
     private int[] segmentIndices = Array.Empty<int>();
     private int[] segmentYStart = Array.Empty<int>();
+    private readonly long maxSegmentRows;
     private int quantizationAdjustment;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlSplines"/> class.
+    /// </summary>
+    public JxlSplines()
+        : this(MaxArrayLength)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlSplines"/> class with a lower limit on the
+    /// segment rows of the draw cache, for tests.
+    /// </summary>
+    /// <param name="maxSegmentRows">The most segment rows <see cref="InitializeDrawCache"/> allows.</param>
+    internal JxlSplines(long maxSegmentRows) => this.maxSegmentRows = maxSegmentRows;
 
     private static int MaxArrayLength =>
 #if NET6_0_OR_GREATER
@@ -103,7 +122,7 @@ internal sealed class JxlSplines
         // treatment of all the coefficients.
         float result = 0;
         float tandhalf = t + 0.5f;
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < DctSize; i++)
         {
             float cosArg = IdctMultipliers[i] * tandhalf;
             float cos = JxlFastMath.FastCosf(cosArg);
@@ -345,8 +364,12 @@ internal sealed class JxlSplines
             SegmentsFromPoints(imageYSize, spline, pointsToDraw, arcLength, this.segments, segmentsSpans);
         }
 
-        // libjxl counts the segments of each row in size_t and ptrdiff_t; here they are indices into
-        // arrays, so their total must fit an array.
+        // A departure from libjxl, as a guard: libjxl counts the segments of each row in size_t and
+        // allocates their indices with no limit. Here they are int indices into an array, so their total
+        // must fit an array, or the casts below would wrap. Within the 2^30 area limit above the total
+        // stays far below Array.MaxLength (the rows of each segment grow with its sigma, and the number of
+        // segments with the arc length, whose product the area estimate bounds), so this is not expected
+        // to throw; it keeps a stream that gets past the estimate from corrupting the indices.
         int[] segmentYStart = new int[imageYSize + 2];
         const int population = 1; // population[y] is segmentYStart[population + y]
         foreach ((long start, long end) in segmentsSpans)
@@ -363,9 +386,9 @@ internal sealed class JxlSplines
             coverage += segmentYStart[population + y];
             segmentYStart[population + y] = (int)total;
             total += coverage;
-            if (total > MaxArrayLength)
+            if (total > this.maxSegmentRows)
             {
-                throw new InvalidMemoryOperationException($"The JPEG XL splines need {total} segment rows, more than the limit of {MaxArrayLength}.");
+                throw new InvalidMemoryOperationException($"The JPEG XL splines need {total} segment rows, more than the limit of {this.maxSegmentRows}.");
             }
         }
 
@@ -415,17 +438,30 @@ internal sealed class JxlSplines
 
     private static float[] CreateIdctMultipliers()
     {
-        float[] multipliers = new float[32];
-        for (int i = 0; i < 32; i++)
+        float[] multipliers = new float[DctSize];
+        for (int i = 0; i < DctSize; i++)
         {
-            multipliers[i] = (float)(Pi / 32 * i);
+            multipliers[i] = (float)(Pi / DctSize * i);
         }
 
         return multipliers;
     }
 
     // std::llround: rounds half away from zero.
-    private static long LlRound(float v) => (long)MathF.Round(v, MidpointRounding.AwayFromZero);
+    // C++ leaves llround of a NaN, an infinity or a value out of range unspecified. On x86-64 (glibc, and
+    // the Windows runtimes djxl is built with) it gives LONG_MIN, the "integer indefinite" of cvtss2si.
+    // A .NET cast is not the same on every runtime: from .NET 9 on it gives 0 for a NaN and saturates an
+    // infinity, and before it gives long.MinValue. So such a value maps to long.MinValue here, on every
+    // runtime: a segment with a NaN or infinite maximum distance then has an empty span, as in libjxl.
+    // The spline bounds keep such values out of a stream (JxlSplineMathsTests).
+    private static long LlRound(float v)
+    {
+        float rounded = MathF.Round(v, MidpointRounding.AwayFromZero);
+
+        // 2^63 is exact as a float; every float below it fits a long.
+        const float twoTo63 = 9223372036854775808F;
+        return rounded >= -twoTo63 && rounded < twoTo63 ? (long)rounded : long.MinValue;
+    }
 
     // std::max of two floats: (a < b) ? b : a.
     private static float Max(float a, float b) => a < b ? b : a;
@@ -433,8 +469,8 @@ internal sealed class JxlSplines
     // std::min of two floats: (b < a) ? b : a.
     private static float Min(float a, float b) => b < a ? b : a;
 
-    // hypotf. .NET has no single-precision hypot, so it is computed in double and rounded once to float,
-    // as glibc's and the Microsoft C runtime's hypotf do.
+    // hypotf. A departure from libjxl: .NET has no single-precision hypot, so it is computed in double and
+    // rounded once to float, as glibc's and the Microsoft C runtime's hypotf do.
     private static float Hypot(float x, float y) => (float)Math.Sqrt((x * (double)x) + (y * (double)y));
 
     private static float InvAdjustedQuant(int adjustment)
@@ -483,7 +519,7 @@ internal sealed class JxlSplines
         Span<SplinePoint> a = stackalloc SplinePoint[3];
         Span<SplinePoint> b = stackalloc SplinePoint[2];
         Span<SplinePoint> p = stackalloc SplinePoint[4];
-        for (int start = 0; start < points.Count - 3; ++start)
+        for (int start = 0; start < points.Count - 3; start++)
         {
             // 4 of them are used, and we draw from p[1] to p[2].
             for (int k = 0; k < 4; k++)
@@ -493,7 +529,7 @@ internal sealed class JxlSplines
 
             result.Add(p[1]);
             t[0] = 0;
-            for (int k = 0; k < 3; ++k)
+            for (int k = 0; k < 3; k++)
             {
                 // TODO(eustas): for each segment delta is calculated 3 times...
                 // TODO(eustas): restrict d[k] with reasonable limit and spec it.
@@ -501,16 +537,16 @@ internal sealed class JxlSplines
                 t[k + 1] = t[k] + d[k];
             }
 
-            for (int i = 1; i < numPoints; ++i)
+            for (int i = 1; i < numPoints; i++)
             {
                 float tt = d[0] + (((float)i / numPoints) * d[1]);
-                for (int k = 0; k < 3; ++k)
+                for (int k = 0; k < 3; k++)
                 {
                     // TODO(eustas): reciprocal multiplication would be faster.
                     a[k] = p[k] + (((tt - t[k]) / d[k]) * (p[k + 1] - p[k]));
                 }
 
-                for (int k = 0; k < 2; ++k)
+                for (int k = 0; k < 2; k++)
                 {
                     b[k] = a[k] + (((tt - t[k]) / (d[k] + d[k + 1])) * (a[k + 1] - a[k]));
                 }
@@ -556,7 +592,7 @@ internal sealed class JxlSplines
 
                 arclengthFromPrevious += arclengthToNext;
                 previous = points[next];
-                ++next;
+                next++;
             }
         }
     }
@@ -569,13 +605,13 @@ internal sealed class JxlSplines
         foreach ((SplinePoint point, float multiplier) in pointsToDraw)
         {
             float progressAlongArc = Min(1.0f, (k * DesiredRenderingDistance) * invArcLength);
-            ++k;
-            for (int c = 0; c < 3; ++c)
+            k++;
+            for (int c = 0; c < 3; c++)
             {
-                color[c] = ContinuousIdct(spline.ColorDct[c], (32 - 1) * progressAlongArc);
+                color[c] = ContinuousIdct(spline.ColorDct[c], (DctSize - 1) * progressAlongArc);
             }
 
-            float sigma = ContinuousIdct(spline.SigmaDct, (32 - 1) * progressAlongArc);
+            float sigma = ContinuousIdct(spline.SigmaDct, (DctSize - 1) * progressAlongArc);
             ComputeSegments(imageYSize, point.X, point.Y, multiplier, color, sigma, segments, segmentsSpans);
         }
     }
@@ -641,8 +677,8 @@ internal sealed class JxlSplines
         public Spline(int numControlPoints)
         {
             this.ControlPoints = new List<SplinePoint>(numControlPoints);
-            this.ColorDct = new[] { new float[32], new float[32], new float[32] };
-            this.SigmaDct = new float[32];
+            this.ColorDct = new[] { new float[DctSize], new float[DctSize], new float[DctSize] };
+            this.SigmaDct = new float[DctSize];
         }
 
         public List<SplinePoint> ControlPoints { get; }
@@ -658,8 +694,8 @@ internal sealed class JxlSplines
     // QuantizedSpline.
     private sealed class QuantizedSpline
     {
-        private readonly int[][] colorDct = { new int[32], new int[32], new int[32] };
-        private readonly int[] sigmaDct = new int[32];
+        private readonly int[][] colorDct = { new int[DctSize], new int[DctSize], new int[DctSize] };
+        private readonly int[] sigmaDct = new int[DctSize];
 
         // Double delta-encoded.
         private (long X, long Y)[] controlPoints = Array.Empty<(long, long)>();
@@ -736,16 +772,16 @@ internal sealed class JxlSplines
             }
 
             float invQuant = InvAdjustedQuant(quantizationAdjustment);
-            for (int c = 0; c < 3; ++c)
+            for (int c = 0; c < 3; c++)
             {
-                for (int i = 0; i < 32; ++i)
+                for (int i = 0; i < DctSize; i++)
                 {
                     float invDctFactor = i == 0 ? SqrtHalf : 1.0f;
                     result.ColorDct[c][i] = this.colorDct[c][i] * invDctFactor * ChannelWeight[c] * invQuant;
                 }
             }
 
-            for (int i = 0; i < 32; ++i)
+            for (int i = 0; i < DctSize; i++)
             {
                 result.ColorDct[0][i] += yToX * result.ColorDct[1][i];
                 result.ColorDct[2][i] += yToB * result.ColorDct[1][i];
@@ -754,9 +790,9 @@ internal sealed class JxlSplines
             ulong widthEstimate = 0;
 
             Span<ulong> color = stackalloc ulong[3];
-            for (int c = 0; c < 3; ++c)
+            for (int c = 0; c < 3; c++)
             {
-                for (int i = 0; i < 32; ++i)
+                for (int i = 0; i < DctSize; i++)
                 {
                     color[c] += (ulong)MathF.Ceiling(invQuant * Math.Abs(this.colorDct[c][i]));
                 }
@@ -773,7 +809,7 @@ internal sealed class JxlSplines
 
             float weightLimit = MathF.Ceiling(MathF.Sqrt(((float)areaLimit / logColor) / Math.Max(1UL, manhattanDistance)));
 
-            for (int i = 0; i < 32; ++i)
+            for (int i = 0; i < DctSize; i++)
             {
                 float invDctFactor = i == 0 ? SqrtHalf : 1.0f;
                 result.SigmaDct[i] = this.sigmaDct[i] * invDctFactor * ChannelWeight[3] * invQuant;
@@ -798,7 +834,7 @@ internal sealed class JxlSplines
 
         private static void DecodeDct(int[] dct, JxlAnsSymbolReader decoder, JxlBitReader br, byte[] contextMap)
         {
-            for (int i = 0; i < 32; ++i)
+            for (int i = 0; i < DctSize; i++)
             {
                 dct[i] = JxlBits.UnpackSigned(decoder.ReadHybridUint(DctContext, br, contextMap));
                 if (dct[i] == int.MinValue)
