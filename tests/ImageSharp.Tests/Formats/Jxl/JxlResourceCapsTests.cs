@@ -50,7 +50,7 @@ public class JxlResourceCapsTests
         WriteIccStream(enc, writer);
         JxlBitReader reader = new(writer.ToArray());
 
-        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => JxlIccReader.Read(reader));
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => JxlIccReader.Read(reader, TestContext.Current.CancellationToken));
         Assert.Equal(throws, ex.Message.Contains("Decoded ICC is too large"));
     }
 
@@ -101,7 +101,7 @@ public class JxlResourceCapsTests
         JxlBitWriter writer = new();
         JxlIccWriter.WriteIcc(profile, writer);
 
-        byte[] decoded = JxlIccReader.Read(new JxlBitReader(writer.ToArray()));
+        byte[] decoded = JxlIccReader.Read(new JxlBitReader(writer.ToArray()), TestContext.Current.CancellationToken);
 
         Assert.Equal(profile, decoded);
     }
