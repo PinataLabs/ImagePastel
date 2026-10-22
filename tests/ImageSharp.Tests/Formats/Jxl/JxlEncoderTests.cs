@@ -137,6 +137,25 @@ public class JxlEncoderTests
         Assert.Equal(encoded.Length, frameDataStart + total);
     }
 
+    // libjxl's JxlEncoderSetBasicInfo takes the intensity target for lossless as for lossy, and without one
+    // SetIntensityTarget gives an sRGB image 255 nits. The pixels stay exact.
+    [Theory]
+    [InlineData(0f, 255f)]
+    [InlineData(400f, 400f)]
+    [InlineData(4000f, 4000f)]
+    public void Encode_Lossless_WritesTheIntensityTargetOfTheMetadata(float metadataTarget, float expected)
+    {
+        using Image<Rgb24> image = new(1, 1);
+        image[0, 0] = new Rgb24(12, 34, 56);
+        image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget = metadataTarget;
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.LosslessFastest);
+
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+        Assert.Equal(expected, decoded.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget);
+        Assert.Equal(image[0, 0], decoded[0, 0]);
+    }
+
     [Fact]
     public void Encoder_Defaults_AreDistanceOneAndEffortDefault()
     {

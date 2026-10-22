@@ -13,6 +13,7 @@
 
 using System;
 using System.Numerics;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
@@ -91,8 +92,8 @@ internal sealed partial class JxlColorEncoding
     /// has (<see cref="JxlIccBuilder.CreateTrc"/>), the rule #115 adopted.
     /// </para>
     /// <para>
-    /// Departures, with no CMS in this library (#105): the curves are compared, not the whole profile through
-    /// a CMS, so the snapped primaries do not have to give the same XYZ. A profile with lookup tables
+    /// Departure (ADR 0001): this library has no CMS (#105). The curves are compared, not the whole profile
+    /// through a CMS, so the snapped primaries do not have to give the same XYZ. A profile with lookup tables
     /// (<c>AToB</c>, <c>BToA</c>, <c>DToB</c> or <c>BToD</c>) is not recognised as matrix/TRC, because a CMS
     /// would use the tables, which this library cannot compare. A <c>cicp</c> tag in a grey profile is
     /// ignored: libjxl would give such a profile an RGB encoding. libjxl reads the rendering intent from the
@@ -201,12 +202,12 @@ internal sealed partial class JxlColorEncoding
         double[] xyz = { v.X, v.Y, v.Z };
         if (chad is not null)
         {
-            if (!TryInvert(chad, out double[,] inverseChad))
+            if (!JxlMatrix3x3.TryInvert(chad, out double[,] inverseChad))
             {
                 return false;
             }
 
-            xyz = Multiply(inverseChad, xyz);
+            xyz = JxlMatrix3x3.Multiply(inverseChad, xyz);
         }
 
         white = XyFromXyz(xyz);
@@ -220,7 +221,7 @@ internal sealed partial class JxlColorEncoding
         double[,] inverseChad;
         if (chad is not null)
         {
-            if (!TryInvert(chad, out inverseChad))
+            if (!JxlMatrix3x3.TryInvert(chad, out inverseChad))
             {
                 return false;
             }
@@ -235,15 +236,15 @@ internal sealed partial class JxlColorEncoding
 
             double factor = 1 / white.Y;
             double[] wpUnadaptedXyz = { white.X * factor, 1, (1 - white.X - white.Y) * factor };
-            double[] wpD50Lms = Multiply(LmsFromXyz, WpD50Xyz);
-            double[] wpUnadaptedLms = Multiply(LmsFromXyz, wpUnadaptedXyz);
+            double[] wpD50Lms = JxlMatrix3x3.Multiply(LmsFromXyz, WpD50Xyz);
+            double[] wpUnadaptedLms = JxlMatrix3x3.Multiply(LmsFromXyz, wpUnadaptedXyz);
             double[,] scale =
             {
                 { wpUnadaptedLms[0] / wpD50Lms[0], 0, 0 },
                 { 0, wpUnadaptedLms[1] / wpD50Lms[1], 0 },
                 { 0, 0, wpUnadaptedLms[2] / wpD50Lms[2] },
             };
-            inverseChad = Multiply(Multiply(XyzFromLms, scale), LmsFromXyz);
+            inverseChad = JxlMatrix3x3.Multiply(JxlMatrix3x3.Multiply(XyzFromLms, scale), LmsFromXyz);
         }
 
         IccProfileTag[] colorants = { IccProfileTag.RedMatrixColumn, IccProfileTag.GreenMatrixColumn, IccProfileTag.BlueMatrixColumn };
@@ -256,7 +257,7 @@ internal sealed partial class JxlColorEncoding
             }
 
             Vector3 v = colorant.Data[0];
-            xy[i] = XyFromXyz(Multiply(inverseChad, new double[] { v.X, v.Y, v.Z }));
+            xy[i] = XyFromXyz(JxlMatrix3x3.Multiply(inverseChad, new double[] { v.X, v.Y, v.Z }));
         }
 
         return this.SetPrimaries(xy[0], xy[1], xy[2]);
@@ -507,59 +508,5 @@ internal sealed partial class JxlColorEncoding
     {
         double sum = xyz[0] + xyz[1] + xyz[2];
         return (xyz[0] / sum, xyz[1] / sum);
-    }
-
-    private static double[] Multiply(double[,] m, double[] v)
-    {
-        double[] result = new double[3];
-        for (int i = 0; i < 3; i++)
-        {
-            result[i] = (m[i, 0] * v[0]) + (m[i, 1] * v[1]) + (m[i, 2] * v[2]);
-        }
-
-        return result;
-    }
-
-    private static double[,] Multiply(double[,] a, double[,] b)
-    {
-        double[,] result = new double[3, 3];
-        for (int j = 0; j < 3; j++)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                result[j, i] = (a[j, 0] * b[0, i]) + (a[j, 1] * b[1, i]) + (a[j, 2] * b[2, i]);
-            }
-        }
-
-        return result;
-    }
-
-    private static bool TryInvert(double[,] m, out double[,] inverse)
-    {
-        inverse = new double[3, 3];
-        inverse[0, 0] = (m[1, 1] * m[2, 2]) - (m[1, 2] * m[2, 1]);
-        inverse[0, 1] = (m[0, 2] * m[2, 1]) - (m[0, 1] * m[2, 2]);
-        inverse[0, 2] = (m[0, 1] * m[1, 2]) - (m[0, 2] * m[1, 1]);
-        inverse[1, 0] = (m[1, 2] * m[2, 0]) - (m[1, 0] * m[2, 2]);
-        inverse[1, 1] = (m[0, 0] * m[2, 2]) - (m[0, 2] * m[2, 0]);
-        inverse[1, 2] = (m[0, 2] * m[1, 0]) - (m[0, 0] * m[1, 2]);
-        inverse[2, 0] = (m[1, 0] * m[2, 1]) - (m[1, 1] * m[2, 0]);
-        inverse[2, 1] = (m[0, 1] * m[2, 0]) - (m[0, 0] * m[2, 1]);
-        inverse[2, 2] = (m[0, 0] * m[1, 1]) - (m[0, 1] * m[1, 0]);
-        double det = (m[0, 0] * inverse[0, 0]) + (m[0, 1] * inverse[1, 0]) + (m[0, 2] * inverse[2, 0]);
-        if (!(Math.Abs(det) > 1e-10))
-        {
-            return false;
-        }
-
-        for (int j = 0; j < 3; j++)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                inverse[j, i] /= det;
-            }
-        }
-
-        return true;
     }
 }

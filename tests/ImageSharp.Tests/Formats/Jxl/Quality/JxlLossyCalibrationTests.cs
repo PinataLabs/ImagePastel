@@ -4,15 +4,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
@@ -116,7 +112,7 @@ public class JxlLossyCalibrationTests
         JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
         MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
         JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);
-        SkipUnlessReaderRuns(readerKind);
+        JxlEncoderRoundTrip.SkipUnlessReaderRuns(readerKind);
         using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
 
         byte[] encoded = Encode(row);
@@ -126,6 +122,34 @@ public class JxlLossyCalibrationTests
         TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
             CultureInfo.InvariantCulture,
             $"{reader}: {result}; score margin {result.Score - result.MinimumScore:F4} (recorded {measured.Score - result.MinimumScore:F4}), size ratio {(double)result.Size / row.Size:F4} (recorded {(double)measured.Size / row.Size:F4})"));
+        Assert.True(result.Passed, result.ToString());
+    }
+
+    // E3d's 16-bit and float input against the 8-bit rows: the table has no such rows, but the image widened
+    // to 16 bits (x 257) or to floats is the same colour, so its XYB is the same and it meets the same bar.
+    // Alpha stays exact. Float input is opaque Bike: float alpha is coded losslessly as 32-bit floats, so
+    // bike_alpha as floats is about twice the size of the 8-bit row (64,664 bytes at d1), which is no
+    // fault. Through our decoder only, and not under coverage: the 8-bit rows run the same encoder code.
+    [Theory]
+    [InlineData(nameof(Rgb48), "bike", 1.0)]
+    [InlineData(nameof(Rgb48), "bike", 4.0)]
+    [InlineData(nameof(Rgba64), "bike_alpha", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 4.0)]
+    public void Encode_FastestCalibrationRowAtAHigherDepth_MeetsTheQualityBar(string pixelType, string image, double distance)
+    {
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the 8-bit rows run the same encoder code.");
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
+        MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
+        using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeWidened(original, (float)distance));
+
+        using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, FastestSlack);
+        TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{pixelType}: {result}; score {result.Score:F4} (8-bit {measured.Score:F4}), size {result.Size} (8-bit {measured.Size})"));
         Assert.True(result.Passed, result.ToString());
     }
 
@@ -145,47 +169,21 @@ public class JxlLossyCalibrationTests
             return JxlEncoderRoundTrip.Encode(rgb, encoder);
         })).Value;
 
-    // Magick reads the same encode as our decoder, so under coverage it adds minutes and no coverage.
-    private static void SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader reader)
+    // Decodes to 16 bits per sample, at least the precision of djxl's PNG, which the table scores.
+    private static Task<Image<Rgba64>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, JxlCalibrationRow row, byte[] encoded)
     {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Magick:
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the same encode runs through our decoder.");
-                break;
-            case JxlEncoderRoundTrip.Reader.Djxl:
-                // Resolve the tool first, so the test skips before it encodes anything.
-                JxlTools.GetToolPath("djxl");
-                break;
-        }
+        string name = $"{row.Image.Name}_e{row.Effort}_d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
+        return JxlEncoderRoundTrip.DecodeAsync<Rgba64>(reader, encoded, "LossyCalibration", name, highBitDepth: true, [.. JxlCalibrationTable.Instance.DjxlArguments]);
     }
 
-    // Decodes to 16 bits per sample, at least the precision of djxl's PNG, which the table scores.
-    private static async Task<Image<Rgba64>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, JxlCalibrationRow row, byte[] encoded)
+    // Encodes the 8-bit original converted to the pixel type at Fastest.
+    private sealed record EncodeWidened(Image<Rgba32> Original, float Distance) : IJxlPixelTypeCall<byte[]>
     {
-        switch (reader)
+        public byte[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
         {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyCalibration");
-                string name = $"{row.Image.Name}_e{row.Effort}_d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
-                await JxlTools.RunAsync("djxl", cancellationToken, new[] { jxlPath, pngPath }.Concat(JxlCalibrationTable.Instance.DjxlArguments).ToArray());
-                return Image.Load<Rgba64>(pngPath);
-            }
+            using Image<TPixel> image = this.Original.CloneAs<TPixel>();
+            return JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = JxlEffort.Fastest });
         }
     }
 

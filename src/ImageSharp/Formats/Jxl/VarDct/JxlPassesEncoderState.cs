@@ -25,13 +25,11 @@ internal sealed class JxlPassesEncoderState
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="distance">The butteraugli distance, after libjxl's clamps.</param>
-    /// <param name="originalDistance">The distance before libjxl's resampling adjusts it, which the X quantisation scale uses.</param>
-    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance, float originalDistance)
+    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance)
     {
         this.FrameDim = frameDim;
         this.SpeedTier = speedTier;
         this.Distance = distance;
-        this.OriginalDistance = originalDistance;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
         this.YSizeBlocks = (int)frameDim.YSizeBlocks;
         this.Quantizer = new JxlQuantizer(this.Matrices);
@@ -49,11 +47,11 @@ internal sealed class JxlPassesEncoderState
     /// <summary>Gets the speed tier, libjxl's <c>cparams.speed_tier</c>.</summary>
     public JxlSpeedTier SpeedTier { get; }
 
-    /// <summary>Gets the butteraugli distance, libjxl's <c>cparams.butteraugli_distance</c>.</summary>
+    /// <summary>
+    /// Gets the butteraugli distance, libjxl's <c>cparams.butteraugli_distance</c>. It is also libjxl's
+    /// <c>cparams.original_butteraugli_distance</c>, which differs only when libjxl resamples (not ported).
+    /// </summary>
     public float Distance { get; }
-
-    /// <summary>Gets the distance before resampling, libjxl's <c>cparams.original_butteraugli_distance</c>.</summary>
-    public float OriginalDistance { get; }
 
     /// <summary>Gets the width of the frame in blocks, the stride of the block images.</summary>
     public int XSizeBlocks { get; }

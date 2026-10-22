@@ -4,14 +4,12 @@
 using System;
 using System.IO;
 using System.Numerics;
-using System.Threading;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -20,8 +18,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// Lossy encoding at Fastest (libjxl effort 3) of grey, 16-bit and float input (slice E3d). libjxl loads
 /// integer samples scaled to [0, 1] at the depth of the pixel format and float samples as they are, copies
 /// a grey plane into all three colour planes, and computes XYB from them (<c>ToXYB</c>, where the grey
-/// sRGB encoding counts as sRGB). The bit depth in the header is only metadata for an XYB image; the
-/// encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
+/// sRGB encoding counts as sRGB). The bit depth in the header is only metadata when the image is
+/// XYB-encoded; the encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyDepthEncoderTests
@@ -49,6 +47,22 @@ public class JxlLossyDepthEncoderTests
     [MemberData(nameof(AllPixelTypes))]
     public void Encode_AnyPixelTypeOfTheLosslessEncoder_DecodesWithinTheScaledBoundWithAlphaExact(string pixelType)
         => JxlPixelTypes.Verify(pixelType, new SmallCase());
+
+    // SHA-256 of this encoder's output for grey, 16-bit and float input with no profile, beside the 8-bit
+    // pins of JxlLossyEncoderTests and the alpha pins of JxlLossyAlphaEncoderTests: any change to lossy
+    // Fastest output must update these on purpose. The test image is built with exact arithmetic, and the
+    // sRGB path uses no C runtime maths, so every leg gives the same file. A recognised profile's output is
+    // not pinned: its curves use Math.Pow.
+    [Theory]
+    [InlineData(nameof(L8), "E11F06866DE27C6524B6F7F84A992058C4C44814734A360779C1F915E62B7F4B")]
+    [InlineData(nameof(Rgb48), "3B17B8175F5452883955891CACACA92D03A1825804D159BD565538AA24E351EE")]
+    [InlineData(nameof(RgbaVector), "AC360A23EF0260C3C845530962AE29724791E3180BEE817DA798A5D0C165F08F")]
+    public void Encode_LossyDepth_IsByteIdenticalToItsPin(string pixelType, string expectedSha256)
+    {
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeTestImage(1.0f));
+
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+    }
 
     // A grey image is written with the grey sRGB encoding, and its depth is the one E1's rules choose: the
     // depth of the pixel type, or the requested depth (JxlMetadata, as cjxl keeps the depth of the file it
@@ -178,36 +192,6 @@ public class JxlLossyDepthEncoderTests
         where TPixel : unmanaged, IPixel<TPixel>
         => typeof(TPixel) == typeof(HalfSingle) || typeof(TPixel) == typeof(HalfVector2) || typeof(TPixel) == typeof(HalfVector4);
 
-    private static async Task<Image<TPixel>> DecodeAsync<TPixel>(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<TPixel>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the same encode runs through our decoder.");
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.HighBitDepthInstance.Decode<TPixel>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                // Resolve the tool first, so the test skips before it writes anything.
-                JxlTools.GetToolPath("djxl");
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyDepthEncoder");
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, TestContext.Current.CancellationToken);
-                await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, jxlPath, pngPath);
-                return Image.Load<TPixel>(pngPath);
-            }
-        }
-    }
-
     // Alpha is compared exactly; the colour of each visible pixel within the bound, in 8-bit steps of the
     // full range. A grey image's colour is its one channel.
     private static void AssertAlphaExactAndColourWithinBound<TPixel>(Image<TPixel> expected, Image<TPixel> actual, string label)
@@ -295,7 +279,7 @@ public class JxlLossyDepthEncoderTests
             byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(this.Distance));
 
             string name = $"{typeof(TPixel).Name}-d{this.Distance.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
-            using Image<TPixel> decoded = await DecodeAsync<TPixel>(this.Reader, encoded, name);
+            using Image<TPixel> decoded = await JxlEncoderRoundTrip.DecodeAsync<TPixel>(this.Reader, encoded, "LossyDepthEncoder", name, highBitDepth: true);
             AssertAlphaExactAndColourWithinBound(image, decoded, $"{name} {this.Reader}, {encoded.Length} bytes");
         }
     }
@@ -333,6 +317,17 @@ public class JxlLossyDepthEncoderTests
             }
 
             return halves;
+        }
+    }
+
+    // Encodes the test image as the pixel type at the distance.
+    private sealed record EncodeTestImage(float Distance) : IJxlPixelTypeCall<byte[]>
+    {
+        public byte[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = CreateImage<TPixel>();
+            return JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(this.Distance));
         }
     }
 

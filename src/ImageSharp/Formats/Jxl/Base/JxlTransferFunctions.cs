@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// TF_SRGB::DisplayFromEncoded, TF_SRGB::EncodedFromDisplay, TF_709::EncodedFromDisplay, TF_PQ (the scaling factor of its constructor,
-// and EncodedFromDisplay) and TF_HLG::EncodedFromDisplay (the vector overloads) in
+// TF_SRGB::DisplayFromEncoded, TF_SRGB::EncodedFromDisplay, TF_709::EncodedFromDisplay, TF_PQ (the scaling factors of its
+// constructor, DisplayFromEncoded and EncodedFromDisplay) and TF_HLG::EncodedFromDisplay (the vector overloads) in
 // lib/jxl/cms/transfer_functions-inl.h, kInvLog2e in lib/jxl/base/common.h, and the curve of OpGamma in
 // lib/jxl/render_pipeline/stage_from_linear.cc, for one lane.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
@@ -51,6 +51,11 @@ internal static class JxlTransferFunctions
     // TF_SRGB::DisplayFromEncoded, computed via af_cheb_rational (k=100).
     private static readonly float[] SrgbToLinearP = { 2.200248328e-04f, 1.043637593e-02f, 1.624820318e-01f, 7.961564959e-01f, 8.210152774e-01f };
     private static readonly float[] SrgbToLinearQ = { 2.631846970e-01f, 1.076976492e+00f, 4.987528350e-01f, -5.512498495e-02f, 6.521209011e-03f };
+
+    // TF_PQ::DisplayFromEncoded: 4-over-4-degree rational polynomial approximation on x+x*x. This improves
+    // the maximum error by about 5x over a rational polynomial for x.
+    private static readonly float[] PqToLinearP = { 2.62975656e-04f, -6.23553089e-03f, 7.38602301e-01f, 2.64553172e+00f, 5.50034862e-01f };
+    private static readonly float[] PqToLinearQ = { 4.21350107e+02f, -4.28736818e+02f, 1.74364667e+02f, -3.39078883e+01f, 2.67718770e+00f };
 
     // TF_PQ::EncodedFromDisplay: 4-over-4-degree rational polynomial approximation on x**0.25, with two
     // different polynomials above and below 1e-4.
@@ -133,6 +138,34 @@ internal static class JxlTransferFunctions
     /// <param name="displayIntensityTarget">The intensity target, in nits.</param>
     /// <returns>The factor, a float product as in libjxl.</returns>
     public static float PqScaleTo10000Nits(float displayIntensityTarget) => displayIntensityTarget * (1.0f / 10000.0f);
+
+    /// <summary>
+    /// Returns the factor that maps a PQ display value, where 1.0 is 10,000 nits, to a linear sample where
+    /// 1.0 is <paramref name="displayIntensityTarget"/> nits: libjxl's
+    /// <c>display_scaling_factor_from_10000_nits_</c> of <c>TF_PQ</c>.
+    /// </summary>
+    /// <param name="displayIntensityTarget">The intensity target, in nits.</param>
+    /// <returns>The factor, a float quotient as in libjxl.</returns>
+    public static float PqScaleFrom10000Nits(float displayIntensityTarget) => 10000.0f / displayIntensityTarget;
+
+    /// <summary>
+    /// Decodes a PQ-encoded sample to linear, as libjxl's <c>TF_PQ::DisplayFromEncoded</c> (maximum error
+    /// 3e-6), which its CMS applies to a PQ image before the colour transform. 0 gives 6.24e-7 of 10,000
+    /// nits, the polynomial's value. A negative sample is decoded as the negated decoding of its magnitude.
+    /// </summary>
+    /// <remarks>The rational polynomial is evaluated without FMA (ADR 0004).</remarks>
+    /// <param name="x">The encoded sample.</param>
+    /// <param name="scaleFrom10000Nits">The factor from <see cref="PqScaleFrom10000Nits"/>.</param>
+    /// <returns>The linear sample, where 1.0 is the intensity target.</returns>
+    public static float PqDisplayFromEncoded(float x, float scaleFrom10000Nits)
+    {
+        float a = MathF.Abs(x);
+
+        // libjxl: MulAdd(x, x, x).
+        float xpxx = (a * a) + a;
+        float magnitude = JxlFastMath.EvalRationalPolynomial(xpxx, PqToLinearP, PqToLinearQ);
+        return JxlScalarMath.CopySign(magnitude * scaleFrom10000Nits, x);
+    }
 
     /// <summary>
     /// Encodes a linear sample with the PQ curve, as libjxl's <c>TF_PQ</c> (not <c>TF_PQ_Base</c>, which

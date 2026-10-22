@@ -139,6 +139,33 @@ public class JxlTransferFunctionsTests
     public void PqEncodedFromDisplay_OfANegativeSample_GivesLibjxlsValue(float intensityTarget, float linear, float expected)
         => Assert.Equal(expected, JxlTransferFunctions.PqEncodedFromDisplay(linear, JxlTransferFunctions.PqScaleTo10000Nits(intensityTarget)));
 
+    // libjxl's TF_PQ::DisplayFromEncoded, which its CMS applies to a PQ image before the colour transform
+    // (BeforeTransform), for intensity targets of 10,000, 1,000 and 4,000 nits: 1.0 is the target. The
+    // rational polynomial is of x + x * x, so 0 gives 6.24e-7 of 10,000 nits, not 0, and -0 its negation.
+    // Above 1 the polynomial extends the curve. Reference values: libjxl's own code on Highway's scalar
+    // target with contraction off (notes/fix-scratch/pq_display.cc).
+    // Measured: exact.
+    [Theory]
+    [InlineData(10000F, 0F, 6.24126244e-07F)]
+    [InlineData(10000F, -0F, -6.24126244e-07F)]
+    [InlineData(10000F, 1e-4F, 6.22727157e-07F)]
+    [InlineData(10000F, 0.1F, 3.22013402e-05F)]
+    [InlineData(10000F, 0.5F, 0.00922443252F)]
+    [InlineData(10000F, -0.5F, -0.00922443252F)]
+    [InlineData(10000F, 0.58F, 0.0201666802F)]
+    [InlineData(10000F, 0.9F, 0.390564322F)]
+    [InlineData(10000F, 1F, 0.999999046F)]
+    [InlineData(10000F, 1.2F, 7.39745617F)]
+    [InlineData(1000F, 0F, 6.24126233e-06F)]
+    [InlineData(1000F, 0.25F, 0.00515590841F)]
+    [InlineData(1000F, 0.75F, 0.983376384F)]
+    [InlineData(1000F, 1F, 9.99999046F)]
+    [InlineData(4000F, 0.01F, 1.66695429e-06F)]
+    [InlineData(4000F, 0.75F, 0.245844096F)]
+    [InlineData(4000F, 1F, 2.49999762F)]
+    public void PqDisplayFromEncoded_GivesLibjxlsValue(float intensityTarget, float encoded, float expected)
+        => Assert.Equal(expected, JxlTransferFunctions.PqDisplayFromEncoded(encoded, JxlTransferFunctions.PqScaleFrom10000Nits(intensityTarget)));
+
     // libjxl's TF_HLG at 0, on the square-root segment, at its threshold 1/12 (which is still on it:
     // libjxl's test is x <= 1/12, and it gives 0.5), just above it, on the log segment, and above 1.
     // Measured: exact.

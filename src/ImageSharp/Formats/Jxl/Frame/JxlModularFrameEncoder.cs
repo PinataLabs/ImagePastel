@@ -15,6 +15,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -396,7 +397,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// <param name="nlDc">Whether to quantise the DC near-losslessly, which libjxl does below Falcon.</param>
     /// <param name="quantizer">The quantiser, which sets the DC steps.</param>
     /// <param name="colorCorrelation">The chroma-from-luma parameters, whose DC factors predict X and B.</param>
-    public void AddVarDctDc(float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, VarDct.JxlQuantizer quantizer, VarDct.JxlColorCorrelation colorCorrelation)
+    public void AddVarDctDc(float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, JxlQuantizer quantizer, JxlColorCorrelation colorCorrelation)
     {
         if (nlDc)
         {
@@ -416,8 +417,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         {
             options.Kind = JxlModularOptions.TreeKind.WPFixedDC;
         }
-
-        if (this.speedTier < JxlSpeedTier.Squirrel)
+        else
         {
             JxlThrowHelper.ThrowNotSupportedException("A learned tree for the VarDCT DC (libjxl effort 8 and up)");
         }
@@ -469,7 +469,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// <param name="r">The LF group's rectangle, in blocks.</param>
     /// <param name="groupIndex">The LF group.</param>
     /// <param name="encState">The encoder state with the per-block choices.</param>
-    public void AddAcMetadata(JxlRect r, long groupIndex, VarDct.JxlPassesEncoderState encState)
+    public void AddAcMetadata(JxlRect r, long groupIndex, JxlPassesEncoderState encState)
     {
         long streamId = JxlModularStreamId.AcMetadata(this.frameDim, groupIndex);
         JxlModularOptions options = this.baseOptions.Clone();
@@ -502,7 +502,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         ReplaceChannel(image, 0, JxlModularChannel.Create(this.allocator, (int)cr.XSize, (int)cr.YSize, 3, 3));
         ReplaceChannel(image, 1, JxlModularChannel.Create(this.allocator, (int)cr.XSize, (int)cr.YSize, 3, 3));
         ReplaceChannel(image, 2, JxlModularChannel.Create(this.allocator, xs * ys, 2));
-        VarDct.JxlColorCorrelation cmap = encState.Cmap;
+        JxlColorCorrelation cmap = encState.Cmap;
         for (int y = 0; y < cr.YSize; y++)
         {
             Span<int> rowX = image.Channel[0].Row(y);
@@ -525,7 +525,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             {
                 int blockIndex = encState.BlockIndex(r.X0 + x, r.Y0 + y);
                 rowOutEpf[x] = encState.EpfSharpness[blockIndex];
-                VarDct.JxlAcStrategy acs = encState.AcStrategy.Get((int)(r.X0 + x), (int)(r.Y0 + y));
+                JxlAcStrategy acs = encState.AcStrategy.Get((int)(r.X0 + x), (int)(r.Y0 + y));
                 if (!acs.IsFirstBlock)
                 {
                     continue;

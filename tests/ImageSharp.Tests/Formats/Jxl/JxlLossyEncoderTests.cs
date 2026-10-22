@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -13,7 +12,6 @@ using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -411,33 +409,8 @@ public class JxlLossyEncoderTests
         }
     }
 
-    internal static async Task<Image<Rgb24>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
-    {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.Instance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                // Resolve the tool first, so the test skips before it writes anything.
-                JxlTools.GetToolPath("djxl");
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyEncoder");
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, TestContext.Current.CancellationToken);
-                await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, jxlPath, pngPath);
-                return Image.Load<Rgb24>(pngPath);
-            }
-        }
-    }
+    internal static Task<Image<Rgb24>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
+        => JxlEncoderRoundTrip.DecodeAsync<Rgb24>(reader, encoded, "LossyEncoder", name);
 
     /// <summary>The error of each channel of a decoded 8-bit image, in 8-bit steps.</summary>
     internal sealed record ChannelErrors(double[] Rmse, int[] Peak)
