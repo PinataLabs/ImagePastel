@@ -49,7 +49,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         Assert.Equal(JxlFrameFlags.None, frameHeader.Flags & JxlFrameFlags.Patches);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
         long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
-        uint[] sizes = JxlToc.ReadToc(tocEntries, reader);
+        JxlGroupOffsets groupOffsets = JxlToc.ReadGroupOffsets(tocEntries, reader);
         reader.EnsureAllReadsWithinBounds("frame header");
         int offset = frameOffset + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
@@ -57,8 +57,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         JxlBitReader[] sections = new JxlBitReader[tocEntries];
         for (long i = 0; i < tocEntries; i++)
         {
-            sections[i] = new JxlBitReader(codestream, offset, (int)sizes[i]);
-            offset += (int)sizes[i];
+            sections[i] = new JxlBitReader(codestream, offset + (int)groupOffsets.Offsets[i], (int)groupOffsets.Sizes[i]);
         }
 
         // A frame of one group and one pass has every section in one.

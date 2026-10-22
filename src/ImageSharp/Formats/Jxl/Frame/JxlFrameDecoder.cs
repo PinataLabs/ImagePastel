@@ -95,27 +95,26 @@ internal sealed class JxlFrameDecoder
         long numPasses = frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
         long tocEntries = JxlToc.NumTocEntries(numGroups, frameDim.NumDcGroups, numPasses);
-        uint[] sizes = JxlToc.ReadToc(tocEntries, reader);
+        JxlGroupOffsets groupOffsets = JxlToc.ReadGroupOffsets(tocEntries, reader);
 
         reader.EnsureAllReadsWithinBounds("frame header");
         long headerBytes = reader.TotalBitsConsumed / 8;
         reader.Close();
 
-        // One reader per section.
-        JxlBitReader[] sections = new JxlBitReader[tocEntries];
-        long pos = headerBytes;
-        for (long i = 0; i < tocEntries; i++)
+        // One reader per section, in the order the sections are decoded in. A permuted TOC only changes
+        // where each section is stored. Every section lies inside the total size.
+        if (headerBytes + groupOffsets.TotalSize > availIn)
         {
-            if (pos + sizes[i] > availIn)
-            {
-                JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for the frame sections");
-            }
-
-            sections[i] = new JxlBitReader(data, offset + (int)pos, (int)sizes[i]);
-            pos += sizes[i];
+            JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for the frame sections");
         }
 
-        frameEnd = offset + (int)pos;
+        JxlBitReader[] sections = new JxlBitReader[tocEntries];
+        for (long i = 0; i < tocEntries; i++)
+        {
+            sections[i] = new JxlBitReader(data, offset + (int)(headerBytes + groupOffsets.Offsets[i]), (int)groupOffsets.Sizes[i]);
+        }
+
+        frameEnd = offset + (int)(headerBytes + groupOffsets.TotalSize);
 
         JxlReferenceFrame dcFrame = (frameHeader.Flags & JxlFrameFlags.UseDcFrame) != 0 ? this.GetDcFrame(frameHeader, frameDim) : null;
 

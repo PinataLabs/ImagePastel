@@ -332,7 +332,7 @@ public class JxlBoundsTests
 
     [Fact]
     public void Toc_OverTheEntryLimit_Throws()
-        => Assert.Throws<InvalidImageContentException>(() => JxlToc.ReadToc(JxlToc.MaxTocEntries + 1, new JxlBitReader(new byte[16])));
+        => Assert.Throws<InvalidImageContentException>(() => JxlToc.ReadGroupOffsets(JxlToc.MaxTocEntries + 1, new JxlBitReader(new byte[16])));
 
     [Fact]
     public void Toc_WithinTheLimit_ReadsTheSizes()
@@ -341,7 +341,7 @@ public class JxlBoundsTests
         writer.Bit(false).ZeroPadToByte(); // no permutation
         writer.Write(2, 0).Write(10, 5).ZeroPadToByte(); // one entry of 5 bytes
 
-        Assert.Equal(new uint[] { 5 }, JxlToc.ReadToc(1, writer.ToReader()));
+        Assert.Equal(new uint[] { 5 }, JxlToc.ReadGroupOffsets(1, writer.ToReader()).Sizes);
     }
 
     [Fact]

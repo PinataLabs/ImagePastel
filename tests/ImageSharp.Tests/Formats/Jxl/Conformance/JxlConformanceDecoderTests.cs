@@ -76,10 +76,11 @@ public class JxlConformanceDecoderTests
     }
 
     // A vector that needs a feature of a later slice, which the spec lists under that slice. progressive
-    // (fetched) has a DC frame with a permuted TOC (D13a), which is rejected before its passes are reached.
+    // (fetched) decodes its DC frame (D13c) and permuted TOCs (D13a), then reaches its two-pass VarDCT
+    // frame (D13b).
     [Theory]
-    [InlineData("progressive", "A permuted TOC")]
-    [InlineData("progressive_5", "A permuted TOC")]
+    [InlineData("progressive", "Progressive passes")]
+    [InlineData("progressive_5", "Progressive passes")]
     public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);

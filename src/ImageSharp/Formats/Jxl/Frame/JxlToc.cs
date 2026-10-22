@@ -1,11 +1,12 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/toc.h and lib/jxl/toc.cc (NumTocEntries, ReadToc).
+// lib/jxl/toc.h and lib/jxl/toc.cc (NumTocEntries, ReadToc, ReadGroupOffsets).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -44,13 +45,61 @@ internal static class JxlToc
     }
 
     /// <summary>
-    /// Reads <paramref name="tocEntries"/> section sizes. Throws <see cref="InvalidImageContentException"/>
-    /// for too many entries or too few bytes.
+    /// Reads the TOC and finds each section: <see cref="JxlGroupOffsets.Offsets"/> and
+    /// <see cref="JxlGroupOffsets.Sizes"/> are in the order the sections are decoded in, and the offsets
+    /// count from the end of the TOC. A permuted TOC stores the sections in another order. Throws
+    /// <see cref="InvalidImageContentException"/> for too many entries, too few bytes or an invalid
+    /// permutation.
     /// </summary>
     /// <param name="tocEntries">The number of entries.</param>
     /// <param name="reader">The reader.</param>
+    /// <returns>Where each section is.</returns>
+    public static JxlGroupOffsets ReadGroupOffsets(long tocEntries, JxlBitReader reader)
+    {
+        uint[] sizes = ReadToc(tocEntries, reader, out uint[] permutation);
+        long[] offsets = new long[tocEntries];
+
+        // Prefix sum starting with 0 and ending with the offset of the last group. libjxl checks the sum
+        // for overflow of uint64_t ("group offset overflow"); at most 65536 sizes below 2^31 cannot
+        // overflow a long.
+        long offset = 0;
+        for (long i = 0; i < tocEntries; ++i)
+        {
+            offsets[i] = offset;
+            offset += sizes[i];
+        }
+
+        if (permutation != null)
+        {
+            long[] permutedOffsets = new long[tocEntries];
+            uint[] permutedSizes = new uint[tocEntries];
+            for (long i = 0; i < tocEntries; ++i)
+            {
+                uint index = permutation[i];
+                permutedOffsets[i] = offsets[index];
+                permutedSizes[i] = sizes[index];
+            }
+
+            offsets = permutedOffsets;
+            sizes = permutedSizes;
+        }
+
+        return new JxlGroupOffsets(offsets, sizes, offset, permutation);
+    }
+
+    /// <summary>
+    /// Reads <paramref name="tocEntries"/> section sizes, in the order the sections are stored in, and the
+    /// permutation, if the TOC is permuted. Throws <see cref="InvalidImageContentException"/> for too many
+    /// entries, too few bytes or an invalid permutation.
+    /// </summary>
+    /// <param name="tocEntries">The number of entries.</param>
+    /// <param name="reader">The reader.</param>
+    /// <param name="permutation">
+    /// The permutation, <paramref name="tocEntries"/> entries: entry i is where section i is stored. Null if
+    /// the TOC is not permuted.
+    /// </param>
     /// <returns>The size of each section, in bytes.</returns>
-    public static uint[] ReadToc(long tocEntries, JxlBitReader reader)
+    private static uint[] ReadToc(long tocEntries, JxlBitReader reader, out uint[] permutation)
     {
         if (tocEntries > MaxTocEntries)
         {
@@ -63,12 +112,12 @@ internal static class JxlToc
             JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for TOC");
         }
 
+        permutation = null;
         if (reader.ReadBits(1) == 1)
         {
             CheckBitBudget(reader, tocEntries);
-
-            // libjxl decodes the Lehmer-coded permutation here (DecodePermutation in coeff_order.cc).
-            JxlThrowHelper.ThrowNotSupportedException("A permuted TOC");
+            permutation = new uint[tocEntries];
+            JxlCoeffOrder.DecodePermutation(0, (int)tocEntries, permutation, reader);
         }
 
         reader.JumpToByteBoundary();
