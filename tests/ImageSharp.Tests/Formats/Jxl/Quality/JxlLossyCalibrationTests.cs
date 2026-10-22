@@ -125,6 +125,34 @@ public class JxlLossyCalibrationTests
         Assert.True(result.Passed, result.ToString());
     }
 
+    // E3d's 16-bit and float input against the 8-bit rows: the table has no such rows, but the image widened
+    // to 16 bits (x 257) or to floats is the same colour, so its XYB is the same and it meets the same bar.
+    // Alpha stays exact. Float input is opaque Bike: float alpha is coded losslessly as 32-bit floats, so
+    // bike_alpha as floats is about twice the size of the 8-bit row (64,664 bytes at d1), which is no
+    // fault. Through our decoder only, and not under coverage: the 8-bit rows run the same encoder code.
+    [Theory]
+    [InlineData(nameof(Rgb48), "bike", 1.0)]
+    [InlineData(nameof(Rgb48), "bike", 4.0)]
+    [InlineData(nameof(Rgba64), "bike_alpha", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 4.0)]
+    public void Encode_FastestCalibrationRowAtAHigherDepth_MeetsTheQualityBar(string pixelType, string image, double distance)
+    {
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the 8-bit rows run the same encoder code.");
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
+        MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
+        using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeWidened(original, (float)distance));
+
+        using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, FastestSlack);
+        TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{pixelType}: {result}; score {result.Score:F4} (8-bit {measured.Score:F4}), size {result.Size} (8-bit {measured.Size})"));
+        Assert.True(result.Passed, result.ToString());
+    }
+
     // The table's images are 8-bit sRGB with no colour chunks; only bike_alpha has alpha. Each is encoded
     // as the pixel type it is stored in, as cjxl reads it: RGB without an alpha channel, or RGBA.
     private static byte[] Encode(JxlCalibrationRow row)
@@ -146,6 +174,17 @@ public class JxlLossyCalibrationTests
     {
         string name = $"{row.Image.Name}_e{row.Effort}_d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
         return JxlEncoderRoundTrip.DecodeAsync<Rgba64>(reader, encoded, "LossyCalibration", name, highBitDepth: true, [.. JxlCalibrationTable.Instance.DjxlArguments]);
+    }
+
+    // Encodes the 8-bit original converted to the pixel type at Fastest.
+    private sealed record EncodeWidened(Image<Rgba32> Original, float Distance) : IJxlPixelTypeCall<byte[]>
+    {
+        public byte[] Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = this.Original.CloneAs<TPixel>();
+            return JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = JxlEffort.Fastest });
+        }
     }
 
     /// <summary>One Fastest row of the table and our encode of it, as measured.</summary>
