@@ -57,6 +57,8 @@ public class JxlConformanceDecoderTests
     [InlineData("bike_5")] // The same reference, at Level 5.
     [InlineData("animation_spline")] // 60 VarDCT frames with XYB and splines, each drawn with the frame's chroma-from-luma base. Measured, worst frame: RMSE 2.8e-7, peak 1.4e-5 (djxl v0.12.0: 2.8e-7, 1.4e-5).
     [InlineData("animation_spline_5")] // The same reference, at Level 5.
+    [InlineData("progressive")] // Fetched. A Modular reference-only frame, a Modular DC frame (level 1) with a permuted TOC, then a two-pass XYB VarDCT frame with patches that uses the DC frame, with a centre-first TOC (D13a, D13b, D13c). Measured: RMSE 4.4e-7, peak 2.0e-5.
+    [InlineData("progressive_5")] // The same reference, at Level 5.
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
@@ -73,22 +75,6 @@ public class JxlConformanceDecoderTests
         }
 
         JxlConformanceComparer.AssertWithinThresholds(vector, expected, actual);
-    }
-
-    // A vector that needs a feature of a later slice, which the spec lists under that slice. progressive
-    // (fetched) decodes its DC frame (D13c) and permuted TOCs (D13a), then reaches its two-pass VarDCT
-    // frame (D13b).
-    [Theory]
-    [InlineData("progressive", "Progressive passes")]
-    [InlineData("progressive_5", "Progressive passes")]
-    public async Task DecodeToPlanes_VectorOfALaterSlice_IsNotSupported(string id, string feature)
-    {
-        JxlConformanceVector vector = JxlConformanceVector.Load(id);
-        string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
-
-        await using FileStream stream = File.OpenRead(input);
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 
     // libjxl test data that no conformance vector covers, against a djxl v0.12.0 .npy reference (see the

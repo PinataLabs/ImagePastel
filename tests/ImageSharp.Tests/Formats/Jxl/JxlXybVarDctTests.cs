@@ -57,6 +57,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_hlg", 3)] // HLG (OpHlg), the OOTF with the BT.2100 luminances, steep in the shadows: RMSE 3.5e-6, peak 1.7e-4
     [InlineData("vardct_xyb_grey_hlg", 1)] // Grey HLG (OpHlg), the OOTF with the sRGB luminances: RMSE 1.8e-7, peak 2.5e-6
     [InlineData("vardct_xyb_grey_patches", 1)] // Grey, with patches from a three-plane XYB reference frame: RMSE 1.4e-7, peak 7.2e-7
+    [InlineData("vardct_xyb_passes", 3)] // Three passes (D13b): RMSE 1.1e-6, peak 1.2e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -373,17 +374,6 @@ public class JxlXybVarDctTests
         Assert.Equal(JxlFrameEncoding.VarDct, frames[1].Encoding);
         Assert.Equal(JxlFrameFlags.Patches, frames[1].Flags & JxlFrameFlags.Patches);
         Assert.True(frames[1].IsLast);
-    }
-
-    // The 64 x 64 image with a feature of a later slice.
-    [Theory]
-    [InlineData("vardct_xyb_passes", "Progressive passes")]
-    public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
-    {
-        using FileStream stream = File.OpenRead(InputPath(name));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
     }
 
     // Compares each sample with the clamped reference, which reference(pixel, channel) gives, in steps of

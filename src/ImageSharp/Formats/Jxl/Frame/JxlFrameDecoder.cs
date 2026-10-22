@@ -325,11 +325,6 @@ internal sealed class JxlFrameDecoder
         {
             JxlThrowHelper.ThrowNotSupportedException($"Unknown frame flags 0x{(ulong)(flags & ~knownFlags):X}");
         }
-
-        if (frameHeader.Passes.NumPasses != 1)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Progressive passes");
-        }
     }
 
     private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlImageFeatures features, JxlColorCorrelation cmap, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)

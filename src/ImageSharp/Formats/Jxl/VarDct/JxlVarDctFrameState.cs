@@ -233,8 +233,11 @@ internal sealed class JxlVarDctFrameState : IDisposable
             this.ContextMap[i] = padded;
         }
 
-        // libjxl picks 16- or 32-bit coefficients here from the largest token width (max_num_bits). This
-        // port always keeps them as int, a deliberate departure: the values are the same either way.
+        // libjxl picks 16- or 32-bit coefficients here from the largest token width (max_num_bits) plus
+        // CeilLog2(num_passes). This port always keeps them as int, a deliberate departure. The values are
+        // the same unless a pass's shift (up to 3 bits, which max_num_bits does not count) pushes the sum
+        // of a coefficient's passes past 16 bits, where libjxl's int16 coefficients wrap. The cjxl files of
+        // JxlProgressivePassesTests, with shifts of 1, match djxl.
     }
 
     public void Dispose()

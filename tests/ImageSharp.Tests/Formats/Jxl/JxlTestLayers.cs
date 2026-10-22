@@ -425,7 +425,14 @@ internal sealed class JxlTestLayers
 
         if (frame.Type != JxlFrameType.ReferenceOnly)
         {
-            w.Write(2, 0); // one pass
+            if (frame.Passes != null)
+            {
+                frame.Passes(w);
+            }
+            else
+            {
+                w.Write(2, 0); // one pass
+            }
         }
 
         // A DC frame has a DC level, U32(Val(1), Val(2), Val(3), Val(4)), and no crop or reference slot.
@@ -620,6 +627,12 @@ internal sealed record JxlTestFrame(byte[] Section)
     /// replaces <see cref="Section"/>, and the frame cannot have patches or splines.
     /// </summary>
     public byte[][] Sections { get; init; }
+
+    /// <summary>
+    /// Gets the writer of the frame header's passes field (libjxl's <c>Passes</c>), for a frame of more
+    /// than one pass. When it is not set, the frame has one pass.
+    /// </summary>
+    public Action<JxlTestBitWriter> Passes { get; init; }
 
     /// <summary>
     /// Gets the writer of the TOC's permutation: its histograms, then its tokens. When set, the TOC's

@@ -281,7 +281,7 @@ djxl vardct_identity_afv.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 | `vardct_xyb_sizes_fine.jxl` | The same kind of frame at `-d 1`, with a fine, fading texture: blocks from 8x8 to 64x32, and custom coefficient orders for DCT8, DCT32X32, DCT16X8 and DCT32X16. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_sizes_fine.npy` |
 | `vardct_xyb_sizes_smooth.jxl` | The same kind of frame at `-d 1`, with smooth colour only: 64x64 and 32x64 blocks in their natural coefficient order. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_sizes_smooth.npy` |
 | `vardct_xyb_identity_afv.jxl` | `Png/bike-small.png`, 288 x 163 8-bit RGBA, at `-e 7` with no loop filters, which has Identity and AFV0 to AFV3 blocks (D9f), an adaptive quant field and a non-zero chroma-from-luma map. Two groups. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_identity_afv.npy` |
-| `vardct_xyb_passes.jxl` | The 64 x 64 image at `-e 2 --progressive_ac`: three passes (D13). | None: decoding throws `NotSupportedException` |
+| `vardct_xyb_passes.jxl` | The 64 x 64 image at `-e 2 --progressive_ac`: three passes. It decodes since D13b; one group, so each pass has one AC section. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_passes.npy` |
 | `vardct_xyb_dc_frame.jxl` | The 64 x 64 image at `-e 2 --progressive_dc=1`: a Modular DC frame comes first, and the VarDCT frame takes its DC from it (D13c). See "How the DC-frame files were made". | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dc_frame.npy` |
 
 ```sh
@@ -323,6 +323,7 @@ djxl vardct_xyb_sizes_fine.jxl ../../../External/ReferenceOutput/JxlDecoderTests
 djxl vardct_xyb_sizes_smooth.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_sizes_smooth.npy
 djxl vardct_xyb_identity_afv.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_identity_afv.npy
 djxl vardct_xyb_e7.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_e7.npy
+djxl vardct_xyb_passes.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_passes.npy
 ```
 
 - `make_vardct_xyb.py` writes the PPM and PGM sources, `make_vardct.py` writes `vardct_alpha.png` and `vardct_grey.png`, `make_custom_icc.py` writes `custom_icc_source.png`, and `make_vardct_sizes.py` writes the three `vardct_xyb_sizes_*_source.ppm`. None of the sources is committed; the scripts make them again.
@@ -336,7 +337,7 @@ djxl vardct_xyb_e7.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_
 - `benchmark_xl --print_more_stats` (v0.12.0) shows no AFV blocks for the `vardct_xyb_sizes_*` sources and 46 for `bike-small.png`. Its "small blocks" count adds Identity, DCT2X2 and DCT4X4, so the 114 small blocks of the noisy source were checked to be DCT2X2 by decoding them. Read its other counts with care: v0.12.0's `JxlEncoderStatsGet` (`lib/jxl/encode.cc`) returns each count from "8x32" to "32x32" for the next larger size, so its "8x32" line counts DCT16X16 blocks, "16x16" counts DCT16X32 and DCT32X16, "16x32" counts DCT32X32 and "32x32" counts DCT32X64 and DCT64X32. It has no line for DCT8X16, DCT8X32 or the sizes above 64x64; `cjxl -e 7` writes none above 64x64.
 - At `-e 2`, every block is DCT8, the quant field is constant, the chroma-from-luma maps are 0, and the quant tables are the library defaults, whose DCT8 table has six distance bands and so needs `FastPowf`. Gaborish is off below effort 5; `--epf=0` is needed, because at `-d 1` cjxl turns EPF on.
 - The chroma-from-luma maps are 0, but an XYB frame still adds Y to B: the default B ratio is 1.
-- `djxl` writes float32 `.npy`, not clamped. The decoder cannot match it bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"): libjxl fuses multiplies and adds on AVX2 and approximates the reciprocal in the quantisation bias, and this port does neither (ADR 0004). Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.1e-6 and 1.2e-5 (`vardct_xyb_64`), 1.1e-6 and 2.6e-5 (`vardct_xyb_300x200_d05`), 1.3e-6 and 7.8e-5 (`vardct_xyb_600x400_d3`), 2.6e-7 and 1.6e-6 (`vardct_xyb_grey`), 3.0e-6 and 4.1e-5 (`vardct_xyb_alpha`), 1.4e-6 and 7.7e-6 (`vardct_xyb_icc`), 1.1e-7 and 7.8e-7 (`vardct_xyb_grey_d50`), 9.8e-7 and 1.3e-5 (`vardct_xyb_strategies`), 6.7e-7 and 2.5e-5 (`vardct_xyb_sizes_noisy`), 7.2e-7 and 3.0e-5 (`vardct_xyb_sizes_fine`), 6.1e-7 and 1.0e-5 (`vardct_xyb_sizes_smooth`), and 4.1e-7 and 2.8e-5 (`vardct_xyb_identity_afv`). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
+- `djxl` writes float32 `.npy`, not clamped. The decoder cannot match it bit for bit (`docs/jxl/spec.md`, "Tolerance for lossy output"): libjxl fuses multiplies and adds on AVX2 and approximates the reciprocal in the quantisation bias, and this port does neither (ADR 0004). Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.1e-6 and 1.2e-5 (`vardct_xyb_64`), 1.1e-6 and 2.6e-5 (`vardct_xyb_300x200_d05`), 1.3e-6 and 7.8e-5 (`vardct_xyb_600x400_d3`), 2.6e-7 and 1.6e-6 (`vardct_xyb_grey`), 3.0e-6 and 4.1e-5 (`vardct_xyb_alpha`), 1.4e-6 and 7.7e-6 (`vardct_xyb_icc`), 1.1e-7 and 7.8e-7 (`vardct_xyb_grey_d50`), 9.8e-7 and 1.3e-5 (`vardct_xyb_strategies`), 6.7e-7 and 2.5e-5 (`vardct_xyb_sizes_noisy`), 7.2e-7 and 3.0e-5 (`vardct_xyb_sizes_fine`), 6.1e-7 and 1.0e-5 (`vardct_xyb_sizes_smooth`), 4.1e-7 and 2.8e-5 (`vardct_xyb_identity_afv`), and 1.1e-6 and 1.2e-5 (`vardct_xyb_passes`, D13b). `Image.Load<Rgb24>` of each is within 0.50 of one 8-bit step of the clamped reference, which is the rounding.
 - `djxl` gives linear sRGB for `vardct_xyb_icc.jxl`, as with `--color_space=RGB_D65_SRG_Rel_Lin`.
 - `djxl` gives linear grey with sRGB's D65 white point for `vardct_xyb_grey_d50.jxl`: libjxl's `CanOutputToColorEncoding` rejects grey with any other white point.
 
@@ -673,6 +674,33 @@ djxl vardct_grey_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/var
 - `jxlinfo -v noise_animation.jxl` lists the second frame as a "Layer" with a duration of 0. `djxl` writes the three shown frames to the `.npy`, coalesced onto the full canvas.
 - The noise comes from libjxl's `Xorshift128Plus`, seeded by the counts of shown and hidden frames and by the position of each tile, so a decoder that seeds a tile wrongly fails the comparison. A decoder that seeds the hidden frame's noise as a shown frame's misses `noise_animation`'s second frame by an RMSE of 9.0e-4; one that seeds every tile of a group with the group's position misses `noise_resampling_2x`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.4e-6 and 4.2e-5 (`noise_resampling_2x`) and, in the worst frame, 1.5e-6 and 4.1e-5 (`noise_animation`). libjxl fuses the multiplies and adds of the noise stages on AVX2, and this port does not (ADR 0004). `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.
+
+#### How the progressive-pass files were made
+
+Frames of more than one pass (D13b), from `Png/Bike.png` (582 x 453, 3 x 2 groups). None has a DC frame, and only `modular_progressive` has a permuted TOC. `JxlProgressivePassesTests` checks them.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `vardct_progressive_ac.jxl` | Lossy VarDCT, XYB, with `--progressive_ac`: three passes, each with its own coefficient orders and histograms, all with a shift of 0, and downsampling targets 4 and 2 after passes 0 and 1. `--progressive_dc=0` keeps the DC in the frame, so there is no DC frame. | `External/ReferenceOutput/JxlDecoderTests/vardct_progressive_ac.npy` |
+| `vardct_qprogressive_ac.jxl` | The same with `--qprogressive_ac`: two passes, the first with a coefficient shift of 1. | `External/ReferenceOutput/JxlDecoderTests/vardct_qprogressive_ac.npy` |
+| `modular_progressive_ac.jxl` | Lossless Modular with `--progressive_ac`: two passes. In each group, the first pass decodes the squeezed channels with a shift of 1 or 2, and the second pass those with a shift of 0; the smaller channels come in the global and DC sections. Unlike `cjxl -d 0 -p`, its TOC is not permuted. | `External/ReferenceOutput/JxlDecoderTests/modular_progressive_ac.npy`; also `Png/Bike.png` itself |
+| `modular_progressive.jxl` | Lossless Modular with `-p`: the same two passes, with the groups stored centre first, so the TOC is permuted (D13a). | `External/ReferenceOutput/JxlDecoderTests/modular_progressive.npy`; also `Png/Bike.png` itself |
+
+```sh
+cjxl ../../Png/Bike.png vardct_progressive_ac.jxl -d 1 --progressive_ac --progressive_dc=0
+cjxl ../../Png/Bike.png vardct_qprogressive_ac.jxl -d 1 --qprogressive_ac --progressive_dc=0
+cjxl ../../Png/Bike.png modular_progressive_ac.jxl -d 0 --progressive_ac
+cjxl ../../Png/Bike.png modular_progressive.jxl -d 0 -p
+djxl vardct_progressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_progressive_ac.npy
+djxl vardct_qprogressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_qprogressive_ac.npy
+djxl modular_progressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_progressive_ac.npy
+djxl modular_progressive.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_progressive.npy
+```
+
+- The two VarDCT files split the same quantized coefficients into passes in different ways, so `djxl` gives the same output for both: the two `.npy` files are identical.
+- A decoder that ignores the first pass's shift misses `vardct_qprogressive_ac` by an RMSE of 0.054. One that takes the first pass's coefficient orders for every pass misses `vardct_progressive_ac` by 0.091 and `vardct_qprogressive_ac` by 0.026. One that gives every Modular pass the first pass's downsampling bracket fails the ANS final-state check on `modular_progressive_ac`.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.2e-5 for both VarDCT files. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference. `modular_progressive_ac` and `modular_progressive` match exactly.
+- `cjxl -d 0 -p --group_order=0` writes the same bytes as `cjxl -d 0 --progressive_ac`: on a lossless file, `-p` adds only the centre-first group order to the passes.
 
 #### How the permuted-TOC file was made
 
