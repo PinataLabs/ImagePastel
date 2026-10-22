@@ -163,7 +163,7 @@ internal static class JxlSqueeze
     /// <param name="image">The image.</param>
     /// <param name="parameters">The steps.</param>
     /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
-    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken = default)
+    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken)
     {
         if (parameters.Count == 0)
         {
@@ -253,7 +253,7 @@ internal static class JxlSqueeze
     /// <param name="input">The image.</param>
     /// <param name="parameters">The steps, as <see cref="MetaSqueeze"/> left them.</param>
     /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
-    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken = default)
+    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken)
     {
         List<JxlModularChannel> channels = input.Channel;
         for (int i = parameters.Count - 1; i >= 0; i--)

@@ -51,7 +51,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     /// The decode's cancellation token, which every Modular stream of the frame checks: per channel, per
     /// transform and per squeeze step. libjxl has no cancellation (#293).
     /// </param>
-    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, CancellationToken cancellationToken = default)
+    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, CancellationToken cancellationToken)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
@@ -257,7 +257,6 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
         {
             foreach (JxlTransform t in this.globalTransform)
             {
-                this.cancellationToken.ThrowIfCancellationRequested();
                 t.Inverse(gi, this.globalHeader.WpHeader, this.cancellationToken);
             }
 

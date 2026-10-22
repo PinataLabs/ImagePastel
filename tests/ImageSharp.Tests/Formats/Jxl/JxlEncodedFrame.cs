@@ -127,7 +127,7 @@ internal static class JxlEncodedFrame
         JxlBundle.Read(reader, metadata.TransformData);
         if (metadata.M.ColorEncoding.WantIcc)
         {
-            JxlIccReader.Read(reader);
+            JxlIccReader.Read(reader, CancellationToken.None);
         }
 
         reader.JumpToByteBoundary();

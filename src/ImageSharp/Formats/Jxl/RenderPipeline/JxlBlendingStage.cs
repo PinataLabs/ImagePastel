@@ -112,7 +112,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         for (int i = 0; i < this.ecBg.Length; i++)
         {
-            bgPlanes[this.numColorPlanes + i] = this.ecBg[i] != null ? ExtraChannelPlane(this.ecBg[i], i, m.NumExtraChannels) : null;
+            bgPlanes[this.numColorPlanes + i] = ExtraChannelPlane(this.ecBg[i], i, m.NumExtraChannels);
         }
 
         this.bgRows = new JxlBlendingRows(bgPlanes, zeros);
@@ -184,8 +184,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         for (int ec = 0; ec < this.extraChannelInfo.Count; ec++)
         {
-            JxlReferenceFrame background = this.ecBg[ec];
-            CopyBackgroundRow(background != null ? ExtraChannelPlane(background, ec, this.extraChannelInfo.Count) : null, output[this.numColorPlanes + ec], this.ImageXSize, ypos);
+            CopyBackgroundRow(ExtraChannelPlane(this.ecBg[ec], ec, this.extraChannelInfo.Count), output[this.numColorPlanes + ec], this.ImageXSize, ypos);
         }
     }
 
@@ -225,12 +224,13 @@ internal sealed class JxlBlendingStage : IDisposable
         }
     }
 
-    // Extra channel i of a slot. libjxl's slot keeps its extra channels apart from its three colour
-    // channels; here they follow the slot's colour planes, which number one for a grey image that is not
-    // XYB, but three when a grey YCbCr frame was saved before its colour transform. So the extra channels
-    // are counted from the end, and an extra channel may blend from such a slot, as in libjxl.
+    // Extra channel i of a slot, or null for an empty slot, which reads as zeros. libjxl's slot keeps its
+    // extra channels apart from its three colour channels; here they follow the slot's colour planes,
+    // which number one for a grey image that is not XYB saved after blending, but three when the frame was
+    // saved before its colour transform. So the extra channels are counted from the end, and an extra
+    // channel may blend from such a slot, as in libjxl.
     private static Buffer2D<float> ExtraChannelPlane(JxlReferenceFrame frame, int i, int numExtraChannels)
-        => frame.Planes[frame.Planes.Length - numExtraChannels + i];
+        => frame?.Planes[frame.Planes.Length - numExtraChannels + i];
 
     // verify_bg_size. A slot's frame always starts at the image origin here: libjxl sets an origin only
     // on the decoded frame, never on the frame it keeps for referencing.

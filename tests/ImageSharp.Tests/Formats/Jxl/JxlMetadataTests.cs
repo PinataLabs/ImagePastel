@@ -316,7 +316,7 @@ public class JxlMetadataTests
         byte[] data = File.ReadAllBytes(path);
         if (data.AsSpan().StartsWith(JxlConstants.ContainerSignature))
         {
-            data = JxlContainer.Read(data, readMetadata: false).Codestream;
+            data = JxlContainer.Read(data, readMetadata: false, CancellationToken.None).Codestream;
         }
 
         JxlCodecMetadata metadata = new();

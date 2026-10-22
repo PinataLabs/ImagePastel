@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
@@ -124,6 +125,29 @@ public class JxlCancellationTests
         image.Transform.Add(squeeze);
         Assert.True(image.Channel.Count > 3);
         return image;
+    }
+
+    // A container with an Exif box. The walk over the boxes checks the token per box (D14 review).
+    [Fact]
+    public void ContainerRead_CancelledToken_Throws()
+    {
+        byte[] file = File.ReadAllBytes(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "orientation_exif.jxl"));
+
+        Assert.NotNull(JxlContainer.Read(file, readMetadata: true, CancellationToken.None).Exif);
+        Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.Read(file, readMetadata: true, Cancelled()));
+    }
+
+    // 1 MiB of zeros, Brotli-compressed: measuring it takes 16 buffers, and the token is checked before
+    // each (D14 review).
+    [Fact]
+    public void BrotliMeasure_CancelledToken_Throws()
+    {
+        byte[] compressed = new byte[1024];
+        Assert.True(BrotliEncoder.TryCompress(new byte[1 << 20], compressed, out int written));
+        compressed = compressed[..written];
+
+        Assert.Equal(1 << 20, JxlContainer.MeasureDecompressedSize(compressed, "XMP", CancellationToken.None));
+        Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.MeasureDecompressedSize(compressed, "XMP", Cancelled()));
     }
 
     private static CancellationToken Cancelled() => new(canceled: true);

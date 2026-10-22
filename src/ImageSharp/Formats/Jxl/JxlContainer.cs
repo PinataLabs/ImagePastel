@@ -8,6 +8,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
@@ -40,8 +41,12 @@ internal static class JxlContainer
     /// </summary>
     /// <param name="data">The file.</param>
     /// <param name="readMetadata">Whether to read the Exif and XMP boxes.</param>
+    /// <param name="cancellationToken">
+    /// The cancellation token, checked per box and per buffer of a Brotli-compressed box. libjxl has no
+    /// cancellation (#293).
+    /// </param>
     /// <returns>The contents.</returns>
-    public static JxlContainerContents Read(byte[] data, bool readMetadata)
+    public static JxlContainerContents Read(byte[] data, bool readMetadata, CancellationToken cancellationToken)
     {
         // djxl keeps the last box of each kind: each Exif or xml box overwrites the one before.
         ReadOnlyMemory<byte>? exifBox = null;
@@ -57,6 +62,8 @@ internal static class JxlContainer
         int boxCount = 0;
         while (pos < data.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Another codestream, bare or boxed, can follow the last codestream box.
             ReadOnlySpan<byte> rest = data.AsSpan(pos);
             if (lastCodestreamSeen && rest.Length >= 2 && rest[0] == JxlConstants.CodestreamSignature[0] && rest[1] == JxlConstants.CodestreamSignature[1])
@@ -183,11 +190,11 @@ internal static class JxlContainer
                 ReadOnlySpan<byte> decodedType = contents.Span.Slice(0, 4);
                 if (decodedType.SequenceEqual("Exif"u8))
                 {
-                    exifBox = Decompress(contents.Slice(4), "Exif") ?? exifBox;
+                    exifBox = Decompress(contents.Slice(4), "Exif", cancellationToken) ?? exifBox;
                 }
                 else if (decodedType.SequenceEqual("xml "u8))
                 {
-                    xmlBox = Decompress(contents.Slice(4), "XMP") ?? xmlBox;
+                    xmlBox = Decompress(contents.Slice(4), "XMP", cancellationToken) ?? xmlBox;
                 }
             }
 
@@ -207,6 +214,55 @@ internal static class JxlContainer
             Xmp = xmlBox?.ToArray(),
         };
     }
+
+#if NETCOREAPP3_0_OR_GREATER
+    /// <summary>
+    /// Returns the decompressed size of a Brotli stream that has to end with the box, or -1 for a stream
+    /// that cannot be read. Throws <see cref="InvalidImageContentException"/> as soon as the size passes
+    /// the cap. Internal for the cancellation tests.
+    /// </summary>
+    /// <param name="input">The compressed contents of a <c>brob</c> box, after its type.</param>
+    /// <param name="kind">"Exif" or "XMP", for the message.</param>
+    /// <param name="cancellationToken">
+    /// The cancellation token, checked per buffer: a box at the cap takes 1,024 of them. libjxl has no
+    /// cancellation (#293).
+    /// </param>
+    /// <returns>The decompressed size, or -1.</returns>
+    internal static long MeasureDecompressedSize(ReadOnlySpan<byte> input, string kind, CancellationToken cancellationToken)
+    {
+        System.IO.Compression.BrotliDecoder decoder = default;
+        try
+        {
+            byte[] buffer = new byte[MeasureBufferSize];
+            long size = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                System.Buffers.OperationStatus status = decoder.Decompress(input, buffer, out int consumed, out int produced);
+                input = input.Slice(consumed);
+                size += produced;
+
+                // "EXIF/XMP box is too large"
+                CheckMetadataBoxSize(size, kind);
+                switch (status)
+                {
+                    case System.Buffers.OperationStatus.Done:
+                        // The Brotli stream has to end with the box.
+                        return input.IsEmpty ? size : -1;
+                    case System.Buffers.OperationStatus.DestinationTooSmall:
+                        break;
+                    default:
+                        // Truncated (NeedMoreData) or invalid.
+                        return -1;
+                }
+            }
+        }
+        finally
+        {
+            decoder.Dispose();
+        }
+    }
+#endif
 
     // The Exif box starts with the offset of the TIFF header. djxl drops the bytes before it, and
     // warns and keeps the box as it is when there is no TIFF header there (lib/extras/dec/jxl.cc);
@@ -244,17 +300,20 @@ internal static class JxlContainer
     // null where there is no Brotli decoder, and for a stream that cannot be read: libjxl fails the
     // decode there, but ImageSharp drops unreadable metadata, as it has to on netstandard2.1 anyway.
     // Throws for a box that decompresses to more than the cap.
-    private static byte[] Decompress(ReadOnlyMemory<byte> compressed, string kind)
+    private static byte[] Decompress(ReadOnlyMemory<byte> compressed, string kind, CancellationToken cancellationToken)
     {
 #if NETCOREAPP3_0_OR_GREATER
         // The stream is decompressed twice: once into a small buffer to measure it, stopping as soon as
         // it passes the cap, then into an array of its size. libjxl grows its buffer as it goes instead;
         // measuring first means a box over the cap is never held, and a box under it allocates its size.
-        long size = MeasureDecompressedSize(compressed.Span, kind);
+        long size = MeasureDecompressedSize(compressed.Span, kind, cancellationToken);
         if (size < 0)
         {
             return null;
         }
+
+        // The second pass is one call, so the token is checked once before it.
+        cancellationToken.ThrowIfCancellationRequested();
 
         // Not a using declaration: that would make the struct read-only, and each call would mutate a copy.
         System.IO.Compression.BrotliDecoder decoder = default;
@@ -273,47 +332,10 @@ internal static class JxlContainer
         // still decodes (issue #165).
         _ = compressed;
         _ = kind;
+        _ = cancellationToken;
         return null;
 #endif
     }
-
-#if NETCOREAPP3_0_OR_GREATER
-    // The decompressed size of a Brotli stream that has to end with the box, or -1 for a stream that
-    // cannot be read. Throws as soon as the size passes the cap.
-    private static long MeasureDecompressedSize(ReadOnlySpan<byte> input, string kind)
-    {
-        System.IO.Compression.BrotliDecoder decoder = default;
-        try
-        {
-            byte[] buffer = new byte[MeasureBufferSize];
-            long size = 0;
-            while (true)
-            {
-                System.Buffers.OperationStatus status = decoder.Decompress(input, buffer, out int consumed, out int produced);
-                input = input.Slice(consumed);
-                size += produced;
-
-                // "EXIF/XMP box is too large"
-                CheckMetadataBoxSize(size, kind);
-                switch (status)
-                {
-                    case System.Buffers.OperationStatus.Done:
-                        // The Brotli stream has to end with the box.
-                        return input.IsEmpty ? size : -1;
-                    case System.Buffers.OperationStatus.DestinationTooSmall:
-                        break;
-                    default:
-                        // Truncated (NeedMoreData) or invalid.
-                        return -1;
-                }
-            }
-        }
-        finally
-        {
-            decoder.Dispose();
-        }
-    }
-#endif
 
     // The file type box: the major brand "jxl " and the file format version.
     private static uint ReadFtyp(ReadOnlySpan<byte> contents)

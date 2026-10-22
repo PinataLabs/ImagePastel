@@ -39,7 +39,7 @@ internal static class JxlIccReader
     /// <param name="reader">The reader, after the transform data.</param>
     /// <param name="cancellationToken">The cancellation token, checked at each checkpoint.</param>
     /// <returns>The profile.</returns>
-    public static byte[] Read(JxlBitReader reader, CancellationToken cancellationToken = default)
+    public static byte[] Read(JxlBitReader reader, CancellationToken cancellationToken)
     {
         // ICCReader::Init.
         CheckEoi(reader);

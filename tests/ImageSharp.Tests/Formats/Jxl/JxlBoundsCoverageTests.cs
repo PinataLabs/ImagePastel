@@ -66,7 +66,7 @@ public class JxlBoundsCoverageTests
     [InlineData(16384, 16384, 8u, false)]
     public void PixelCap_FrameOverTheCapInAnImageUnderIt_ThrowsBeforeAllocating(int xsize, int ysize, uint upsampling, bool throws)
     {
-        Assert.True(JxlFrameDecoder.CountSamples(xsize, ysize, 3, 0, Array.Empty<uint>()) <= JxlFrameDecoder.MaxSamplesPerFrame);
+        Assert.True((long)xsize * ysize * 3 <= JxlSampleBudget.MaxSamples);
         byte[] codestream = new JxlTestLayers(8, 8, alpha: false)
             .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Crop = true, XSize = xsize, YSize = ysize, Upsampling = upsampling })
             .ToArray();

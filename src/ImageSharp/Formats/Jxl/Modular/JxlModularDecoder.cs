@@ -50,7 +50,7 @@ internal static class JxlModularDecoder
         List<JxlPropertyDecisionNode> tree,
         JxlAnsCode code,
         byte[] ctxMap,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         List<(int W, int H)> reqSizes = new(image.Channel.Count);
         foreach (JxlModularChannel c in image.Channel)
@@ -256,7 +256,6 @@ internal static class JxlModularDecoder
         image.Transform = new List<JxlTransform>(header.Transforms);
         foreach (JxlTransform transform in image.Transform)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             transform.MetaApply(image, cancellationToken);
         }
 

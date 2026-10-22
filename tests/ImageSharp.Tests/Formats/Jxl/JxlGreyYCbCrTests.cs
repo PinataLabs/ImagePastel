@@ -105,12 +105,39 @@ public class JxlGreyYCbCrTests
         Assert.Equal(expected.Planes[1][9, 4] + (128F / 65535), frame.Planes[1][9, 4], 1e-6F);
     }
 
+    // A grey frame that is not YCbCr, with patches from a grey YCbCr slot and saved before its colour
+    // transform, keeps three planes in its slot, as libjxl (D14 review): its grey g plus Cb, Y and Cr,
+    // 200, 100 and 50, inside its patch, and g three times outside it. A later grey YCbCr frame adds that
+    // slot to its own Cb, Y and Cr with a patch, so in 8-bit units R = (Y + 128 + 1.402 Cr) / 255 is
+    // (468.2 + 2.402 g) / 255 where both patches cover the pixel, and (298.1 + 2.402 g) / 255 where only
+    // the second does. A slot of one plane, g + 200, would give (778.5 + 2.402 g) / 255. The frames are
+    // those of the committed file grey_ycbcr_patch_chain.
+    [Fact]
+    public void DecodeToPlanes_GreyFrameSavedBeforeTheColourTransformWithYCbCrPatches_KeepsThreePlanesInItsSlot()
+    {
+        JxlTestLayers plainLayers = GreyLayers(out byte[] section);
+
+        using JxlDecodedImage plain = DecodeToPlanes(plainLayers.Add(JxlTestFrame.Last(section)).ToArray());
+        using JxlDecodedImage decoded = DecodeToPlanes(Build("grey_ycbcr_patch_chain"));
+
+        // The last frame's pixel (x, y) inside its patch takes the slot's (x + 12, y + 18); the middle
+        // frame's patch covers its columns 20 to 35 and rows 30 to 41.
+        Buffer2D<float> source = Assert.Single(Assert.Single(plain.Frames).Planes);
+        Buffer2D<float> grey = Assert.Single(Assert.Single(decoded.Frames).Planes);
+        float inBoth = source[24, 38] * 255;
+        float inSecond = source[17, 25] * 255;
+        Assert.Equal((468.2F + (2.402F * inBoth)) / 255, grey[12, 20], 1e-5F);
+        Assert.Equal((298.1F + (2.402F * inSecond)) / 255, grey[5, 7], 1e-5F);
+        Assert.Equal(298.1F / 255, grey[40, 40], 1e-6F);
+    }
+
     // The hand-built files against djxl v0.12.0's float32 output. All are lossless Modular frames, so
     // the decoders agree to float rounding.
     [Theory]
     [InlineData("grey_ycbcr_saved_before_ct")]
     [InlineData("grey_ycbcr_patches")]
     [InlineData("grey_ycbcr_alpha_blending")]
+    [InlineData("grey_ycbcr_patch_chain")]
     public void DecodeToPlanes_MatchesDjxl(string name)
     {
         NpyArray expected = NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".npy"));
@@ -129,6 +156,7 @@ public class JxlGreyYCbCrTests
     [InlineData("grey_ycbcr_saved_before_ct")]
     [InlineData("grey_ycbcr_patches")]
     [InlineData("grey_ycbcr_alpha_blending")]
+    [InlineData("grey_ycbcr_patch_chain")]
     public void CommittedFile_IsTheHandBuiltCodestream(string name)
     {
         byte[] codestream = Build(name);
@@ -181,6 +209,27 @@ public class JxlGreyYCbCrTests
                 return JxlTestLayers.FromFile(File.ReadAllBytes(InputPath("greyscale_alpha")), out byte[] alphaSection)
                     .Add(YCbCrSavedBeforeTheColourTransform(1))
                     .Add(JxlTestFrame.Last(alphaSection) with { ExtraChannel = new(JxlBlendMode.Add, Source: 1) })
+                    .ToArray();
+
+            // A grey YCbCr frame saved before its colour transform in slot 1. Then the grey frame of
+            // greyscale.jxl, reference-only and saved before its colour transform in slot 2, with an added
+            // patch from slot 1. Then a grey YCbCr frame with an added patch from slot 2, which covers part
+            // of the middle frame's patch.
+            case "grey_ycbcr_patch_chain":
+                return layers
+                    .Add(YCbCrSavedBeforeTheColourTransform(1))
+                    .Add(new JxlTestFrame(section)
+                    {
+                        Type = JxlFrameType.ReferenceOnly,
+                        SaveAsReference = 2,
+                        SaveBeforeColorTransform = true,
+                        Patches = new JxlTestPatchDictionary(new JxlTestRefPatch(1, 0, 0, 16, 12, new JxlTestPatch(20, 30, add))),
+                    })
+                    .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with
+                    {
+                        YCbCr = true,
+                        Patches = new JxlTestPatchDictionary(new JxlTestRefPatch(2, 16, 24, 24, 20, new JxlTestPatch(4, 6, add))),
+                    })
                     .ToArray();
 
             default:

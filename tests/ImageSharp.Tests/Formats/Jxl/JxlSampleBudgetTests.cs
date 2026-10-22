@@ -89,7 +89,7 @@ public class JxlSampleBudgetTests
         return writer.ToArray();
     }
 
-    // Each test writes an 8 x 8 XYB image with 8-bit alpha extra channels, then the header of one
+    // Each test writes an 8 x 8 XYB-encoded image with 8-bit alpha extra channels, then the header of one
     // Modular frame of the given size, with no TOC.
     private static byte[] FrameCodestream(int numExtraChannels, int dimShift, uint extraChannelUpsampling, int frameSize = 8192)
     {

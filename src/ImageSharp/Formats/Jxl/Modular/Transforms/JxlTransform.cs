@@ -122,9 +122,12 @@ internal sealed class JxlTransform : JxlFields
     /// <summary>Undoes the transform. Throws <see cref="InvalidImageContentException"/> on failure.</summary>
     /// <param name="input">The image.</param>
     /// <param name="wpHeader">The weighted predictor parameters.</param>
-    /// <param name="cancellationToken">The cancellation token, which squeeze checks per step (#293).</param>
-    public void Inverse(JxlModularImage input, JxlWeightedHeader wpHeader, CancellationToken cancellationToken = default)
+    /// <param name="cancellationToken">
+    /// The cancellation token, checked once per transform, or per step for a squeeze (#293).
+    /// </param>
+    public void Inverse(JxlModularImage input, JxlWeightedHeader wpHeader, CancellationToken cancellationToken)
     {
+        this.CheckCancellation(cancellationToken);
         switch (this.Id)
         {
             case JxlTransformId.Rct:
@@ -147,9 +150,12 @@ internal sealed class JxlTransform : JxlFields
     /// decoded before the transform is undone.
     /// </summary>
     /// <param name="input">The image.</param>
-    /// <param name="cancellationToken">The cancellation token, which squeeze checks per step (#293).</param>
-    public void MetaApply(JxlModularImage input, CancellationToken cancellationToken = default)
+    /// <param name="cancellationToken">
+    /// The cancellation token, checked once per transform, or per step for a squeeze (#293).
+    /// </param>
+    public void MetaApply(JxlModularImage input, CancellationToken cancellationToken)
     {
+        this.CheckCancellation(cancellationToken);
         switch (this.Id)
         {
             case JxlTransformId.Rct:
@@ -203,4 +209,14 @@ internal sealed class JxlTransform : JxlFields
     /// <returns>The sum.</returns>
     [MethodImpl(InliningOptions.ShortMethod)]
     public static int PixelAdd(int a, int b) => unchecked((int)((uint)a + (uint)b));
+
+    // The one cancellation check of a transform. A squeeze checks before each of its steps instead
+    // (JxlSqueeze), so it is not checked twice in a row. libjxl has no cancellation (#293).
+    private void CheckCancellation(CancellationToken cancellationToken)
+    {
+        if (this.Id != JxlTransformId.Squeeze)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+    }
 }

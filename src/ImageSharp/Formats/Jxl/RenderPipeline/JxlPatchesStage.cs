@@ -39,7 +39,7 @@ internal sealed class JxlPatchesStage : IDisposable
         this.hasAlpha = JxlBlending.HasAlpha(metadata.ExtraChannelInfo);
 
         // Room for three colour planes, which a grey image that is not XYB has here when the frame has
-        // noise or the YCbCr colour transform (JxlRenderPipeline.Finish).
+        // noise, the YCbCr colour transform or a save before the colour transform (JxlRenderPipeline.Finish).
         int maxChannels = 3 + metadata.NumExtraChannels;
         this.tmp = allocator.Allocate2D<float>(Math.Max(frameXSize, 1), maxChannels);
         this.rows = new JxlBlendingRows(new Buffer2D<float>[maxChannels], Memory<float>.Empty);
@@ -49,7 +49,8 @@ internal sealed class JxlPatchesStage : IDisposable
     /// <param name="planes">The frame planes, one per channel.</param>
     /// <param name="numColorPlanes">
     /// The number of colour planes: three, or one for a grey image that is not XYB, unless the frame has
-    /// noise or the YCbCr colour transform, which need three. The same for every row of a frame.
+    /// noise, the YCbCr colour transform or a save before the colour transform, which need three. The same
+    /// for every row of a frame.
     /// </param>
     /// <param name="xsize">The width of the frame.</param>
     /// <param name="ypos">The row.</param>

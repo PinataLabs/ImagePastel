@@ -72,7 +72,7 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         // A frame of one group and one pass has every section in one.
         bool singleSection = tocEntries == 1;
         JxlDequantMatrices matrices = new();
-        JxlModularFrameDecoder modularFrameDecoder = new(Configuration.Default.MemoryAllocator, frameDim, matrices);
+        JxlModularFrameDecoder modularFrameDecoder = new(Configuration.Default.MemoryAllocator, frameDim, matrices, CancellationToken.None);
         JxlVarDctFrameState state = new(Configuration.Default.MemoryAllocator, frameHeader, frameDim, matrices);
         JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, JxlImageFeatures.None, state.Cmap, matrices, modularFrameDecoder, state, CancellationToken.None);
         for (long i = 0; i < frameDim.NumDcGroups; i++)

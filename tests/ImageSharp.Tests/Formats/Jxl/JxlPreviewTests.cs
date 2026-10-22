@@ -172,39 +172,6 @@ public class JxlPreviewTests
         Assert.Contains("preview", ex.Message);
     }
 
-    // The eight inputs of libjxl's OSS-Fuzz regression set whose header has a preview. Before D14a every
-    // one threw NotSupportedException from Identify and from decode. libjxl's djxl_fuzzer reads the last
-    // four bytes as fuzzer flags; fed as they are, as here, djxl v0.12.0 rejects all eight.
-    [Theory]
-    [InlineData("4816304719134720")]
-    [InlineData("4848606801166336")]
-    [InlineData("5381727462227968")]
-    [InlineData("5467620336336896")]
-    [InlineData("5914266367557632")]
-    [InlineData("6355777170833408")]
-    [InlineData("6735607318052864")]
-    [InlineData("6748486320652288")]
-    public void OssFuzzPreviewInput_IdentifiesAndDecodesOrThrowsAnAllowedException(string id)
-    {
-        byte[] data = File.ReadAllBytes(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "oss-fuzz", "clusterfuzz-testcase-minimized-djxl_fuzzer-" + id));
-
-        using (MemoryStream stream = new(data))
-        {
-            IImageInfo info = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken);
-            TestContext.Current.TestOutputHelper?.WriteLine($"Identify: {info.Width}x{info.Height}");
-        }
-
-        try
-        {
-            Decode(data);
-            TestContext.Current.TestOutputHelper?.WriteLine("Decode: ok");
-        }
-        catch (Exception ex) when (ex is InvalidImageContentException or InvalidMemoryOperationException)
-        {
-            TestContext.Current.TestOutputHelper?.WriteLine($"Decode: {ex.GetType().Name}: {ex.Message}");
-        }
-    }
-
     private static Dictionary<string, Action<JxlFrameHeader>> PreviewHeaderChanges => new()
     {
         ["reference_only"] = header => header.FrameType = JxlFrameType.ReferenceOnly,

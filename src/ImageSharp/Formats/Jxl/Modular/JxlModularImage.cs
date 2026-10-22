@@ -93,11 +93,10 @@ internal sealed class JxlModularImage : IDisposable
     /// </summary>
     /// <param name="wpHeader">The weighted predictor parameters, which delta palettes use.</param>
     /// <param name="cancellationToken">The cancellation token, checked per transform and per squeeze step (#293).</param>
-    public void UndoTransforms(JxlWeightedHeader wpHeader, CancellationToken cancellationToken = default)
+    public void UndoTransforms(JxlWeightedHeader wpHeader, CancellationToken cancellationToken)
     {
         while (this.Transform.Count > 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             JxlTransform t = this.Transform[^1];
             t.Inverse(this, wpHeader, cancellationToken);
             this.Transform.RemoveAt(this.Transform.Count - 1);

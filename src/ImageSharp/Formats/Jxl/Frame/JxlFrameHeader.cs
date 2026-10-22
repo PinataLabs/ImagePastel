@@ -117,7 +117,7 @@ internal sealed class JxlFrameHeader : JxlFields
     /// frame with a colour transform, decodes three even for a grey image, as libjxl does (its
     /// <c>nb_chans</c> in <c>ModularFrameDecoder::DecodeGlobalInfo</c>). A Modular frame with no colour
     /// transform decodes <see cref="JxlImageMetadata.NumColorPlanes"/>: one for a grey image, which libjxl
-    /// copies into three (<c>rgb_from_gray</c>) and this port keeps as one.
+    /// copies into three (<c>rgb_from_gray</c>) and this port keeps as one until a stage needs three.
     /// </summary>
     public int NumDecodedColorPlanes
         => this.Encoding == JxlFrameEncoding.VarDct || this.ColorTransform != JxlColorTransform.None ? 3 : this.NonserializedMetadata.M.NumColorPlanes;
@@ -125,8 +125,8 @@ internal sealed class JxlFrameHeader : JxlFields
     /// <summary>
     /// Gets a value indicating whether the frame is a grey image's YCbCr frame, which drops to one colour
     /// plane only after its colour transform. libjxl keeps three colour planes to the output. This port
-    /// drops the other frames of a grey image that is not XYB to one plane before the patches, where no
-    /// later stage mixes the colour planes (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The
+    /// drops the other frames of a grey image that is not XYB to one plane where no later stage mixes or
+    /// keeps the colour planes (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The
     /// YCbCr transform mixes the three planes, so such a frame keeps them through its patches, its save
     /// before the colour transform and the transform itself, as libjxl does.
     /// </summary>

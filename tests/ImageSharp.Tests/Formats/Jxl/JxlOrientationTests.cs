@@ -83,7 +83,7 @@ public class JxlOrientationTests
     public void Load_OrientedImageWithExif_SetsTheExifOrientationTo1()
     {
         // The codestream orientation is 6, and so is the Exif orientation in the file's Exif box.
-        JxlContainerContents contents = JxlContainer.Read(File.ReadAllBytes(ExifPath), readMetadata: true);
+        JxlContainerContents contents = JxlContainer.Read(File.ReadAllBytes(ExifPath), readMetadata: true, CancellationToken.None);
         Assert.Equal((ushort)6, new ExifProfile(contents.Exif).GetValue(ExifTag.Orientation).Value);
 
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), ExifPath);

@@ -80,7 +80,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = this.ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream, cancellationToken);
         int frameOffset = this.ReadHeaders(data, cancellationToken);
         return this.Decode<TPixel>(data, frameOffset, cancellationToken);
     }
@@ -94,7 +94,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <returns>The image.</returns>
     public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        byte[] data = this.ReadCodestream(stream);
+        byte[] data = this.ReadCodestream(stream, cancellationToken);
         int frameOffset = this.ReadHeaders(data, cancellationToken);
         Type pixelType = ChoosePixelType(this.metadata.M);
         return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
@@ -160,7 +160,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
-        CheckSampleBudget(this.metadata);
+        JxlSampleBudget.CheckImage(this.metadata);
 
         // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
         Size size = this.OrientedSize;
@@ -193,7 +193,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(this.ReadCodestream(stream), cancellationToken);
+        this.ReadHeaders(this.ReadCodestream(stream, cancellationToken), cancellationToken);
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -215,10 +215,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = this.ReadCodestream(bufferedStream);
+        byte[] data = this.ReadCodestream(bufferedStream, cancellationToken);
         int frameOffset = this.ReadHeaders(data, cancellationToken);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
-        CheckSampleBudget(this.metadata);
+        JxlSampleBudget.CheckImage(this.metadata);
 
         // djxl orients its output, so the planes are oriented too.
         JxlPlanesSink planesSink = new();
@@ -285,25 +285,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
-    // The sample budget of a full-size frame, checked from the header as the pixel cap is, so that the
-    // image is not allocated for a frame that would fail it. Each extra channel counts at its own size,
-    // shrunk by its dim_shift. JxlFrameDecoder checks each frame again at its own size and upsampling.
-    // A departure from libjxl, which has no such cap; see JxlFrameDecoder.MaxSamplesPerFrame.
-    private static void CheckSampleBudget(JxlCodecMetadata metadata)
-    {
-        List<JxlExtraChannelInfo> extraChannels = metadata.M.ExtraChannelInfo;
-        uint[] dimShiftUpsampling = new uint[extraChannels.Count];
-        for (int i = 0; i < extraChannels.Count; i++)
-        {
-            dimShiftUpsampling[i] = 1u << (int)extraChannels[i].DimShift;
-        }
-
-        long samples = JxlFrameDecoder.CountSamples((long)metadata.XSize, (long)metadata.YSize, metadata.M.NumColorPlanes, extraChannels.Count, dimShiftUpsampling);
-        JxlFrameDecoder.CheckSampleBudget("image", samples);
-    }
-
-    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container.
-    private byte[] ReadCodestream(BufferedReadStream stream)
+    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container. The
+    // container read checks the token per box, and per buffer of a Brotli-compressed box (#293).
+    private byte[] ReadCodestream(BufferedReadStream stream, CancellationToken cancellationToken)
     {
         byte[] data = ReadAll(stream);
         this.imageMetadata = new ImageMetadata();
@@ -312,7 +296,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             return data;
         }
 
-        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
+        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata, cancellationToken);
         if (contents.Exif != null)
         {
             // The decoder always undoes the codestream orientation, which overrides the Exif one, so

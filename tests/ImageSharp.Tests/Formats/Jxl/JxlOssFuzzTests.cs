@@ -55,6 +55,20 @@ public class JxlOssFuzzTests
         "6329817929220096",
     };
 
+    // The inputs whose header has a preview (D14a). Before D14a, Identify and Load threw
+    // NotSupportedException for each. Now each identifies, and Load rejects each, as djxl does.
+    private static readonly string[] PreviewInputs =
+    {
+        "4816304719134720",
+        "4848606801166336",
+        "5381727462227968",
+        "5467620336336896",
+        "5914266367557632",
+        "6355777170833408",
+        "6735607318052864",
+        "6748486320652288",
+    };
+
     private static string InputDirectory => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "libjxl", "oss-fuzz");
 
     // The OSS-Fuzz test case IDs, which name the files.
@@ -77,12 +91,16 @@ public class JxlOssFuzzTests
     [Theory]
     [MemberData(nameof(Inputs))]
     public async Task Identify_DecodesOrThrowsAnAllowedExceptionWithinTheBudget(string id)
-        => await RunWithinTheBudget(id, async (configuration, stream, token) =>
+    {
+        bool identified = await RunWithinTheBudget(id, async (configuration, stream, token) =>
         {
             IImageInfo info = await Image.IdentifyAsync(configuration, stream, token);
             Assert.NotNull(info);
             return $"{info.Width}x{info.Height}";
         });
+
+        Assert.True(identified || !PreviewInputs.Contains(id), $"{id} has a preview, which Identify skips");
+    }
 
     [Theory]
     [MemberData(nameof(Inputs))]

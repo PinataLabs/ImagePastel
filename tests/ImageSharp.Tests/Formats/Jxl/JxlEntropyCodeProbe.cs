@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -75,7 +76,7 @@ internal static class JxlEntropyCodeProbe
         JxlBundle.Read(reader, metadata.TransformData);
         if (metadata.M.ColorEncoding.WantIcc)
         {
-            JxlIccReader.Read(reader);
+            JxlIccReader.Read(reader, CancellationToken.None);
         }
 
         reader.JumpToByteBoundary();

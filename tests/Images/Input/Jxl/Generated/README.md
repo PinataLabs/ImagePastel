@@ -759,15 +759,17 @@ Hand-built codestreams of grey YCbCr frames that need three colour planes before
 | `grey_ycbcr_saved_before_ct.jxl` | A reference-only grey YCbCr frame saved before its colour transform in slot 1, then the grey frame of `greyscale.jxl` with two patches from that slot, one added and one replacing. libjxl's slot keeps Cb, Y and Cr, and a grey frame's patches take channel 0, Cb. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy` |
 | `grey_ycbcr_patches.jxl` | The grey frame of `greyscale.jxl` in slot 2 and a grey YCbCr frame in slot 1, both reference-only and saved before their colour transform, then a grey YCbCr frame with an added patch from each. The patches blend all three colour planes before the YCbCr transform mixes them. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy` |
 | `grey_ycbcr_alpha_blending.jxl` | A reference-only grey YCbCr frame with alpha, saved before its colour transform in slot 1, then the frame of `greyscale_alpha.jxl`, whose alpha is added to the alpha of slot 1. The colour planes of that slot are three, not one. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy`, two channels |
+| `grey_ycbcr_patch_chain.jxl` | D14 review. A reference-only grey YCbCr frame saved before its colour transform in slot 1. Then the grey frame of `greyscale.jxl`, reference-only and saved before its colour transform in slot 2, with an added patch from slot 1. Then a grey YCbCr frame with an added patch from slot 2. libjxl's slot 2 holds three different planes (grey plus Cb, Y and Cr inside the first patch), which the last frame's YCbCr transform mixes. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patch_chain.npy` |
 
 ```sh
 djxl grey_ycbcr_saved_before_ct.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy
 djxl grey_ycbcr_patches.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy
 djxl grey_ycbcr_alpha_blending.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy
+djxl grey_ycbcr_patch_chain.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patch_chain.npy
 ```
 
 - libjxl does not let a frame blend its colour onto a slot saved before the colour transform ("Trying to blend XYB reference frame"). So patches are the only colour use of such a slot. libjxl does not check the slot that an extra channel blends onto.
-- Measured on x64 against `djxl` with AVX2: `grey_ycbcr_saved_before_ct` and `grey_ycbcr_alpha_blending` are exact. `grey_ycbcr_patches` has a worst channel RMSE of 3.6e-8 and a peak error of 2.4e-7, the float rounding of the YCbCr transform.
+- Measured on x64 against `djxl` with AVX2: `grey_ycbcr_saved_before_ct` and `grey_ycbcr_alpha_blending` are exact. `grey_ycbcr_patches` has a worst channel RMSE of 3.6e-8 and a peak error of 2.4e-7, the float rounding of the YCbCr transform. `grey_ycbcr_patch_chain` has 3.3e-8 and 2.4e-7. A decoder that keeps one plane in slot 2 (the one patched from Cb) misses it by an RMSE of 0.26 and a peak of 1.2.
 
 #### How the preview file was made
 
