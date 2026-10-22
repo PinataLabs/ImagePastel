@@ -103,6 +103,12 @@ internal sealed class JxlPassesEncoderState
     /// <summary>Gets or sets the orders the AC global section codes, one bit per order bucket.</summary>
     public uint UsedOrders { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether every coefficient order stays natural rather than customised (for
+    /// tests; see <see cref="IJxlEncoderOptions.NaturalCoeffOrders"/>).
+    /// </summary>
+    public bool NaturalCoeffOrders { get; set; }
+
     /// <summary>Gets or sets the strategies used, one bit per raw strategy.</summary>
     public uint UsedAcs { get; set; }
 
