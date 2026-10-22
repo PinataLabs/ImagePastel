@@ -87,6 +87,59 @@ public class JxlCalibrationOracleTests
         Assert.True(Math.Abs(output.Score - row.Score) <= ScoreReproduction, $"{row}: ssimulacra2 gave {output.Score:F8}; the table has {row.Score:F8}.");
     }
 
+    [Theory]
+    [MemberData(nameof(Rows))]
+    public async Task Comparer_PassesCjxlsOwnOutput(string image, int effort, double distance)
+    {
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, effort, distance);
+        CjxlOutput output = await EncodeAsync(row, TestContext.Current.CancellationToken);
+
+        using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+        using Image<RgbaVector> decoded = Image.Load<RgbaVector>(JxlEncoderRoundTrip.CreateConfiguration(), output.JxlPath);
+
+        JxlQualityResult result = JxlQualityComparer.Verify(row, original, decoded, output.Size);
+        TestContext.Current.TestOutputHelper?.WriteLine(result.ToString());
+    }
+
+    /// <summary>
+    /// Deliberately degraded encodes at effort 3: cjxl at distance 4 fails the quality bar of the distance 1
+    /// row, and cjxl at distance 0.25 fails the size bar of the distance 4 row.
+    /// </summary>
+    /// <param name="image">The calibration image.</param>
+    [Theory]
+    [InlineData("bike")]
+    [InlineData("calliphora")]
+    [InlineData("bike_alpha")]
+    [InlineData("gradient")]
+    [InlineData("text")]
+    [InlineData("line_art")]
+    public async Task Comparer_FailsADegradedEncode(string image)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        JxlCalibrationRow d1 = JxlCalibrationTable.Instance.Find(image, 3, 1);
+        JxlCalibrationRow d4 = JxlCalibrationTable.Instance.Find(image, 3, 4);
+        using Image<Rgba32> original = Image.Load<Rgba32>(d1.Image.FullPath);
+        JxlQualityResult lowQuality = await CompareCjxlAsync(d1, original, "4", cancellationToken);
+        JxlQualityResult tooLarge = await CompareCjxlAsync(d4, original, "0.25", cancellationToken);
+
+        TestContext.Current.TestOutputHelper?.WriteLine(lowQuality.ToString());
+        TestContext.Current.TestOutputHelper?.WriteLine(tooLarge.ToString());
+        Assert.False(lowQuality.Passed, lowQuality.ToString());
+        Assert.Contains("SSIMULACRA2", Assert.Single(lowQuality.Failures));
+        Assert.False(tooLarge.Passed, tooLarge.ToString());
+        Assert.Contains("bytes", Assert.Single(tooLarge.Failures));
+    }
+
+    // Encodes the row's image with cjxl at effort 3 and another distance, and compares it with the row.
+    private static async Task<JxlQualityResult> CompareCjxlAsync(JxlCalibrationRow row, Image<Rgba32> original, string distance, CancellationToken cancellationToken)
+    {
+        string path = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", "Calibration"), $"{row.Image.Name}_e3_d{distance}_against_d{row.Distance.ToString(CultureInfo.InvariantCulture)}.jxl");
+        File.Delete(path);
+        await JxlTools.RunAsync("cjxl", cancellationToken, row.Image.FullPath, path, "-d", distance, "-e", "3");
+        using Image<RgbaVector> decoded = Image.Load<RgbaVector>(JxlEncoderRoundTrip.CreateConfiguration(), path);
+        return JxlQualityComparer.Compare(row, original, decoded, new FileInfo(path).Length);
+    }
+
     private static Task<CjxlOutput> EncodeAsync(JxlCalibrationRow row, CancellationToken cancellationToken)
     {
         // Resolve the tools first, so the test skips before it writes anything.

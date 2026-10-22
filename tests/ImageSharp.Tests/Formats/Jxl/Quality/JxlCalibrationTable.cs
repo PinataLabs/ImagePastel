@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using SixLabors.ImageSharp.Formats.Jxl;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 
@@ -51,6 +52,24 @@ internal sealed class JxlCalibrationTable
     /// <returns>The row.</returns>
     public JxlCalibrationRow Find(string image, int effort, double distance)
         => this.Rows.Single(r => r.Image.Name == image && r.Effort == effort && r.Distance == distance);
+
+    /// <summary>Gets the row of one image at the libjxl effort of one encoder effort, and one distance.</summary>
+    /// <param name="image">The image name, such as <c>bike</c>.</param>
+    /// <param name="effort">The encoder effort: Fastest is libjxl's 3, Default 5 and Thorough 7.</param>
+    /// <param name="distance">The distance.</param>
+    /// <returns>The row.</returns>
+    public JxlCalibrationRow Find(string image, JxlEffort effort, double distance) => this.Find(image, LibjxlEffort(effort), distance);
+
+    /// <summary>Gets the libjxl effort of an encoder effort.</summary>
+    /// <param name="effort">The encoder effort.</param>
+    /// <returns>3, 5 or 7.</returns>
+    public static int LibjxlEffort(JxlEffort effort) => effort switch
+    {
+        JxlEffort.Fastest => 3,
+        JxlEffort.Default => 5,
+        JxlEffort.Thorough => 7,
+        _ => throw new ArgumentOutOfRangeException(nameof(effort), effort, null),
+    };
 
     /// <summary>Gets the cjxl arguments that made a row, after the input and output paths.</summary>
     /// <param name="row">The row.</param>
