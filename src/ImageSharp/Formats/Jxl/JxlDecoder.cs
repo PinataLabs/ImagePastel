@@ -47,7 +47,8 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A frame over the 2^28-pixel cap throws <see cref="InvalidMemoryOperationException"/>. This bypasses
+    /// A frame over the 2^28-pixel cap, or over the budget of 2^30 samples (pixels times colour and extra
+    /// channels), throws <see cref="InvalidMemoryOperationException"/>. This bypasses
     /// <see cref="ImageDecoderUtilities"/>, which would turn it into an <see cref="InvalidImageContentException"/>.
     /// </remarks>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)

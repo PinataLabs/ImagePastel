@@ -1,7 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // The codestream header steps follow libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// JxlDecoderReadBasicInfo and JxlDecoderReadAllHeaders in lib/jxl/decode.cc.
+// JxlDecoderReadBasicInfo and JxlDecoderReadAllHeaders in lib/jxl/decode.cc, and the frame loop of
+// JxlDecoderProcessCodestream there, with its preview skip.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -79,8 +80,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public Image<TPixel> Decode<TPixel>(BufferedReadStream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        byte[] data = this.ReadCodestream(stream);
-        int frameOffset = this.ReadHeaders(data);
+        byte[] data = this.ReadCodestream(stream, cancellationToken);
+        int frameOffset = this.ReadHeaders(data, cancellationToken);
         return this.Decode<TPixel>(data, frameOffset, cancellationToken);
     }
 
@@ -93,8 +94,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <returns>The image.</returns>
     public Image Decode(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        byte[] data = this.ReadCodestream(stream);
-        int frameOffset = this.ReadHeaders(data);
+        byte[] data = this.ReadCodestream(stream, cancellationToken);
+        int frameOffset = this.ReadHeaders(data, cancellationToken);
         Type pixelType = ChoosePixelType(this.metadata.M);
         return pixelType == typeof(L8) ? this.Decode<L8>(data, frameOffset, cancellationToken)
             : pixelType == typeof(L16) ? this.Decode<L16>(data, frameOffset, cancellationToken)
@@ -159,6 +160,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
+        JxlSampleBudget.CheckImage(this.metadata);
 
         // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
         Size size = this.OrientedSize;
@@ -191,7 +193,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public IImageInfo Identify(BufferedReadStream stream, CancellationToken cancellationToken)
     {
-        this.ReadHeaders(this.ReadCodestream(stream));
+        this.ReadHeaders(this.ReadCodestream(stream, cancellationToken), cancellationToken);
         JxlImageMetadata m = this.metadata.M;
         int bitsPerPixel = (int)m.BitDepth.BitsPerSample * (m.ColorEncoding.IsGray ? 1 : 3);
         foreach (JxlExtraChannelInfo eci in m.ExtraChannelInfo)
@@ -213,9 +215,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
     {
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
-        byte[] data = this.ReadCodestream(bufferedStream);
-        int frameOffset = this.ReadHeaders(data);
+        byte[] data = this.ReadCodestream(bufferedStream, cancellationToken);
+        int frameOffset = this.ReadHeaders(data, cancellationToken);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
+        JxlSampleBudget.CheckImage(this.metadata);
 
         // djxl orients its output, so the planes are oriented too.
         JxlPlanesSink planesSink = new();
@@ -245,6 +248,15 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         using JxlReferenceFrames references = new();
         JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
         List<JxlFrameHeader> displayed = new();
+
+        // The preview frame comes first. libjxl skips it when the preview is not wanted, as here: this
+        // decoder has no output for the preview.
+        if (this.metadata.M.HavePreview)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            offset = frameDecoder.SkipPreviewFrame(data, offset);
+        }
+
         uint frameCount = 0;
         JxlFrameHeader frameHeader;
         do
@@ -273,8 +285,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         }
     }
 
-    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container.
-    private byte[] ReadCodestream(BufferedReadStream stream)
+    // Reads the whole file, and takes the codestream and the Exif and XMP out of a container. The
+    // container read checks the token per box, and per buffer of a Brotli-compressed box (#293).
+    private byte[] ReadCodestream(BufferedReadStream stream, CancellationToken cancellationToken)
     {
         byte[] data = ReadAll(stream);
         this.imageMetadata = new ImageMetadata();
@@ -283,7 +296,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             return data;
         }
 
-        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata);
+        JxlContainerContents contents = JxlContainer.Read(data, !this.ignoreMetadata, cancellationToken);
         if (contents.Exif != null)
         {
             // The decoder always undoes the codestream orientation, which overrides the Exif one, so
@@ -395,9 +408,11 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     }
 
     // Reads the signature, size header, image metadata, transform data and ICC profile, and returns
-    // the offset of the first frame.
-    private int ReadHeaders(byte[] data)
+    // the offset of the first frame. libjxl has no cancellation; the token is ImageSharp's (#293). It is
+    // checked once here, so Identify honours it too, and the ICC decode checks it as it goes.
+    private int ReadHeaders(byte[] data, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (data.Length < 2 || data[0] != JxlConstants.CodestreamSignature[0] || data[1] != JxlConstants.CodestreamSignature[1])
         {
             JxlThrowHelper.ThrowInvalidImageContentException("invalid signature");
@@ -445,7 +460,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
-            IccProfile original = new(JxlIccReader.Read(reader));
+            IccProfile original = new(JxlIccReader.Read(reader, cancellationToken));
             this.isCmyk = IsCmyk(codecMetadata.M, original);
             this.SetIccProfile(original);
         }
@@ -460,13 +475,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         reader.EnsureAllReadsWithinBounds("codestream headers");
         long headerBits = reader.TotalBitsConsumed;
         reader.Close();
-
-        if (codecMetadata.M.HavePreview)
-        {
-            // libjxl skips the preview frame, which comes first. This port rejects the image: no slice
-            // has taken the preview frame yet (docs/jxl/spec.md, "D13 done-check notes").
-            JxlThrowHelper.ThrowNotSupportedException("Preview frames");
-        }
 
         return signatureLength + (int)(headerBits / 8);
     }

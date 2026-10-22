@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -85,16 +86,28 @@ internal static class JxlEncodedFrame
         return groups;
     }
 
-    // Reads the first frame up to the end of its global Modular stream.
-    private static JxlModularFrameDecoder ReadGlobalInfo(byte[] codestream)
+    /// <summary>Reads the first frame up to the end of its global Modular stream.</summary>
+    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="cancellationToken">The token the frame decoder checks.</param>
+    /// <returns>The frame decoder, which the caller disposes.</returns>
+    public static JxlModularFrameDecoder ReadGlobalInfo(byte[] codestream, CancellationToken cancellationToken = default)
     {
         (JxlFrameHeader frameHeader, uint[] sizes, int sectionStart) = ReadFrameHeader(codestream);
 
         // The DC global section: the all-default DC quantisation bit, then the global Modular stream.
         JxlBitReader section = new(codestream, sectionStart, (int)sizes[0]);
         Assert.Equal(1UL, section.ReadBits(1));
-        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameHeader.ToFrameDimensions(), new JxlDequantMatrices());
-        decoder.DecodeGlobalInfo(section, frameHeader);
+        JxlModularFrameDecoder decoder = new(Configuration.Default.MemoryAllocator, frameHeader.ToFrameDimensions(), new JxlDequantMatrices(), cancellationToken);
+        try
+        {
+            decoder.DecodeGlobalInfo(section, frameHeader);
+        }
+        catch
+        {
+            decoder.Dispose();
+            throw;
+        }
+
         section.Close();
         return decoder;
     }
@@ -114,7 +127,7 @@ internal static class JxlEncodedFrame
         JxlBundle.Read(reader, metadata.TransformData);
         if (metadata.M.ColorEncoding.WantIcc)
         {
-            JxlIccReader.Read(reader);
+            JxlIccReader.Read(reader, CancellationToken.None);
         }
 
         reader.JumpToByteBoundary();

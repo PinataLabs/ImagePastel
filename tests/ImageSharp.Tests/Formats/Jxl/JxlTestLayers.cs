@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -100,7 +101,7 @@ internal sealed class JxlTestLayers
     /// <returns>The layers.</returns>
     public static JxlTestLayers FromFile(byte[] file, out byte[] section)
     {
-        byte[] codestream = file[0] == 0xFF ? file : JxlContainer.Read(file, readMetadata: false).Codestream;
+        byte[] codestream = file[0] == 0xFF ? file : JxlContainer.Read(file, readMetadata: false, CancellationToken.None).Codestream;
         section = FirstSection(codestream, out JxlCodecMetadata metadata, out JxlFrameHeader frameHeader, out int frameOffset);
         if (metadata.M.XybEncoded || metadata.M.HaveAnimation || metadata.M.ColorEncoding.WantIcc || frameHeader.Encoding != JxlFrameEncoding.Modular)
         {

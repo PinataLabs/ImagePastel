@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 
@@ -19,6 +20,17 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 /// </remarks>
 internal static class JxlSqueeze
 {
+    /// <summary>
+    /// The most channels a Modular image can have after its squeezes; see <see cref="MetaSqueeze"/>. No
+    /// file libjxl writes comes near it: its encoder squeezes with the default steps only, which add
+    /// one residual per channel and step. A frame under the 2^28 pixel cap takes at most 25 steps (a
+    /// 2^28 x 1 frame squeezed down to 8 wide), plus two chroma steps, so its 259 channels (3 colour and
+    /// 256 extra) become at most about 6,700. The cap is kept that low because each step inserts its
+    /// residuals in O(channels): filling 2^14 channels one at a time costs about 1.3e8 moves, where 2^16
+    /// would cost 2.1e9, over a second.
+    /// </summary>
+    public const int MaxChannels = 1 << 14;
+
     // libjxl's kMaxFirstPreviewSize: the default squeeze stops once both sides are at most this.
     private const int MaxFirstPreviewSize = 8;
 
@@ -150,7 +162,8 @@ internal static class JxlSqueeze
     /// </summary>
     /// <param name="image">The image.</param>
     /// <param name="parameters">The steps.</param>
-    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters)
+    /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
+    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken)
     {
         if (parameters.Count == 0)
         {
@@ -159,7 +172,18 @@ internal static class JxlSqueeze
 
         foreach (JxlSqueezeParams parameter in parameters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CheckMetaSqueezeParams(parameter, image.Channel.Count);
+
+            // Departure (#161): libjxl at ef67fde2 has no bound on the number of channels. Meta channels
+            // keep a shift of -1, so the shift > 30 check below never stops repeated squeezes of them,
+            // and a stream of tens of kilobytes can make about 1.5 million channels, each inserted in
+            // O(n). Squeezes are the only transform that adds more than one channel per transform.
+            if (image.Channel.Count + (long)parameter.NumC > MaxChannels)
+            {
+                JxlThrowHelper.ThrowInvalidImageContentException($"Too many Modular channels: over {MaxChannels}");
+            }
+
             bool horizontal = parameter.Horizontal;
             bool inPlace = parameter.InPlace;
             int beginC = (int)parameter.BeginC;
@@ -228,11 +252,13 @@ internal static class JxlSqueeze
     /// <summary>Undoes the squeeze steps, last step first. Throws <see cref="InvalidImageContentException"/> on failure.</summary>
     /// <param name="input">The image.</param>
     /// <param name="parameters">The steps, as <see cref="MetaSqueeze"/> left them.</param>
-    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters)
+    /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
+    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken)
     {
         List<JxlModularChannel> channels = input.Channel;
         for (int i = parameters.Count - 1; i >= 0; i--)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CheckMetaSqueezeParams(parameters[i], channels.Count);
             bool horizontal = parameters[i].Horizontal;
             bool inPlace = parameters[i].InPlace;

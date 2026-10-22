@@ -35,7 +35,7 @@ public class JxlRawQuantTableTests
     public void Header_IsVarDctWithNoColourTransform()
     {
         // cjxl puts a transcode in a container, beside the JPEG reconstruction box.
-        byte[] codestream = JxlContainer.Read(File.ReadAllBytes(InputPath(Name)), readMetadata: false).Codestream;
+        byte[] codestream = JxlContainer.Read(File.ReadAllBytes(InputPath(Name)), readMetadata: false, CancellationToken.None).Codestream;
         JxlFrameHeader frameHeader = JxlTestLayers.ReadFirstFrameHeader(codestream);
 
         Assert.Equal(JxlFrameEncoding.VarDct, frameHeader.Encoding);

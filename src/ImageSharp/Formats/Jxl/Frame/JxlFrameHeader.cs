@@ -90,6 +90,13 @@ internal sealed class JxlFrameHeader : JxlFields
     /// <summary>Gets or sets the codestream metadata, which is not serialized here.</summary>
     public JxlCodecMetadata NonserializedMetadata { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the frame is the preview frame, which is not serialized
+    /// (libjxl's <c>nonserialized_is_preview</c>). A preview frame defaults to the preview size, and must
+    /// be a regular frame with no blending and no custom size or origin.
+    /// </summary>
+    public bool NonserializedIsPreview { get; set; }
+
     /// <summary>Gets or sets the frame name, UTF-8.</summary>
     public ReadOnlySpan<byte> Name
     {
@@ -110,25 +117,30 @@ internal sealed class JxlFrameHeader : JxlFields
     /// frame with a colour transform, decodes three even for a grey image, as libjxl does (its
     /// <c>nb_chans</c> in <c>ModularFrameDecoder::DecodeGlobalInfo</c>). A Modular frame with no colour
     /// transform decodes <see cref="JxlImageMetadata.NumColorPlanes"/>: one for a grey image, which libjxl
-    /// copies into three (<c>rgb_from_gray</c>) and this port keeps as one.
+    /// copies into three (<c>rgb_from_gray</c>) and this port keeps as one until a stage needs three.
     /// </summary>
     public int NumDecodedColorPlanes
         => this.Encoding == JxlFrameEncoding.VarDct || this.ColorTransform != JxlColorTransform.None ? 3 : this.NonserializedMetadata.M.NumColorPlanes;
 
     /// <summary>
     /// Gets a value indicating whether the frame is a grey image's YCbCr frame, which drops to one colour
-    /// plane only after its colour transform. A departure from libjxl, which keeps three colour planes to
-    /// the output: this port drops the frame of a grey image that is not XYB to one plane before the
-    /// patches, as its patches, reference slots and blending hold one
-    /// (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The YCbCr transform mixes the three
-    /// planes, so such a frame keeps them through it.
+    /// plane only after its colour transform. libjxl keeps three colour planes to the output. This port
+    /// drops the other frames of a grey image that is not XYB to one plane where no later stage mixes or
+    /// keeps the colour planes (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The
+    /// YCbCr transform mixes the three planes, so such a frame keeps them through its patches, its save
+    /// before the colour transform and the transform itself, as libjxl does.
     /// </summary>
     public bool DropsToGreyAfterColorTransform
         => this.ColorTransform == JxlColorTransform.YCbCr && this.NonserializedMetadata.M.NumColorPlanes == 1;
 
-    private long DefaultXSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.XSize;
+    // default_xsize and default_ysize: the preview frame defaults to the preview size.
+    private long DefaultXSize => this.NonserializedMetadata == null ? 0
+        : this.NonserializedIsPreview ? (long)this.NonserializedMetadata.M.PreviewSize.XSize
+        : (long)this.NonserializedMetadata.XSize;
 
-    private long DefaultYSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.YSize;
+    private long DefaultYSize => this.NonserializedMetadata == null ? 0
+        : this.NonserializedIsPreview ? (long)this.NonserializedMetadata.M.PreviewSize.YSize
+        : (long)this.NonserializedMetadata.YSize;
 
     /// <summary>Returns the dimensions of the frame.</summary>
     /// <returns>The dimensions.</returns>
@@ -165,6 +177,10 @@ internal sealed class JxlFrameHeader : JxlFields
         }
 
         this.FrameType = (JxlFrameType)visitor.U32(Val((uint)JxlFrameType.Regular), Val((uint)JxlFrameType.Dc), Val((uint)JxlFrameType.ReferenceOnly), Val((uint)JxlFrameType.SkipProgressive), (uint)JxlFrameType.Regular, (uint)this.FrameType);
+        if (visitor.IsReading && this.NonserializedIsPreview && this.FrameType != JxlFrameType.Regular)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Only regular frame could be a preview");
+        }
 
         bool isModular = this.Encoding == JxlFrameEncoding.Modular;
         isModular = visitor.Bool(false, isModular);
@@ -335,6 +351,20 @@ internal sealed class JxlFrameHeader : JxlFields
                 ecBlendingInfo.NonserializedIsPartialFrame = isPartialFrame;
                 ecBlendingInfo.NonserializedNumExtraChannels = numExtraChannels;
                 visitor.VisitNested(ecBlendingInfo);
+            }
+
+            if (visitor.IsReading && this.NonserializedIsPreview)
+            {
+                bool replaceAll = this.BlendingInfo.Mode == JxlBlendMode.Replace;
+                foreach (JxlBlendingInfo ecBlendingInfo in this.ExtraChannelBlendingInfo)
+                {
+                    replaceAll &= ecBlendingInfo.Mode == JxlBlendMode.Replace;
+                }
+
+                if (!replaceAll || this.CustomSizeOrOrigin)
+                {
+                    JxlThrowHelper.ThrowInvalidImageContentException("Preview is not compatible with blending");
+                }
             }
 
             if (visitor.Conditional(this.NonserializedMetadata != null && this.NonserializedMetadata.M.HaveAnimation))

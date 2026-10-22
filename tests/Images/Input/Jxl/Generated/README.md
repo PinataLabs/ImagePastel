@@ -744,3 +744,48 @@ djxl vardct_xyb_dc_frame.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - The DC frames are not shown: `djxl` writes one frame, and so does `Image.Load`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 9.7e-7 and 1.7e-5 (`progressive_dc1`), 1.0e-6 and 1.2e-5 (`progressive_dc2`), and 9.1e-7 and 1.2e-5 (`vardct_xyb_dc_frame`). `Image.Load<Rgb24>` is within 0.502 of one 8-bit step of the clamped reference.
 - A decoder that leaves the DC at zero instead of taking it from the DC frame misses both files by an RMSE of 0.59. One that does so only for the level-1 DC frame of `progressive_dc2` misses that file by 0.55.
+
+#### How the grey YCbCr files were made
+
+Hand-built codestreams of grey YCbCr frames that need three colour planes before their colour transform (D14b). `jxl_from_tree` cannot write a grey image, a save before the colour transform or patches. So `JxlGreyYCbCrTests.Build` builds the files with `JxlTestLayers`, from these parts:
+
+- the image header and frame section of `greyscale.jxl` (64 x 64 8-bit grey) or `greyscale_alpha.jxl` (64 x 64 16-bit grey and alpha);
+- the `ColourA` section of `JxlTestLayers`, which codes Cb = 200, Y = 100, Cr = 50 and alpha 128 in a YCbCr frame.
+
+`JxlGreyYCbCrTests.CommittedFile_IsTheHandBuiltCodestream` checks that each file holds the bytes that `Build` writes. It also writes them to `tests/Images/ActualOutput/Jxl/JxlGreyYCbCrTests/`, from where they were copied.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `grey_ycbcr_saved_before_ct.jxl` | A reference-only grey YCbCr frame saved before its colour transform in slot 1, then the grey frame of `greyscale.jxl` with two patches from that slot, one added and one replacing. libjxl's slot keeps Cb, Y and Cr, and a grey frame's patches take channel 0, Cb. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy` |
+| `grey_ycbcr_patches.jxl` | The grey frame of `greyscale.jxl` in slot 2 and a grey YCbCr frame in slot 1, both reference-only and saved before their colour transform, then a grey YCbCr frame with an added patch from each. The patches blend all three colour planes before the YCbCr transform mixes them. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy` |
+| `grey_ycbcr_alpha_blending.jxl` | A reference-only grey YCbCr frame with alpha, saved before its colour transform in slot 1, then the frame of `greyscale_alpha.jxl`, whose alpha is added to the alpha of slot 1. The colour planes of that slot are three, not one. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy`, two channels |
+| `grey_ycbcr_patch_chain.jxl` | D14 review. A reference-only grey YCbCr frame saved before its colour transform in slot 1. Then the grey frame of `greyscale.jxl`, reference-only and saved before its colour transform in slot 2, with an added patch from slot 1. Then a grey YCbCr frame with an added patch from slot 2. libjxl's slot 2 holds three different planes (grey plus Cb, Y and Cr inside the first patch), which the last frame's YCbCr transform mixes. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patch_chain.npy` |
+
+```sh
+djxl grey_ycbcr_saved_before_ct.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy
+djxl grey_ycbcr_patches.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy
+djxl grey_ycbcr_alpha_blending.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy
+djxl grey_ycbcr_patch_chain.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patch_chain.npy
+```
+
+- libjxl does not let a frame blend its colour onto a slot saved before the colour transform ("Trying to blend XYB reference frame"). So patches are the only colour use of such a slot. libjxl does not check the slot that an extra channel blends onto.
+- Measured on x64 against `djxl` with AVX2: `grey_ycbcr_saved_before_ct` and `grey_ycbcr_alpha_blending` are exact. `grey_ycbcr_patches` has a worst channel RMSE of 3.6e-8 and a peak error of 2.4e-7, the float rounding of the YCbCr transform. `grey_ycbcr_patch_chain` has 3.3e-8 and 2.4e-7. A decoder that keeps one plane in slot 2 (the one patched from Cb) misses it by an RMSE of 0.26 and a peak of 1.2.
+
+#### How the preview file was made
+
+A codestream whose header has a preview (D14a). `cjxl` cannot write a preview, so the test helper `JxlPreviewTests.WithPreview` inserts one: it sets the preview size in the image header and writes a single-group Modular preview frame before the first frame. `JxlPreviewTests` checks the file.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `preview_noise.jxl` | A 24 x 16 8-bit RGBA layered codestream (`JxlTestLayers`) with a 12 x 8 preview, 101 bytes. After the preview come a hidden frame with the strongest noise (a regular frame that is not the last and has no duration), then the last frame, which replaces only its 4 x 4 corner. So the hidden frame's noise shows, and that noise is seeded by the frame counters, which count the preview as a frame that is not shown. | `External/ReferenceOutput/JxlDecoderTests/preview_noise.npy` |
+
+```sh
+# Run JxlPreviewTests.PreviewNoise_IsTheStreamPreviewNoiseBuilds, which writes the stream to
+# tests/Images/ActualOutput/Jxl/JxlPreviewTests/preview_noise.jxl, and copy that file here.
+djxl preview_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/preview_noise.npy
+```
+
+- `jxlinfo -v preview_noise.jxl` reports "Have preview: 1" and "Preview image: 12x8", then two layers: "Full image size" and "4x4 at position (0,0)". `djxl` skips the preview frame and writes one frame.
+- The hidden frame's noise is seeded with a visible frame index of 0 and a non-visible frame index of 2. A decoder that does not count the preview (index 1) misses the reference by an RMSE of 0.68; one that counts it as a shown frame (indexes 1 and 1) misses it by 0.71.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 6.8e-8 and the peak error 2.4e-7.
+- The preview frame's section is the `ColourA` section of `JxlTestLayers`. Neither `djxl` nor this decoder decodes it.

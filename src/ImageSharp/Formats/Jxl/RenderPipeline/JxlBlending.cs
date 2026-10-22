@@ -16,10 +16,11 @@ namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 /// Blends a frame or a patch onto a background, one row at a time, as libjxl's <c>blending.cc</c>.
 /// </summary>
 /// <remarks>
-/// Deliberate departure from libjxl: libjxl always has three colour planes. Here a grey image has one
-/// (<see cref="JxlImageMetadata.NumColorPlanes"/>); libjxl's three grey planes are equal, so blending
-/// one gives the same values. Extra channel <c>i</c> is plane <c>numColorPlanes + i</c> rather than
-/// <c>3 + i</c>.
+/// Deliberate departure from libjxl: libjxl always has three colour planes. Here a grey image that is not
+/// XYB may have one (<see cref="JxlImageMetadata.NumColorPlanes"/>), where no later stage mixes or keeps
+/// the colour planes (<see cref="JxlRenderPipeline.Finish"/>). Blending works on each colour channel
+/// alone, so the one plane gets libjxl's first channel. Extra channel <c>i</c> is plane
+/// <c>numColorPlanes + i</c> rather than <c>3 + i</c>.
 /// </remarks>
 internal static class JxlBlending
 {

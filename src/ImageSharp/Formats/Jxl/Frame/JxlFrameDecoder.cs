@@ -11,6 +11,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -52,9 +53,8 @@ internal sealed class JxlFrameDecoder
     /// <summary>
     /// Decodes the frame that starts at byte <paramref name="offset"/>: blends it onto its reference
     /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
-    /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data,
-    /// <see cref="NotSupportedException"/> for the departures from libjxl that <c>CheckSupported</c> names, and
-    /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap.
+    /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data, and
+    /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap or the sample budget.
     /// </summary>
     /// <param name="data">The codestream.</param>
     /// <param name="offset">The first byte of the frame.</param>
@@ -66,14 +66,16 @@ internal sealed class JxlFrameDecoder
     {
         int availIn = data.Length - offset;
         JxlBitReader reader = new(data, offset, availIn);
+
+        // libjxl's FrameHeader reads the flags as a U64 and never checks the bits it does not define (4, 8,
+        // 64, and 256 and up), so a frame with them decodes as the same frame without them. This port does
+        // the same.
         JxlFrameHeader frameHeader = new(this.metadata);
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        CheckSupported(frameHeader);
 
         // InitFrame counts the shown frames, and the frames since the last shown one. A DC frame is never
-        // shown, so it counts as not shown. libjxl also counts a preview frame as not shown; JxlDecoderCore
-        // rejects images with a preview.
+        // shown, so it counts as not shown. A preview frame counts as not shown too (SkipPreviewFrame).
         if ((frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0) &&
             (frameHeader.FrameType == JxlFrameType.Regular || frameHeader.FrameType == JxlFrameType.SkipProgressive))
         {
@@ -91,6 +93,9 @@ internal sealed class JxlFrameDecoder
         {
             throw new InvalidMemoryOperationException($"The JPEG XL frame is {frameDim.XSizeUpsampled}x{frameDim.YSizeUpsampled} pixels, more than the limit of {MaxPixelsPerFrame}.");
         }
+
+        // The sample budget, a departure from libjxl (see JxlSampleBudget), is checked with it.
+        JxlSampleBudget.CheckFrame(frameDim, frameHeader, this.metadata.M.NumExtraChannels);
 
         long numPasses = frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -143,7 +148,7 @@ internal sealed class JxlFrameDecoder
 
         // InitFrame resets the dequantization matrices to their defaults for each frame.
         JxlDequantMatrices matrices = new();
-        using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
+        using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices, cancellationToken);
 
         // The upsampling stages give the channel shifts, so they are built with the pipeline; the loop
         // filters come once the sections are decoded.
@@ -200,6 +205,47 @@ internal sealed class JxlFrameDecoder
         }
 
         return frameHeader;
+    }
+
+    /// <summary>
+    /// Skips the preview frame that starts at byte <paramref name="offset"/>, as libjxl does when the
+    /// preview is not wanted (<c>JxlDecoderProcessCodestream</c> in decode.cc, with <c>InitFrame</c> in
+    /// dec_frame.cc): reads its header at the preview size and its TOC, counts it as a frame that is not
+    /// shown, and steps over its sections. It is never decoded, shown, blended or saved to a reference
+    /// slot. Throws <see cref="InvalidImageContentException"/> for an invalid header or a truncated frame.
+    /// </summary>
+    /// <param name="data">The codestream.</param>
+    /// <param name="offset">The first byte of the preview frame.</param>
+    /// <returns>The byte after the preview frame's last section, where the first frame starts.</returns>
+    public int SkipPreviewFrame(byte[] data, int offset)
+    {
+        int availIn = data.Length - offset;
+        JxlBitReader reader = new(data, offset, availIn);
+        JxlFrameHeader frameHeader = new(this.metadata) { NonserializedIsPreview = true };
+        JxlBundle.Read(reader, frameHeader);
+        JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
+
+        // InitFrame counts a preview frame as not shown, whatever its header says.
+        this.nonvisibleFrameIndex++;
+
+        // libjxl checks the frame size with CheckSizeLimit, which only guards against size_t overflow, and
+        // allocates nothing for a preview it skips. Neither does this decoder, so DecodeFrame's pixel cap
+        // does not apply.
+        long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
+        JxlGroupOffsets groupOffsets = JxlToc.ReadGroupOffsets(tocEntries, reader);
+
+        reader.EnsureAllReadsWithinBounds("preview frame header");
+        long headerBytes = reader.TotalBitsConsumed / 8;
+        reader.Close();
+
+        // libjxl advances past SumSectionSizes() and asks for more input when the bytes run out, which
+        // djxl reports as a truncated file. This decoder has the whole codestream, so it checks here.
+        if (headerBytes + groupOffsets.TotalSize > availIn)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for the preview frame sections");
+        }
+
+        return offset + (int)(headerBytes + groupOffsets.TotalSize);
     }
 
     /// <summary>
@@ -307,38 +353,6 @@ internal sealed class JxlFrameDecoder
         }
 
         return dcFrame;
-    }
-
-    // Rejects the frames this port does not decode, so such files fail cleanly instead of decoding badly.
-    // Since D13 every frame feature libjxl decodes is decoded, and only the commented departures below are
-    // rejected: two kinds of grey YCbCr frame (D10), and frame flags libjxl does not define.
-    private static void CheckSupported(JxlFrameHeader frameHeader)
-    {
-        // A departure from libjxl: a grey image's YCbCr frame keeps three planes until after its colour
-        // transform (JxlFrameHeader.DropsToGreyAfterColorTransform), but grey reference slots and patches
-        // hold one. So such a frame cannot be saved before its colour transform, nor take patches, which
-        // libjxl allows with three planes. JPEG transcodes never write such a frame.
-        if (frameHeader.DropsToGreyAfterColorTransform)
-        {
-            if (frameHeader.CanBeReferenced && frameHeader.SaveBeforeColorTransform)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("A YCbCr frame of a grey image saved before its colour transform");
-            }
-
-            if ((frameHeader.Flags & JxlFrameFlags.Patches) != 0)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("Patches on a YCbCr frame of a grey image");
-            }
-        }
-
-        JxlFrameFlags flags = frameHeader.Flags;
-
-        // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
-        const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;
-        if ((flags & ~knownFlags) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException($"Unknown frame flags 0x{(ulong)(flags & ~knownFlags):X}");
-        }
     }
 
     private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlImageFeatures features, JxlColorCorrelation cmap, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)

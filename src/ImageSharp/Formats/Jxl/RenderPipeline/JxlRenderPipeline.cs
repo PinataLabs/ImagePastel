@@ -258,28 +258,41 @@ internal sealed class JxlRenderPipeline : IDisposable
             this.RunNeighbourStages(beforePatches, cancellationToken);
 
             // A VarDCT frame of a grey image that is not XYB has three colour planes, as every libjxl
-            // frame. Everywhere else such an image has one (JxlImageMetadata.NumColorPlanes): its reference
-            // frames, blending and output. libjxl keeps three planes to the output, which takes the first.
+            // frame. Where nothing mixes or keeps the colour planes, such an image has one
+            // (JxlImageMetadata.NumColorPlanes): its blending, its slots saved after blending and its
+            // output. libjxl keeps three planes to the output, which takes the first.
             // EPF mixes the colour channels, so the loop filters run on all three; a Modular frame of such
             // an image is given three for them (RunNeighbourStages), copies of its grey plane, as libjxl's
             // rgb_from_gray makes them.
             // The add-noise stage mixes the colour channels too: it takes the noise strength from the
             // first two. So a frame with noise keeps three planes up to it, and a Modular frame is given
-            // three here if it has none yet. The patches blend each of them with the reference's one grey
-            // plane (JxlPatchesStage), and the splines add their X, Y and B colours to them, as in libjxl.
-            // The frame drops to grey after the noise. A DC frame keeps three planes up to its DC-slot copy
-            // for the same reason: the slot holds libjxl's three colour channels, which the splines and the
-            // noise make differ.
-            // Without noise, the patches, the splines and the upsampling work on each colour channel alone,
-            // so the frame drops to grey before them, and the first plane comes out the same.
+            // three here if it has none yet. The patches blend each of them with the slot's plane of the
+            // same channel (JxlPatchesStage), and the splines add their X, Y and B colours to them, as in
+            // libjxl.
+            // A DC frame keeps three planes up to its DC-slot copy for the same reason: the slot holds
+            // libjxl's three colour channels, which the splines and the noise make differ.
+            // A frame saved before its colour transform keeps three planes up to that save, so its slot
+            // holds libjxl's three colour channels (D14 review). The patches of a later frame read such a
+            // slot channel by channel, and a later YCbCr frame mixes what they read. The three differ
+            // wherever the VarDCT decode, the patches from another such slot, the splines or the noise
+            // made them differ. A Modular frame is given three copies of its grey plane, as rgb_from_gray.
             // A YCbCr frame mixes the colour channels in its colour transform, so it keeps three planes
             // through it and drops to its first plane, R, after it (JxlFrameHeader.DropsToGreyAfterColorTransform).
-            // JxlFrameDecoder.CheckSupported rejects the grey YCbCr frames that would need three planes
-            // earlier: patches and a save before the colour transform, as grey reference slots hold one plane.
+            // So its patches blend all three, and a save before the colour transform keeps Cb, Y and Cr in
+            // the slot, as libjxl does.
+            // Every other frame of such an image drops to grey once nothing mixes its colour planes or keeps
+            // them: before the patches, or after the noise or the save before the colour transform. The
+            // patches, the splines and the upsampling work on each colour channel alone, so the first plane
+            // comes out the same.
+            // A departure from libjxl: a slot saved after blending holds the one grey plane, where libjxl
+            // keeps three. Only blending reads such a slot (patches reject it), and blending, the save after
+            // it and the output work on each colour channel alone, so only the first channel is ever read.
+            // The patches and the extra-channel blending count a slot's colour planes from its own planes.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
             bool dropsToGreyAfterColorTransform = frameHeader.DropsToGreyAfterColorTransform;
             bool isDcFrame = frameHeader.DcLevel != 0;
-            if (noise != null || isDcFrame)
+            bool savesBeforeColorTransform = canBeReferenced && frameHeader.SaveBeforeColorTransform;
+            if (noise != null || isDcFrame || savesBeforeColorTransform)
             {
                 if (this.numColorPlanes == 1)
                 {
@@ -334,19 +347,21 @@ internal sealed class JxlRenderPipeline : IDisposable
                 saved = this.CopyPlanes(3, isInXyb: true);
             }
 
-            if (!dropsToGreyAfterColorTransform)
-            {
-                this.DropToGreyIfGreyImage(metadata);
-            }
-
             foreach (JxlChannelShift shift in this.shifts)
             {
                 DebugGuard.IsTrue(shift.X == 0 && shift.Y == 0, "The neighbour stages upsample every channel to the frame size");
             }
 
-            if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
+            if (savesBeforeColorTransform)
             {
                 saved = this.CopyPlanes(this.planes.Length, isInXyb: true);
+            }
+
+            // A grey image that is not XYB has no colour transform here but YCbCr, so dropping after the
+            // save is dropping before the colour stages.
+            if (!dropsToGreyAfterColorTransform)
+            {
+                this.DropToGreyIfGreyImage(metadata);
             }
 
             // SimpleRenderPipeline runs each stage over the whole frame before the next.
