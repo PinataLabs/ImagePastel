@@ -42,7 +42,12 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="matrices">The frame's dequantization matrices.</param>
-    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
+    /// <param name="dcFrame">
+    /// For a frame that uses a DC frame, the DC slot it takes its DC from, at least
+    /// <see cref="JxlFrameDimensions.XSizeBlocks"/> by <see cref="JxlFrameDimensions.YSizeBlocks"/>;
+    /// otherwise <see langword="null"/>.
+    /// </param>
+    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, JxlReferenceFrame dcFrame = null)
     {
         this.allocator = allocator;
         this.FrameDim = frameDim;
@@ -54,10 +59,20 @@ internal sealed class JxlVarDctFrameState : IDisposable
         {
             this.RawQuantField = allocator.Allocate2D<int>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
             this.EpfSharpness = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+
+            // InitializePassesSharedState: a frame that uses a DC frame has a quantised DC of zeros (the
+            // buckets of its block contexts), and its DC is the DC frame's image. libjxl points at the slot;
+            // here the DC is a copy of it, as nothing in the frame changes it (FinalizeDc skips the smoothing,
+            // and ProcessDcGroup the DC groups' DC).
             this.QuantDc = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
             for (int c = 0; c < 3; c++)
             {
                 this.Dc[c] = allocator.Allocate2D<float>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+                if (dcFrame != null)
+                {
+                    DebugGuard.IsTrue(dcFrame.Width >= this.XSizeBlocks && dcFrame.Height >= this.YSizeBlocks, "The frame decoder checks the DC frame's size");
+                    JxlPlanes.CopyRows(dcFrame.Planes[c], this.Dc[c], this.XSizeBlocks, this.YSizeBlocks);
+                }
             }
         }
         catch
@@ -162,7 +177,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <param name="frameHeader">The frame header.</param>
     public void FinalizeDc(JxlFrameHeader frameHeader)
     {
-        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0 && (frameHeader.Flags & JxlFrameFlags.UseDcFrame) == 0)
+        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0 && !frameHeader.UsesDcFrame)
         {
             JxlCompressedDc.AdaptiveDcSmoothing(this.allocator, this.Quantizer.MulDc, this.Dc, this.XSizeBlocks, this.YSizeBlocks);
         }
@@ -215,8 +230,11 @@ internal sealed class JxlVarDctFrameState : IDisposable
             this.ContextMap[i] = padded;
         }
 
-        // libjxl picks 16- or 32-bit coefficients here from the largest token width (max_num_bits). This
-        // port always keeps them as int, a deliberate departure: the values are the same either way.
+        // libjxl picks 16- or 32-bit coefficients here from the largest token width (max_num_bits) plus
+        // CeilLog2(num_passes). This port always keeps them as int, a deliberate departure. The values are
+        // the same unless a pass's shift (up to 3 bits, which max_num_bits does not count) pushes the sum
+        // of a coefficient's passes past 16 bits, where libjxl's int16 coefficients wrap. The cjxl files of
+        // JxlProgressivePassesTests, with shifts of 1, match djxl.
     }
 
     public void Dispose()

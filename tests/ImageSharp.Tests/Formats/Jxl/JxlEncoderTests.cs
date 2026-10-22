@@ -141,7 +141,7 @@ public class JxlEncoderTests
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
         Assert.Equal(expectedGroups, frameDim.NumGroups);
         Assert.Equal(expectedLfGroups, frameDim.NumDcGroups);
-        uint[] sizes = JxlToc.ReadToc(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, 1), reader);
+        uint[] sizes = JxlToc.ReadGroupOffsets(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, 1), reader).Sizes;
         long frameDataStart = 2 + (reader.TotalBitsConsumed / 8);
         reader.Close();
 

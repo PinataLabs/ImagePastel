@@ -22,11 +22,17 @@ internal static class JxlCodestreamFrames
     /// <param name="codestream">A bare codestream with no preview.</param>
     /// <returns>The header of each frame, in codestream order.</returns>
     public static List<JxlFrameHeader> Read(byte[] codestream)
+        => ReadWithToc(codestream).ConvertAll(frame => frame.Header);
+
+    /// <summary>Reads the frame headers and their TOCs.</summary>
+    /// <param name="codestream">A bare codestream with no preview.</param>
+    /// <returns>The header and the TOC of each frame, in codestream order.</returns>
+    public static List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> ReadWithToc(byte[] codestream)
     {
         JxlCodecMetadata metadata = ReadImageHeader(codestream, out int offset);
         Assert.False(metadata.M.HavePreview);
 
-        List<JxlFrameHeader> frames = new();
+        List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> frames = new();
         JxlFrameHeader frameHeader;
         do
         {
@@ -35,16 +41,13 @@ internal static class JxlCodestreamFrames
             JxlBundle.Read(reader, frameHeader);
             JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
             long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
-            uint[] sizes = JxlToc.ReadToc(tocEntries, reader);
+            JxlGroupOffsets toc = JxlToc.ReadGroupOffsets(tocEntries, reader);
             reader.EnsureAllReadsWithinBounds("frame header");
             offset += (int)(reader.TotalBitsConsumed / 8);
             reader.Close();
-            foreach (uint size in sizes)
-            {
-                offset += (int)size;
-            }
+            offset += (int)toc.TotalSize;
 
-            frames.Add(frameHeader);
+            frames.Add((frameHeader, toc));
         }
         while (!frameHeader.IsLast);
 

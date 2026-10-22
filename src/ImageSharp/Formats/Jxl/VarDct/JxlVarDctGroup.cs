@@ -107,7 +107,8 @@ internal static class JxlVarDctGroup
             int rxs = xsizeBlocks >> hshift[i];
             int rys = ysizeBlocks >> vshift[i];
 
-            // The DC planes are not subsampled here, so they are XSizeBlocks x YSizeBlocks.
+            // The DC planes are not subsampled here, so they are XSizeBlocks x YSizeBlocks. For a frame that
+            // uses a DC frame, libjxl checks against the DC frame's image: JxlFrameDecoder.GetDcFrame does that.
             if (rx0[i] + rxs > state.XSizeBlocks || ry0[i] + rys > state.YSizeBlocks)
             {
                 JxlThrowHelper.ThrowInvalidImageContentException("Frame dimensions are too big for the image.");

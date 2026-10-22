@@ -10,13 +10,13 @@ using SixLabors.ImageSharp.Formats.Jxl.Fields;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
-/// <summary>Writes the table of contents, as <see cref="JxlToc.ReadToc"/> reads it.</summary>
+/// <summary>Writes the table of contents, as <see cref="JxlToc.ReadGroupOffsets"/> reads it.</summary>
 internal static class JxlTocWriter
 {
     /// <summary>
     /// Writes whether the sections are permuted, then pads to a byte. libjxl writes the permutation
     /// itself when there is one; the encoder never permutes (libjxl's <c>centerfirst</c> is off by
-    /// default), and the decoder does not read permutations yet.
+    /// default). The decoder reads permutations since D13a.
     /// </summary>
     /// <param name="writer">The writer.</param>
     public static void WriteTocPermutation(JxlBitWriter writer)

@@ -33,9 +33,10 @@ internal static class JxlThrowHelper
         => throw new ImageFormatException(errorMessage, innerException);
 
     /// <summary>
-    /// Throws for a valid codestream feature that a later slice of the port adds.
+    /// Throws for a valid codestream feature that the port does not handle: a feature of a later encoder
+    /// slice, or a commented departure of the decoder from libjxl.
     /// </summary>
-    /// <param name="feature">The feature that is not decoded yet.</param>
+    /// <param name="feature">The feature that is not handled.</param>
     [DoesNotReturn]
     [MethodImpl(InliningOptions.ColdPath)]
     public static void ThrowNotSupportedException(string feature) => throw new NotSupportedException($"JPEG XL feature not supported yet: {feature}.");

@@ -14,11 +14,14 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// The frame features of later slices: each is rejected on its own with
-/// <see cref="NotSupportedException"/>, so that a slice can lift one rejection at a time. The features
-/// that D10 and D11 lifted decode. Patches on VarDCT frames, which D12a lifted, are checked against djxl
-/// in JxlXybVarDctTests and the conformance tests, noise, which D12c lifted, in JxlNoiseTests, and
-/// splines, which D12b lifted, in JxlSplinesTests.
+/// The frame features that the slices lifted one at a time, and what the frame decoder still rejects with
+/// <see cref="NotSupportedException"/>. Since D13 it decodes every frame feature libjxl decodes, and
+/// rejects only its commented departures: frame flags libjxl does not define (here), and two kinds of
+/// grey YCbCr frame (JxlYCbCrTests). The features that D10 and D11 lifted decode here. The later ones are
+/// checked against djxl elsewhere: patches on VarDCT frames (D12a) in JxlXybVarDctTests and the
+/// conformance tests, splines (D12b) in JxlSplinesTests, noise (D12c) in JxlNoiseTests, the permuted TOC
+/// (D13a) in JxlPermutedTocTests, passes (D13b) in JxlProgressivePassesTests, and DC frames (D13c) in
+/// JxlDcFrameTests.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlSupportedFeaturesTests
@@ -26,14 +29,14 @@ public class JxlSupportedFeaturesTests
     private const int Width = 16;
     private const int Height = 16;
 
+    // libjxl ignores the frame flags it does not define (4, 8, 64 and 256 and up); this port rejects them.
     [Theory]
-    [InlineData(32, "DC frame")]
-    [InlineData(4, "frame flags")]
-    [InlineData(8, "frame flags")]
-    [InlineData(64, "frame flags")]
-    [InlineData(256, "frame flags")]
-    public void Decode_FrameFlag_IsNotSupported(ulong flags, string feature)
-        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }, feature);
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(64)]
+    [InlineData(256)]
+    public void Decode_UndefinedFrameFlag_IsNotSupported(ulong flags)
+        => AssertNotSupported(new JxlTestLayers(Width, Height), JxlTestFrame.Last(JxlTestLayers.ColourA) with { Flags = flags }, "Unknown frame flags");
 
     // The D10 features, which threw until D10, decode: YCbCr, chroma subsampling (the modes are Cb, Y,
     // Cr), colour upsampling and extra-channel upsampling. ColourA is one colour, and upsampling and

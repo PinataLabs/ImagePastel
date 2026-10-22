@@ -17,8 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// One test per structural bound of libjxl's VarDCT decoder (issue #112), on streams from
 /// <see cref="JxlTestVarDct"/>: a stream past the bound throws <see cref="InvalidImageContentException"/>,
-/// and a stream at the bound decodes, or passes the bound and stops at a feature of a later slice with
-/// <see cref="NotSupportedException"/>. No other exception escapes.
+/// and a stream at the bound decodes. No other exception escapes.
 /// </summary>
 /// <remarks>
 /// <para>Bounds that no stream can reach:</para>
@@ -29,7 +28,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// whose every valid code is a permutation. <c>DecodeLehmerCode</c>'s own checks (n != 0,
 /// code[i] + i &lt; n) are behind ReadPermutation's checks, which these tests cover; the function is
 /// tested on its own in <see cref="JxlVarDctComponentsTests"/>. libjxl's DecodePermutation, with its ANS check
-/// (coeff_order.cc:77), is only reached by a permuted TOC, which is not supported, nor ported, until D13.</item>
+/// (coeff_order.cc:77), is only reached by a permuted TOC; <see cref="JxlPermutedTocTests"/> covers its bounds.</item>
 /// <item>Dequantization matrices: the mode has 3 bits and all 8 modes exist, so "Invalid quantization
 /// table encoding" cannot happen; the predefined table has 0 bits, so "Invalid predefined table" cannot
 /// either; and the number of distance bands has 4 bits, at most 16 of the 17 libjxl allows. Interpolate's
@@ -40,7 +39,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// counted from the frame's pixel size, which is at most 8 <c>xsize_blocks</c>. A shift only moves the
 /// rectangle's corners towards the origin: <c>(x0 &gt;&gt; s) + (xsize &gt;&gt; s) &lt;= (x0 + xsize) &gt;&gt; s</c>.
 /// So no stream reaches it; <see cref="AcGroup_SubsampledGroupsAtOddSizes_Decode"/> decodes subsampled
-/// frames of several groups at the bound. The number of histograms is 1 + a bit field, so it is never 0.</item>
+/// frames of several groups at the bound. In libjxl, a frame that uses a DC frame checks against the DC
+/// frame's image instead, which can be smaller; <c>JxlFrameDecoder</c> makes that check before the
+/// sections, and <see cref="JxlDcFrameTests"/> covers it. The number of histograms is 1 + a bit field, so
+/// it is never 0.</item>
 /// </list>
 /// </remarks>
 [Trait("Format", "Jxl")]
@@ -53,9 +55,6 @@ public class JxlVarDctBoundsTests
 
         /// <summary>The stream is over a bound: <see cref="InvalidImageContentException"/>.</summary>
         Invalid,
-
-        /// <summary>The stream passes the bounds and needs a later slice: <see cref="NotSupportedException"/>.</summary>
-        NotSupported,
     }
 
     // F16 values.
@@ -391,7 +390,9 @@ public class JxlVarDctBoundsTests
         => AssertOutcome(Quantizer(globalScale, quantDc), Outcome.Decodes);
 
     // Issue #112: whatever bit of a VarDCT stream is wrong, only the allowed exceptions escape. A flip in the
-    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own.
+    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own, and
+    // a flip in the frame flags can set a flag libjxl does not define, which this port rejects with
+    // NotSupportedException.
     [Theory]
     [InlineData("default")]
     [InlineData("nonzeros_63")]
@@ -777,22 +778,14 @@ public class JxlVarDctBoundsTests
 
     private static void AssertOutcome(byte[] codestream, Outcome outcome, string message = null)
     {
-        switch (outcome)
+        if (outcome == Outcome.Decodes)
         {
-            case Outcome.Decodes:
-                using (JxlDecodedImage decoded = Decode(codestream))
-                {
-                    Assert.Single(decoded.Frames);
-                }
-
-                break;
-            case Outcome.Invalid:
-                InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Decode(codestream));
-                Assert.Contains(message, ex.Message, StringComparison.Ordinal);
-                break;
-            default:
-                Assert.Throws<NotSupportedException>(() => Decode(codestream));
-                break;
+            using JxlDecodedImage decoded = Decode(codestream);
+            Assert.Single(decoded.Frames);
+            return;
         }
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Decode(codestream));
+        Assert.Contains(message, ex.Message, StringComparison.Ordinal);
     }
 }

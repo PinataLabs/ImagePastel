@@ -83,7 +83,7 @@ internal static class JxlEntropyCodeProbe
         JxlBundle.Read(reader, frameHeader);
         Assert.Equal(JxlFrameEncoding.Modular, frameHeader.Encoding);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        JxlToc.ReadToc(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses), reader);
+        JxlToc.ReadGroupOffsets(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses), reader);
 
         // The DC global section comes first: the DequantMatrices DC all_default bit, then has_tree.
         Assert.Equal(1UL, reader.ReadBits(1));

@@ -112,6 +112,15 @@ internal sealed class JxlTestVarDct
     /// </summary>
     public uint[] FirstBlockTokens { get; init; }
 
+    /// <summary>Gets the writer of the TOC's permutation, as <see cref="JxlTestFrame.TocPermutation"/>; none by default.</summary>
+    public Action<JxlTestBitWriter> TocPermutation { get; init; }
+
+    /// <summary>
+    /// Gets the order the sections are stored in: entry k is the section, in decoding order, stored k-th.
+    /// By default they are stored in decoding order.
+    /// </summary>
+    public int[] StoredSections { get; init; }
+
     // FrameDimensions::Set: the blocks are rounded up to whole blocks of the most subsampled channel.
     private int XSizeBlocks => ((this.Width + (BlockDim << this.MaxHShift) - 1) / (BlockDim << this.MaxHShift)) << this.MaxHShift;
 
@@ -317,11 +326,17 @@ internal sealed class JxlTestVarDct
             }
         }
 
+        if (this.StoredSections != null)
+        {
+            sections = this.StoredSections.Select(i => sections[i]).ToList();
+        }
+
         JxlTestFrame frame = new(sections[0])
         {
             Encoding = JxlFrameEncoding.VarDct,
             IsLast = true,
             Sections = sections.Count > 1 ? sections.ToArray() : null,
+            TocPermutation = this.TocPermutation,
             Flags = (this.SkipAdaptiveDcSmoothing ?? (this.MaxHShift != 0 || this.MaxVShift != 0)) ? 128UL : 0,
             YCbCr = this.ChromaSubsampling != null,
             ChromaSubsampling = this.ChromaSubsampling,
