@@ -72,8 +72,7 @@ internal sealed class JxlFrameDecoder
         CheckSupported(frameHeader);
 
         // InitFrame counts the shown frames, and the frames since the last shown one. A DC frame is never
-        // shown, so it counts as not shown. libjxl also counts a preview frame as not shown; JxlDecoderCore
-        // rejects images with a preview.
+        // shown, so it counts as not shown. A preview frame counts as not shown too (SkipPreviewFrame).
         if ((frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0) &&
             (frameHeader.FrameType == JxlFrameType.Regular || frameHeader.FrameType == JxlFrameType.SkipProgressive))
         {
@@ -200,6 +199,47 @@ internal sealed class JxlFrameDecoder
         }
 
         return frameHeader;
+    }
+
+    /// <summary>
+    /// Skips the preview frame that starts at byte <paramref name="offset"/>, as libjxl does when the
+    /// preview is not wanted (<c>JxlDecoderProcessCodestream</c> in decode.cc, with <c>InitFrame</c> in
+    /// dec_frame.cc): reads its header at the preview size and its TOC, counts it as a frame that is not
+    /// shown, and steps over its sections. It is never decoded, shown, blended or saved to a reference
+    /// slot. Throws <see cref="InvalidImageContentException"/> for an invalid header or a truncated frame.
+    /// </summary>
+    /// <param name="data">The codestream.</param>
+    /// <param name="offset">The first byte of the preview frame.</param>
+    /// <returns>The byte after the preview frame's last section, where the first frame starts.</returns>
+    public int SkipPreviewFrame(byte[] data, int offset)
+    {
+        int availIn = data.Length - offset;
+        JxlBitReader reader = new(data, offset, availIn);
+        JxlFrameHeader frameHeader = new(this.metadata) { NonserializedIsPreview = true };
+        JxlBundle.Read(reader, frameHeader);
+        JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
+
+        // InitFrame counts a preview frame as not shown, whatever its header says.
+        this.nonvisibleFrameIndex++;
+
+        // libjxl checks the frame size with CheckSizeLimit, which only guards against size_t overflow, and
+        // allocates nothing for a preview it skips. Neither does this decoder, so DecodeFrame's pixel cap
+        // does not apply.
+        long tocEntries = JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses);
+        JxlGroupOffsets groupOffsets = JxlToc.ReadGroupOffsets(tocEntries, reader);
+
+        reader.EnsureAllReadsWithinBounds("preview frame header");
+        long headerBytes = reader.TotalBitsConsumed / 8;
+        reader.Close();
+
+        // libjxl advances past SumSectionSizes() and asks for more input when the bytes run out, which
+        // djxl reports as a truncated file. This decoder has the whole codestream, so it checks here.
+        if (headerBytes + groupOffsets.TotalSize > availIn)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for the preview frame sections");
+        }
+
+        return offset + (int)(headerBytes + groupOffsets.TotalSize);
     }
 
     /// <summary>

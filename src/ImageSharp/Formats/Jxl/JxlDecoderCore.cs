@@ -1,7 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // The codestream header steps follow libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// JxlDecoderReadBasicInfo and JxlDecoderReadAllHeaders in lib/jxl/decode.cc.
+// JxlDecoderReadBasicInfo and JxlDecoderReadAllHeaders in lib/jxl/decode.cc, and the frame loop of
+// JxlDecoderProcessCodestream there, with its preview skip.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -245,6 +246,15 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         using JxlReferenceFrames references = new();
         JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
         List<JxlFrameHeader> displayed = new();
+
+        // The preview frame comes first. libjxl skips it when the preview is not wanted, as here: this
+        // decoder has no output for the preview.
+        if (this.metadata.M.HavePreview)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            offset = frameDecoder.SkipPreviewFrame(data, offset);
+        }
+
         uint frameCount = 0;
         JxlFrameHeader frameHeader;
         do
@@ -460,13 +470,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         reader.EnsureAllReadsWithinBounds("codestream headers");
         long headerBits = reader.TotalBitsConsumed;
         reader.Close();
-
-        if (codecMetadata.M.HavePreview)
-        {
-            // libjxl skips the preview frame, which comes first. This port rejects the image: no slice
-            // has taken the preview frame yet (docs/jxl/spec.md, "D13 done-check notes").
-            JxlThrowHelper.ThrowNotSupportedException("Preview frames");
-        }
 
         return signatureLength + (int)(headerBits / 8);
     }
