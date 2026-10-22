@@ -1,0 +1,424 @@
+{
+  "tools": "cjxl v0.12.0 4128790 [_AVX2_,SSE4,SSE2] {Clang 22.1.3}",
+  "cjxl_arguments": [
+    "-d",
+    "{distance}",
+    "-e",
+    "{effort}"
+  ],
+  "djxl_arguments": [
+    "--bits_per_sample=16"
+  ],
+  "images": [
+    {
+      "name": "bike",
+      "path": "Png/Bike.png",
+      "kind": "photo"
+    },
+    {
+      "name": "calliphora",
+      "path": "Png/CalliphoraPartial.png",
+      "kind": "photo"
+    },
+    {
+      "name": "bike_alpha",
+      "path": "Png/bike-small.png",
+      "kind": "photo with alpha"
+    },
+    {
+      "name": "gradient",
+      "path": "Jxl/Calibration/gradient.png",
+      "kind": "synthetic gradient"
+    },
+    {
+      "name": "text",
+      "path": "Jxl/Calibration/text.png",
+      "kind": "text"
+    },
+    {
+      "name": "line_art",
+      "path": "Jxl/Calibration/line_art.png",
+      "kind": "line art"
+    }
+  ],
+  "rows": [
+    {
+      "image": "bike",
+      "effort": 3,
+      "distance": 1,
+      "size": 48399,
+      "ssimulacra2": 88.24250327
+    },
+    {
+      "image": "bike",
+      "effort": 3,
+      "distance": 2,
+      "size": 31445,
+      "ssimulacra2": 81.08633744
+    },
+    {
+      "image": "bike",
+      "effort": 3,
+      "distance": 4,
+      "size": 21101,
+      "ssimulacra2": 71.56629863
+    },
+    {
+      "image": "bike",
+      "effort": 5,
+      "distance": 1,
+      "size": 44661,
+      "ssimulacra2": 86.58197698
+    },
+    {
+      "image": "bike",
+      "effort": 5,
+      "distance": 2,
+      "size": 29272,
+      "ssimulacra2": 79.7795486
+    },
+    {
+      "image": "bike",
+      "effort": 5,
+      "distance": 4,
+      "size": 17833,
+      "ssimulacra2": 68.94802963
+    },
+    {
+      "image": "bike",
+      "effort": 7,
+      "distance": 1,
+      "size": 44843,
+      "ssimulacra2": 86.45763699
+    },
+    {
+      "image": "bike",
+      "effort": 7,
+      "distance": 2,
+      "size": 29175,
+      "ssimulacra2": 79.69666186
+    },
+    {
+      "image": "bike",
+      "effort": 7,
+      "distance": 4,
+      "size": 18453,
+      "ssimulacra2": 70.10860948
+    },
+    {
+      "image": "calliphora",
+      "effort": 3,
+      "distance": 1,
+      "size": 65958,
+      "ssimulacra2": 84.75757788
+    },
+    {
+      "image": "calliphora",
+      "effort": 3,
+      "distance": 2,
+      "size": 45309,
+      "ssimulacra2": 73.68076386
+    },
+    {
+      "image": "calliphora",
+      "effort": 3,
+      "distance": 4,
+      "size": 30312,
+      "ssimulacra2": 57.83431775
+    },
+    {
+      "image": "calliphora",
+      "effort": 5,
+      "distance": 1,
+      "size": 56305,
+      "ssimulacra2": 80.12039422
+    },
+    {
+      "image": "calliphora",
+      "effort": 5,
+      "distance": 2,
+      "size": 36415,
+      "ssimulacra2": 65.30274983
+    },
+    {
+      "image": "calliphora",
+      "effort": 5,
+      "distance": 4,
+      "size": 22130,
+      "ssimulacra2": 38.13937535
+    },
+    {
+      "image": "calliphora",
+      "effort": 7,
+      "distance": 1,
+      "size": 56364,
+      "ssimulacra2": 80.06656974
+    },
+    {
+      "image": "calliphora",
+      "effort": 7,
+      "distance": 2,
+      "size": 36586,
+      "ssimulacra2": 65.14387595
+    },
+    {
+      "image": "calliphora",
+      "effort": 7,
+      "distance": 4,
+      "size": 22380,
+      "ssimulacra2": 40.44089823
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 3,
+      "distance": 1,
+      "size": 27585,
+      "ssimulacra2": 87.78640357
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 3,
+      "distance": 2,
+      "size": 21586,
+      "ssimulacra2": 79.97156079
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 3,
+      "distance": 4,
+      "size": 17583,
+      "ssimulacra2": 69.31486201
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 5,
+      "distance": 1,
+      "size": 26390,
+      "ssimulacra2": 86.19514464
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 5,
+      "distance": 2,
+      "size": 20809,
+      "ssimulacra2": 78.01061557
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 5,
+      "distance": 4,
+      "size": 16730,
+      "ssimulacra2": 63.58160402
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 7,
+      "distance": 1,
+      "size": 26567,
+      "ssimulacra2": 87.49007417
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 7,
+      "distance": 2,
+      "size": 20679,
+      "ssimulacra2": 78.66018678
+    },
+    {
+      "image": "bike_alpha",
+      "effort": 7,
+      "distance": 4,
+      "size": 16542,
+      "ssimulacra2": 63.45046517
+    },
+    {
+      "image": "gradient",
+      "effort": 3,
+      "distance": 1,
+      "size": 2625,
+      "ssimulacra2": 92.98022117
+    },
+    {
+      "image": "gradient",
+      "effort": 3,
+      "distance": 2,
+      "size": 1839,
+      "ssimulacra2": 87.29937663
+    },
+    {
+      "image": "gradient",
+      "effort": 3,
+      "distance": 4,
+      "size": 1265,
+      "ssimulacra2": 84.21127589
+    },
+    {
+      "image": "gradient",
+      "effort": 5,
+      "distance": 1,
+      "size": 2187,
+      "ssimulacra2": 94.05366578
+    },
+    {
+      "image": "gradient",
+      "effort": 5,
+      "distance": 2,
+      "size": 1706,
+      "ssimulacra2": 92.09415754
+    },
+    {
+      "image": "gradient",
+      "effort": 5,
+      "distance": 4,
+      "size": 1278,
+      "ssimulacra2": 89.98311982
+    },
+    {
+      "image": "gradient",
+      "effort": 7,
+      "distance": 1,
+      "size": 2312,
+      "ssimulacra2": 93.98634624
+    },
+    {
+      "image": "gradient",
+      "effort": 7,
+      "distance": 2,
+      "size": 1806,
+      "ssimulacra2": 92.41597894
+    },
+    {
+      "image": "gradient",
+      "effort": 7,
+      "distance": 4,
+      "size": 1423,
+      "ssimulacra2": 90.26526374
+    },
+    {
+      "image": "text",
+      "effort": 3,
+      "distance": 1,
+      "size": 15698,
+      "ssimulacra2": 85.06553034
+    },
+    {
+      "image": "text",
+      "effort": 3,
+      "distance": 2,
+      "size": 11973,
+      "ssimulacra2": 74.1812889
+    },
+    {
+      "image": "text",
+      "effort": 3,
+      "distance": 4,
+      "size": 9112,
+      "ssimulacra2": 62.76036251
+    },
+    {
+      "image": "text",
+      "effort": 5,
+      "distance": 1,
+      "size": 14388,
+      "ssimulacra2": 91.26774437
+    },
+    {
+      "image": "text",
+      "effort": 5,
+      "distance": 2,
+      "size": 10797,
+      "ssimulacra2": 85.46061996
+    },
+    {
+      "image": "text",
+      "effort": 5,
+      "distance": 4,
+      "size": 8549,
+      "ssimulacra2": 80.55712433
+    },
+    {
+      "image": "text",
+      "effort": 7,
+      "distance": 1,
+      "size": 12319,
+      "ssimulacra2": 92.62978708
+    },
+    {
+      "image": "text",
+      "effort": 7,
+      "distance": 2,
+      "size": 9467,
+      "ssimulacra2": 89.9750607
+    },
+    {
+      "image": "text",
+      "effort": 7,
+      "distance": 4,
+      "size": 7701,
+      "ssimulacra2": 82.89369671
+    },
+    {
+      "image": "line_art",
+      "effort": 3,
+      "distance": 1,
+      "size": 27044,
+      "ssimulacra2": 79.86493814
+    },
+    {
+      "image": "line_art",
+      "effort": 3,
+      "distance": 2,
+      "size": 19116,
+      "ssimulacra2": 67.4816551
+    },
+    {
+      "image": "line_art",
+      "effort": 3,
+      "distance": 4,
+      "size": 13255,
+      "ssimulacra2": 51.26918525
+    },
+    {
+      "image": "line_art",
+      "effort": 5,
+      "distance": 1,
+      "size": 24227,
+      "ssimulacra2": 78.07218728
+    },
+    {
+      "image": "line_art",
+      "effort": 5,
+      "distance": 2,
+      "size": 18295,
+      "ssimulacra2": 61.15936743
+    },
+    {
+      "image": "line_art",
+      "effort": 5,
+      "distance": 4,
+      "size": 13027,
+      "ssimulacra2": 51.72125191
+    },
+    {
+      "image": "line_art",
+      "effort": 7,
+      "distance": 1,
+      "size": 24315,
+      "ssimulacra2": 83.80945042
+    },
+    {
+      "image": "line_art",
+      "effort": 7,
+      "distance": 2,
+      "size": 18882,
+      "ssimulacra2": 74.21376419
+    },
+    {
+      "image": "line_art",
+      "effort": 7,
+      "distance": 4,
+      "size": 13474,
+      "ssimulacra2": 64.46840576
+    }
+  ]
+}
