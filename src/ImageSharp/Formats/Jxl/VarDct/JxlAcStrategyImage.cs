@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/ac_strategy.h and lib/jxl/ac_strategy.cc (AcStrategyRow, AcStrategyImage).
+// lib/jxl/ac_strategy.h and lib/jxl/ac_strategy.cc (AcStrategyRow, AcStrategyImage, FillDCT8).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -37,6 +37,9 @@ internal sealed class JxlAcStrategyImage
 
     /// <summary>Marks every block as not yet set.</summary>
     public void FillInvalid() => Array.Fill(this.layers, Invalid);
+
+    /// <summary>Sets every block to DCT8, as the encoder's <c>FillDCT8</c> does for the whole image.</summary>
+    public void FillDct8() => Array.Fill(this.layers, (byte)(((int)JxlAcStrategyType.Dct << 1) | 1));
 
     /// <summary>
     /// Sets the strategy whose first block is (<paramref name="x"/>, <paramref name="y"/>) on every
