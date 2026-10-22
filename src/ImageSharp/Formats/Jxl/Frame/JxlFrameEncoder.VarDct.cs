@@ -59,19 +59,18 @@ internal static partial class JxlFrameEncoder
     public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, bool naturalCoeffOrders, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances, then keep the distance as the
-        // original one, which sets the X quantisation scale. libjxl's resampling from distance 10 would
-        // change only the other (see the remarks).
+        // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances. libjxl then keeps a copy as
+        // original_butteraugli_distance, which sets the X quantisation scale, because its resampling from
+        // distance 10 changes butteraugli_distance. Resampling is not ported (see the remarks), so the two
+        // are always equal and this keeps one.
         if (distance < MinButteraugliDistance)
         {
             distance = MinButteraugliDistance;
         }
 
-        float originalDistance = distance;
-
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        JxlPassesEncoderState encState = new(frameDim, speedTier, distance, originalDistance) { NaturalCoeffOrders = naturalCoeffOrders };
+        JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
 
@@ -355,7 +354,8 @@ internal static partial class JxlFrameEncoder
         frameHeader.XQmScale = 3;
         foreach (float step in xQmScaleSteps)
         {
-            if (encState.OriginalDistance > step)
+            // libjxl compares cparams.original_butteraugli_distance, equal to the distance here.
+            if (encState.Distance > step)
             {
                 frameHeader.XQmScale++;
             }
