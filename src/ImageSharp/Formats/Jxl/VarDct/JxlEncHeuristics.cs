@@ -56,10 +56,10 @@ internal static class JxlEncHeuristics
     /// </summary>
     /// <remarks>
     /// Temporary departures (E4a, the Default tracer): from Hare down libjxl computes an adaptive quant
-    /// field, searches the AC strategies, fits a chroma-from-luma map per tile and chooses a block context
-    /// map. Until the tickets that port them land, each runs its Falcon form here, at every tier: the
-    /// constant field of <c>q = 0.79 / d</c> (E4b), DCT8 everywhere (E4g), the default chroma-from-luma map
-    /// (E4d) and the default block context map (E4e). Each is marked where it runs.
+    /// field, searches the AC strategies and chooses a block context map. Until the tickets that port them
+    /// land, each runs its Falcon form here, at every tier: the constant field of <c>q = 0.79 / d</c> (E4b),
+    /// DCT8 everywhere (E4g) and the default block context map (E4e). Each is marked where it runs. The
+    /// chroma-from-luma map of each tile is fitted from Hare down, as libjxl does.
     /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>
@@ -103,8 +103,12 @@ internal static class JxlEncHeuristics
         // AdjustQuantField only changes the field under blocks larger than 8x8, so it leaves q.
         Array.Fill(encState.RawQuantField, encState.Quantizer.RawQuantField(q));
 
-        // Compute a non-default CfL map if we are at Hare speed, or slower.
-        // Temporary departure (E4a): Hare keeps the default map until E4d ports the fast CfL search.
+        // Compute a non-default CfL map if we are at Hare speed, or slower. libjxl fits each tile right after
+        // its strategies and quant field; the fit reads only its own tile, so it runs here for all of them.
+        if (speedTier <= JxlSpeedTier.Hare)
+        {
+            JxlEncChromaFromLuma.ComputeMap(encState, opsin, fast: speedTier >= JxlSpeedTier.Wombat);
+        }
 
         // Refine quantization levels: libjxl fills the EPF sharpness with 4 for FindBestQuantizer, which only
         // searches from Kitten down. ComputeArHeuristics sets the sharpness before anything reads it, so

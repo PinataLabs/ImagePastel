@@ -116,15 +116,79 @@ public class JxlLossyDefaultEncoderTests
         (int min, int max) = frame.QuantFieldRange();
         Assert.Equal(min, max);
 
-        // Temporary departures until E4d (chroma-from-luma) and E4e (block context map).
+        // The AC chroma-from-luma map is fitted per tile (Encode_SaturatedPhoto_FitsAChromaFromLumaMap); the DC
+        // factors keep their default, as libjxl never fits them.
         JxlColorCorrelation defaultCmap = new(header.ToFrameDimensions().XSize, header.ToFrameDimensions().YSize);
-        Assert.All(frame.State.Cmap.YtoXMap, f => Assert.Equal(0, f));
-        Assert.All(frame.State.Cmap.YtoBMap, f => Assert.Equal(0, f));
         Assert.Equal(defaultCmap.DcFactors.ToArray(), frame.State.Cmap.DcFactors.ToArray());
+
+        // Temporary departure until E4e (block context map).
         JxlBlockCtxMap defaultBlockCtxMap = new();
         Assert.Empty(frame.State.BlockCtxMap.QfThresholds);
         Assert.Equal(defaultBlockCtxMap.NumCtxs, frame.State.BlockCtxMap.NumCtxs);
         Assert.Equal(defaultBlockCtxMap.CtxMap, frame.State.BlockCtxMap.CtxMap);
+    }
+
+    // At Hare libjxl fits the AC chroma-from-luma map of each 64x64 tile by least squares (the fast
+    // FindBestMultiplier), read back through the decoder's parse. The flower crop is saturated, so its tiles
+    // predict B from Y with non-zero multipliers; its X multipliers all shrink to 0, as cjxl -e 5 -d 1 gives
+    // too. Bike has tiles with non-zero multipliers in both maps (at d1 with E4d's DCT8 blocks and constant
+    // field, 73 of its 80 X and 60 of its 80 B multipliers equal cjxl's).
+    [Theory]
+    [InlineData("flower-384x244", 1.0f, 24, false)]
+    [InlineData("flower-384x244", 2.0f, 24, false)]
+    [InlineData("flower-384x244", 4.0f, 24, false)]
+    [InlineData("bike-582x453", 1.0f, 80, true)]
+    public void Encode_SaturatedPhoto_FitsAChromaFromLumaMap(string sizeCase, float distance, int tiles, bool expectYtoX)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        JxlColorCorrelation cmap = frame.State.Cmap;
+        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} d{distance}: YtoX [{string.Join(", ", cmap.YtoXMap)}], YtoB [{string.Join(", ", cmap.YtoBMap)}]");
+        Assert.Equal(tiles, cmap.YtoXMap.Length);
+        Assert.Contains(cmap.YtoBMap, f => f != 0);
+        Assert.Equal(expectYtoX, Array.Exists(cmap.YtoXMap, f => f != 0));
+    }
+
+    // A grey image has no X (red-green) signal in XYB, so no tile predicts X from Y.
+    [Fact]
+    public void Encode_GreyImage_KeepsTheYtoXMapZero()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                foreach (ref Rgb24 p in accessor.GetRowSpan(y))
+                {
+                    byte grey = (byte)(((p.R * 77) + (p.G * 150) + (p.B * 29)) >> 8);
+                    p = new Rgb24(grey, grey, grey);
+                }
+            }
+        });
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"YtoX [{string.Join(", ", frame.State.Cmap.YtoXMap)}], YtoB [{string.Join(", ", frame.State.Cmap.YtoBMap)}]");
+        Assert.All(frame.State.Cmap.YtoXMap, f => Assert.Equal(0, f));
+    }
+
+    // The chroma-from-luma map takes the part of B that Y predicts out before B is quantised, so the blue
+    // channel of the flower crop at d1 is no worse than with E4a's default map (our decoder): E4a gave 31,333
+    // bytes and a blue RMSE of 7.92 8-bit steps.
+    [Fact]
+    public async Task Encode_SaturatedPhoto_BlueErrorDoesNotGrowAgainstTheDefaultMap()
+    {
+        const double e4aBlueRmse = 7.923919958812128;
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
+
+        using Image<Rgb24> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(JxlEncoderRoundTrip.Reader.Ours, encoded, "LossyDefaultEncoder", "flower_cfl_d1");
+        JxlLossyEncoderTests.ChannelErrors errors = JxlLossyEncoderTests.ChannelErrors.Measure(image, decoded);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{encoded.Length} bytes: {errors}; blue RMSE {errors.Rmse[2]:R}");
+        Assert.True(errors.Rmse[2] <= e4aBlueRmse, $"blue RMSE {errors.Rmse[2]:R} > E4a's {e4aBlueRmse:R}");
     }
 
     [Fact]
