@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -91,6 +92,22 @@ public class JxlLossyAlphaEncoderTests
         byte[] actual = JxlPixelTypes.Call(pixelType, new EncodeAs(image));
 
         Assert.Equal(expected, actual);
+    }
+
+    // SHA-256 of this encoder's output with alpha (feat/jxl-e3f, after E3b's custom order), as
+    // JxlLossyEncoderTests pins the opaque cases: any change to lossy Fastest output with alpha must update
+    // these on purpose. One group (alpha in the global stream) and six (alpha in the group streams, as a
+    // two-colour channel palette).
+    [Theory]
+    [InlineData("soft", "flower-256x244", "1CFAEA0D9B92A8BBB5076BABCF1BE6250B290B76FB749BB4A43537C2F314AAAA")]
+    [InlineData("hard", "bike-582x453", "987B83B7321B7362B924C4E0C49394F9611A09A6E50D02A6997769A13758DFF6")]
+    public void Encode_LossyAlpha_IsByteIdenticalToItsPin(string mask, string sizeCase, string expectedSha256)
+    {
+        using Image<Rgba32> image = CreateMaskedImage(sizeCase, mask);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
+
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
     }
 
     // A size case of JxlLossyEncoderTests with an alpha mask: "soft" ramps from opaque inside a disk to
