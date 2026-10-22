@@ -390,9 +390,9 @@ public class JxlVarDctBoundsTests
         => AssertOutcome(Quantizer(globalScale, quantDc), Outcome.Decodes);
 
     // Issue #112: whatever bit of a VarDCT stream is wrong, only the allowed exceptions escape. A flip in the
-    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own, and
-    // a flip in the frame flags can set a flag libjxl does not define, which this port rejects with
-    // NotSupportedException.
+    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own.
+    // Since D14 nothing throws NotSupportedException: a flip that sets a frame flag libjxl does not define
+    // is ignored (D14b), and one that sets HavePreview skips the preview frame (D14a).
     [Theory]
     [InlineData("default")]
     [InlineData("nonzeros_63")]
@@ -420,7 +420,7 @@ public class JxlVarDctBoundsTests
             {
                 Decode(flipped).Dispose();
             }
-            catch (Exception ex) when (ex is InvalidImageContentException or NotSupportedException or InvalidMemoryOperationException)
+            catch (Exception ex) when (ex is InvalidImageContentException or InvalidMemoryOperationException or OperationCanceledException)
             {
             }
             catch (Exception ex)
