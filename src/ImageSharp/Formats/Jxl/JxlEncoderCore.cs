@@ -4,7 +4,8 @@
 // lib/jxl/encode.cc (JxlEncoderSetBasicInfo, JxlEncoderSetColorEncoding, JxlEncoderSetICCProfile,
 // JxlEncoderSetFrameDistance, and the
 // codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
-// (ColorEncoding::SetICCRaw) and lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB).
+// (ColorEncoding::SetICCRaw), lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB) and
+// lib/jxl/luminance.cc (SetIntensityTarget).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -57,15 +58,13 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         cancellationToken.ThrowIfCancellationRequested();
 
         bool lossy = this.distance != 0;
-        if (lossy)
-        {
-            CheckLossyInput(image);
-        }
-
         JxlCodecMetadata metadata = CreateMetadata<TPixel>(image, lossy);
 
-        // A lossy image has no profile (CheckLossyInput), so its colour encoding stays the sRGB enum.
-        byte[] icc = SetIccProfile(metadata.M.ColorEncoding, image.Metadata.IccProfile);
+        // Lossless embeds a matching profile verbatim; lossy writes the colour encoding it recognises.
+        byte[] icc = lossy
+            ? SetLossyColorEncoding(metadata.M.ColorEncoding, image.Metadata.IccProfile)
+            : SetIccProfile(metadata.M.ColorEncoding, image.Metadata.IccProfile);
+        SetIntensityTarget(metadata.M, image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget);
 
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
         JxlBitWriter writer = new();
@@ -143,21 +142,53 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // embedded verbatim when its data colour space matches the pixels, RGB for colour and grey for grey.
     // Returns the profile bytes, or null when the colour encoding keeps the sRGB enum.
     // libjxl has two paths here. With a CMS, SetICC parses the profile and sets the colour fields from
-    // it; without one, SetICCRaw keeps the fields it has. This port has no CMS (#105), so it takes the
-    // second: the fields keep the enum of SetColorEncoding, which already gives the colour space of a
-    // matching profile, and the intensity target stays the SDR default that libjxl's SetIntensityTarget
-    // gives those fields. Lossless never turns the profile back into an enum (DecideIfWantICC runs only
-    // without uses_original_profile).
-    // A profile that is not valid throws ImageFormatException, the same as one that libjxl's ICC
-    // reader would refuse (JxlIccWriter): libjxl's JxlEncoderSetICCProfile returns an error for a
-    // profile its CMS cannot parse, and a profile that fails IccProfile.CheckIsValid counts as one.
-    // Departure (ADR 0001): libjxl also returns an error for a profile that does not match the channel
+    // it; without one, SetICCRaw keeps the fields it has. Lossless takes the second (#115): the fields keep
+    // the enum of SetColorEncoding, which already gives the colour space of a matching profile, and the
+    // intensity target is the SDR default that libjxl's SetIntensityTarget gives those fields. Lossless
+    // never turns the profile back into an enum (DecideIfWantICC runs only without uses_original_profile).
+    // Departure (ADR 0001): libjxl returns an error for a profile that does not match the channel
     // count; this port ignores such a profile and writes the enum (#115).
     private static byte[] SetIccProfile(JxlColorEncoding colorEncoding, IccProfile profile)
     {
-        if (profile is null)
+        if (!IsPixelProfile(colorEncoding, profile))
         {
             return null;
+        }
+
+        colorEncoding.WantIcc = true;
+        return profile.ToByteArray();
+    }
+
+    // The lossy colour rules of #115, libjxl's JxlEncoderSetICCProfile with a CMS and then DecideIfWantICC:
+    // a matching profile that TryFromIccProfile recognises is written as its colour encoding, never as the
+    // ICC, and the pixels reach XYB through it. Unlike libjxl, which keeps an ICC it cannot describe and
+    // encodes through its CMS, a profile that is not recognised throws: this library has no CMS (#115).
+    // Returns null: a lossy file never has an ICC.
+    private static byte[] SetLossyColorEncoding(JxlColorEncoding colorEncoding, IccProfile profile)
+    {
+        if (!IsPixelProfile(colorEncoding, profile))
+        {
+            return null;
+        }
+
+        if (!JxlColorEncoding.TryFromIccProfile(profile, out JxlColorEncoding recognised))
+        {
+            throw new NotSupportedException("lossy JPEG XL needs an ICC profile the encoder can describe; use Distance = 0 or convert to sRGB first");
+        }
+
+        colorEncoding.CopyFrom(recognised);
+        return null;
+    }
+
+    // Whether the profile describes the pixels: it is there, and its data colour space is RGB for colour and
+    // grey for grey. A profile that is not valid throws ImageFormatException, the same as one that libjxl's
+    // ICC reader would refuse (JxlIccWriter): libjxl's JxlEncoderSetICCProfile returns an error for a
+    // profile its CMS cannot parse, and a profile that fails IccProfile.CheckIsValid counts as one.
+    private static bool IsPixelProfile(JxlColorEncoding colorEncoding, IccProfile profile)
+    {
+        if (profile is null)
+        {
+            return false;
         }
 
         if (!profile.CheckIsValid())
@@ -166,13 +197,27 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         }
 
         IccColorSpaceType pixelColorSpace = colorEncoding.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
-        if (profile.Header.DataColorSpace != pixelColorSpace)
+        return profile.Header.DataColorSpace == pixelColorSpace;
+    }
+
+    // libjxl's JxlEncoderSetBasicInfo with an intensity target, or else SetIntensityTarget: 10,000 nits
+    // for PQ (the peak of SMPTE ST 2084), 1,000 for HLG (BT.2100's nominal display peak) and 255 for SDR.
+    // #115 leaves HLG out; this follows libjxl. The header stores it as a half float.
+    private static void SetIntensityTarget(JxlImageMetadata m, float requested)
+    {
+        if (requested != 0)
         {
-            return null;
+            if (!(requested > 0 && requested <= 65504))
+            {
+                JxlThrowHelper.ThrowImageFormatException($"JPEG XL intensity target {requested} is out of range: it has to be in (0..65504].");
+            }
+
+            m.ToneMapping.IntensityTarget = requested;
+            return;
         }
 
-        colorEncoding.WantIcc = true;
-        return profile.ToByteArray();
+        JxlCustomTransferFunction tf = m.ColorEncoding.Tf;
+        m.ToneMapping.IntensityTarget = tf.IsPq ? 10000 : tf.IsHlg ? 1000 : 255;
     }
 
     // The colour encoding: sRGB, or grey with the sRGB white point and transfer function, as libjxl's
@@ -215,17 +260,6 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         {
             string slice = this.effort == JxlEffort.Default ? "E4" : "E5";
             throw new NotSupportedException($"JPEG XL lossy encoding at effort {this.effort} is not supported yet; slice {slice} adds it.");
-        }
-    }
-
-    // Lossy encoding takes every pixel type that lossless does: grey or RGB, integer or float, with or
-    // without alpha. An ICC profile still throws, naming the slice that adds the colour rules.
-    private static void CheckLossyInput<TPixel>(Image<TPixel> image)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        if (image.Metadata.IccProfile is not null)
-        {
-            throw new NotSupportedException("JPEG XL lossy encoding of an image with an ICC profile is not supported yet; slice E3e adds the colour rules.");
         }
     }
 }

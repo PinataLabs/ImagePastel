@@ -27,6 +27,7 @@ internal sealed class JxlMetadata : IDeepCloneable
         this.IsXybEncoded = other.IsXybEncoded;
         this.BitsPerSample = other.BitsPerSample;
         this.ExponentBitsPerSample = other.ExponentBitsPerSample;
+        this.IntensityTarget = other.IntensityTarget;
         this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
         this.LoopCount = other.LoopCount;
         this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
@@ -61,6 +62,14 @@ internal sealed class JxlMetadata : IDeepCloneable
     /// read and written with <see cref="BitsPerSample"/>.
     /// </summary>
     public uint ExponentBitsPerSample { get; set; }
+
+    /// <summary>
+    /// Gets or sets the intensity target: the luminance, in nits, that the largest sample stands for. The
+    /// decoder sets it from the image header. When it is not 0, the encoder writes it; otherwise the encoder
+    /// writes libjxl's default for the transfer function: 10,000 nits for PQ, 1,000 for HLG and 255 for
+    /// anything else.
+    /// </summary>
+    public float IntensityTarget { get; set; }
 
     /// <summary>
     /// Gets or sets the ICC profile embedded in the codestream, or null when the stream describes its

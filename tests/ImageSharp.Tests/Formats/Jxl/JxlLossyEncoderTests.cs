@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -309,18 +308,6 @@ public class JxlLossyEncoderTests
         Assert.Equal(0, stream.Length);
     }
 
-    // The colour rules for a profile come with E3e: until then any profile throws.
-    [Fact]
-    public void Encode_LossyWithAProfile_ThrowsNotSupportedNamingE3e()
-    {
-        using Image<Rgb24> image = new(1, 1);
-        image.Metadata.IccProfile = new IccProfile(File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Icc.LittleCmsSrgbV4)));
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
-
-        Assert.Contains("E3e", ex.Message);
-    }
-
     // libjxl's JxlEncoderSetFrameDistance accepts [0, 25].
     [Theory]
     [InlineData(-1.0f)]
@@ -413,7 +400,7 @@ public class JxlLossyEncoderTests
         return cases;
     }
 
-    private static void AssertWithinInterimBound(Image<Rgb24> expected, Image<Rgb24> actual, string label)
+    internal static void AssertWithinInterimBound(Image<Rgb24> expected, Image<Rgb24> actual, string label)
     {
         Assert.Equal(expected.Size(), actual.Size());
         ChannelErrors errors = ChannelErrors.Measure(expected, actual);
@@ -424,7 +411,7 @@ public class JxlLossyEncoderTests
         }
     }
 
-    private static async Task<Image<Rgb24>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
+    internal static async Task<Image<Rgb24>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
     {
         switch (reader)
         {
