@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -36,8 +37,9 @@ internal static class JxlIccReader
     /// Reads the ICC profile. Throws <see cref="InvalidImageContentException"/> for invalid data.
     /// </summary>
     /// <param name="reader">The reader, after the transform data.</param>
+    /// <param name="cancellationToken">The cancellation token, checked at each checkpoint.</param>
     /// <returns>The profile.</returns>
-    public static byte[] Read(JxlBitReader reader)
+    public static byte[] Read(JxlBitReader reader, CancellationToken cancellationToken = default)
     {
         // ICCReader::Init.
         CheckEoi(reader);
@@ -81,6 +83,8 @@ internal static class JxlIccReader
         {
             if (i % MaxCheckpointInterval == 0 && i > 0)
             {
+                // libjxl has no cancellation (#293). The token is checked where libjxl saves a checkpoint.
+                cancellationToken.ThrowIfCancellationRequested();
                 CheckEoi(reader);
                 if ((i & 0xFFFF) == 0)
                 {

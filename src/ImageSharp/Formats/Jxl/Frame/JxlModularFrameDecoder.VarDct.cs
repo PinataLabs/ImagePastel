@@ -46,7 +46,7 @@ internal sealed partial class JxlModularFrameDecoder
         }
 
         JxlModularOptions options = new();
-        JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
+        JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap, this.cancellationToken);
         JxlCompressedDc.DequantDc(r, state.Dc, state.QuantDc, image, state.Quantizer.MulDc, mul, state.Cmap.DcFactors, frameHeader.ChromaSubsampling, state.BlockCtxMap);
     }
 
@@ -77,7 +77,7 @@ internal sealed partial class JxlModularFrameDecoder
         ReplaceChannel(image, 1, JxlModularChannel.Create(this.allocator, (int)cr.XSize, (int)cr.YSize, 3, 3));
         ReplaceChannel(image, 2, JxlModularChannel.Create(this.allocator, count, 2, 0, 0));
         JxlModularOptions options = new();
-        JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
+        JxlModularDecoder.ModularGenericDecompress(reader, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap, this.cancellationToken);
 
         JxlColorCorrelation cmap = state.Cmap;
         ConvertPlaneAndClamp(image.Channel[0], cr, cmap.YtoXMap, cmap.XSizeTiles);
@@ -183,7 +183,7 @@ internal sealed partial class JxlModularFrameDecoder
         using JxlModularImage image = JxlModularImage.Create(this.allocator, requiredSizeX, requiredSizeY, 8, 3);
         JxlModularOptions options = new();
         long streamId = JxlModularStreamId.QuantTable(this.frameDim, idx);
-        JxlModularDecoder.ModularGenericDecompress(br, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
+        JxlModularDecoder.ModularGenericDecompress(br, image, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap, this.cancellationToken);
 
         int[] qtable = new int[requiredSizeX * requiredSizeY * 3];
         for (int c = 0; c < 3; c++)
