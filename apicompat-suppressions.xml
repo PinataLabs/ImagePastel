@@ -198,4 +198,33 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffFrameMetadata.set_EmbeddedIccProfile(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
   </Suppression>
+  <!-- Additions: JPEG XL colour description and its enums, #308 (D15a). -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlColorEncoding</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlPrimaries</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlRenderingIntent</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlTransferFunction</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint</Target>
+  </Suppression>
 </Suppressions>

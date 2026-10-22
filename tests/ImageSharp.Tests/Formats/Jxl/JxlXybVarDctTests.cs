@@ -157,7 +157,7 @@ public class JxlXybVarDctTests
 
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
-        Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.TransferFunction);
     }
 
     // An XYB image renders to its own PQ or HLG encoding, so its pixels get that encoding's profile: the one
@@ -325,7 +325,7 @@ public class JxlXybVarDctTests
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(grey ? JxlColorSpace.Gray : JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.Equal(Enum.Parse<JxlTransferFunction>(transferFunction), metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(Enum.Parse<JxlTransferFunction>(transferFunction), metadata.ColorEncoding.TransferFunction);
         Assert.Null(metadata.OriginalIccProfile);
     }
 

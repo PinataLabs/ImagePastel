@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -105,7 +106,7 @@ public class JxlFieldsTests
         // ColorEncoding: not all default, no ICC, colour space 2 + 15 = 17 (BitsOffset(4, 2)), which is undefined.
         JxlBitReader reader = new JxlTestBitWriter().Bit(false).Bit(false).Write(2, 2).Write(4, 15).ToReader();
 
-        Assert.Throws<InvalidImageContentException>(() => JxlBundle.Read(reader, new JxlColorEncoding()));
+        Assert.Throws<InvalidImageContentException>(() => JxlBundle.Read(reader, new JxlColorEncodingHeader()));
     }
 
     [Fact]
@@ -163,7 +164,7 @@ public class JxlFieldsTests
         Assert.Equal(0x5DABCUL, JxlFieldCoders.ReadU64(reader));
     }
 
-    private static void AssertSrgb(JxlColorEncoding colorEncoding)
+    private static void AssertSrgb(JxlColorEncodingHeader colorEncoding)
     {
         Assert.False(colorEncoding.WantIcc);
         Assert.Equal(JxlColorSpace.Rgb, colorEncoding.ColorSpace);

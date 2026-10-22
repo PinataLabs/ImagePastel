@@ -219,12 +219,12 @@ public class JxlEncoderIccTests
         Assert.Null(jxlMetadata.OriginalIccProfile);
         Assert.Null(decoded.Metadata.IccProfile);
         JxlColorEncoding colorEncoding = jxlMetadata.ColorEncoding;
-        Assert.False(colorEncoding.WantIcc);
+        Assert.NotNull(colorEncoding);
         Assert.Equal(typeof(TPixel) == typeof(L8) ? JxlColorSpace.Gray : JxlColorSpace.Rgb, colorEncoding.ColorSpace);
         Assert.Equal(JxlWhitePoint.D65, colorEncoding.WhitePoint);
         Assert.Equal(JxlPrimaries.Srgb, colorEncoding.Primaries);
-        Assert.False(colorEncoding.Tf.HaveGamma);
-        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.Tf.TransferFunction);
+        Assert.Null(colorEncoding.Gamma);
+        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.TransferFunction);
         ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
 

@@ -15,16 +15,17 @@ using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
 
 /// <summary>
-/// The colour encoding of the image: either an enumerated encoding, or a flag that an ICC profile follows.
+/// The colour encoding field bundle of the image header: either an enumerated encoding, or a flag that an
+/// ICC profile follows. <see cref="JxlColorEncoding"/> is its public description.
 /// </summary>
 /// <remarks>
 /// libjxl builds an ICC profile from the enumerated fields as it reads them (<c>CreateICC</c>) and
 /// rejects the header when that fails. Here <see cref="Icc.JxlIccBuilder"/> does that once the headers
 /// are read.
 /// </remarks>
-internal sealed partial class JxlColorEncoding : JxlFields
+internal sealed partial class JxlColorEncodingHeader : JxlFields
 {
-    public JxlColorEncoding() => JxlBundle.Init(this);
+    public JxlColorEncodingHeader() => JxlBundle.Init(this);
 
     /// <summary>Gets or sets a value indicating whether an ICC profile follows the headers instead of the enumerated fields.</summary>
     public bool WantIcc { get; set; }
@@ -99,18 +100,9 @@ internal sealed partial class JxlColorEncoding : JxlFields
         return (toXyz, new[] { toXyz[1, 0], toXyz[1, 1], toXyz[1, 2] });
     }
 
-    /// <summary>Returns a copy of this encoding.</summary>
-    /// <returns>The copy.</returns>
-    public JxlColorEncoding Clone()
-    {
-        JxlColorEncoding clone = new();
-        clone.CopyFrom(this);
-        return clone;
-    }
-
     /// <summary>Copies the fields of <paramref name="other"/> into this instance.</summary>
     /// <param name="other">The encoding to copy.</param>
-    public void CopyFrom(JxlColorEncoding other)
+    public void CopyFrom(JxlColorEncodingHeader other)
     {
         this.WantIcc = other.WantIcc;
         this.ColorSpace = other.ColorSpace;

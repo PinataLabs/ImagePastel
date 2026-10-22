@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -23,7 +22,7 @@ internal sealed class JxlMetadata : IDeepCloneable
 
     private JxlMetadata(JxlMetadata other)
     {
-        this.ColorEncoding = other.ColorEncoding?.Clone();
+        this.ColorEncoding = other.ColorEncoding;
         this.IsXybEncoded = other.IsXybEncoded;
         this.BitsPerSample = other.BitsPerSample;
         this.ExponentBitsPerSample = other.ExponentBitsPerSample;

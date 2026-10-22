@@ -4,6 +4,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -12,7 +13,7 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// E3e: <see cref="JxlColorEncoding.TryFromIccProfile"/> recognises a profile as a JPEG XL colour encoding,
+/// E3e: <see cref="JxlColorEncodingHeader.TryFromIccProfile"/> recognises a profile as a JPEG XL colour encoding,
 /// in libjxl's order (<c>JxlCmsSetFieldsFromICC</c>): a <c>cicp</c> tag, then a matrix/TRC (RGB) or
 /// <c>kTRC</c> (grey) profile, whose white point and primaries snap to a named enum within 1e-3 and
 /// whose curve matches a transfer function within 2e-4.
@@ -71,10 +72,10 @@ public class JxlColorEncodingFromIccTests
     [MemberData(nameof(DecoderEncodings))]
     public void TryFromIccProfile_DecoderBuiltProfile_MapsBackToTheSameEnum(string description)
     {
-        JxlColorEncoding expected = Parse(description);
+        JxlColorEncodingHeader expected = Parse(description);
         IccProfile profile = JxlIccBuilder.Create(expected);
 
-        Assert.True(JxlColorEncoding.TryFromIccProfile(profile, out JxlColorEncoding actual), description);
+        Assert.True(JxlColorEncodingHeader.TryFromIccProfile(profile, out JxlColorEncodingHeader actual), description);
 
         AssertSameEncoding(expected, actual);
     }
@@ -125,7 +126,7 @@ public class JxlColorEncodingFromIccTests
     [MemberData(nameof(CommonProfiles))]
     public void TryFromIccProfile_CommonProfile_RecognisesItsSpace(string path, string description)
     {
-        Assert.True(JxlColorEncoding.TryFromIccProfile(ReadProfile(path), out JxlColorEncoding actual), path);
+        Assert.True(JxlColorEncodingHeader.TryFromIccProfile(ReadProfile(path), out JxlColorEncodingHeader actual), path);
 
         AssertSameEncoding(Parse(description), actual);
     }
@@ -134,7 +135,7 @@ public class JxlColorEncodingFromIccTests
     [MemberData(nameof(UnrecognisedProfiles))]
     public void TryFromIccProfile_LutLabOrMixedProfile_IsNotRecognised(string path)
     {
-        Assert.False(JxlColorEncoding.TryFromIccProfile(ReadProfile(path), out JxlColorEncoding actual));
+        Assert.False(JxlColorEncodingHeader.TryFromIccProfile(ReadProfile(path), out JxlColorEncodingHeader actual));
         Assert.Null(actual);
     }
 
@@ -149,7 +150,7 @@ public class JxlColorEncodingFromIccTests
     [InlineData(1, 1, "RGB_D65_SRG_Per_709")]
     public void TryFromIccProfile_CicpOnlyProfile_RecognisesTheCodePoints(byte primaries, byte transfer, string description)
     {
-        Assert.True(JxlColorEncoding.TryFromIccProfile(CicpOnlyProfile(primaries, transfer, 0, 1), out JxlColorEncoding actual));
+        Assert.True(JxlColorEncodingHeader.TryFromIccProfile(CicpOnlyProfile(primaries, transfer, 0, 1), out JxlColorEncodingHeader actual));
 
         AssertSameEncoding(Parse(description), actual);
     }
@@ -162,7 +163,7 @@ public class JxlColorEncodingFromIccTests
     [InlineData(6, 13, 0, 1)]
     [InlineData(9, 14, 0, 1)]
     public void TryFromIccProfile_CicpTheEnumsCannotName_IsNotRecognised(byte primaries, byte transfer, byte matrix, byte fullRange)
-        => Assert.False(JxlColorEncoding.TryFromIccProfile(CicpOnlyProfile(primaries, transfer, matrix, fullRange), out _));
+        => Assert.False(JxlColorEncodingHeader.TryFromIccProfile(CicpOnlyProfile(primaries, transfer, matrix, fullRange), out _));
 
     // The rendering intent is the header's, carried into the encoding (so a perceptual sRGB profile is not
     // libjxl's all-default sRGB).
@@ -175,7 +176,7 @@ public class JxlColorEncodingFromIccTests
         byte[] bytes = File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Icc.LittleCmsSrgbV4));
         intentBytes.CopyTo(bytes, 64);
 
-        Assert.True(JxlColorEncoding.TryFromIccProfile(new IccProfile(bytes), out JxlColorEncoding actual));
+        Assert.True(JxlColorEncodingHeader.TryFromIccProfile(new IccProfile(bytes), out JxlColorEncodingHeader actual));
 
         Assert.Equal((JxlRenderingIntent)expected, actual.RenderingIntent);
     }
@@ -186,7 +187,7 @@ public class JxlColorEncodingFromIccTests
         byte[] bytes = File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Icc.LittleCmsSrgbV4));
         bytes[67] = 4;
 
-        Assert.False(JxlColorEncoding.TryFromIccProfile(new IccProfile(bytes), out _));
+        Assert.False(JxlColorEncodingHeader.TryFromIccProfile(new IccProfile(bytes), out _));
     }
 
     /// <summary>
@@ -222,10 +223,10 @@ public class JxlColorEncodingFromIccTests
     /// </summary>
     /// <param name="description">The description, for example <c>RGB_D65_SRG_Rel_SRG</c>.</param>
     /// <returns>The encoding.</returns>
-    internal static JxlColorEncoding Parse(string description)
+    internal static JxlColorEncodingHeader Parse(string description)
     {
         string[] parts = description.Split('_');
-        JxlColorEncoding c = new() { ColorSpace = parts[0] == "Gra" ? JxlColorSpace.Gray : JxlColorSpace.Rgb };
+        JxlColorEncodingHeader c = new() { ColorSpace = parts[0] == "Gra" ? JxlColorSpace.Gray : JxlColorSpace.Rgb };
         int i = 1;
         switch (parts[i++])
         {
@@ -311,7 +312,7 @@ public class JxlColorEncodingFromIccTests
     /// </summary>
     /// <param name="expected">The expected encoding.</param>
     /// <param name="actual">The recognised encoding.</param>
-    internal static void AssertSameEncoding(JxlColorEncoding expected, JxlColorEncoding actual)
+    internal static void AssertSameEncoding(JxlColorEncodingHeader expected, JxlColorEncodingHeader actual)
     {
         Assert.False(actual.WantIcc);
         Assert.Equal(expected.ColorSpace, actual.ColorSpace);

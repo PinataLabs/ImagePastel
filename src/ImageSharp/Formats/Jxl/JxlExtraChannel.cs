@@ -1,8 +1,6 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>

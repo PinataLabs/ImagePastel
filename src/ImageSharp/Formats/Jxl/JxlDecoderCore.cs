@@ -380,7 +380,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // An XYB image whose encoding the XYB stage cannot output renders to linear sRGB, which the image
     // sink encodes as sRGB, so its pixels get no profile either: as for an ICC profile, the pixel profile
     // only ever describes the pixels (ADR 0002).
-    private void SetColorEncodingProfile(JxlColorEncoding c)
+    private void SetColorEncodingProfile(JxlColorEncodingHeader c)
     {
         IccProfile profile = JxlIccBuilder.Create(c);
         bool srgbCurve = !c.Tf.HaveGamma && c.Tf.TransferFunction == JxlTransferFunction.Srgb && c.WhitePoint == JxlWhitePoint.D65;
@@ -467,7 +467,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         else
         {
             this.isCmyk = false;
-            jxlMetadata.ColorEncoding = codecMetadata.M.ColorEncoding.Clone();
+            jxlMetadata.ColorEncoding = new JxlColorEncoding(codecMetadata.M.ColorEncoding);
             this.SetColorEncodingProfile(codecMetadata.M.ColorEncoding);
         }
 

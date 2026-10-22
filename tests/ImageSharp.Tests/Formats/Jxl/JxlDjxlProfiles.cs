@@ -26,13 +26,12 @@ internal static class JxlDjxlProfiles
     /// <summary>Returns the colour encoding in the header of <c>colour_<paramref name="name"/>.jxl</c>.</summary>
     /// <param name="name">The name after <c>colour_</c>.</param>
     /// <returns>The colour encoding.</returns>
-    public static JxlColorEncoding ColourEncoding(string name)
+    public static JxlColorEncodingHeader ColourEncoding(string name)
     {
+        // The files are bare codestreams, so the header bundle is read straight from them.
         string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "colour_" + name + ".jxl");
-        using FileStream stream = File.OpenRead(path);
-        JxlColorEncoding c = new JxlDecoder().Identify(Configuration.Default, stream, TestContext.Current.CancellationToken)
-            .Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding;
-        Assert.NotNull(c);
+        JxlColorEncodingHeader c = JxlCodestreamFrames.ReadImageHeader(File.ReadAllBytes(path), out _).M.ColorEncoding;
+        Assert.False(c.WantIcc);
         return c;
     }
 

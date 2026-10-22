@@ -151,7 +151,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // never turns the profile back into an enum (DecideIfWantICC runs only without uses_original_profile).
     // Departure (ADR 0001): libjxl returns an error for a profile that does not match the channel
     // count; this port ignores such a profile and writes the enum (#115).
-    private static byte[] SetIccProfile(JxlColorEncoding colorEncoding, IccProfile profile)
+    private static byte[] SetIccProfile(JxlColorEncodingHeader colorEncoding, IccProfile profile)
     {
         if (!IsPixelProfile(colorEncoding, profile))
         {
@@ -167,14 +167,14 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // ICC, and the pixels reach XYB through it. Unlike libjxl, which keeps an ICC it cannot describe and
     // encodes through its CMS, a profile that is not recognised throws: this library has no CMS (#115).
     // Returns null: a lossy file never has an ICC.
-    private static byte[] SetLossyColorEncoding(JxlColorEncoding colorEncoding, IccProfile profile)
+    private static byte[] SetLossyColorEncoding(JxlColorEncodingHeader colorEncoding, IccProfile profile)
     {
         if (!IsPixelProfile(colorEncoding, profile))
         {
             return null;
         }
 
-        if (!JxlColorEncoding.TryFromIccProfile(profile, out JxlColorEncoding recognised))
+        if (!JxlColorEncodingHeader.TryFromIccProfile(profile, out JxlColorEncodingHeader recognised))
         {
             throw new NotSupportedException("lossy JPEG XL needs an ICC profile the encoder can describe; use Distance = 0 or convert to sRGB first");
         }
@@ -187,7 +187,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     // grey for grey. A profile that is not valid throws ImageFormatException, the same as one that libjxl's
     // ICC reader would refuse (JxlIccWriter): libjxl's JxlEncoderSetICCProfile returns an error for a
     // profile its CMS cannot parse, and a profile that fails IccProfile.CheckIsValid counts as one.
-    private static bool IsPixelProfile(JxlColorEncoding colorEncoding, IccProfile profile)
+    private static bool IsPixelProfile(JxlColorEncodingHeader colorEncoding, IccProfile profile)
     {
         if (profile is null)
         {
@@ -225,7 +225,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
     // The colour encoding: sRGB, or grey with the sRGB white point and transfer function, as libjxl's
     // ColorEncoding::SRGB(is_gray). SetIccProfile then adds a matching pixel profile.
-    private static void SetColorEncoding(JxlColorEncoding colorEncoding, bool isGray)
+    private static void SetColorEncoding(JxlColorEncodingHeader colorEncoding, bool isGray)
     {
         colorEncoding.WantIcc = false;
         colorEncoding.ColorSpace = isGray ? JxlColorSpace.Gray : JxlColorSpace.Rgb;

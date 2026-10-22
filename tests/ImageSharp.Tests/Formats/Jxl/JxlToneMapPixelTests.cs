@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using Xunit;
@@ -26,7 +27,7 @@ public class JxlToneMapPixelTests
     [InlineData("p3_hlg", 11, 18)]
     public void ToneMapPixel_OnTheLutGrid_GivesDjxlsLabBytes(string name, int primaries, int transferFunction)
     {
-        JxlColorEncoding c = JxlDjxlProfiles.ColourEncoding(name);
+        JxlColorEncodingHeader c = JxlDjxlProfiles.ColourEncoding(name);
         Assert.Equal(JxlWhitePoint.D65, c.WhitePoint);
         Assert.Equal((JxlPrimaries)primaries, c.Primaries);
         Assert.Equal((JxlTransferFunction)transferFunction, c.Tf.TransferFunction);

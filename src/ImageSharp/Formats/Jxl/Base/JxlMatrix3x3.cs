@@ -29,7 +29,7 @@ internal static class JxlMatrix3x3
     /// <returns>The row-major matrix.</returns>
     public static float[,] SrgbToXyzD50()
     {
-        JxlColorEncoding srgb = new();
+        JxlColorEncodingHeader srgb = new();
         ((double X, double Y) R, (double X, double Y) G, (double X, double Y) B) p = srgb.PrimariesXy;
         (double X, double Y) w = srgb.WhitePointXy;
         return IccProfileBuilder.PrimariesToXyzD50(

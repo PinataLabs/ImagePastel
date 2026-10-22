@@ -31,7 +31,7 @@ internal sealed class JxlImageMetadata : JxlFields
     public bool XybEncoded { get; set; }
 
     /// <summary>Gets the colour encoding.</summary>
-    public JxlColorEncoding ColorEncoding { get; } = new();
+    public JxlColorEncodingHeader ColorEncoding { get; } = new();
 
     /// <summary>Gets or sets the EXIF orientation, 1 to 8.</summary>
     public uint Orientation

@@ -91,7 +91,7 @@ public class JxlConformanceLoadTests
         Assert.True(worst <= 1 + 1e-4, $"Largest difference {worst:G4} steps");
     }
 
-    // The colour space and transfer function are named as strings, because their enums are internal.
+    // The colour space and transfer function are the names of their enum values.
     // A null colour space means an ICC profile.
     [Theory]
     [InlineData("opsin_inverse", 500, 606, 24, "Rgb", "Srgb", 0, true)]
@@ -129,7 +129,7 @@ public class JxlConformanceLoadTests
         else
         {
             Assert.Equal(colorSpace, metadata.ColorEncoding.ColorSpace.ToString());
-            Assert.Equal(transferFunction, metadata.ColorEncoding.Tf.TransferFunction.ToString());
+            Assert.Equal(transferFunction, metadata.ColorEncoding.TransferFunction.ToString());
             Assert.Null(metadata.OriginalIccProfile);
         }
     }

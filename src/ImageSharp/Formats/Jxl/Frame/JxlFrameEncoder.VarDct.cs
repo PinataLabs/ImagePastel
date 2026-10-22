@@ -203,7 +203,7 @@ internal static partial class JxlFrameEncoder
     // so a grey image, whose grey is in all three planes, takes the same branches). Any other encoding is
     // converted to linear sRGB, or linear grey (JxlLinearSrgbTransform), then goes through the opsin
     // matrix. libjxl keeps a linear copy from Kitten down, for its butteraugli search; Falcon does not.
-    private static void ToXyb(JxlColorEncoding c, float intensityTarget, Buffer2D<float>[] color, int width, int height)
+    private static void ToXyb(JxlColorEncodingHeader c, float intensityTarget, Buffer2D<float>[] color, int width, int height)
     {
         float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(intensityTarget);
         bool srgbSpace = c.WhitePoint == JxlWhitePoint.D65 && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));

@@ -88,9 +88,9 @@ public class JxlLossyDepthEncoderTests
 
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
+        Assert.NotNull(metadata.ColorEncoding);
         Assert.Equal(expectedGrey ? JxlColorSpace.Gray : JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.False(metadata.ColorEncoding.WantIcc);
-        Assert.Equal(JxlTransferFunction.Srgb, metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Srgb, metadata.ColorEncoding.TransferFunction);
         Assert.Equal(expectedBits, metadata.BitsPerSample);
         Assert.Equal(expectedExponentBits, metadata.ExponentBitsPerSample);
         Assert.Equal(expectedBitsPerPixel, info.PixelType.BitsPerPixel);

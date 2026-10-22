@@ -127,8 +127,8 @@ public class JxlXybModularTests
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.True(metadata.ColorEncoding.Tf.HaveGamma);
-        Assert.Equal(4545500U, metadata.ColorEncoding.Tf.Gamma);
+        Assert.Equal(JxlTransferFunction.Gamma, metadata.ColorEncoding.TransferFunction);
+        Assert.Equal(0.45455, metadata.ColorEncoding.Gamma.Value, 1e-7);
         Assert.Null(metadata.OriginalIccProfile);
     }
 
