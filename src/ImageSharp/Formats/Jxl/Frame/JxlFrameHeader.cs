@@ -90,6 +90,13 @@ internal sealed class JxlFrameHeader : JxlFields
     /// <summary>Gets or sets the codestream metadata, which is not serialized here.</summary>
     public JxlCodecMetadata NonserializedMetadata { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the frame is the preview frame, which is not serialized
+    /// (libjxl's <c>nonserialized_is_preview</c>). A preview frame defaults to the preview size, and must
+    /// be a regular frame with no blending and no custom size or origin.
+    /// </summary>
+    public bool NonserializedIsPreview { get; set; }
+
     /// <summary>Gets or sets the frame name, UTF-8.</summary>
     public ReadOnlySpan<byte> Name
     {
@@ -126,9 +133,14 @@ internal sealed class JxlFrameHeader : JxlFields
     public bool DropsToGreyAfterColorTransform
         => this.ColorTransform == JxlColorTransform.YCbCr && this.NonserializedMetadata.M.NumColorPlanes == 1;
 
-    private long DefaultXSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.XSize;
+    // default_xsize and default_ysize: the preview frame defaults to the preview size.
+    private long DefaultXSize => this.NonserializedMetadata == null ? 0
+        : this.NonserializedIsPreview ? (long)this.NonserializedMetadata.M.PreviewSize.XSize
+        : (long)this.NonserializedMetadata.XSize;
 
-    private long DefaultYSize => this.NonserializedMetadata == null ? 0 : (long)this.NonserializedMetadata.YSize;
+    private long DefaultYSize => this.NonserializedMetadata == null ? 0
+        : this.NonserializedIsPreview ? (long)this.NonserializedMetadata.M.PreviewSize.YSize
+        : (long)this.NonserializedMetadata.YSize;
 
     /// <summary>Returns the dimensions of the frame.</summary>
     /// <returns>The dimensions.</returns>
@@ -165,6 +177,10 @@ internal sealed class JxlFrameHeader : JxlFields
         }
 
         this.FrameType = (JxlFrameType)visitor.U32(Val((uint)JxlFrameType.Regular), Val((uint)JxlFrameType.Dc), Val((uint)JxlFrameType.ReferenceOnly), Val((uint)JxlFrameType.SkipProgressive), (uint)JxlFrameType.Regular, (uint)this.FrameType);
+        if (visitor.IsReading && this.NonserializedIsPreview && this.FrameType != JxlFrameType.Regular)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("Only regular frame could be a preview");
+        }
 
         bool isModular = this.Encoding == JxlFrameEncoding.Modular;
         isModular = visitor.Bool(false, isModular);
@@ -335,6 +351,20 @@ internal sealed class JxlFrameHeader : JxlFields
                 ecBlendingInfo.NonserializedIsPartialFrame = isPartialFrame;
                 ecBlendingInfo.NonserializedNumExtraChannels = numExtraChannels;
                 visitor.VisitNested(ecBlendingInfo);
+            }
+
+            if (visitor.IsReading && this.NonserializedIsPreview)
+            {
+                bool replaceAll = this.BlendingInfo.Mode == JxlBlendMode.Replace;
+                foreach (JxlBlendingInfo ecBlendingInfo in this.ExtraChannelBlendingInfo)
+                {
+                    replaceAll &= ecBlendingInfo.Mode == JxlBlendMode.Replace;
+                }
+
+                if (!replaceAll || this.CustomSizeOrOrigin)
+                {
+                    JxlThrowHelper.ThrowInvalidImageContentException("Preview is not compatible with blending");
+                }
             }
 
             if (visitor.Conditional(this.NonserializedMetadata != null && this.NonserializedMetadata.M.HaveAnimation))

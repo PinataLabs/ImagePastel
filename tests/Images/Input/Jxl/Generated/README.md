@@ -768,3 +768,22 @@ djxl grey_ycbcr_alpha_blending.jxl ../../../External/ReferenceOutput/JxlDecoderT
 
 - libjxl does not let a frame blend its colour onto a slot saved before the colour transform ("Trying to blend XYB reference frame"). So patches are the only colour use of such a slot. libjxl does not check the slot that an extra channel blends onto.
 - Measured on x64 against `djxl` with AVX2: `grey_ycbcr_saved_before_ct` and `grey_ycbcr_alpha_blending` are exact. `grey_ycbcr_patches` has a worst channel RMSE of 3.6e-8 and a peak error of 2.4e-7, the float rounding of the YCbCr transform.
+
+#### How the preview file was made
+
+A codestream whose header has a preview (D14a). `cjxl` cannot write a preview, so the test helper `JxlPreviewTests.WithPreview` inserts one: it sets the preview size in the image header and writes a single-group Modular preview frame before the first frame. `JxlPreviewTests` checks the file.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `preview_noise.jxl` | A 24 x 16 8-bit RGBA layered codestream (`JxlTestLayers`) with a 12 x 8 preview, 101 bytes. After the preview come a hidden frame with the strongest noise (a regular frame that is not the last and has no duration), then the last frame, which replaces only its 4 x 4 corner. So the hidden frame's noise shows, and that noise is seeded by the frame counters, which count the preview as a frame that is not shown. | `External/ReferenceOutput/JxlDecoderTests/preview_noise.npy` |
+
+```sh
+# Run JxlPreviewTests.PreviewNoise_IsTheStreamPreviewNoiseBuilds, which writes the stream to
+# tests/Images/ActualOutput/Jxl/JxlPreviewTests/preview_noise.jxl, and copy that file here.
+djxl preview_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/preview_noise.npy
+```
+
+- `jxlinfo -v preview_noise.jxl` reports "Have preview: 1" and "Preview image: 12x8", then two layers: "Full image size" and "4x4 at position (0,0)". `djxl` skips the preview frame and writes one frame.
+- The hidden frame's noise is seeded with a visible frame index of 0 and a non-visible frame index of 2. A decoder that does not count the preview (index 1) misses the reference by an RMSE of 0.68; one that counts it as a shown frame (indexes 1 and 1) misses it by 0.71.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 6.8e-8 and the peak error 2.4e-7.
+- The preview frame's section is the `ColourA` section of `JxlTestLayers`. Neither `djxl` nor this decoder decodes it.
