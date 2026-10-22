@@ -144,15 +144,18 @@ internal sealed class JxlHistogramParams
     }
 
     /// <summary>
-    /// Returns libjxl's histogram parameters for Modular streams. libjxl also takes the extra DC
-    /// precision of VarDCT frames, which only Modular-coded VarDCT DC uses; that comes with the lossy slices.
+    /// Returns libjxl's histogram parameters for Modular streams.
     /// </summary>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="modularMode">Whether the frame is a Modular frame.</param>
     /// <param name="predictor">The predictor option.</param>
+    /// <param name="extraDcPrecision">
+    /// The extra DC precision of each LF group of a VarDCT frame, or empty; only the first group's is read,
+    /// as libjxl does.
+    /// </param>
     /// <param name="decodingSpeedTier">The decoding speed tier.</param>
     /// <returns>The parameters.</returns>
-    public static JxlHistogramParams ForModular(JxlSpeedTier speedTier, bool modularMode, JxlPredictor predictor, int decodingSpeedTier = 0)
+    public static JxlHistogramParams ForModular(JxlSpeedTier speedTier, bool modularMode, JxlPredictor predictor, ReadOnlySpan<int> extraDcPrecision = default, int decodingSpeedTier = 0)
     {
         JxlHistogramParams result = new();
         if (speedTier > JxlSpeedTier.Kitten)
@@ -162,7 +165,8 @@ internal sealed class JxlHistogramParams
             result.Lz77 = modularMode && speedTier <= JxlSpeedTier.Hare ? Lz77Method.Rle : Lz77Method.None;
 
             // Near-lossless DC, as well as modular mode, require choosing hybrid uint more carefully.
-            result.UintMethod = modularMode && speedTier < JxlSpeedTier.Cheetah ? HybridUintMethod.Fast : HybridUintMethod.None;
+            bool nearLosslessDc = !extraDcPrecision.IsEmpty && extraDcPrecision[0] != 0;
+            result.UintMethod = nearLosslessDc || (modularMode && speedTier < JxlSpeedTier.Cheetah) ? HybridUintMethod.Fast : HybridUintMethod.None;
         }
         else
         {

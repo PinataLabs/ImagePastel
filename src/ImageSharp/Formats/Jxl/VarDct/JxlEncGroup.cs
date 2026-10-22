@@ -180,15 +180,13 @@ internal static class JxlEncGroup
     }
 
     // Quantises the Y channel at Falcon's thresholds, then dequantises it in place, so that X and B can
-    // take out the chroma-from-luma prediction from the Y the decoder will see. libjxl's AdjustQuantBlockAC
-    // runs here from Hare down; it comes with Default (E4).
+    // take out the chroma-from-luma prediction from the Y the decoder will see. From Hare down libjxl first
+    // runs AdjustQuantBlockAC on each channel, which may raise the block's quant and sets the Y thresholds
+    // from {0.58, 0.64, 0.64, 0.64}.
+    // Temporary departure (E4a): Hare quantises as Falcon does, at {0.56, 0.62, 0.62, 0.62} with the
+    // block's quant unchanged, until E4c ports AdjustQuantBlockAC.
     private static void QuantizeRoundtripYBlockAc(JxlPassesEncoderState encState, int size, JxlQuantizer quantizer, JxlAcStrategyType quantKind, int xsize, int ysize, ref int quant, float[] inout, int[] quantized)
     {
-        if (encState.SpeedTier <= JxlSpeedTier.Hare)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Adjusting the AC quantisation per block (libjxl effort 5 and up; slice E4)");
-        }
-
         float[] thresY = { 0.56f, 0.62f, 0.62f, 0.62f };
         QuantizeBlockAc(quantizer, 1, 1.0f, quantKind, xsize, ysize, thresY, inout.AsSpan(size, size), quant, quantized.AsSpan(size, size));
 

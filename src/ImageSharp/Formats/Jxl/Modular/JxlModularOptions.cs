@@ -51,6 +51,12 @@ internal sealed class JxlModularOptions
 
         /// <summary>The VarDCT AC metadata tree of effort 3 and faster: a single leaf with the Left predictor.</summary>
         FalconACMeta,
+
+        /// <summary>
+        /// The VarDCT AC metadata tree of efforts 4 to 7: split by channel, then by the left or top value of
+        /// the quant field, the strategies and the EPF sharpness.
+        /// </summary>
+        ACMeta,
     }
 
     /// <summary>Gets or sets the largest channel decoded in this stream; larger channels are decoded per group.</summary>

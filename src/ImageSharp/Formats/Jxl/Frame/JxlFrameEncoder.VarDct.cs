@@ -104,12 +104,9 @@ internal static partial class JxlFrameEncoder
 
         frameHeader.Passes.NumPasses = 1;
 
-        // Gaborish defaults to enabled in Hare or slower, above distance 0.5.
+        // Gaborish defaults to enabled in Hare or slower, above distance 0.5, with the default weights
+        // (gab_custom off).
         frameHeader.LoopFilter.Gab = speedTier <= JxlSpeedTier.Hare && distance > 0.5f;
-        if (frameHeader.LoopFilter.Gab)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Gaborish in the encoder (libjxl effort 5 and up; slice E4)");
-        }
 
         // EPF iterations by distance, at decoding speed tier 0.
         float[] thresholds = { 0.7f, 1.5f, 4.0f };
@@ -168,7 +165,7 @@ internal static partial class JxlFrameEncoder
             ComputeChromacityAdjustments(frameHeader, encState);
 
             // ComputeVarDCTEncodingData.
-            JxlEncHeuristics.LossyFrameHeuristics(encState);
+            JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
             InitializePassesEncoder(frameHeader, color, encState, encModular);
             JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
             ComputeAcMetadata(encState, encModular);
