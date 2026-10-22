@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using Xunit;
 
@@ -51,6 +53,37 @@ public class JxlForwardDctTests
         Assert.True(MaxAbsDifference(pixels, back) <= 1e-5, $"max abs error {MaxAbsDifference(pixels, back)}");
     }
 
+    // libjxl's TransformFromPixels of the LCG block, bit for bit: the SHA-256 of the coefficients as
+    // little-endian floats. From a harness of lib/jxl/enc_transforms-inl.h at ef67fde2 on Highway's scalar
+    // target with -ffp-contract=off (the DCT has no lane sums). Coefficient 1 is noted as a value.
+    [Theory]
+    [InlineData((int)JxlAcStrategyType.Dct, "F799629716D20DB896185D747E51CD15AB9A6488E065664D13AB9FD66E2A0E8F", -0.05878055840730667f)]
+    [InlineData((int)JxlAcStrategyType.Identity, "C1F7E13572F50077334C7FEEB3A7F2B3FD99C89D4F451AA3E8520600D5FDE8F4", -0.03187894821166992f)]
+    [InlineData((int)JxlAcStrategyType.Dct2X2, "9510B83459E6165C6E790E8D9371A1B6BDCEA2B3EBDD6E90DD57FA7EE65706D1", 0.017136335372924805f)]
+    [InlineData((int)JxlAcStrategyType.Dct4X4, "C840BC2EF3C4558BF1F331E41F1AFC81CB48FC3C419FB6832F84189EBF6652F1", 0.003652334213256836f)]
+    [InlineData((int)JxlAcStrategyType.Dct16X16, "02294B330EE82AB0A27ABD3F0E9BF386397F4C611669173640F1A498D100E788", -0.009991928935050964f)]
+    [InlineData((int)JxlAcStrategyType.Dct32X32, "0EBF9242A6E55A5861E6F355D987E3ABCA6E16F6335232C1068B1E75B9B8C0E7", 0.009861333295702934f)]
+    [InlineData((int)JxlAcStrategyType.Dct16X8, "CEA4BC189C1C787258D3532F8CB5D75E2E7E81F59F50835C88DB623F9E9CFA79", 0.007569536566734314f)]
+    [InlineData((int)JxlAcStrategyType.Dct8X16, "D66A2FF6BC64BEDA50825A92DD903E7AB78F62619B428AFBFC7687D86FDB67C9", -0.019463010132312775f)]
+    [InlineData((int)JxlAcStrategyType.Dct32X16, "D03830C00CE50218BF640F7485CCFA9A00AA83D252654BBF5CB9E5D1B486F117", 0.001264701597392559f)]
+    [InlineData((int)JxlAcStrategyType.Dct16X32, "48A3257A69138AA2D293AB2CFC101D2DB8CEEFFBC4C93B5F33804126A550D0DC", -0.003828343003988266f)]
+    [InlineData((int)JxlAcStrategyType.Dct64X64, "9F851DFE6D81A344665177F90C16BDFA31C3B6DC443DADEEB0A6D5CD425CA3D4", 0.0017419431824237108f)]
+    [InlineData((int)JxlAcStrategyType.Dct64X32, "59CA516FC8F13A6B920C9F1AE20AF48B494E69F993047B8EB962D0428FE1A63D", -0.004918401129543781f)]
+    [InlineData((int)JxlAcStrategyType.Dct32X64, "61931CD8CDBD06625CC9BF525BFABFE6BD189AC803C770A6B8F58BA2044515D1", -0.006262142211198807f)]
+    public void TransformFromPixels_MatchesLibjxlBitForBit(int rawStrategy, string sha256, float coefficient1)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
+        int rows = acs.CoveredBlocksY * 8;
+        int cols = acs.CoveredBlocksX * 8;
+        float[] pixels = LcgBlock(rows * cols, (uint)rawStrategy + 1);
+        float[] coefficients = new float[rows * cols];
+
+        JxlDct.TransformFromPixels(acs.Strategy, pixels, cols, coefficients, new float[JxlDct.ScratchSize]);
+
+        Assert.Equal(coefficient1, coefficients[1]);
+        Assert.Equal(sha256, Sha256(coefficients));
+    }
+
     // The block of the libjxl harness: an LCG's values with 16 fraction bits, exact in float.
     private static float[] LcgBlock(int count, uint seed)
     {
@@ -63,6 +96,17 @@ public class JxlForwardDctTests
         }
 
         return values;
+    }
+
+    private static string Sha256(float[] values)
+    {
+        byte[] bytes = new byte[values.Length * sizeof(float)];
+        for (int i = 0; i < values.Length; i++)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(bytes.AsSpan(i * sizeof(float)), values[i]);
+        }
+
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     private static double MaxAbsDifference(float[] a, float[] b)
