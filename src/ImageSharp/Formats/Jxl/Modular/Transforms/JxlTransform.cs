@@ -6,6 +6,7 @@
 
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
@@ -121,7 +122,8 @@ internal sealed class JxlTransform : JxlFields
     /// <summary>Undoes the transform. Throws <see cref="InvalidImageContentException"/> on failure.</summary>
     /// <param name="input">The image.</param>
     /// <param name="wpHeader">The weighted predictor parameters.</param>
-    public void Inverse(JxlModularImage input, JxlWeightedHeader wpHeader)
+    /// <param name="cancellationToken">The cancellation token, which squeeze checks per step (#293).</param>
+    public void Inverse(JxlModularImage input, JxlWeightedHeader wpHeader, CancellationToken cancellationToken = default)
     {
         switch (this.Id)
         {
@@ -129,7 +131,7 @@ internal sealed class JxlTransform : JxlFields
                 JxlRct.InvRct(input, (int)this.BeginC, (int)this.RctType);
                 break;
             case JxlTransformId.Squeeze:
-                JxlSqueeze.InvSqueeze(input, this.Squeezes);
+                JxlSqueeze.InvSqueeze(input, this.Squeezes, cancellationToken);
                 break;
             case JxlTransformId.Palette:
                 JxlPalette.InvPalette(input, this.BeginC, this.NbColors, this.NbDeltas, this.Predictor, wpHeader);
@@ -145,7 +147,8 @@ internal sealed class JxlTransform : JxlFields
     /// decoded before the transform is undone.
     /// </summary>
     /// <param name="input">The image.</param>
-    public void MetaApply(JxlModularImage input)
+    /// <param name="cancellationToken">The cancellation token, which squeeze checks per step (#293).</param>
+    public void MetaApply(JxlModularImage input, CancellationToken cancellationToken = default)
     {
         switch (this.Id)
         {
@@ -153,7 +156,7 @@ internal sealed class JxlTransform : JxlFields
                 CheckEqualChannels(input, this.BeginC, this.BeginC + 2);
                 break;
             case JxlTransformId.Squeeze:
-                JxlSqueeze.MetaSqueeze(input, this.Squeezes);
+                JxlSqueeze.MetaSqueeze(input, this.Squeezes, cancellationToken);
                 break;
             case JxlTransformId.Palette:
                 JxlPalette.MetaPalette(input, this.BeginC, this.BeginC + this.NumC - 1, this.NbColors, this.NbDeltas);

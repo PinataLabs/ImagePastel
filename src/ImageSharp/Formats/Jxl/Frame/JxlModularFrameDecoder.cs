@@ -8,6 +8,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
@@ -27,6 +28,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlDequantMatrices matrices;
+    private readonly CancellationToken cancellationToken;
     private readonly JxlGroupHeader globalHeader = new();
     private JxlModularImage fullImage;
     private List<JxlTransform> globalTransform = new();
@@ -45,11 +47,16 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
     /// The frame's dequantization matrices, libjxl's <c>shared->matrices</c>. The DC global section fills
     /// in their DC factors before any group is converted.
     /// </param>
-    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
+    /// <param name="cancellationToken">
+    /// The decode's cancellation token, which every Modular stream of the frame checks: per channel, per
+    /// transform and per squeeze step. libjxl has no cancellation (#293).
+    /// </param>
+    public JxlModularFrameDecoder(MemoryAllocator allocator, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, CancellationToken cancellationToken = default)
     {
         this.allocator = allocator;
         this.frameDim = frameDim;
         this.matrices = matrices;
+        this.cancellationToken = cancellationToken;
     }
 
     /// <summary>Gets a value indicating whether the frame keeps a full-frame Modular image until the end.</summary>
@@ -144,7 +151,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
                 MaxChanSize = this.frameDim.GroupDimension,
                 GroupDim = this.frameDim.GroupDimension,
             };
-            JxlModularDecoder.ModularGenericDecompress(reader, gi, this.globalHeader, JxlModularStreamId.Global, options, undoTransforms: false, this.tree, this.code, this.contextMap);
+            JxlModularDecoder.ModularGenericDecompress(reader, gi, this.globalHeader, JxlModularStreamId.Global, options, undoTransforms: false, this.tree, this.code, this.contextMap, this.cancellationToken);
 
             this.haveSomething = false;
             for (int c = 0; c < gi.Channel.Count; c++)
@@ -244,13 +251,14 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
         }
 
         JxlModularOptions options = new();
-        JxlModularDecoder.ModularGenericDecompress(reader, gi, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap);
+        JxlModularDecoder.ModularGenericDecompress(reader, gi, null, (int)streamId, options, undoTransforms: true, this.tree, this.code, this.contextMap, this.cancellationToken);
 
         if (!this.useFullImage)
         {
             foreach (JxlTransform t in this.globalTransform)
             {
-                t.Inverse(gi, this.globalHeader.WpHeader);
+                this.cancellationToken.ThrowIfCancellationRequested();
+                t.Inverse(gi, this.globalHeader.WpHeader, this.cancellationToken);
             }
 
             this.ModularImageToDecodedRect(frameHeader, gi, pipeline, groupId, new JxlRect(0, 0, gi.W, gi.H));
@@ -297,7 +305,7 @@ internal sealed partial class JxlModularFrameDecoder : IDisposable
 
         // libjxl clones the image unless it decodes in place; the final decode is always in place.
         JxlModularImage gi = this.fullImage;
-        gi.UndoTransforms(this.globalHeader.WpHeader);
+        gi.UndoTransforms(this.globalHeader.WpHeader, this.cancellationToken);
         if (gi.Error)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Undoing transforms failed");
