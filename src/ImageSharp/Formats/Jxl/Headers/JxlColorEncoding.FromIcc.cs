@@ -91,8 +91,8 @@ internal sealed partial class JxlColorEncoding
     /// has (<see cref="JxlIccBuilder.CreateTrc"/>), the rule #115 adopted.
     /// </para>
     /// <para>
-    /// Departures, with no CMS in this library (#105): the curves are compared, not the whole profile through
-    /// a CMS, so the snapped primaries do not have to give the same XYZ. A profile with lookup tables
+    /// Departure (ADR 0001): this library has no CMS (#105). The curves are compared, not the whole profile
+    /// through a CMS, so the snapped primaries do not have to give the same XYZ. A profile with lookup tables
     /// (<c>AToB</c>, <c>BToA</c>, <c>DToB</c> or <c>BToD</c>) is not recognised as matrix/TRC, because a CMS
     /// would use the tables, which this library cannot compare. A <c>cicp</c> tag in a grey profile is
     /// ignored: libjxl would give such a profile an RGB encoding. libjxl reads the rendering intent from the

@@ -19,8 +19,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 /// adapted to D50.
 /// </summary>
 /// <remarks>
-/// libjxl converts with its CMS (skcms or lcms) through ICC profiles. This library has no CMS (#105, #115),
-/// so the conversion is analytic, from the encoding's fields (a deliberate departure):
+/// Departure (ADR 0001): libjxl converts with its CMS (skcms or lcms) through ICC profiles. This library has
+/// no CMS (#105, #115), so the conversion is analytic, from the encoding's fields:
 /// <list type="bullet">
 /// <item><description>
 /// The curves are the exact formulas in double precision: gamma, BT.709, DCI (gamma 2.6), PQ (scaled by the

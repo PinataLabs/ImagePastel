@@ -19,8 +19,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// The AC dequantization tables, which the AC global section of a VarDCT frame codes.
 /// </content>
 /// <remarks>
-/// Deliberate departure from libjxl: each table and its inverse are allocated when they are first computed,
-/// rather than one block for all 17. A table is still checked as libjxl checks it.
+/// Departure (ADR 0001): each table and its inverse are allocated when they are first computed, rather than
+/// one block for all 17, so a frame allocates only the tables it uses. A table is still checked as libjxl
+/// checks it.
 /// </remarks>
 internal sealed partial class JxlDequantMatrices
 {
