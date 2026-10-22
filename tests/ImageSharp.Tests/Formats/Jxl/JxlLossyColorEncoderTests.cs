@@ -128,6 +128,53 @@ public class JxlLossyColorEncoderTests
         Assert.Equal(expected, Identify(encoded).IntensityTarget);
     }
 
+    // The header stores the intensity target as a half float, which has to be positive.
+    [Theory]
+    [InlineData(-1f)]
+    [InlineData(70000f)]
+    [InlineData(float.NaN)]
+    public void Encode_IntensityTargetOutOfRange_Throws(float target)
+    {
+        using Image<Rgb24> image = new(8, 8);
+        image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget = target;
+
+        Assert.Throws<ImageFormatException>(() => JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f)));
+    }
+
+    // #115's round trip: a decoded image carries the profile the decoder built for its colour encoding (or
+    // none for sRGB) and its intensity target, and a lossy re-encode gives back the same colour encoding and
+    // intensity target, never an ICC.
+    [Theory]
+    [InlineData("RGB_D65_DCI_Rel_SRG")]
+    [InlineData("RGB_D65_202_Per_PeQ")]
+    [InlineData("RGB_D65_202_Rel_HLG")]
+    [InlineData("RGB_D65_SRG_Rel_g0.4545455")]
+    [InlineData("Gra_D65_Rel_709")]
+    public void Encode_DecodedImage_KeepsItsColourEncodingAndIntensityTarget(string description)
+    {
+        JxlColorEncoding expected = JxlColorEncodingFromIccTests.Parse(description);
+        using Image<Rgb24> patches = CreatePatches(expected.IsGray);
+        using Image source = expected.IsGray ? patches.CloneAs<L8>() : patches.Clone();
+        source.Metadata.IccProfile = JxlIccBuilder.Create(expected);
+        byte[] first = Encode(source);
+        using Image decoded = Image.Load(JxlEncoderRoundTrip.CreateConfiguration(), first);
+        Assert.NotNull(decoded.Metadata.IccProfile);
+
+        byte[] second = Encode(decoded);
+
+        JxlMetadata metadata = Identify(second);
+        Assert.Null(metadata.OriginalIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(expected, metadata.ColorEncoding);
+        Assert.Equal(Identify(first).IntensityTarget, metadata.IntensityTarget);
+
+        static byte[] Encode(Image image)
+        {
+            using MemoryStream stream = new();
+            image.Save(stream, JxlLossyEncoderTests.Lossy(1.0f));
+            return stream.ToArray();
+        }
+    }
+
     /// <summary>
     /// Gets the recognised encodings whose pixel path the patch tests check, with the worst patch error of
     /// cjxl v0.12.0's file (<c>-e 3 -d 1</c>, from a PNG with the same profile) through djxl. The encoding is
