@@ -1,7 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_ans_params.h (HistogramParams) and lib/jxl/enc_ans.cc (HistogramParams::ForModular).
+// lib/jxl/enc_ans_params.h (HistogramParams, and its HistogramParams(tier, num_ctx) constructor),
+// lib/jxl/enc_ans.cc (HistogramParams::ForModular) and the histogram parameters that EncodeGlobalACInfo in
+// lib/jxl/enc_frame.cc sets.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;

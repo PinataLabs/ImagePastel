@@ -3,7 +3,8 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/color_encoding_internal.h and lib/jxl/color_encoding_internal.cc (Customxy,
 // CustomTransferFunction, ColorEncoding fields), with the storage defaults, gamma limits and the
-// IsUnknown, IsSRGB, IsLinear, IsPQ, IsHLG, Is709 and IsDCI predicates of lib/jxl/cms/color_encoding_cms.h.
+// IsUnknown, IsSRGB, IsLinear, IsPQ, IsHLG, Is709 and IsDCI predicates and CustomTransferFunction::SetGamma
+// of lib/jxl/cms/color_encoding_cms.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;

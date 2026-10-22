@@ -91,6 +91,9 @@ License notice for Little CMS
 Parts of the ICC colour engine under src/ImageSharp/ColorManagement and
 src/ImageSharp/Metadata/Profiles/ICC follow Little CMS (commit 5176347, as
 vendored in libjxl third_party/lcms, and commit a57322d8, Little CMS 2.20).
+So does the JPEG XL codec's profile recognition in
+src/ImageSharp/Formats/Jxl/Headers/JxlColorEncoding.FromIcc.cs, which ports
+cmsEstimateGamma from src/cmsgamma.c at commit 5176347.
 Each such file names its Little CMS commit and source files. Some test profiles under tests/Images/Input/Icc were written
 by Little CMS.
 https://github.com/mm2/Little-CMS
