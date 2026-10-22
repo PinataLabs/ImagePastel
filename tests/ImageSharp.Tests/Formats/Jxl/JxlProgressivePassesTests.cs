@@ -76,15 +76,33 @@ public class JxlProgressivePassesTests
         Assert.True(result.PeakError <= (1.0 / 255) + 1e-6, $"Peak error {result.PeakError * 255:G4} steps");
     }
 
-    // A lossless Modular frame of two passes (cjxl -d 0 --progressive_ac, whose TOC is not permuted), each
-    // decoding its downsampling bracket of the squeezed channels, matches djxl exactly, and is the source
-    // image. A decoder that gives every pass the first pass's bracket fails the ANS final-state check.
+    // cjxl -d 0 -p: the passes of modular_progressive_ac, with the groups stored centre first, so the TOC
+    // is permuted (D13a).
     [Fact]
-    public void DecodeToPlanes_ModularPasses_MatchesDjxlExactly()
+    public void LosslessProgressive_IsOneModularFrameOfSeveralPassesWithAPermutedToc()
     {
-        NpyArray expected = LoadReference("modular_progressive_ac");
+        List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> frames = JxlCodestreamFrames.ReadWithToc(File.ReadAllBytes(InputPath("modular_progressive")));
 
-        using FileStream stream = File.OpenRead(InputPath("modular_progressive_ac"));
+        (JxlFrameHeader frame, JxlGroupOffsets toc) = Assert.Single(frames);
+        Assert.Equal(JxlFrameType.Regular, frame.FrameType);
+        Assert.Equal(JxlFrameEncoding.Modular, frame.Encoding);
+        Assert.Equal((JxlFrameFlags)0, frame.Flags & JxlFrameFlags.UseDcFrame);
+        Assert.True(frame.Passes.NumPasses > 1, $"{frame.Passes.NumPasses} pass");
+        Assert.NotNull(toc.Permutation);
+    }
+
+    // A lossless Modular frame of two passes, each decoding its downsampling bracket of the squeezed
+    // channels, matches djxl exactly, and is the source image: modular_progressive_ac (cjxl -d 0
+    // --progressive_ac, whose TOC is not permuted) and modular_progressive (cjxl -d 0 -p, permuted). A
+    // decoder that gives every pass the first pass's bracket fails the ANS final-state check.
+    [Theory]
+    [InlineData("modular_progressive_ac")]
+    [InlineData("modular_progressive")]
+    public void DecodeToPlanes_ModularPasses_MatchesDjxlExactly(string name)
+    {
+        NpyArray expected = LoadReference(name);
+
+        using FileStream stream = File.OpenRead(InputPath(name));
         using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
         NpyArray actual = JxlConformanceImages.ToNpy(decoded);
 
@@ -92,10 +110,12 @@ public class JxlProgressivePassesTests
         Assert.Equal(expected.Data, actual.Data);
     }
 
-    [Fact]
-    public void Load_ModularPasses_IsTheSourceImage()
+    [Theory]
+    [InlineData("modular_progressive_ac")]
+    [InlineData("modular_progressive")]
+    public void Load_ModularPasses_IsTheSourceImage(string name)
     {
-        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath("modular_progressive_ac"));
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
         using Image<Rgb24> source = Image.Load<Rgb24>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Png", "Bike.png"));
 
         ImageComparer.Exact.VerifySimilarity(source, image);

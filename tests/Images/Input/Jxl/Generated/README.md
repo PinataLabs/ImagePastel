@@ -677,26 +677,30 @@ djxl vardct_grey_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/var
 
 #### How the progressive-pass files were made
 
-Frames of more than one pass (D13b), from `Png/Bike.png` (582 x 453, 3 x 2 groups). None has a DC frame or a permuted TOC. `JxlProgressivePassesTests` checks them.
+Frames of more than one pass (D13b), from `Png/Bike.png` (582 x 453, 3 x 2 groups). None has a DC frame, and only `modular_progressive` has a permuted TOC. `JxlProgressivePassesTests` checks them.
 
 | File | Why it is here | Reference |
 |---|---|---|
 | `vardct_progressive_ac.jxl` | Lossy VarDCT, XYB, with `--progressive_ac`: three passes, each with its own coefficient orders and histograms, all with a shift of 0, and downsampling targets 4 and 2 after passes 0 and 1. `--progressive_dc=0` keeps the DC in the frame, so there is no DC frame. | `External/ReferenceOutput/JxlDecoderTests/vardct_progressive_ac.npy` |
 | `vardct_qprogressive_ac.jxl` | The same with `--qprogressive_ac`: two passes, the first with a coefficient shift of 1. | `External/ReferenceOutput/JxlDecoderTests/vardct_qprogressive_ac.npy` |
 | `modular_progressive_ac.jxl` | Lossless Modular with `--progressive_ac`: two passes. In each group, the first pass decodes the squeezed channels with a shift of 1 or 2, and the second pass those with a shift of 0; the smaller channels come in the global and DC sections. Unlike `cjxl -d 0 -p`, its TOC is not permuted. | `External/ReferenceOutput/JxlDecoderTests/modular_progressive_ac.npy`; also `Png/Bike.png` itself |
+| `modular_progressive.jxl` | Lossless Modular with `-p`: the same two passes, with the groups stored centre first, so the TOC is permuted (D13a). | `External/ReferenceOutput/JxlDecoderTests/modular_progressive.npy`; also `Png/Bike.png` itself |
 
 ```sh
 cjxl ../../Png/Bike.png vardct_progressive_ac.jxl -d 1 --progressive_ac --progressive_dc=0
 cjxl ../../Png/Bike.png vardct_qprogressive_ac.jxl -d 1 --qprogressive_ac --progressive_dc=0
 cjxl ../../Png/Bike.png modular_progressive_ac.jxl -d 0 --progressive_ac
+cjxl ../../Png/Bike.png modular_progressive.jxl -d 0 -p
 djxl vardct_progressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_progressive_ac.npy
 djxl vardct_qprogressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_qprogressive_ac.npy
 djxl modular_progressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_progressive_ac.npy
+djxl modular_progressive.jxl ../../../External/ReferenceOutput/JxlDecoderTests/modular_progressive.npy
 ```
 
 - The two VarDCT files split the same quantized coefficients into passes in different ways, so `djxl` gives the same output for both: the two `.npy` files are identical.
 - A decoder that ignores the first pass's shift misses `vardct_qprogressive_ac` by an RMSE of 0.054. One that takes the first pass's coefficient orders for every pass misses `vardct_progressive_ac` by 0.091 and `vardct_qprogressive_ac` by 0.026. One that gives every Modular pass the first pass's downsampling bracket fails the ANS final-state check on `modular_progressive_ac`.
-- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.2e-5 for both VarDCT files. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference. `modular_progressive_ac` matches exactly.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.2e-5 for both VarDCT files. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference. `modular_progressive_ac` and `modular_progressive` match exactly.
+- `cjxl -d 0 -p --group_order=0` writes the same bytes as `cjxl -d 0 --progressive_ac`: on a lossless file, `-p` adds only the centre-first group order to the passes.
 
 #### How the permuted-TOC file was made
 
