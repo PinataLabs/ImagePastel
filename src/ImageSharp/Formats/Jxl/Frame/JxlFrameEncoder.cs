@@ -141,7 +141,7 @@ internal static partial class JxlFrameEncoder
     private static List<JxlBitWriter> ComputeEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlModularFrameEncoder encModular)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        encModular.ComputeEncodingData(frameHeader, metadata.M, image);
+        encModular.ComputeEncodingData(frameHeader, metadata.M, image, doColor: true);
         encModular.ComputeTree();
         encModular.ComputeTokens();
         return EncodeGroups(frameHeader, frameDim, encModular);

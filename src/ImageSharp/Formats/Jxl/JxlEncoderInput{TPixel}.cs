@@ -175,6 +175,36 @@ internal static class JxlEncoderInput<TPixel>
     }
 
     /// <summary>
+    /// Copies the alpha samples of <paramref name="image"/> into the top-left of a float plane, scaled to
+    /// [0, 1] as <see cref="CopyColorPlanes"/> scales the colour: libjxl's interleaved alpha of
+    /// <c>CopyColorChannels</c>, which a lossy frame reads to simplify the invisible pixels.
+    /// </summary>
+    /// <param name="image">The image, of an 8- or 16-bit integer pixel type with alpha.</param>
+    /// <param name="plane">The plane, at least the size of the image.</param>
+    public static void CopyAlphaPlane(Image<TPixel> image, Buffer2D<float> plane)
+    {
+        // Half, float and signed samples come with slice E3d.
+        if (Layout.ExponentBitsPerSample != 0 || Layout.Kind == SampleKind.ScaledFloat)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Lossy JPEG XL encoding of float samples (slice E3d)");
+        }
+
+        float scale = Layout.Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
+        using RowReader reader = new(image);
+        Span<int> samples = reader.Samples;
+        for (int y = 0; y < image.Height; y++)
+        {
+            reader.Read(y);
+            reader.GetIntegers(3, samples);
+            Span<float> output = plane.DangerousGetRowSpan(y).Slice(0, image.Width);
+            for (int x = 0; x < samples.Length; x++)
+            {
+                output[x] = samples[x] * scale;
+            }
+        }
+    }
+
+    /// <summary>
     /// Copies the alpha samples of <paramref name="image"/> into channel <paramref name="c"/> of
     /// <paramref name="gi"/>, at the depth of <paramref name="eci"/>. It is libjxl's extra channel loop
     /// for the one extra channel a pixel type can have.

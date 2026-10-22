@@ -306,11 +306,12 @@ public class JxlLossyEncoderTests
         Assert.Equal(0, stream.Length);
     }
 
-    // Lossy input that later E3 slices add: alpha (E3c); grey, 16-bit and float samples (E3d).
+    // Lossy input that a later E3 slice adds: grey, 16-bit and float samples, with or without alpha (E3d).
+    // 8-bit RGB with alpha is E3c's (JxlLossyAlphaEncoderTests).
     [Theory]
-    [InlineData(nameof(Rgba32), "E3c")]
-    [InlineData(nameof(La16), "E3c")]
-    [InlineData(nameof(RgbaVector), "E3c")]
+    [InlineData(nameof(La16), "E3d")]
+    [InlineData(nameof(Rgba64), "E3d")]
+    [InlineData(nameof(RgbaVector), "E3d")]
     [InlineData(nameof(L8), "E3d")]
     [InlineData(nameof(L16), "E3d")]
     [InlineData(nameof(Rgb48), "E3d")]

@@ -28,9 +28,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Gradient and Weighted predictors at efforts 5 and 7, with the per-group RCT search and local
 /// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
 /// palette by the estimated cost. Squeeze and quantisation are not ported.
-/// For a lossy VarDCT frame it codes the quantised DC and the AC metadata of each LF group, with libjxl's
-/// predefined trees of effort 3 merged into one by stream id. It is the mirror of
-/// <see cref="JxlModularFrameDecoder"/>.
+/// For a lossy VarDCT frame it codes the quantised DC and the AC metadata of each LF group, and the extra
+/// channels losslessly, with libjxl's predefined trees of effort 3 merged into one by stream id. It is the
+/// mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
 {
@@ -44,9 +44,6 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private const float ChannelColorsPercent = 80f;
     private const int PaletteColors = 1 << 10;
     private const bool LossyPalette = false;
-
-    // libjxl's do_color: this encoder always codes the colour channels in the Modular image.
-    private const bool DoColor = true;
 
     // libjxl's CompressParams default decoding_speed_tier, which the encoder has no option for.
     private const int DecodingSpeedTier = 0;
@@ -84,6 +81,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private JxlGroupHeader[] streamHeaders;
     private List<JxlToken>[] tokens;
     private int[] imageWidths;
+
+    // libjxl's do_color: whether the Modular image codes the colour channels (a Modular frame) or only
+    // the extra channels (a VarDCT frame).
+    private bool doColor = true;
 
     // libjxl's cparams_.colorspace: -1 lets the encoder choose the RCTs, 0 turns the per-group RCT
     // search off. This encoder has no option to force an RCT.
@@ -162,15 +163,19 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
     /// <summary>
     /// Fills the Modular image of the global stream from <paramref name="image"/>, then the images of
-    /// the streams that code parts of it.
+    /// the streams that code parts of it. A Modular frame codes the colour and the extra channels; a
+    /// VarDCT frame (<paramref name="doColor"/> off) only the extra channels, losslessly.
     /// </summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="metadata">The image metadata.</param>
     /// <param name="image">The image.</param>
-    public void ComputeEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlImageMetadata metadata, Image<TPixel> image)
+    /// <param name="doColor">Whether the Modular image codes the colour channels: libjxl's <c>modular_mode</c>.</param>
+    public void ComputeEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlImageMetadata metadata, Image<TPixel> image, bool doColor)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        this.doColor = doColor;
+
         // Convert ImageBundle to modular Image object
         int xsize = (int)this.frameDim.XSize;
         int ysize = (int)this.frameDim.YSize;
@@ -181,12 +186,17 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             nbChans = 1;
         }
 
+        if (!doColor)
+        {
+            nbChans = 0;
+        }
+
         nbChans += metadata.NumExtraChannels;
 
-        bool fp = metadata.BitDepth.FloatingPointSample;
+        bool fp = metadata.BitDepth.FloatingPointSample && frameHeader.ColorTransform != JxlColorTransform.Xyb;
 
         // bits_per_sample is just metadata for XYB-encoded images.
-        if (metadata.BitDepth.BitsPerSample >= 32)
+        if (metadata.BitDepth.BitsPerSample >= 32 && doColor && frameHeader.ColorTransform != JxlColorTransform.Xyb)
         {
             if (metadata.BitDepth.BitsPerSample == 32 && !fp)
             {
@@ -199,12 +209,15 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
 
         // in the non-float case, there is an implicit 0 sign bit
-        int maxBitdepth = (int)metadata.BitDepth.BitsPerSample + (fp ? 0 : 1);
+        int maxBitdepth = doColor ? (int)metadata.BitDepth.BitsPerSample + (fp ? 0 : 1) : 0;
         JxlModularImage gi = JxlModularImage.Create(this.allocator, xsize, ysize, (int)metadata.BitDepth.BitsPerSample, nbChans);
         this.streamImages[0].Dispose();
         this.streamImages[0] = gi;
 
-        JxlEncoderInput<TPixel>.CopyColorChannels(image, metadata.BitDepth, gi);
+        if (doColor)
+        {
+            JxlEncoderInput<TPixel>.CopyColorChannels(image, metadata.BitDepth, gi);
+        }
 
         // The extra channels follow the colour channels. A pixel type has at most one, its alpha, and
         // the frame header keeps every extra channel at the frame's resolution.
@@ -224,10 +237,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // libjxl's maxval only sets the quantisation of lossy channels.
         int maxval = gi.BitDepth < 32 ? (int)((1u << gi.BitDepth) - 1) : 0;
 
-        // Set options and apply transformations. Lossless keeps libjxl's palette settings.
+        // Set options and apply transformations. A lossless Modular part (every frame of this encoder: the
+        // extra channels of a VarDCT frame are lossless too) keeps libjxl's palette settings.
         // Global palette transforms
         float channelColorsPercent = 0;
-        if (!LossyPalette && (this.speedTier <= JxlSpeedTier.Thunder || (DoColor && metadata.BitDepth.BitsPerSample > 8)))
+        if (!LossyPalette && (this.speedTier <= JxlSpeedTier.Thunder || (doColor && metadata.BitDepth.BitsPerSample > 8)))
         {
             channelColorsPercent = ChannelColorsPreTransformPercent;
         }
@@ -237,7 +251,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.TryPalettes(gi, ref maxBitdepth, ref maxval, channelColorsPercent);
 
         // don't do an RCT if we're short on bits
-        if (DoColor && gi.Channel.Count - gi.NbMetaChannels >= 3 && maxBitdepth + 1 < LevelMaxBitdepth)
+        if (doColor && gi.Channel.Count - gi.NbMetaChannels >= 3 && maxBitdepth + 1 < LevelMaxBitdepth)
         {
             // libjxl's colorspace is -1 (choose) unless the caller forces an RCT, which this encoder
             // has no option for. Lossless above Hare gets the fixed YCoCg.
@@ -738,7 +752,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
 
         // lossless and no specific color transform specified: try Nothing, YCoCg, and 17 RCTs
-        if (this.colorspace < 0 && gi.Channel.Count - gi.NbMetaChannels >= 3 && DoColor && this.speedTier <= JxlSpeedTier.Hare)
+        if (this.colorspace < 0 && gi.Channel.Count - gi.NbMetaChannels >= 3 && this.doColor && this.speedTier <= JxlSpeedTier.Hare)
         {
             TryRcts(gi, NbRctsToTry(this.speedTier));
         }

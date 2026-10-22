@@ -2,12 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using Xunit;
 
@@ -38,6 +40,9 @@ internal sealed class JxlDecodedDcGroups : IDisposable
 
     /// <summary>Gets the VarDCT state, with every DC group decoded.</summary>
     public JxlVarDctFrameState State { get; }
+
+    /// <summary>Gets the transforms of the global Modular stream, which codes the extra channels.</summary>
+    public IReadOnlyList<JxlTransform> GlobalTransforms => this.modularFrameDecoder.GlobalTransforms;
 
     /// <summary>Decodes the DC global section and the DC groups of the first frame.</summary>
     /// <param name="codestream">A bare codestream whose first frame is VarDCT, with no patches.</param>
