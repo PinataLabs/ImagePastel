@@ -159,6 +159,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     {
         // The pixel cap is checked from the header, before the image is allocated.
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
+        CheckSampleBudget(this.metadata);
 
         // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
         Size size = this.OrientedSize;
@@ -216,6 +217,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         byte[] data = this.ReadCodestream(bufferedStream);
         int frameOffset = this.ReadHeaders(data);
         CheckPixelCap(this.metadata.XSize, this.metadata.YSize);
+        CheckSampleBudget(this.metadata);
 
         // djxl orients its output, so the planes are oriented too.
         JxlPlanesSink planesSink = new();
@@ -271,6 +273,23 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             throw new InvalidMemoryOperationException($"The JPEG XL image is {xsize}x{ysize} pixels, more than the limit of {JxlFrameDecoder.MaxPixelsPerFrame}.");
         }
+    }
+
+    // The sample budget of a full-size frame, checked from the header as the pixel cap is, so that the
+    // image is not allocated for a frame that would fail it. Each extra channel counts at its own size,
+    // shrunk by its dim_shift. JxlFrameDecoder checks each frame again at its own size and upsampling.
+    // A departure from libjxl, which has no such cap; see JxlFrameDecoder.MaxSamplesPerFrame.
+    private static void CheckSampleBudget(JxlCodecMetadata metadata)
+    {
+        List<JxlExtraChannelInfo> extraChannels = metadata.M.ExtraChannelInfo;
+        uint[] dimShiftUpsampling = new uint[extraChannels.Count];
+        for (int i = 0; i < extraChannels.Count; i++)
+        {
+            dimShiftUpsampling[i] = 1u << (int)extraChannels[i].DimShift;
+        }
+
+        long samples = JxlFrameDecoder.CountSamples((long)metadata.XSize, (long)metadata.YSize, metadata.M.NumColorPlanes, extraChannels.Count, dimShiftUpsampling);
+        JxlFrameDecoder.CheckSampleBudget("image", samples);
     }
 
     // Reads the whole file, and takes the codestream and the Exif and XMP out of a container.

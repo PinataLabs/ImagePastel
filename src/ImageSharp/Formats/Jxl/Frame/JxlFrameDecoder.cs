@@ -11,6 +11,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -33,6 +34,16 @@ internal sealed class JxlFrameDecoder
     /// <summary>The largest frame, in pixels: the Level 5 limit (2^28).</summary>
     public const long MaxPixelsPerFrame = 1L << 28;
 
+    /// <summary>
+    /// The largest frame, in samples: pixels times colour and extra channels, which is the pixel cap
+    /// times four (RGBA). A departure from libjxl, which has no such cap: an image can have 256 extra
+    /// channels, so the pixel cap alone lets a frame need far more memory than any machine has, and the
+    /// <see cref="OutOfMemoryException"/> would escape. Issue #112 allows only
+    /// <see cref="InvalidImageContentException"/>, <see cref="InvalidMemoryOperationException"/> and
+    /// <see cref="OperationCanceledException"/> to escape.
+    /// </summary>
+    public const long MaxSamplesPerFrame = MaxPixelsPerFrame * 4;
+
     private readonly Configuration configuration;
     private readonly JxlCodecMetadata metadata;
     private readonly JxlReferenceFrames references;
@@ -54,7 +65,7 @@ internal sealed class JxlFrameDecoder
     /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
     /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data,
     /// <see cref="NotSupportedException"/> for the departures from libjxl that <c>CheckSupported</c> names, and
-    /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap.
+    /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap or the sample budget.
     /// </summary>
     /// <param name="data">The codestream.</param>
     /// <param name="offset">The first byte of the frame.</param>
@@ -91,6 +102,9 @@ internal sealed class JxlFrameDecoder
         {
             throw new InvalidMemoryOperationException($"The JPEG XL frame is {frameDim.XSizeUpsampled}x{frameDim.YSizeUpsampled} pixels, more than the limit of {MaxPixelsPerFrame}.");
         }
+
+        // The sample budget, a departure from libjxl (see MaxSamplesPerFrame), is checked with it.
+        CheckSampleBudget("frame", CountSamples(frameDim.XSizeUpsampled, frameDim.YSizeUpsampled, frameHeader.NumDecodedColorPlanes, this.metadata.M.NumExtraChannels, frameHeader.ExtraChannelUpsampling));
 
         long numPasses = frameHeader.Passes.NumPasses;
         long numGroups = frameDim.NumGroups;
@@ -211,6 +225,44 @@ internal sealed class JxlFrameDecoder
     /// <returns><see langword="true"/> if the frame is displayed.</returns>
     public static bool IsLastOfStill(JxlFrameHeader frameHeader)
         => frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0;
+
+    /// <summary>
+    /// Counts the samples of a frame for the sample budget: the colour planes at the upsampled size, and
+    /// each extra channel at its own size, the upsampled size divided by its upsampling (which includes
+    /// its <c>dim_shift</c>), as the Modular decoder sizes it. The size must be inside the pixel cap, so
+    /// the count cannot overflow.
+    /// </summary>
+    /// <param name="xsizeUpsampled">The upsampled frame width.</param>
+    /// <param name="ysizeUpsampled">The upsampled frame height.</param>
+    /// <param name="numColorPlanes">The number of colour planes.</param>
+    /// <param name="numExtraChannels">The number of extra channels.</param>
+    /// <param name="extraChannelUpsampling">The upsampling of each extra channel; a missing entry counts as 1.</param>
+    /// <returns>The number of samples.</returns>
+    public static long CountSamples(long xsizeUpsampled, long ysizeUpsampled, int numColorPlanes, int numExtraChannels, IReadOnlyList<uint> extraChannelUpsampling)
+    {
+        long samples = xsizeUpsampled * ysizeUpsampled * numColorPlanes;
+        for (int i = 0; i < numExtraChannels; i++)
+        {
+            uint ecups = i < extraChannelUpsampling.Count ? extraChannelUpsampling[i] : 1;
+            samples += JxlBits.DivCeil(xsizeUpsampled, ecups) * JxlBits.DivCeil(ysizeUpsampled, ecups);
+        }
+
+        return samples;
+    }
+
+    /// <summary>
+    /// Throws <see cref="InvalidMemoryOperationException"/> if <paramref name="samples"/> is over
+    /// <see cref="MaxSamplesPerFrame"/>. It is checked with the pixel cap, before anything is allocated.
+    /// </summary>
+    /// <param name="what">"frame" or "image", for the message.</param>
+    /// <param name="samples">The number of samples.</param>
+    public static void CheckSampleBudget(string what, long samples)
+    {
+        if (samples > MaxSamplesPerFrame)
+        {
+            throw new InvalidMemoryOperationException($"The JPEG XL {what} has {samples} samples, more than the limit of {MaxSamplesPerFrame}.");
+        }
+    }
 
     // Internal, as ProcessDcGroup, so that tests can read the state the DC sections fill (the AC
     // metadata, the quant field and the chroma-from-luma maps), which no output shows on its own.
