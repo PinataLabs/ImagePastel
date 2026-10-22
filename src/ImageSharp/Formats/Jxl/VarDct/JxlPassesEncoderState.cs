@@ -25,7 +25,7 @@ internal sealed class JxlPassesEncoderState
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="distance">The butteraugli distance, after libjxl's clamps.</param>
-    /// <param name="originalDistance">The distance asked for, which the X quantisation scale uses.</param>
+    /// <param name="originalDistance">The distance before libjxl's resampling adjusts it, which the X quantisation scale uses.</param>
     public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance, float originalDistance)
     {
         this.FrameDim = frameDim;
@@ -52,7 +52,7 @@ internal sealed class JxlPassesEncoderState
     /// <summary>Gets the butteraugli distance, libjxl's <c>cparams.butteraugli_distance</c>.</summary>
     public float Distance { get; }
 
-    /// <summary>Gets the distance asked for, libjxl's <c>cparams.original_butteraugli_distance</c>.</summary>
+    /// <summary>Gets the distance before resampling, libjxl's <c>cparams.original_butteraugli_distance</c>.</summary>
     public float OriginalDistance { get; }
 
     /// <summary>Gets the width of the frame in blocks, the stride of the block images.</summary>

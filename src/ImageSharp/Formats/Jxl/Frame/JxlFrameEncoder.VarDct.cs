@@ -57,12 +57,15 @@ internal static partial class JxlFrameEncoder
     public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        // ParamsPostInit: the original distance sets the X quantisation scale.
-        float originalDistance = distance;
+        // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances, then keep the distance as the
+        // original one, which sets the X quantisation scale. libjxl's resampling from distance 10 would
+        // change only the other (see the remarks).
         if (distance < MinButteraugliDistance)
         {
             distance = MinButteraugliDistance;
         }
+
+        float originalDistance = distance;
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
