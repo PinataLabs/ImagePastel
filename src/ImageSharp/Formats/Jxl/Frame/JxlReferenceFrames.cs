@@ -35,11 +35,7 @@ internal sealed class JxlReferenceFrames : IDisposable
     /// <summary>Puts a frame in a slot, replacing the frame there.</summary>
     /// <param name="slot">The slot.</param>
     /// <param name="frame">The frame, which the slots now own.</param>
-    public void Save(uint slot, JxlReferenceFrame frame)
-    {
-        this.slots[slot]?.Dispose();
-        this.slots[slot] = frame;
-    }
+    public void Save(uint slot, JxlReferenceFrame frame) => Replace(this.slots, slot, frame);
 
     /// <summary>Returns the planes in a DC slot, or <see langword="null"/> if no DC frame wrote it.</summary>
     /// <param name="slot">The DC slot, 0 to 3.</param>
@@ -49,24 +45,27 @@ internal sealed class JxlReferenceFrames : IDisposable
     /// <summary>Puts the planes of a DC frame in a DC slot, replacing those there.</summary>
     /// <param name="slot">The DC slot, 0 to 3.</param>
     /// <param name="frame">The X, Y and B planes, which the slots now own.</param>
-    public void SaveDc(uint slot, JxlReferenceFrame frame)
-    {
-        this.dcSlots[slot]?.Dispose();
-        this.dcSlots[slot] = frame;
-    }
+    public void SaveDc(uint slot, JxlReferenceFrame frame) => Replace(this.dcSlots, slot, frame);
 
     public void Dispose()
     {
-        for (int i = 0; i < this.slots.Length; i++)
-        {
-            this.slots[i]?.Dispose();
-            this.slots[i] = null;
-        }
+        Clear(this.slots);
+        Clear(this.dcSlots);
+    }
 
-        for (int i = 0; i < this.dcSlots.Length; i++)
+    // Disposes the frame in a slot of either kind, and puts another, or null, in its place.
+    private static void Replace(JxlReferenceFrame[] slots, uint slot, JxlReferenceFrame frame)
+    {
+        slots[slot]?.Dispose();
+        slots[slot] = frame;
+    }
+
+    // Empties every slot of one kind.
+    private static void Clear(JxlReferenceFrame[] slots)
+    {
+        for (uint i = 0; i < slots.Length; i++)
         {
-            this.dcSlots[i]?.Dispose();
-            this.dcSlots[i] = null;
+            Replace(slots, i, null);
         }
     }
 }

@@ -222,10 +222,11 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <summary>
     /// Runs the stages over the whole frame, in libjxl's order: the neighbour stages before the patches
     /// (the chroma upsampling, the loop filters, then the early upsampling of the extra channels), the
-    /// patches, the splines, the neighbour stages after them (the upsampling), the noise, the write of a DC
-    /// frame into its DC slot, the save before the colour transform, the colour-transform stages, the
-    /// blending, the save after blending, and the output. Returns the frame to keep in its reference slot, if it can be referenced; the caller saves
-    /// it once the frame is done, as libjxl's <c>FinalizeFrame</c> does.
+    /// patches, the splines, the neighbour stages after them (the upsampling), the noise, the copy of a DC
+    /// frame for its DC slot, the save before the colour transform, the colour-transform stages, the
+    /// blending, the save after blending, and the output. Returns the frame to keep: a DC frame's copy for
+    /// its DC slot, or the frame for its reference slot, if it can be referenced. The caller saves it once
+    /// the frame is done, as libjxl's <c>FinalizeFrame</c> does.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="beforePatches">
@@ -244,12 +245,11 @@ internal sealed class JxlRenderPipeline : IDisposable
     /// <param name="blending">The blending stage, or <see langword="null"/> if the frame is not blended.</param>
     /// <param name="sink">The sink for a displayed frame, or <see langword="null"/> if the frame is not displayed.</param>
     /// <param name="cancellationToken">The cancellation token, checked on each row of the neighbour stages, the patches and the splines.</param>
-    /// <param name="dcSlots">
-    /// The slots a DC frame (<see cref="JxlFrameHeader.DcLevel"/> not 0) writes its X, Y and B planes into,
-    /// at slot <c>DcLevel - 1</c>; <see langword="null"/> only for a frame that is not a DC frame.
-    /// </param>
-    /// <returns>The frame to save, or <see langword="null"/>.</returns>
-    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, JxlSplinesStage splines, IJxlNeighbourStage[] afterPatches, JxlNoiseStages noise, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken, JxlReferenceFrames dcSlots = null)
+    /// <returns>
+    /// The frame to save, or <see langword="null"/>: for a DC frame (<see cref="JxlFrameHeader.DcLevel"/> not
+    /// 0), its X, Y and B planes for DC slot <c>DcLevel - 1</c>; otherwise the frame for its reference slot.
+    /// </returns>
+    public JxlReferenceFrame Finish(JxlFrameHeader frameHeader, IJxlNeighbourStage[] beforePatches, JxlPatchesStage patches, JxlSplinesStage splines, IJxlNeighbourStage[] afterPatches, JxlNoiseStages noise, IJxlColorStage[] colorStages, JxlBlendingStage blending, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         bool canBeReferenced = frameHeader.CanBeReferenced;
         JxlReferenceFrame saved = null;
@@ -267,7 +267,7 @@ internal sealed class JxlRenderPipeline : IDisposable
             // first two. So a frame with noise keeps three planes up to it, and a Modular frame is given
             // three here if it has none yet. The patches blend each of them with the reference's one grey
             // plane (JxlPatchesStage), and the splines add their X, Y and B colours to them, as in libjxl.
-            // The frame drops to grey after the noise. A DC frame keeps three planes up to its DC-slot write
+            // The frame drops to grey after the noise. A DC frame keeps three planes up to its DC-slot copy
             // for the same reason: the slot holds libjxl's three colour channels, which the splines and the
             // noise make differ.
             // Without noise, the patches, the splines and the upsampling work on each colour channel alone,
@@ -324,13 +324,14 @@ internal sealed class JxlRenderPipeline : IDisposable
                 this.AddNoise(noise, cancellationToken);
             }
 
-            // WriteToImage3FStage: a DC frame writes its three colour planes, before the colour transform,
-            // into its DC slot, where a later frame takes them as its DC. A DC frame cannot be referenced or
+            // WriteToImage3FStage: a DC frame copies its three colour planes, before the colour transform,
+            // for its DC slot, where a later frame takes them as its DC. A DC frame cannot be referenced or
             // blended, and it is not displayed, so the stages after this one change nothing that is kept.
             if (isDcFrame)
             {
-                DebugGuard.NotNull(dcSlots, nameof(dcSlots));
-                dcSlots.SaveDc(frameHeader.DcLevel - 1, this.CopyColorPlanes());
+                DebugGuard.IsTrue(!canBeReferenced, "A DC frame cannot be referenced");
+                DebugGuard.IsTrue(this.numColorPlanes == 3, "A DC frame keeps three colour planes up to its DC-slot copy");
+                saved = this.CopyPlanes(3, isInXyb: true);
             }
 
             if (!dropsToGreyAfterColorTransform)
@@ -345,7 +346,7 @@ internal sealed class JxlRenderPipeline : IDisposable
 
             if (canBeReferenced && frameHeader.SaveBeforeColorTransform)
             {
-                saved = this.CopyPlanes(isInXyb: true);
+                saved = this.CopyPlanes(this.planes.Length, isInXyb: true);
             }
 
             // SimpleRenderPipeline runs each stage over the whole frame before the next.
@@ -372,7 +373,7 @@ internal sealed class JxlRenderPipeline : IDisposable
             if (canBeReferenced && !frameHeader.SaveBeforeColorTransform)
             {
                 // A frame that is not displayed hands its planes over rather than copying them.
-                saved = sink == null ? this.TakePlanes() : this.CopyPlanes(isInXyb: false);
+                saved = sink == null ? this.TakePlanes() : this.CopyPlanes(this.planes.Length, isInXyb: false);
             }
 
             // The output of a grey image takes the first colour channel: an XYB grey image has three
@@ -671,45 +672,17 @@ internal sealed class JxlRenderPipeline : IDisposable
         this.shifts = shifts;
     }
 
-    // WriteToImage3FStage: the three colour planes at the frame size (Finish keeps three for a DC frame).
-    private JxlReferenceFrame CopyColorPlanes()
+    // The first numPlanes planes at the frame size: every plane for WriteToImageBundleStage into
+    // frame_storage_for_referencing, and the three colour planes for WriteToImage3FStage into a DC slot.
+    private JxlReferenceFrame CopyPlanes(int numPlanes, bool isInXyb)
     {
-        DebugGuard.IsTrue(this.numColorPlanes == 3, "A DC frame keeps three colour planes up to its DC-slot write");
-        Buffer2D<float>[] copy = new Buffer2D<float>[3];
-        try
-        {
-            for (int c = 0; c < copy.Length; c++)
-            {
-                Buffer2D<float> plane = this.planes[c];
-                copy[c] = this.allocator.Allocate2D<float>(this.width, this.height);
-                for (int y = 0; y < this.height; y++)
-                {
-                    plane.DangerousGetRowSpan(y).Slice(0, this.width).CopyTo(copy[c].DangerousGetRowSpan(y));
-                }
-            }
-        }
-        catch
-        {
-            JxlPlanes.DisposeAll(copy);
-            throw;
-        }
-
-        return new JxlReferenceFrame(copy, this.width, this.height, isInXyb: true);
-    }
-
-    // WriteToImageBundleStage into frame_storage_for_referencing.
-    private JxlReferenceFrame CopyPlanes(bool isInXyb)
-    {
-        Buffer2D<float>[] copy = new Buffer2D<float>[this.planes.Length];
+        Buffer2D<float>[] copy = new Buffer2D<float>[numPlanes];
         try
         {
             for (int c = 0; c < copy.Length; c++)
             {
                 copy[c] = this.allocator.Allocate2D<float>(this.width, this.height);
-                for (int y = 0; y < this.height; y++)
-                {
-                    this.planes[c].DangerousGetRowSpan(y).Slice(0, this.width).CopyTo(copy[c].DangerousGetRowSpan(y));
-                }
+                JxlPlanes.CopyRows(this.planes[c], copy[c], this.width, this.height);
             }
         }
         catch

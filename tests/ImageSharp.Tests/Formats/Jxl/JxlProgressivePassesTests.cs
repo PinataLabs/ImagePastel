@@ -1,8 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -187,7 +189,7 @@ public class JxlProgressivePassesTests
         if (error != null)
         {
             InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-            Assert.Contains(error, ex.Message, System.StringComparison.Ordinal);
+            Assert.Contains(error, ex.Message, StringComparison.Ordinal);
             return;
         }
 
@@ -233,7 +235,7 @@ public class JxlProgressivePassesTests
 
         for (int i = 0; i < numDownsample; i++)
         {
-            w.Write(2, (ulong)System.Numerics.BitOperations.Log2((uint)downsample[i]));
+            w.Write(2, (ulong)BitOperations.Log2((uint)downsample[i]));
         }
 
         for (int i = 0; i < numDownsample; i++)

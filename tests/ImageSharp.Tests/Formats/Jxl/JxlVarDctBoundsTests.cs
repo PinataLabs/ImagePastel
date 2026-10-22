@@ -39,7 +39,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// counted from the frame's pixel size, which is at most 8 <c>xsize_blocks</c>. A shift only moves the
 /// rectangle's corners towards the origin: <c>(x0 &gt;&gt; s) + (xsize &gt;&gt; s) &lt;= (x0 + xsize) &gt;&gt; s</c>.
 /// So no stream reaches it; <see cref="AcGroup_SubsampledGroupsAtOddSizes_Decode"/> decodes subsampled
-/// frames of several groups at the bound. The number of histograms is 1 + a bit field, so it is never 0.</item>
+/// frames of several groups at the bound. In libjxl, a frame that uses a DC frame checks against the DC
+/// frame's image instead, which can be smaller; <c>JxlFrameDecoder</c> makes that check before the
+/// sections, and <see cref="JxlDcFrameTests"/> covers it. The number of histograms is 1 + a bit field, so
+/// it is never 0.</item>
 /// </list>
 /// </remarks>
 [Trait("Format", "Jxl")]

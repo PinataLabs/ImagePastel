@@ -45,9 +45,10 @@ public class JxlConformanceLoadTests
     // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. patches
     // (linear sRGB planes, sRGB pixels) is within 0.50 and bike (BT.709) within 0.501. noise is within 0.50
     // and animation_spline (all 60 frames) within 0.502. progressive (linear sRGB planes, sRGB pixels; its
-    // DC frame and reference-only frame are not shown, so one frame) is within 0.506. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
-    // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
-    // light, and the sRGB curve magnifies that in the shadows.
+    // DC frame and reference-only frame are not shown, so one frame) is within 0.506. alpha_premultiplied is
+    // within 0.60 of a 16-bit step. grayscale is within 0.79: its reference differs from djxl v0.12.0, which
+    // this decoder matches, by up to 2.3e-4 in linear light, and the sRGB curve magnifies that in the
+    // shadows.
     [Theory]
     [InlineData("opsin_inverse", typeof(Rgb24), ReferenceSpace.AsCoded)]
     [InlineData("grayscale", typeof(L8), ReferenceSpace.LinearSrgb)]

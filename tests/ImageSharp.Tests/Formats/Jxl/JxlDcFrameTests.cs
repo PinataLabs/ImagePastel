@@ -177,10 +177,10 @@ public class JxlDcFrameTests
         Assert.Contains(message, ex.Message, StringComparison.Ordinal);
     }
 
-    // A departure from libjxl, which reads a DC frame at the block positions of the VarDCT frame that uses it
-    // without checking its size: a frame larger than the image (a custom size) would read past the DC
-    // frame, so it is rejected before its sections are read. The level-1 DC frame of the 16 x 16 image is
-    // 2 x 2; the 24 x 16 frame has 3 x 2 blocks.
+    // libjxl's dec_group.cc checks that each AC group's blocks lie inside the DC image, which for a VarDCT
+    // frame that uses a DC frame is the DC frame's. A frame larger than the image (a custom size) fails it.
+    // This port checks the DC frame's size before the frame's sections are read, with libjxl's message. The
+    // level-1 DC frame of the 16 x 16 image is 2 x 2; the 24 x 16 frame has 3 x 2 blocks.
     [Fact]
     public void DecodeToPlanes_VarDctFrameLargerThanItsDcFrame_Throws()
     {
@@ -189,7 +189,7 @@ public class JxlDcFrameTests
         using MemoryStream stream = new(layers.Add(frame).ToArray());
 
         InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains("DC frame is smaller", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Frame dimensions are too big for the image.", ex.Message, StringComparison.Ordinal);
     }
 
     private static NpyArray DecodeToNpy(JxlTestLayers layers, JxlTestFrame frame)

@@ -101,13 +101,16 @@ internal sealed class JxlFrameDecoder
         long headerBytes = reader.TotalBitsConsumed / 8;
         reader.Close();
 
-        // One reader per section, in the order the sections are decoded in. A permuted TOC only changes
-        // where each section is stored. Every section lies inside the total size.
+        // A departure from libjxl, whose JxlDecoderProcessSections (decode.cc) checks the bytes of each
+        // section as the data arrives. This decoder has the whole codestream, so it checks once that the
+        // frame holds all its sections. Every section lies inside the total size, so the check is the same.
         if (headerBytes + groupOffsets.TotalSize > availIn)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Not enough bytes for the frame sections");
         }
 
+        // One reader per section, in the order the sections are decoded in. A permuted TOC only changes
+        // where each section is stored.
         JxlBitReader[] sections = new JxlBitReader[tocEntries];
         for (long i = 0; i < tocEntries; i++)
         {
@@ -116,7 +119,7 @@ internal sealed class JxlFrameDecoder
 
         frameEnd = offset + (int)(headerBytes + groupOffsets.TotalSize);
 
-        JxlReferenceFrame dcFrame = (frameHeader.Flags & JxlFrameFlags.UseDcFrame) != 0 ? this.GetDcFrame(frameHeader, frameDim) : null;
+        JxlReferenceFrame dcFrame = frameHeader.UsesDcFrame ? this.GetDcFrame(frameHeader, frameDim) : null;
 
         bool isLastOfStill = IsLastOfStill(frameHeader);
 
@@ -180,12 +183,20 @@ internal sealed class JxlFrameDecoder
         IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
 
         JxlNoiseStages noiseStages = features.Noise != null ? new JxlNoiseStages(features.Noise, cmap, pipeline.NoiseChannel) : null;
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, noiseStages, colorStages, blending, isLastOfStill ? sink : null, cancellationToken, this.references);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, noiseStages, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
 
-        // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
+        // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it. A DC
+        // frame writes its DC slot (libjxl writes it in the pipeline); no stage of the frame reads that slot.
         if (saved != null)
         {
-            this.references.Save(frameHeader.SaveAsReference, saved);
+            if (frameHeader.DcLevel != 0)
+            {
+                this.references.SaveDc(frameHeader.DcLevel - 1, saved);
+            }
+            else
+            {
+                this.references.Save(frameHeader.SaveAsReference, saved);
+            }
         }
 
         return frameHeader;
@@ -255,7 +266,7 @@ internal sealed class JxlFrameDecoder
         long gy = dcGroupId / frameDim.XSizeDcGroups;
 
         // A frame that uses a DC frame has no VarDCT DC of its own: its DC is the DC frame's.
-        if (varDct != null && (frameHeader.Flags & JxlFrameFlags.UseDcFrame) == 0)
+        if (varDct != null && !frameHeader.UsesDcFrame)
         {
             modularFrameDecoder.DecodeVarDctDc(frameHeader, dcGroupId, br, varDct);
         }
@@ -284,13 +295,15 @@ internal sealed class JxlFrameDecoder
             JxlThrowHelper.ThrowInvalidImageContentException($"kUseDcFrame specified for dc_level {dcLevel}, but no frame was decoded with level {dcLevel + 1}");
         }
 
-        // A departure from libjxl, which reads the DC frame's image at the VarDCT frame's block positions
-        // without checking its size. A DC frame is the image size divided by 8 per level, rounded up, which
-        // covers the blocks of a frame of the image size; a frame with a larger custom size would read past
-        // it, so such a frame is rejected here.
+        // libjxl's check in DecodeGroupImpl (dec_group.cc), moved here: each AC group's blocks must lie inside
+        // the DC image, which for such a frame is the DC frame's. The DC frame is the image size divided by 8
+        // per level, rounded up, so it covers the blocks of a frame of the image size, but not those of a
+        // frame with a larger custom size. A frame that uses a DC frame has no chroma subsampling, so this
+        // rejects the frames libjxl rejects. JxlVarDctGroup's copy of the check cannot do it: it compares
+        // with the frame's own DC planes, which are copied at the frame's block size.
         if (frameHeader.Encoding == JxlFrameEncoding.VarDct && (dcFrame.Width < frameDim.XSizeBlocks || dcFrame.Height < frameDim.YSizeBlocks))
         {
-            JxlThrowHelper.ThrowInvalidImageContentException("The DC frame is smaller than the blocks of the frame that uses it");
+            JxlThrowHelper.ThrowInvalidImageContentException("Frame dimensions are too big for the image.");
         }
 
         return dcFrame;

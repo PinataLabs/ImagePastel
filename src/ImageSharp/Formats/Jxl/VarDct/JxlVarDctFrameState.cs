@@ -71,10 +71,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
                 if (dcFrame != null)
                 {
                     DebugGuard.IsTrue(dcFrame.Width >= this.XSizeBlocks && dcFrame.Height >= this.YSizeBlocks, "The frame decoder checks the DC frame's size");
-                    for (int y = 0; y < this.YSizeBlocks; y++)
-                    {
-                        dcFrame.Planes[c].DangerousGetRowSpan(y).Slice(0, this.XSizeBlocks).CopyTo(this.Dc[c].DangerousGetRowSpan(y));
-                    }
+                    JxlPlanes.CopyRows(dcFrame.Planes[c], this.Dc[c], this.XSizeBlocks, this.YSizeBlocks);
                 }
             }
         }
@@ -180,7 +177,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <param name="frameHeader">The frame header.</param>
     public void FinalizeDc(JxlFrameHeader frameHeader)
     {
-        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0 && (frameHeader.Flags & JxlFrameFlags.UseDcFrame) == 0)
+        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0 && !frameHeader.UsesDcFrame)
         {
             JxlCompressedDc.AdaptiveDcSmoothing(this.allocator, this.Quantizer.MulDc, this.Dc, this.XSizeBlocks, this.YSizeBlocks);
         }

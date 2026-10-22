@@ -101,6 +101,10 @@ internal sealed class JxlFrameHeader : JxlFields
     public bool CanBeReferenced
         => !this.IsLast && this.FrameType != JxlFrameType.Dc && (this.AnimationFrame.Duration == 0 || this.SaveAsReference != 0);
 
+    /// <summary>Gets a value indicating whether the frame takes its DC from a DC frame (<c>kUseDcFrame</c>).</summary>
+    public bool UsesDcFrame
+        => (this.Flags & JxlFrameFlags.UseDcFrame) != 0;
+
     /// <summary>
     /// Gets the number of colour planes the frame decodes into the render pipeline. A VarDCT frame, or a
     /// frame with a colour transform, decodes three even for a grey image, as libjxl does (its
@@ -184,7 +188,7 @@ internal sealed class JxlFrameHeader : JxlFields
         }
 
         // Chroma subsampling for YCbCr, if no DC frame is used.
-        if (visitor.Conditional(this.ColorTransform == JxlColorTransform.YCbCr && (this.Flags & JxlFrameFlags.UseDcFrame) == 0))
+        if (visitor.Conditional(this.ColorTransform == JxlColorTransform.YCbCr && !this.UsesDcFrame))
         {
             visitor.VisitNested(this.ChromaSubsampling);
         }
@@ -192,7 +196,7 @@ internal sealed class JxlFrameHeader : JxlFields
         int numExtraChannels = this.NonserializedMetadata?.M.NumExtraChannels ?? 0;
 
         // Upsampling
-        if (visitor.Conditional((this.Flags & JxlFrameFlags.UseDcFrame) == 0))
+        if (visitor.Conditional(!this.UsesDcFrame))
         {
             this.Upsampling = visitor.U32(Val(1), Val(2), Val(4), Val(8), 1, this.Upsampling);
             if (this.NonserializedMetadata != null && visitor.Conditional(numExtraChannels != 0))
