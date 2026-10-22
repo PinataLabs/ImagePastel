@@ -32,6 +32,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     private readonly MemoryAllocator memoryAllocator;
     private readonly float distance;
     private readonly JxlEffort effort;
+    private readonly bool naturalCoeffOrders;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlEncoderCore"/> class.
@@ -43,6 +44,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         this.memoryAllocator = memoryAllocator;
         this.distance = options.Distance;
         this.effort = options.Effort;
+        this.naturalCoeffOrders = options.NaturalCoeffOrders;
     }
 
     /// <inheritdoc/>
@@ -79,7 +81,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         if (lossy)
         {
-            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.memoryAllocator, writer);
+            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.naturalCoeffOrders, this.memoryAllocator, writer);
         }
         else
         {

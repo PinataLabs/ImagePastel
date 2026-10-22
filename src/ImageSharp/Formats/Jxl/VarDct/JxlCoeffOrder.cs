@@ -222,8 +222,13 @@ internal static class JxlCoeffOrder
         }
     }
 
-    // HybridUintConfig(0, 0, 0).Encode(val) gives token 0 for 0 and 1 + FloorLog2(val) otherwise.
-    private static int CoeffOrderContext(uint val)
+    /// <summary>
+    /// Returns the context of a permutation token that follows <paramref name="val"/>: the token of
+    /// <c>HybridUintConfig(0, 0, 0)</c>, which is 0 for 0 and 1 + FloorLog2(val) otherwise, at most 7.
+    /// </summary>
+    /// <param name="val">The previous value, or the size for the first token.</param>
+    /// <returns>The context.</returns>
+    public static int CoeffOrderContext(uint val)
     {
         uint token = val == 0 ? 0 : 1 + (uint)JxlBits.FloorLog2Nonzero(val);
         return (int)Math.Min(token, PermutationContexts - 1);

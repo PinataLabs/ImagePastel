@@ -23,6 +23,15 @@ internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
     /// <inheritdoc/>
     public JxlEffort Effort { get; set; } = JxlEffort.Default;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether a lossy frame keeps every coefficient order natural. For
+    /// tests only; see <see cref="IJxlEncoderOptions.NaturalCoeffOrders"/>.
+    /// </summary>
+    internal bool NaturalCoeffOrders { get; set; }
+
+    /// <inheritdoc/>
+    bool IJxlEncoderOptions.NaturalCoeffOrders => this.NaturalCoeffOrders;
+
     /// <inheritdoc/>
     public void Encode<TPixel>(Image<TPixel> image, Stream stream)
         where TPixel : unmanaged, IPixel<TPixel>
