@@ -64,6 +64,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         byte[] icc = lossy
             ? SetLossyColorEncoding(metadata.M.ColorEncoding, image.Metadata.IccProfile)
             : SetIccProfile(metadata.M.ColorEncoding, image.Metadata.IccProfile);
+
+        // Both modes: libjxl's JxlEncoderSetBasicInfo takes intensity_target whether or not the frame is
+        // lossless, and JxlEncoderSetColorEncoding / JxlEncoderSetICCProfile fall back to SetIntensityTarget.
         SetIntensityTarget(metadata.M, image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget);
 
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
