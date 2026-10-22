@@ -65,8 +65,10 @@ internal sealed class JxlFrameDecoder
     {
         int availIn = data.Length - offset;
         JxlBitReader reader = new(data, offset, availIn);
+
         // libjxl's FrameHeader reads the flags as a U64 and never checks the bits it does not define (4, 8,
-        // 64, and 256 and up), so a frame with them decodes as the same frame without them. This port does the same.
+        // 64, and 256 and up), so a frame with them decodes as the same frame without them. This port does
+        // the same.
         JxlFrameHeader frameHeader = new(this.metadata);
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
