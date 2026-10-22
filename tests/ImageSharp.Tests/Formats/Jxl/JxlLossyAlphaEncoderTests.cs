@@ -156,7 +156,7 @@ public class JxlLossyAlphaEncoderTests
         return image;
     }
 
-    private static void AssertAlphaExact(Image<Rgba32> expected, Image<Rgba32> actual, string label)
+    internal static void AssertAlphaExact(Image<Rgba32> expected, Image<Rgba32> actual, string label)
     {
         Assert.Equal(expected.Size(), actual.Size());
         for (int y = 0; y < expected.Height; y++)
@@ -171,7 +171,7 @@ public class JxlLossyAlphaEncoderTests
         }
     }
 
-    private static void AssertVisibleColourWithinInterimBound(Image<Rgba32> expected, Image<Rgba32> actual, string label)
+    internal static void AssertVisibleColourWithinInterimBound(Image<Rgba32> expected, Image<Rgba32> actual, string label)
     {
         double[] sums = new double[3];
         long n = 0;

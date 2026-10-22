@@ -112,6 +112,7 @@ public class JxlLossyEncoderTests
         Assert.Equal(expectedXQmScale, header.XQmScale);
         Assert.Equal(2u, header.BQmScale);
         Assert.Equal(1u, header.Upsampling);
+        Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(0, p));
         for (int by = 0; by < frame.State.YSizeBlocks; by++)
         {
             for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
