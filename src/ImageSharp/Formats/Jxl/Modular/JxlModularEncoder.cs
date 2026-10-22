@@ -48,8 +48,7 @@ internal static class JxlModularEncoder
     /// <summary>
     /// Returns libjxl's predefined <c>kWPFixedDC</c> tree, the one effort 3 uses: the Weighted
     /// predictor, split on its error property, with fewer levels for small images. libjxl's
-    /// <c>PredefinedTree</c> also builds the trees of the VarDCT metadata and of effort 2; they come
-    /// with the slices that use them.
+    /// <c>PredefinedTree</c> also builds the trees of effort 2; they come with the slice that uses them.
     /// </summary>
     /// <param name="totalPixels">The number of pixels in all channels of all streams.</param>
     /// <param name="bitdepth">The largest bit depth of the streams.</param>

@@ -3,8 +3,8 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (MergeTrees, do_transform, maybe_do_transform,
 // try_palettes, and ModularFrameEncoder: Init, ComputeEncodingData, PrepareStreamParams, ComputeTree,
-// ComputeTokens, EncodeGlobalInfo, EncodeStream, and the 4:4:4 effort-3 paths of AddVarDCTDC and
-// AddACMetadata).
+// ComputeTokens, EncodeGlobalInfo, EncodeStream, and the 4:4:4 paths of AddVarDCTDC, with QuantizeWP for
+// near-lossless DC, and AddACMetadata from effort 3 to 7).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -30,8 +30,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
 /// palette by the estimated cost. Squeeze and quantisation are not ported.
 /// For a lossy VarDCT frame it codes the quantised DC and the AC metadata of each LF group, and the extra
-/// channels losslessly, with libjxl's predefined trees of effort 3 merged into one by stream id. It is the
-/// mirror of <see cref="JxlModularFrameDecoder"/>.
+/// channels losslessly, with one tree per kind of stream merged into one by stream id: libjxl's predefined
+/// trees for the DC and the AC metadata, and for the extra channels <c>kWPFixedDC</c> at effort 3 and a
+/// learned tree at effort 5. It is the mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
 {

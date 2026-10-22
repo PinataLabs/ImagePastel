@@ -24,8 +24,10 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <content>
-/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest): XYB,
-/// DCT8 blocks with a constant quant field, the DC and AC metadata in Modular streams, and the AC tokens.
+/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest) and,
+/// in part, effort 5 (Default): XYB, DCT8 blocks with a constant quant field, the DC and AC metadata in
+/// Modular streams, and the AC tokens. Effort 5 adds Gaborish and near-lossless DC; its searches come
+/// with the E4 tickets (see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
 /// </content>
 /// <remarks>
 /// <para>
