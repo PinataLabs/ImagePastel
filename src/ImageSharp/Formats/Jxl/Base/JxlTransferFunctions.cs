@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// TF_SRGB::EncodedFromDisplay, TF_709::EncodedFromDisplay, TF_PQ (the scaling factor of its constructor,
+// TF_SRGB::DisplayFromEncoded, TF_SRGB::EncodedFromDisplay, TF_709::EncodedFromDisplay, TF_PQ (the scaling factor of its constructor,
 // and EncodedFromDisplay) and TF_HLG::EncodedFromDisplay (the vector overloads) in
 // lib/jxl/cms/transfer_functions-inl.h, kInvLog2e in lib/jxl/base/common.h, and the curve of OpGamma in
 // lib/jxl/render_pipeline/stage_from_linear.cc, for one lane.
@@ -22,7 +22,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 internal static class JxlTransferFunctions
 {
     private const float ThreshLinearToSrgb = 0.0031308f;
+    private const float ThreshSrgbToLinear = 0.04045f;
     private const float LowDiv = 12.92f;
+    private const float LowDivInv = 1.0f / LowDiv;
 
     // TF_709's constants are doubles that Set converts to float; each literal here is the same float.
     private const float Bt709Thresh = 0.018f;
@@ -46,12 +48,33 @@ internal static class JxlTransferFunctions
     private static readonly float[] SrgbP = { -5.135152395e-04f, 5.287254571e-03f, 3.903842876e-01f, 1.474205315e+00f, 7.352629620e-01f };
     private static readonly float[] SrgbQ = { 1.004519624e-02f, 3.036675394e-01f, 1.340816930e+00f, 9.258482155e-01f, 2.424867759e-02f };
 
+    // TF_SRGB::DisplayFromEncoded, computed via af_cheb_rational (k=100).
+    private static readonly float[] SrgbToLinearP = { 2.200248328e-04f, 1.043637593e-02f, 1.624820318e-01f, 7.961564959e-01f, 8.210152774e-01f };
+    private static readonly float[] SrgbToLinearQ = { 2.631846970e-01f, 1.076976492e+00f, 4.987528350e-01f, -5.512498495e-02f, 6.521209011e-03f };
+
     // TF_PQ::EncodedFromDisplay: 4-over-4-degree rational polynomial approximation on x**0.25, with two
     // different polynomials above and below 1e-4.
     private static readonly float[] PqP = { 1.351392e-02f, -1.095778e+00f, 5.522776e+01f, 1.492516e+02f, 4.838434e+01f };
     private static readonly float[] PqQ = { 1.012416e+00f, 2.016708e+01f, 9.263710e+01f, 1.120607e+02f, 2.590418e+01f };
     private static readonly float[] PqPLow = { 9.863406e-06f, 3.881234e-01f, 1.352821e+02f, 6.889862e+04f, -2.864824e+05f };
     private static readonly float[] PqQLow = { 3.371868e+01f, 1.477719e+03f, 1.608477e+04f, -4.389884e+04f, -2.072546e+05f };
+
+    /// <summary>
+    /// Decodes an sRGB-encoded sample to linear, as libjxl's <c>TF_SRGB::DisplayFromEncoded</c>, which
+    /// the encoder's forward XYB uses. A negative sample is decoded as the negated decoding of its magnitude.
+    /// </summary>
+    /// <remarks>The rational polynomial is evaluated without FMA (ADR 0004).</remarks>
+    /// <param name="v">The encoded sample.</param>
+    /// <returns>The linear sample.</returns>
+    public static float SrgbDisplayFromEncoded(float v)
+    {
+        float x = MathF.Abs(v);
+        float magnitude = x > ThreshSrgbToLinear
+            ? JxlFastMath.EvalRationalPolynomial(x, SrgbToLinearP, SrgbToLinearQ)
+            : x * LowDivInv;
+
+        return JxlScalarMath.CopySign(magnitude, v);
+    }
 
     /// <summary>
     /// Encodes a linear sample with the sRGB curve, with an error of about 5e-7. A negative sample is
