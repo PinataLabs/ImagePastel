@@ -39,8 +39,10 @@ public class JxlLossyCalibrationTests
     /// everywhere, plus Gaborish: it scores above cjxl on the photos, at 1.2x to 1.9x cjxl's size
     /// (calliphora d4 1.88x). It fails gradient d4 (margin -0.35) and text d4 (-2.29), where cjxl's
     /// effort 5 gains from its strategy search (E4g, E4h).
+    /// E4d (net10.0, x64): 17 of 18. The fitted chroma-from-luma map lifts text d4 to a margin of +2.85;
+    /// gradient d4 still fails (-0.29). The photos keep their margins (bike d1 +7.54, calliphora d4 +34.25).
     /// </remarks>
-    private const int DefaultRowsPassing = 16;
+    private const int DefaultRowsPassing = 17;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
