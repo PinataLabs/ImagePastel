@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_frame.cc (ParamsPostInit, LoopFilterFromParams, MakeFrameHeader, ComputeChromacityAdjustments,
-// ComputeVarDCTEncodingData, ComputeAllCoeffOrders, TokenizeAllCoefficients, EncodeGlobalDCInfo,
+// lib/jxl/enc_frame.cc (ParamsPostInit, LoopFilterFromParams, MakeFrameHeader, SimplifyInvisible,
+// ComputeChromacityAdjustments, ComputeVarDCTEncodingData, ComputeAllCoeffOrders, TokenizeAllCoefficients, EncodeGlobalDCInfo,
 // EncodeGlobalACInfo, the VarDCT parts of EncodeGroups and ComputeEncodingData), lib/jxl/enc_cache.cc
 // (InitializePassesEncoder, ComputeACMetadata), lib/jxl/enc_group.cc (EncodeGroupTokenizedCoefficients),
 // lib/jxl/image_ops.cc (PadImageToBlockMultipleInPlace), lib/jxl/enc_quant_weights.cc
@@ -148,7 +148,7 @@ internal static partial class JxlFrameEncoder
             JxlEncoderInput<TPixel>.CopyColorPlanes(image, color);
 
             // ToXYB for sRGB (no profile). libjxl keeps a linear copy from Kitten down, for its
-            // butteraugli search. Invisible pixels are simplified only with alpha (slice E3c).
+            // butteraugli search, which would be simplified too.
             float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(metadata.M.ToneMapping.IntensityTarget);
             for (int y = 0; y < image.Height; y++)
             {
@@ -157,6 +157,18 @@ internal static partial class JxlFrameEncoder
                     color[1].DangerousGetRowSpan(y).Slice(0, image.Width),
                     color[2].DangerousGetRowSpan(y).Slice(0, image.Width),
                     premulAbsorb);
+            }
+
+            // libjxl simplifies the invisible pixels of straight alpha in a regular frame, unless
+            // keep_invisible is set (by default it is set only for lossless), the extra channels are
+            // resampled differently from the colour (never here: ec_resampling is the colour's 1), or
+            // perceptual optimizations are disabled (they are not).
+            int alphaIndex = metadata.M.Find(JxlExtraChannelType.Alpha);
+            if (alphaIndex >= 0 && !metadata.M.ExtraChannelInfo[alphaIndex].AlphaAssociated && frameHeader.FrameType == JxlFrameType.Regular)
+            {
+                using Buffer2D<float> alpha = allocator.Allocate2D<float>(image.Width, image.Height);
+                JxlEncoderInput<TPixel>.CopyAlphaPlane(image, alpha);
+                SimplifyInvisible(color, alpha, image.Width, image.Height, lossless: false);
             }
 
             PadImageToBlockMultipleInPlace(color, image.Width, image.Height, paddedX, paddedY);
@@ -181,11 +193,109 @@ internal static partial class JxlFrameEncoder
             JxlAcTokenizer.TokenizeCoefficients(encState, groupIndex);
         }
 
-        // libjxl codes the extra channels here (ModularFrameEncoder::ComputeEncodingData with do_color off);
-        // a frame without them has no Modular image. Alpha comes with slice E3c.
+        // The extra channels (alpha) are coded losslessly in Modular, without the colour; a frame without
+        // them has no Modular image.
+        if (metadata.M.NumExtraChannels > 0)
+        {
+            encModular.ComputeEncodingData(frameHeader, metadata.M, image, doColor: false);
+        }
+
         encModular.ComputeTree();
         encModular.ComputeTokens();
         return EncodeVarDctGroups(frameHeader, frameDim, encState, encModular);
+    }
+
+    // Replace invisible pixels with a weighted average of the pixel to the left, the pixel to the
+    // topright, and non-invisible neighbours. Produces downward-blurry smears, with in the upwards
+    // direction only a 1px edge duplication but not more. It would probably be better to smear in all
+    // directions. That requires an alpha-weighed convolution with a large enough kernel though, which
+    // might be overkill...
+    // The image is the xsize x ysize top-left of the planes; each plane is done in turn, in place, so a
+    // pixel reads the new values of its left and upper neighbours.
+    private static void SimplifyInvisible(Buffer2D<float>[] image, Buffer2D<float> alpha, int xsize, int ysize, bool lossless)
+    {
+        for (int c = 0; c < 3; ++c)
+        {
+            for (int y = 0; y < ysize; ++y)
+            {
+                System.Span<float> row = image[c].DangerousGetRowSpan(y);
+                System.Span<float> prow = y > 0 ? image[c].DangerousGetRowSpan(y - 1) : default;
+                System.Span<float> nrow = y + 1 < ysize ? image[c].DangerousGetRowSpan(y + 1) : default;
+                System.Span<float> a = alpha.DangerousGetRowSpan(y);
+                System.Span<float> pa = y > 0 ? alpha.DangerousGetRowSpan(y - 1) : default;
+                System.Span<float> na = y + 1 < ysize ? alpha.DangerousGetRowSpan(y + 1) : default;
+                for (int x = 0; x < xsize; ++x)
+                {
+                    if (a[x] != 0)
+                    {
+                        continue;
+                    }
+
+                    if (lossless)
+                    {
+                        row[x] = 0;
+                        continue;
+                    }
+
+                    float d = 0f;
+                    row[x] = 0;
+                    if (x > 0)
+                    {
+                        row[x] += row[x - 1];
+                        d++;
+                        if (a[x - 1] > 0f)
+                        {
+                            row[x] += row[x - 1];
+                            d++;
+                        }
+                    }
+
+                    if (x + 1 < xsize)
+                    {
+                        if (y > 0)
+                        {
+                            row[x] += prow[x + 1];
+                            d++;
+                        }
+
+                        if (a[x + 1] > 0f)
+                        {
+                            row[x] += 2f * row[x + 1];
+                            d += 2f;
+                        }
+
+                        if (y > 0 && pa[x + 1] > 0f)
+                        {
+                            row[x] += 2f * prow[x + 1];
+                            d += 2f;
+                        }
+
+                        if (y + 1 < ysize && na[x + 1] > 0f)
+                        {
+                            row[x] += 2f * nrow[x + 1];
+                            d += 2f;
+                        }
+                    }
+
+                    if (y > 0 && pa[x] > 0f)
+                    {
+                        row[x] += 2f * prow[x];
+                        d += 2f;
+                    }
+
+                    if (y + 1 < ysize && na[x] > 0f)
+                    {
+                        row[x] += 2f * nrow[x];
+                        d += 2f;
+                    }
+
+                    if (d > 1f)
+                    {
+                        row[x] /= d;
+                    }
+                }
+            }
+        }
     }
 
     // The last column and row are replicated up to a multiple of the block size.
