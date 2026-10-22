@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -228,6 +229,103 @@ public class JxlContainerTests
         data.AddRange(Box("jxlc", Codestream));
 
         Assert.Throws<InvalidImageContentException>(() => Decode(data.ToArray()));
+    }
+
+    // libjxl reads a jbrd box only when the caller asks for JPEG reconstruction, which is out of scope,
+    // and has no use for jxll or a type it does not know; so none of them changes the decoded image,
+    // wherever it sits.
+    [Theory]
+    [InlineData("jbrd", "before")]
+    [InlineData("jbrd", "after")]
+    [InlineData("jbrd", "between")]
+    [InlineData("jxll", "before")]
+    [InlineData("jxll", "after")]
+    [InlineData("jxll", "between")]
+    [InlineData("zZz0", "before")]
+    [InlineData("zZz0", "after")]
+    [InlineData("zZz0", "between")]
+    public void Load_IgnoredBox_DecodesLikeTheBareCodestream(string type, string position)
+    {
+        byte[] container = WithIgnoredBox(Box(type, IgnoredBoxContents(type)), position);
+
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), container);
+        using Image<Rgb24> expected = Image.Load<Rgb24>(CreateConfiguration(), Codestream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, image);
+    }
+
+    [Theory]
+    [InlineData("jbrd", "before")]
+    [InlineData("jxll", "between")]
+    [InlineData("zZz0", "after")]
+    public void Identify_IgnoredBox_IdentifiesLikeTheBareCodestream(string type, string position)
+    {
+        using MemoryStream stream = new(WithIgnoredBox(Box(type, IgnoredBoxContents(type)), position));
+        using MemoryStream bare = new(Codestream);
+
+        IImageInfo info = Image.Identify(CreateConfiguration(), stream);
+        IImageInfo expected = Image.Identify(CreateConfiguration(), bare);
+
+        Assert.Equal(expected.Width, info.Width);
+        Assert.Equal(expected.Height, info.Height);
+        Assert.Equal(expected.PixelType.BitsPerPixel, info.PixelType.BitsPerPixel);
+        Assert.Null(info.Metadata.ExifProfile);
+        Assert.Null(info.Metadata.XmpProfile);
+    }
+
+    [Fact]
+    public void Load_EveryIgnoredBoxEverywhere_DecodesLikeTheBareCodestream()
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), EveryIgnoredBoxEverywhere());
+        using Image<Rgb24> expected = Image.Load<Rgb24>(CreateConfiguration(), Codestream);
+
+        ImageComparer.Exact.VerifySimilarity(expected, image);
+    }
+
+    // djxl takes the same container, so the boxes are ones a conforming decoder ignores.
+    [Fact]
+    public async Task Djxl_EveryIgnoredBoxEverywhere_Decodes()
+    {
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlContainerTests));
+        string input = Path.Combine(directory, "every_ignored_box.jxl");
+        await File.WriteAllBytesAsync(input, EveryIgnoredBoxEverywhere(), TestContext.Current.CancellationToken);
+
+        await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, input, Path.ChangeExtension(input, ".png"));
+    }
+
+    // jxll, jbrd and an unknown box before, between and after two jxlp boxes.
+    private static byte[] EveryIgnoredBoxEverywhere()
+    {
+        byte[][] parts = Split(Codestream, 2);
+        return Container(
+            Box("jxll", IgnoredBoxContents("jxll")),
+            Box("jbrd", IgnoredBoxContents("jbrd")),
+            Box("zZz0", IgnoredBoxContents("zZz0")),
+            Jxlp(0, parts[0]),
+            Box("jbrd", IgnoredBoxContents("jbrd")),
+            Box("zZz0", IgnoredBoxContents("zZz0")),
+            Jxlp(1, parts[1], last: true),
+            Box("jxll", IgnoredBoxContents("jxll")),
+            Box("jbrd", IgnoredBoxContents("jbrd")),
+            Box("zZz0", IgnoredBoxContents("zZz0")));
+    }
+
+    // jxll holds the level, one byte; jbrd and the unknown box get bytes that no reader could take for
+    // a JPEG bitstream reconstruction or a codestream.
+    private static byte[] IgnoredBoxContents(string type)
+        => type == "jxll" ? new byte[] { 10 } : new byte[] { 0xFF, 0x0A, 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01 };
+
+    // delta_palette's codestream with the box before its jxlc box, after it, or between two jxlp boxes.
+    private static byte[] WithIgnoredBox(byte[] box, string position)
+    {
+        byte[][] parts = Split(Codestream, 2);
+        return position switch
+        {
+            "before" => Container(box, Box("jxlc", Codestream)),
+            "after" => Container(Box("jxlc", Codestream), box),
+            "between" => Container(Jxlp(0, parts[0]), box, Jxlp(1, parts[1], last: true)),
+            _ => throw new ArgumentOutOfRangeException(nameof(position), position, null),
+        };
     }
 
     private static void Decode(byte[] data)
