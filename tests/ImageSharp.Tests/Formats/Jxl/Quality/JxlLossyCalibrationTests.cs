@@ -16,7 +16,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 /// <summary>
 /// E3's done-check (#270): every Fastest (libjxl effort 3) row of the calibration table, encoded by our
 /// encoder at the row's distance, meets the quality bar of #107 against cjxl's row. Our decoder checks it
-/// on every leg, Magick.NET on every leg but coverage, and djxl in <c>jxl-oracle</c>.
+/// on every leg, Magick.NET on every leg but coverage, and djxl in <c>jxl-oracle</c>. The Default (effort
+/// 5) rows are E4's progress meter until its done-check.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyCalibrationTests
@@ -27,6 +28,19 @@ public class JxlLossyCalibrationTests
     /// a few tenths would still pass: the SHA-256 pins catch any change to the bytes.
     /// </summary>
     private const double FastestSlack = 3;
+
+    /// <summary>
+    /// How many of the 18 Default rows pass at <see cref="JxlQualityComparer.SlackFor"/> Default's slack,
+    /// as E4a measured them through our decoder (see <see cref="Encode_DefaultCalibrationRows_PassAtLeastTheRecordedCount"/>).
+    /// Each E4 ticket that changes it records its new count here.
+    /// </summary>
+    /// <remarks>
+    /// E4a (net10.0, x64): 16 of 18. Its tracer quantises with Fastest's constant field (0.79 / d) and DCT8
+    /// everywhere, plus Gaborish: it scores above cjxl on the photos, at 1.2x to 1.9x cjxl's size
+    /// (calliphora d4 1.88x). It fails gradient d4 (margin -0.35) and text d4 (-2.29), where cjxl's
+    /// effort 5 gains from its strategy search (E4g, E4h).
+    /// </remarks>
+    private const int DefaultRowsPassing = 16;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
@@ -65,7 +79,7 @@ public class JxlLossyCalibrationTests
     };
 
     // Each row is encoded once, whichever readers check it.
-    private static readonly ConcurrentDictionary<(string Image, double Distance), Lazy<byte[]>> Encodes = new();
+    private static readonly ConcurrentDictionary<(string Image, int Effort, double Distance), Lazy<byte[]>> Encodes = new();
 
     public static TheoryData<string, string, double> ReaderRows
     {
@@ -153,12 +167,43 @@ public class JxlLossyCalibrationTests
         Assert.True(result.Passed, result.ToString());
     }
 
+    // E4's progress meter (#297): every Default (libjxl effort 5) row of the table, encoded at the row's
+    // distance and decoded by our decoder, against the comparer at the Default slack. Only E4i must pass
+    // them all; until then each ticket logs how many pass, and this asserts that no ticket passes fewer than
+    // DefaultRowsPassing, the count recorded by the last ticket that changed it.
+    [Fact]
+    public void Encode_DefaultCalibrationRows_PassAtLeastTheRecordedCount()
+    {
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: JxlLossyDefaultEncoderTests runs the same encoder code.");
+        JxlCalibrationRow[] rows = JxlCalibrationTable.Instance.Rows
+            .Where(r => r.Effort == JxlCalibrationTable.LibjxlEffort(JxlEffort.Default))
+            .ToArray();
+
+        int passed = 0;
+        foreach (JxlCalibrationRow row in rows)
+        {
+            using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+            byte[] encoded = Encode(row);
+            using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+            JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length);
+            passed += result.Passed ? 1 : 0;
+            TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{(result.Passed ? "pass" : "FAIL")} {result}; score margin {result.Score - result.MinimumScore:F4}, size ratio {(double)result.Size / row.Size:F4}"));
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"{passed} of {rows.Length} Default rows pass (recorded {DefaultRowsPassing}).");
+        Assert.Equal(18, rows.Length);
+        Assert.True(passed >= DefaultRowsPassing, $"{passed} of {rows.Length} Default rows pass; {DefaultRowsPassing} did before.");
+    }
+
     // The table's images are 8-bit sRGB with no colour chunks; only bike_alpha has alpha. Each is encoded
     // as the pixel type it is stored in, as cjxl reads it: RGB without an alpha channel, or RGBA.
     private static byte[] Encode(JxlCalibrationRow row)
-        => Encodes.GetOrAdd((row.Image.Name, row.Distance), _ => new Lazy<byte[]>(() =>
+        => Encodes.GetOrAdd((row.Image.Name, row.Effort, row.Distance), _ => new Lazy<byte[]>(() =>
         {
-            JxlEncoder encoder = new() { Distance = (float)row.Distance, Effort = JxlEffort.Fastest };
+            JxlEffort effort = row.Effort == JxlCalibrationTable.LibjxlEffort(JxlEffort.Default) ? JxlEffort.Default : JxlEffort.Fastest;
+            JxlEncoder encoder = new() { Distance = (float)row.Distance, Effort = effort };
             if (Image.Identify(row.Image.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
             {
                 using Image<Rgba32> rgba = Image.Load<Rgba32>(row.Image.FullPath);
