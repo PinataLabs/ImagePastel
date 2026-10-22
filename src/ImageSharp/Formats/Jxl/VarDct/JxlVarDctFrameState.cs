@@ -33,7 +33,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
 
     // Shared by enc/dec. 5F and 13 are by far the most common for d1/2/4/8, 0 ensures low overhead for
     // small images.
-    private static readonly JxlU32Enc OrderEnc = new(Val(0x5F), Val(0x13), Val(0), Bits(JxlBlockCtxMap.NumOrders));
+    internal static readonly JxlU32Enc OrderEnc = new(Val(0x5F), Val(0x13), Val(0), Bits(JxlBlockCtxMap.NumOrders));
 
     private readonly MemoryAllocator allocator;
 
