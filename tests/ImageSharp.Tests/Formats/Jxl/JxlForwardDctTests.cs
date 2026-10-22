@@ -148,6 +148,21 @@ public class JxlForwardDctTests
         Assert.Equal(sha256, Sha256(dc));
     }
 
+    // The 8x8 kinds that libjxl's search tries only below Hare come with lossy Thorough.
+    [Theory]
+    [InlineData((int)JxlAcStrategyType.Dct4X8)]
+    [InlineData((int)JxlAcStrategyType.Dct8X4)]
+    [InlineData((int)JxlAcStrategyType.Afv0)]
+    [InlineData((int)JxlAcStrategyType.Afv3)]
+    public void TransformFromPixels_OfAThoroughOnlyStrategy_ThrowsNamingE5(int rawStrategy)
+    {
+        float[] pixels = new float[64];
+        NotSupportedException ex = Assert.Throws<NotSupportedException>(
+            () => JxlDct.TransformFromPixels((JxlAcStrategyType)rawStrategy, pixels, 8, new float[64], new float[JxlDct.ScratchSize]));
+
+        Assert.Contains("E5", ex.Message, StringComparison.Ordinal);
+    }
+
     // The block of the libjxl harness: an LCG's values with 16 fraction bits, exact in float.
     private static float[] LcgBlock(int count, uint seed)
     {
