@@ -121,7 +121,7 @@ internal static class JxlEncodedFrame
         JxlFrameHeader frameHeader = new(metadata);
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        uint[] sizes = JxlToc.ReadToc(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses), reader);
+        uint[] sizes = JxlToc.ReadGroupOffsets(JxlToc.NumTocEntries(frameDim.NumGroups, frameDim.NumDcGroups, frameHeader.Passes.NumPasses), reader).Sizes;
         reader.EnsureAllReadsWithinBounds("frame header");
         int sectionStart = 2 + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();

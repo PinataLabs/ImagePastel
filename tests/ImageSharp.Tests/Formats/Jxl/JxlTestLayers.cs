@@ -361,7 +361,7 @@ internal sealed class JxlTestLayers
         JxlBitReader reader = new(codestream, frameOffset, codestream.Length - frameOffset);
         frameHeader = new JxlFrameHeader(metadata);
         JxlBundle.Read(reader, frameHeader);
-        uint[] sizes = JxlToc.ReadToc(1, reader);
+        uint[] sizes = JxlToc.ReadGroupOffsets(1, reader).Sizes;
         int start = frameOffset + (int)(reader.TotalBitsConsumed / 8);
         reader.Close();
         return codestream.AsSpan(start, (int)sizes[0]).ToArray();
@@ -506,10 +506,12 @@ internal sealed class JxlTestLayers
             section = withFeatures.ToArray();
         }
 
-        // TOC: no permutation, then the size of each section as U32(Bits(10), BitsOffset(14, 1024),
-        // BitsOffset(22, 17408), BitsOffset(30, 4211712)).
+        // TOC: the permuted bit and the permutation, if any, then the size of each section as
+        // U32(Bits(10), BitsOffset(14, 1024), BitsOffset(22, 17408), BitsOffset(30, 4211712)).
         byte[][] sections = frame.Sections ?? new[] { section };
-        w.Bit(false).ZeroPadToByte();
+        w.Bit(frame.TocPermutation != null);
+        frame.TocPermutation?.Invoke(w);
+        w.ZeroPadToByte();
         foreach (byte[] s in sections)
         {
             WriteSectionSize(w, (ulong)s.Length);
@@ -617,6 +619,12 @@ internal sealed record JxlTestFrame(byte[] Section)
     /// than one pass. When it is not set, the frame has one pass.
     /// </summary>
     public Action<JxlTestBitWriter> Passes { get; init; }
+
+    /// <summary>
+    /// Gets the writer of the TOC's permutation: its histograms, then its tokens. When set, the TOC's
+    /// permuted bit is set, and <see cref="Sections"/> are in the order the permutation stores them.
+    /// </summary>
+    public Action<JxlTestBitWriter> TocPermutation { get; init; }
 
     /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
     public JxlTestPatchDictionary Patches { get; init; }

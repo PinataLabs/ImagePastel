@@ -697,3 +697,20 @@ djxl modular_progressive_ac.jxl ../../../External/ReferenceOutput/JxlDecoderTest
 - The two VarDCT files split the same quantized coefficients into passes in different ways, so `djxl` gives the same output for both: the two `.npy` files are identical.
 - A decoder that ignores the first pass's shift misses `vardct_qprogressive_ac` by an RMSE of 0.054. One that takes the first pass's coefficient orders for every pass misses `vardct_progressive_ac` by 0.091 and `vardct_qprogressive_ac` by 0.026. One that gives every Modular pass the first pass's downsampling bracket fails the ANS final-state check on `modular_progressive_ac`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.0e-6 and 1.2e-5 for both VarDCT files. `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference. `modular_progressive_ac` matches exactly.
+
+#### How the permuted-TOC file was made
+
+`cjxl --group_order=1` stores the groups centre first, so the frame's TOC starts with a permutation (D13a). `JxlPermutedTocTests` checks the file.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `group_order_centre.jxl` | `Png/Bike.png`, 582 x 453 8-bit RGB, at `cjxl -d 1 --group_order=1` (default effort), 44,849 bytes: one VarDCT frame of 3 x 2 groups, so nine sections, stored in a permuted order. | `External/ReferenceOutput/JxlDecoderTests/group_order_centre.npy` |
+
+```sh
+cjxl ../../Png/Bike.png group_order_centre.jxl -d 1 --group_order=1
+djxl group_order_centre.jxl ../../../External/ReferenceOutput/JxlDecoderTests/group_order_centre.npy
+```
+
+- The TOC, read from the frame header (`CentreFirst_IsOneVarDctFrameWithAPermutedToc`): the permuted bit is set, and the permutation of the nine sections is not the identity.
+- `cjxl -d 1` of the same image without `--group_order=1` gives a file 6 bytes smaller whose `djxl` output is byte-identical: the group order changes only where each section is stored.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 1.0e-6 and the peak error 1.2e-5.
