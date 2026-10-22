@@ -433,15 +433,49 @@ internal static class JxlEncGroup
         }
     }
 
-    // Quantises the Y channel at Falcon's thresholds, then dequantises it in place, so that X and B can
-    // take out the chroma-from-luma prediction from the Y the decoder will see. From Hare down libjxl first
-    // runs AdjustQuantBlockAC on each channel, which may raise the block's quant and sets the Y thresholds
-    // from {0.58, 0.64, 0.64, 0.64}.
-    // Temporary departure (E4a): Hare quantises as Falcon does, at {0.56, 0.62, 0.62, 0.62} with the
-    // block's quant unchanged, until E4c ports AdjustQuantBlockAC.
+    // Quantises the Y channel, then dequantises it in place, so that X and B can take out the
+    // chroma-from-luma prediction from the Y the decoder will see. From Hare down it first runs
+    // AdjustQuantBlockAC on Y, X and B (pre-CfL), each from the original quant: the block takes the
+    // largest quant, and Y its thresholds from the Y call.
     private static void QuantizeRoundtripYBlockAc(JxlPassesEncoderState encState, int size, JxlQuantizer quantizer, JxlAcStrategyType quantKind, int xsize, int ysize, ref int quant, float[] inout, int[] quantized)
     {
-        float[] thresY = { 0.56f, 0.62f, 0.62f, 0.62f };
+        float[] thresY = { 0.58f, 0.64f, 0.64f, 0.64f };
+        if (encState.SpeedTier <= JxlSpeedTier.Hare)
+        {
+            int maxQuant = 0;
+            int quantOrig = quant;
+            Span<float> thres = stackalloc float[4];
+            for (int i = 0; i < 3; i++)
+            {
+                // libjxl's order: Y, then X, then B.
+                int c = i == 0 ? 1 : i == 1 ? 0 : 2;
+                float qmMultiplier = c == 0 ? encState.XQmMultiplier : c == 1 ? 1.0f : encState.BQmMultiplier;
+                thres[0] = 0.58f;
+                thres[1] = 0.64f;
+                thres[2] = 0.64f;
+                thres[3] = 0.64f;
+                quant = quantOrig;
+                AdjustQuantBlockAc(quantizer, c, qmMultiplier, quantKind, xsize, ysize, thres, inout.AsSpan(c * size, size), ref quant);
+
+                // Dead zone adjustment
+                if (c == 1)
+                {
+                    thres.CopyTo(thresY);
+                }
+
+                maxQuant = Math.Max(quant, maxQuant);
+            }
+
+            quant = maxQuant;
+        }
+        else
+        {
+            thresY[0] = 0.56f;
+            thresY[1] = 0.62f;
+            thresY[2] = 0.62f;
+            thresY[3] = 0.62f;
+        }
+
         QuantizeBlockAc(quantizer, 1, 1.0f, quantKind, xsize, ysize, thresY, inout.AsSpan(size, size), quant, quantized.AsSpan(size, size));
 
         ReadOnlySpan<float> dequantMatrix = quantizer.DequantMatrix(quantKind, 1);

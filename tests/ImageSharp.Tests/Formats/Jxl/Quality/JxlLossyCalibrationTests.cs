@@ -39,8 +39,12 @@ public class JxlLossyCalibrationTests
     /// everywhere, plus Gaborish: it scores above cjxl on the photos, at 1.2x to 1.9x cjxl's size
     /// (calliphora d4 1.88x). It fails gradient d4 (margin -0.35) and text d4 (-2.29), where cjxl's
     /// effort 5 gains from its strategy search (E4g, E4h).
+    /// E4c (net10.0, x64): 17 of 18. AdjustQuantBlockAC raises the quant of most blocks (flat X and B
+    /// channels, lone high frequencies), so scores rise and files grow: gradient d4 (margin +1.29) and
+    /// text d4 (+0.41) now pass, and calliphora d4 fails on size alone (2.04x cjxl, margin +36.12). E4b's
+    /// global scale from 0.39 / d should bring the sizes down.
     /// </remarks>
-    private const int DefaultRowsPassing = 16;
+    private const int DefaultRowsPassing = 17;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

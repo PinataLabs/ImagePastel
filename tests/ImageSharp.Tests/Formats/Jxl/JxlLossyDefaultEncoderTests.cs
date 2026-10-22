@@ -77,8 +77,8 @@ public class JxlLossyDefaultEncoderTests
     // libjxl's choices at Hare, read back through the decoder's parse: XYB VarDCT; Gaborish above d0.5
     // (LoopFilterFromParams); the EPF iterations and X quantisation scale as at Fastest; near-lossless DC,
     // so one bit of extra DC precision in every LF group (the gradient has two). E4a's temporary departures
-    // are visible too: every block DCT8, one quant field value, and the default chroma-from-luma and
-    // block context maps.
+    // are visible too: every block DCT8, a quant field built on one constant value (which E4c's
+    // AdjustQuantBlockAC raises), and the default chroma-from-luma and block context maps.
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -103,7 +103,7 @@ public class JxlLossyDefaultEncoderTests
         Assert.Equal(header.ToFrameDimensions().NumDcGroups, frame.ExtraDcPrecision.Length);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // Temporary departures until E4g (strategies) and E4b (quant field).
+        // Temporary departure until E4g (strategies).
         for (int by = 0; by < frame.State.YSizeBlocks; by++)
         {
             for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
@@ -113,8 +113,10 @@ public class JxlLossyDefaultEncoderTests
             }
         }
 
-        (int min, int max) = frame.QuantFieldRange();
-        Assert.Equal(min, max);
+        // Temporary departure until E4b (quant field): before AdjustQuantBlockAC every block has the raw
+        // value of the constant 0.79 / d. AdjustQuantBlockAC (E4c) then raises the quant of flat blocks.
+        (int raised, _, _) = frame.QuantFieldAround(frame.State.Quantizer.RawQuantField((float)(0.79 / distance)));
+        Assert.True(raised > 0, "AdjustQuantBlockAC raises no block's quant");
 
         // Temporary departures until E4d (chroma-from-luma) and E4e (block context map).
         JxlColorCorrelation defaultCmap = new(header.ToFrameDimensions().XSize, header.ToFrameDimensions().YSize);
@@ -125,6 +127,30 @@ public class JxlLossyDefaultEncoderTests
         Assert.Empty(frame.State.BlockCtxMap.QfThresholds);
         Assert.Equal(defaultBlockCtxMap.NumCtxs, frame.State.BlockCtxMap.NumCtxs);
         Assert.Equal(defaultBlockCtxMap.CtxMap, frame.State.BlockCtxMap.CtxMap);
+    }
+
+    // AdjustQuantBlockAC (E4c), read back through the decoder's parse of the raw quant field. Each block
+    // takes the largest of the quants its Y, X and B coefficients ask for: flat blocks and lone high
+    // frequencies raise it, and busy blocks lower it when all three channels are busy. Until E4b every
+    // block starts from the raw value of the constant 0.79 / d. Shares on the flower crop (E4c):
+    // d0.5 base 7, 65.0% raised and 6.0% lowered; d1 base 6, 79.4% and 4.8%; d2 base 5, 92.7% and 0.4%.
+    // At d4 (base 5) no block is lowered: the floor max(4, quant / 2) leaves one step, and the flat X or
+    // B channel of nearly every block asks for a raise.
+    [Theory]
+    [InlineData(0.5f)]
+    [InlineData(1.0f)]
+    [InlineData(2.0f)]
+    public void Encode_Photo_AdjustsTheQuantOfEachBlockBothWays(float distance)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        int constantQuant = frame.State.Quantizer.RawQuantField((float)(0.79 / distance));
+        (int raised, int lowered, int blocks) = frame.QuantFieldAround(constantQuant);
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: base {constantQuant}, raised {raised} ({100.0 * raised / blocks:F1}%), lowered {lowered} ({100.0 * lowered / blocks:F1}%) of {blocks} blocks; range {frame.QuantFieldRange()}");
+        Assert.True(raised > 0, "AdjustQuantBlockAC raises no block's quant");
+        Assert.True(lowered > 0, "AdjustQuantBlockAC lowers no block's quant");
     }
 
     [Fact]
@@ -146,16 +172,16 @@ public class JxlLossyDefaultEncoderTests
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "7DA51E672F36D8E261B93F2E8F05C872A0825ADAEC220F9785D7CA59B40B1986")]
-    [InlineData("flower-384x244", "", 1.0f, "5CCBF69756487289AD2FB472D8266E88CE7F96D90152B25DCDAF63A18F39C149")]
-    [InlineData("flower-384x244", "", 2.0f, "389A786B664E1E110F12CB6BC81E3050AD780811593EBBCF92F501637B629D9B")]
-    [InlineData("flower-384x244", "", 4.0f, "17CD37A73A106C4382C8D5D748F8CE817A342ACB61054D55C342CE0E2856FA24")]
-    [InlineData("flower-17x23", "", 1.0f, "B398A6CA525E189365B160BA0CCEFA9AF80C2C626004CAC1B37EA12BBBABC803")]
-    [InlineData("dot-1x1", "", 1.0f, "325ADA26DA3104663BA288B60DFDD7942D3533BEFD809FA43594FD851860C1C8")]
-    [InlineData("bike-582x453", "", 1.0f, "74F8C81F98135462F573958B1EA4CD09947A45AF69DF62D6B6DB36F8CEF0EA1B")]
-    [InlineData("gradient-2049x9", "", 2.0f, "A58E35BF3F749154E9B08B44CEFC7CC0BAE07A2299E4E04C6FF17D241DF9FFFA")]
-    [InlineData("flower-256x244", "soft", 1.0f, "566F2BFFDB2D22E82B71DFBCC0505973A9547E94EEC8528C24508E2FDCFECC38")]
-    [InlineData("bike-582x453", "hard", 1.0f, "064CF8AF56881D8D606C9743284F07AA0A639E4A046CBAC89301BAA8150980F6")]
+    [InlineData("flower-384x244", "", 0.5f, "0746B376C521005252CE24A8CA5C99099E65CB2E53ECD104686D5D51E480583D")]
+    [InlineData("flower-384x244", "", 1.0f, "6DC0975952FA150CCADACF439A6BDFE2C409BD1CF20CDA1DD72598DA21CF4935")]
+    [InlineData("flower-384x244", "", 2.0f, "BB59A4A0F826FC4E24346555818B67B20C66E93A30F6F82E9B4F27EC2B0FB09F")]
+    [InlineData("flower-384x244", "", 4.0f, "DDCC3AECB3AFC56752551F687F957412ACD513B380D59FD7976473F8810C8465")]
+    [InlineData("flower-17x23", "", 1.0f, "943248258212CB24293BE736E41DAB0D094C64FF79FFEA6222DA5605A09DDC52")]
+    [InlineData("dot-1x1", "", 1.0f, "01C0A1CA1E665AF496DAAB8785E5231EE0A38F0A399EF6FC36B7272233892718")]
+    [InlineData("bike-582x453", "", 1.0f, "4E5940FF47AB543386A98BF8453D1AE9DC2A4A0625B883D944463C1C476A4DFF")]
+    [InlineData("gradient-2049x9", "", 2.0f, "5AB16925DDEB96DF2068E627615C7702FC564090953CC62AFA383C285511AC1E")]
+    [InlineData("flower-256x244", "soft", 1.0f, "6139F489E9C464C63A8F7F199F6D16CAEA7B559811E6D4EA6B21A26CBFAD6FFC")]
+    [InlineData("bike-582x453", "hard", 1.0f, "5AF49BB885547454CE50D749B6488E070EE3DAD735AFE243570E6DC84DCB21F0")]
     public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded;
