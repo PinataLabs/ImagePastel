@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -124,6 +125,55 @@ public class JxlLossyDefaultEncoderTests
         Assert.Empty(frame.State.BlockCtxMap.QfThresholds);
         Assert.Equal(defaultBlockCtxMap.NumCtxs, frame.State.BlockCtxMap.NumCtxs);
         Assert.Equal(defaultBlockCtxMap.CtxMap, frame.State.BlockCtxMap.CtxMap);
+    }
+
+    [Fact]
+    public void Encode_LargerDistance_GivesASmallerFile()
+    {
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+        float[] distances = { 0.5f, 1, 2, 4, 8, 16, 25 };
+
+        int[] sizes = Array.ConvertAll(distances, d => JxlEncoderRoundTrip.Encode(image, Lossy(d)).Length);
+
+        TestContext.Current.TestOutputHelper?.WriteLine(string.Join(", ", Array.ConvertAll(distances, d => $"d{d}: {sizes[Array.IndexOf(distances, d)]} B")));
+        for (int i = 1; i < sizes.Length; i++)
+        {
+            Assert.True(sizes[i] < sizes[i - 1], $"d{distances[i]} gives {sizes[i]} bytes, d{distances[i - 1]} gives {sizes[i - 1]}");
+        }
+    }
+
+    // SHA-256 of this encoder's lossy Default output: the one table of Default pins. It uses no FMA and no
+    // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
+    // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
+    [Theory]
+    [InlineData("flower-384x244", "", 0.5f, "7DA51E672F36D8E261B93F2E8F05C872A0825ADAEC220F9785D7CA59B40B1986")]
+    [InlineData("flower-384x244", "", 1.0f, "5CCBF69756487289AD2FB472D8266E88CE7F96D90152B25DCDAF63A18F39C149")]
+    [InlineData("flower-384x244", "", 2.0f, "389A786B664E1E110F12CB6BC81E3050AD780811593EBBCF92F501637B629D9B")]
+    [InlineData("flower-384x244", "", 4.0f, "17CD37A73A106C4382C8D5D748F8CE817A342ACB61054D55C342CE0E2856FA24")]
+    [InlineData("flower-17x23", "", 1.0f, "B398A6CA525E189365B160BA0CCEFA9AF80C2C626004CAC1B37EA12BBBABC803")]
+    [InlineData("dot-1x1", "", 1.0f, "325ADA26DA3104663BA288B60DFDD7942D3533BEFD809FA43594FD851860C1C8")]
+    [InlineData("bike-582x453", "", 1.0f, "74F8C81F98135462F573958B1EA4CD09947A45AF69DF62D6B6DB36F8CEF0EA1B")]
+    [InlineData("gradient-2049x9", "", 2.0f, "A58E35BF3F749154E9B08B44CEFC7CC0BAE07A2299E4E04C6FF17D241DF9FFFA")]
+    [InlineData("flower-256x244", "soft", 1.0f, "566F2BFFDB2D22E82B71DFBCC0505973A9547E94EEC8528C24508E2FDCFECC38")]
+    [InlineData("bike-582x453", "hard", 1.0f, "064CF8AF56881D8D606C9743284F07AA0A639E4A046CBAC89301BAA8150980F6")]
+    public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
+    {
+        byte[] encoded;
+        if (mask.Length == 0)
+        {
+            using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
+            encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
+        }
+        else
+        {
+            using Image<Rgba32> image = JxlLossyAlphaEncoderTests.CreateMaskedImage(sizeCase, mask);
+            encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
+        }
+
+        // Logged in full, so that a ticket that changes the output on purpose can regenerate the table.
+        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData(\"{sizeCase}\", \"{mask}\", {distance:0.0#}f, \"{actual}\")]");
+        Assert.Equal(expectedSha256, actual);
     }
 
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Default };
