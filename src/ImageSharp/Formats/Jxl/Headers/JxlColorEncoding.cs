@@ -22,7 +22,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
 /// rejects the header when that fails. Here <see cref="Icc.JxlIccBuilder"/> does that once the headers
 /// are read.
 /// </remarks>
-internal sealed class JxlColorEncoding : JxlFields
+internal sealed partial class JxlColorEncoding : JxlFields
 {
     public JxlColorEncoding() => JxlBundle.Init(this);
 

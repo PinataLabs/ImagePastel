@@ -67,6 +67,41 @@ internal sealed class JxlCustomTransferFunction : JxlFields
         this.TransferFunction = other.TransferFunction;
     }
 
+    /// <summary>
+    /// Sets the transfer function to the gamma <paramref name="newGamma"/>, as libjxl's
+    /// <c>CustomTransferFunction::SetGamma</c>: within 1e-3 of 1 it is the linear transfer function and of
+    /// 1 / 2.6 the DCI one; otherwise the gamma is kept, times 10^7.
+    /// </summary>
+    /// <param name="newGamma">The encoding exponent, the reciprocal of the display gamma.</param>
+    /// <returns><see langword="false"/> if the gamma is out of range (below 1 / 8192 or above 1).</returns>
+    public bool SetGamma(double newGamma)
+    {
+        if (newGamma < (1.0 / MaxGamma) || newGamma > 1.0)
+        {
+            return false;
+        }
+
+        this.HaveGamma = false;
+        if (Math.Abs(newGamma - 1.0) <= 1e-3)
+        {
+            this.TransferFunction = JxlTransferFunction.Linear;
+            return true;
+        }
+
+        if (Math.Abs(newGamma - (1.0 / 2.6)) <= 1e-3)
+        {
+            this.TransferFunction = JxlTransferFunction.Dci;
+            return true;
+        }
+
+        // Don't translate 0.45.. to kSRGB nor k709 - that might change pixel values because those curves
+        // also have a linear part.
+        this.HaveGamma = true;
+        this.Gamma = (uint)MathF.Round((float)(newGamma * GammaMul), MidpointRounding.AwayFromZero);
+        this.TransferFunction = JxlTransferFunction.Unknown;
+        return true;
+    }
+
     public override void VisitFields(JxlVisitor visitor)
     {
         if (visitor.Conditional(!this.SetImplicit()))

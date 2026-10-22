@@ -285,6 +285,31 @@ internal static class JxlIccBuilder
         return (primaries, (byte)c.Tf.TransferFunction);
     }
 
+    /// <summary>
+    /// Returns the tone curve that a profile built for <paramref name="tf"/> has in its TRC tags: a
+    /// parametric curve, or for PQ and HLG the 64-entry table curve. A PQ or HLG RGB encoding that
+    /// <c>CanToneMap</c> accepts gets a 3D LUT instead, but its curve is still this one.
+    /// </summary>
+    /// <param name="tf">A gamma or a known transfer function.</param>
+    /// <returns>The curve, as a <c>para</c> or <c>curv</c> tag entry.</returns>
+    internal static IccTagDataEntry CreateTrc(JxlCustomTransferFunction tf)
+    {
+        if (tf.IsPq || tf.IsHlg)
+        {
+            // As IccProfileBuilder stores the table: 65535 is 1.
+            ushort[] table = CreateTableCurve(tf.IsHlg);
+            float[] values = new float[table.Length];
+            for (int i = 0; i < values.Length; i++)
+            {
+                values[i] = table[i] / 65535F;
+            }
+
+            return new IccCurveTagDataEntry(values);
+        }
+
+        return new IccParametricCurveTagDataEntry(Curve(tf).Curve);
+    }
+
     // The parametric curve of a gamma or one of the transfer functions a parametric curve can express.
     private static IccToneCurve Curve(JxlCustomTransferFunction tf)
     {
