@@ -23,10 +23,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Base;
 /// no CMS (#105, #115), so the conversion is analytic, from the encoding's fields:
 /// <list type="bullet">
 /// <item><description>
-/// The curves are the exact formulas in double precision: gamma, BT.709, DCI (gamma 2.6), PQ (scaled by the
-/// intensity target, as the CMS's <c>TF_PQ</c>) and HLG (with the OOTF to the intensity target, as the CMS's
-/// <c>ApplyHlgOotf</c>). The CMS evaluates the profile's curve, or for PQ <c>TF_PQ</c>'s rational
-/// polynomial (maximum error 3e-6). Negative samples and samples above 1 extend the curve, mirrored.
+/// PQ and HLG are undone as the CMS's <c>BeforeTransform</c> undoes them, ported as libjxl has them: PQ
+/// with <c>TF_PQ</c>'s rational polynomial (maximum error 3e-6), scaled by the intensity target, and HLG
+/// with <c>TF_HLG_Base</c> in double precision and then the OOTF to the intensity target
+/// (<c>ApplyHlgOotf</c>). The other curves (gamma, BT.709 and DCI's gamma 2.6) are the exact formulas in
+/// double precision, where the CMS evaluates the profile's curve. Negative samples and samples above 1
+/// extend the curve, mirrored.
 /// </description></item>
 /// <item><description>
 /// The primaries matrix is the one the decoder's XYB stage inverts (<c>AdaptToPrimaries</c>), from the
@@ -46,7 +48,7 @@ internal sealed class JxlLinearSrgbTransform
     private const double Bt709InvAdd = 0.099 * Bt709InvMulHi;
 
     private readonly JxlCustomTransferFunction tf;
-    private readonly float intensityTarget;
+    private readonly float pqScale;
     private readonly double gammaExponent;
 
     // The matrix from linear samples with the encoding's primaries to linear sRGB, row-major, or null for
@@ -66,7 +68,7 @@ internal sealed class JxlLinearSrgbTransform
     public JxlLinearSrgbTransform(JxlColorEncoding c, float intensityTarget)
     {
         this.tf = c.Tf;
-        this.intensityTarget = intensityTarget;
+        this.pqScale = JxlTransferFunctions.PqScaleFrom10000Nits(intensityTarget);
         if (c.Tf.HaveGamma)
         {
             this.gammaExponent = 1.0 / (c.Tf.Gamma * (1.0 / JxlCustomTransferFunction.GammaMul));
@@ -140,7 +142,7 @@ internal sealed class JxlLinearSrgbTransform
             case JxlTransferFunction.Srgb:
                 return JxlTransferFunctions.SrgbDisplayFromEncoded(e);
             case JxlTransferFunction.Pq:
-                return (float)JxlTfPqBase.DisplayFromEncoded(this.intensityTarget, e);
+                return JxlTransferFunctions.PqDisplayFromEncoded(e, this.pqScale);
             case JxlTransferFunction.Hlg:
                 return (float)JxlTfHlgBase.DisplayFromEncoded(e);
         }
