@@ -17,6 +17,13 @@
                     <Include>[PinataLabs.ImageSharp]*,[ImageSharp.SourceGenerators]*</Include>
                     <!-- Output of gen/ImageSharp.SourceGenerators, written under obj/.../generated/. -->
                     <ExcludeByFile>**/generated/ImageSharp.SourceGenerators/**/*.cs</ExcludeByFile>
+                    <!--
+                      Record only whether each line and branch ran, not how often. Counting every hit
+                      makes test classes that run the same code in parallel contend for the same
+                      counters, which slowed the coverage run several times over. Line and branch
+                      coverage, and SonarQube, only need to know whether code ran.
+                    -->
+                    <SingleHit>true</SingleHit>
                 </Configuration>
             </DataCollector>
         </DataCollectors>
