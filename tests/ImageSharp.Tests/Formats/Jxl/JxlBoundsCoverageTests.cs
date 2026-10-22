@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
 using SixLabors.ImageSharp.Formats.Jxl.Modular;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
@@ -54,7 +55,9 @@ public class JxlBoundsCoverageTests
     // The 2^28-pixel cap applies to each frame at its upsampled size, not only to the image: a frame with a
     // custom size larger than its 8 x 8 image is checked before anything is allocated for it. At the cap
     // the frame gets past the check and fails on its TOC, which is too short for 4162 sections. The
-    // upsampled frame is coded at 2049 x 2048, far under the cap.
+    // upsampled frame is coded at 2049 x 2048, far under the cap. The frames are RGB, so each is under the
+    // sample budget (2^30 samples, checked after the pixel cap): the over-cap frames throw the pixel cap's
+    // exception, and the frames at the cap pass both.
     [Theory]
     [InlineData(16385, 16384, 1u, true)]
     [InlineData(16384, 16385, 1u, true)]
@@ -63,7 +66,7 @@ public class JxlBoundsCoverageTests
     [InlineData(16384, 16384, 8u, false)]
     public void PixelCap_FrameOverTheCapInAnImageUnderIt_ThrowsBeforeAllocating(int xsize, int ysize, uint upsampling, bool throws)
     {
-        // RGB, so that the frame stays under D14d's sample budget (2^30 samples) at any of these sizes.
+        Assert.True(JxlFrameDecoder.CountSamples(xsize, ysize, 3, 0, Array.Empty<uint>()) <= JxlFrameDecoder.MaxSamplesPerFrame);
         byte[] codestream = new JxlTestLayers(8, 8, alpha: false)
             .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { Crop = true, XSize = xsize, YSize = ysize, Upsampling = upsampling })
             .ToArray();
@@ -76,7 +79,7 @@ public class JxlBoundsCoverageTests
         if (throws)
         {
             InvalidMemoryOperationException ex = Assert.Throws<InvalidMemoryOperationException>(() => new JxlDecoder().Decode<Rgb24>(configuration, stream, CancellationToken.None));
-            Assert.Contains($"frame is {xsize}x{ysize} pixels", ex.Message, StringComparison.Ordinal);
+            Assert.Equal($"The JPEG XL frame is {xsize}x{ysize} pixels, more than the limit of {JxlFrameDecoder.MaxPixelsPerFrame}.", ex.Message);
         }
         else
         {
