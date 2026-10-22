@@ -140,8 +140,11 @@ internal static class JxlIccReader
             JxlThrowHelper.ThrowInvalidImageContentException("Malformed ICC");
         }
 
-        // NB(eustas): 64 MiB ICC should be enough for everything!?
-        const ulong outputLimit = 1 << 28;
+        // libjxl allows 1 << 28 here ("64 MiB ICC should be enough for everything!?"). Departure (#112):
+        // the limit is tightened to 1 << 22 bytes, the Level 5 limit on the ICC size (encode.cc), so a
+        // hostile profile cannot make the decoder build 256 MiB. JxlIccWriter runs this check too, so
+        // the encoder refuses a profile that this decoder would not read.
+        const ulong outputLimit = 1 << 22;
         if (osize > outputLimit)
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Decoded ICC is too large");
