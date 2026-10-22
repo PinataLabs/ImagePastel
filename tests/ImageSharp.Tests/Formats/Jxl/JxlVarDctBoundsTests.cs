@@ -17,8 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// One test per structural bound of libjxl's VarDCT decoder (issue #112), on streams from
 /// <see cref="JxlTestVarDct"/>: a stream past the bound throws <see cref="InvalidImageContentException"/>,
-/// and a stream at the bound decodes, or passes the bound and stops at a feature of a later slice with
-/// <see cref="NotSupportedException"/>. No other exception escapes.
+/// and a stream at the bound decodes. No other exception escapes.
 /// </summary>
 /// <remarks>
 /// <para>Bounds that no stream can reach:</para>
@@ -53,9 +52,6 @@ public class JxlVarDctBoundsTests
 
         /// <summary>The stream is over a bound: <see cref="InvalidImageContentException"/>.</summary>
         Invalid,
-
-        /// <summary>The stream passes the bounds and needs a later slice: <see cref="NotSupportedException"/>.</summary>
-        NotSupported,
     }
 
     // F16 values.
@@ -391,7 +387,9 @@ public class JxlVarDctBoundsTests
         => AssertOutcome(Quantizer(globalScale, quantDc), Outcome.Decodes);
 
     // Issue #112: whatever bit of a VarDCT stream is wrong, only the allowed exceptions escape. A flip in the
-    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own.
+    // image size can also reach the pixel cap, whose InvalidMemoryOperationException is ImageSharp's own, and
+    // a flip in the frame flags can set a flag libjxl does not define, which this port rejects with
+    // NotSupportedException.
     [Theory]
     [InlineData("default")]
     [InlineData("nonzeros_63")]
@@ -777,22 +775,14 @@ public class JxlVarDctBoundsTests
 
     private static void AssertOutcome(byte[] codestream, Outcome outcome, string message = null)
     {
-        switch (outcome)
+        if (outcome == Outcome.Decodes)
         {
-            case Outcome.Decodes:
-                using (JxlDecodedImage decoded = Decode(codestream))
-                {
-                    Assert.Single(decoded.Frames);
-                }
-
-                break;
-            case Outcome.Invalid:
-                InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Decode(codestream));
-                Assert.Contains(message, ex.Message, StringComparison.Ordinal);
-                break;
-            default:
-                Assert.Throws<NotSupportedException>(() => Decode(codestream));
-                break;
+            using JxlDecodedImage decoded = Decode(codestream);
+            Assert.Single(decoded.Frames);
+            return;
         }
+
+        InvalidImageContentException ex = Assert.Throws<InvalidImageContentException>(() => Decode(codestream));
+        Assert.Contains(message, ex.Message, StringComparison.Ordinal);
     }
 }

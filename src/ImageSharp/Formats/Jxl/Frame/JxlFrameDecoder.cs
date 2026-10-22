@@ -53,7 +53,7 @@ internal sealed class JxlFrameDecoder
     /// Decodes the frame that starts at byte <paramref name="offset"/>: blends it onto its reference
     /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
     /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data,
-    /// <see cref="NotSupportedException"/> for features of later slices, and
+    /// <see cref="NotSupportedException"/> for the departures from libjxl that <c>CheckSupported</c> names, and
     /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap.
     /// </summary>
     /// <param name="data">The codestream.</param>
@@ -296,8 +296,9 @@ internal sealed class JxlFrameDecoder
         return dcFrame;
     }
 
-    // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
-    // decoding badly. Each feature has a check of its own, so a slice can lift one at a time.
+    // Rejects the frames this port does not decode, so such files fail cleanly instead of decoding badly.
+    // Since D13 every frame feature libjxl decodes is decoded, and only the commented departures below are
+    // rejected: two kinds of grey YCbCr frame (D10), and frame flags libjxl does not define.
     private static void CheckSupported(JxlFrameHeader frameHeader)
     {
         // A departure from libjxl: a grey image's YCbCr frame keeps three planes until after its colour

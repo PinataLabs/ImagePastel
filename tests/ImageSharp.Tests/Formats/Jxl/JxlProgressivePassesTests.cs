@@ -16,7 +16,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// Progressive passes (D13b): frames whose AC (VarDCT) or Modular groups are split into several passes,
 /// each refining the last. The decoder outputs only the final image, so each file is checked against
-/// djxl v0.12.0's output. The generated files are described in <c>Generated/README.md</c>.
+/// djxl v0.12.0's output. The <c>cjxl -p</c> files (D13d) combine the passes with a permuted TOC, and the
+/// lossy one with a DC frame as well. The generated files are described in <c>Generated/README.md</c>.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlProgressivePassesTests
@@ -51,6 +52,7 @@ public class JxlProgressivePassesTests
     [Theory]
     [InlineData("vardct_progressive_ac")] // 3 passes, shifts 0: 1.0e-6, 1.2e-5
     [InlineData("vardct_qprogressive_ac")] // 2 passes, shifts 1, 0: 1.0e-6, 1.2e-5
+    [InlineData("vardct_progressive")] // cjxl -d 1 -p: a DC frame, then 3 passes, permuted TOCs: 9.7e-7, 1.7e-5
     public void DecodeToPlanes_VarDct_MatchesDjxl(string name)
     {
         NpyArray expected = LoadReference(name);
@@ -58,17 +60,22 @@ public class JxlProgressivePassesTests
         using FileStream stream = File.OpenRead(InputPath(name));
         using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
 
-        Assert.Single(JxlLossyComparer.AssertWithinThresholds(expected, JxlConformanceImages.ToNpy(decoded)));
+        JxlConformanceFrameResult result = Assert.Single(JxlLossyComparer.AssertWithinThresholds(expected, JxlConformanceImages.ToNpy(decoded)));
+        TestContext.Current.TestOutputHelper?.WriteLine($"Worst channel RMSE {result.WorstChannelRmse:G3}, peak {result.PeakError:G3}");
     }
 
+    // Image.Load gives one frame: the DC frame of vardct_progressive is not shown. Measured: 0.501 of one
+    // 8-bit step for each file, which is the rounding.
     [Theory]
     [InlineData("vardct_progressive_ac")]
     [InlineData("vardct_qprogressive_ac")]
+    [InlineData("vardct_progressive")]
     public void Load_VarDct_Rgb24_IsWithinOneStepOfTheClampedReference(string name)
     {
         NpyArray expected = LoadReference(name);
 
         using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), InputPath(name));
+        Assert.Equal(1, image.Frames.Count);
         NpyArray actual = JxlConformanceImages.ToNpy(image, expected.Shape[3]);
 
         JxlConformanceFrameResult result = Assert.Single(JxlConformanceComparer.Measure(expected, actual, JxlConformanceComparison.ClampToUnitRange));
@@ -119,6 +126,30 @@ public class JxlProgressivePassesTests
         using Image<Rgb24> source = Image.Load<Rgb24>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Png", "Bike.png"));
 
         ImageComparer.Exact.VerifySimilarity(source, image);
+    }
+
+    // cjxl -d 1 -p (D13d) combines the three D13 features: a Modular DC frame at level 1 (D13c), then a
+    // VarDCT frame of three passes (D13b) that uses it. Both frames store their sections centre first, so
+    // both TOCs are permuted (D13a), as in the progressive conformance vector.
+    [Fact]
+    public void LossyProgressive_IsADcFrameThenAVarDctFrameOfSeveralPassesWithPermutedTocs()
+    {
+        List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> frames = JxlCodestreamFrames.ReadWithToc(File.ReadAllBytes(InputPath("vardct_progressive")));
+
+        Assert.Equal(2, frames.Count);
+        JxlFrameHeader dc = frames[0].Header;
+        Assert.Equal(JxlFrameType.Dc, dc.FrameType);
+        Assert.Equal(1u, dc.DcLevel);
+        Assert.Equal(JxlFrameEncoding.Modular, dc.Encoding);
+        Assert.NotNull(frames[0].Toc.Permutation);
+        (JxlFrameHeader frame, JxlGroupOffsets toc) = frames[1];
+        Assert.Equal(JxlFrameType.Regular, frame.FrameType);
+        Assert.Equal(JxlFrameEncoding.VarDct, frame.Encoding);
+        Assert.Equal(JxlFrameFlags.UseDcFrame, frame.Flags & JxlFrameFlags.UseDcFrame);
+        Assert.True(frame.Passes.NumPasses > 1, $"{frame.Passes.NumPasses} pass");
+        Assert.True(frame.ToFrameDimensions().NumGroups > 1);
+        Assert.NotNull(toc.Permutation);
+        Assert.True(frame.IsLast);
     }
 
     // The bounds of libjxl's Passes::VisitFields (#112). A frame of one 256 x 256 group whose image fits

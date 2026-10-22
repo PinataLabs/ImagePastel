@@ -57,7 +57,7 @@ public class JxlConformanceDecoderTests
     [InlineData("bike_5")] // The same reference, at Level 5.
     [InlineData("animation_spline")] // 60 VarDCT frames with XYB and splines, each drawn with the frame's chroma-from-luma base. Measured, worst frame: RMSE 2.8e-7, peak 1.4e-5 (djxl v0.12.0: 2.8e-7, 1.4e-5).
     [InlineData("animation_spline_5")] // The same reference, at Level 5.
-    [InlineData("progressive")] // Fetched. A Modular reference-only frame, a Modular DC frame (level 1) with a permuted TOC, then a two-pass XYB VarDCT frame with patches that uses the DC frame, with a centre-first TOC (D13a, D13b, D13c). Measured: RMSE 4.4e-7, peak 2.0e-5.
+    [InlineData("progressive")] // Fetched. A Modular reference-only frame, a Modular DC frame (level 1) with a permuted TOC, then a two-pass XYB VarDCT frame with patches that uses the DC frame, with a centre-first TOC (D13a, D13b, D13c). 4064x2704, so about a minute in a Debug build, most of it in the three EPF passes. Measured: RMSE 4.4e-7, peak 2.0e-5 (djxl v0.12.0: 2.8e-7, 4.9e-6).
     [InlineData("progressive_5")] // The same reference, at Level 5.
     public async Task DecodeToPlanes_PassesThresholds(string id)
     {

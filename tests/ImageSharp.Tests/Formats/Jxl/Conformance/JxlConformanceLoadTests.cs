@@ -44,7 +44,8 @@ public class JxlConformanceLoadTests
     // Measured: opsin_inverse, animation_icos4d, grayscale_public_university, cafe, grayscale_jpeg and
     // bench_oriented_brg are within 0.50 of one step, which is the rounding; upsampling within 0.504. patches
     // (linear sRGB planes, sRGB pixels) is within 0.50 and bike (BT.709) within 0.501. noise is within 0.50
-    // and animation_spline (all 60 frames) within 0.502. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
+    // and animation_spline (all 60 frames) within 0.502. progressive (linear sRGB planes, sRGB pixels; its
+    // DC frame and reference-only frame are not shown, so one frame) is within 0.506. alpha_premultiplied is within 0.60 of a 16-bit step. grayscale is within
     // 0.79: its reference differs from djxl v0.12.0, which this decoder matches, by up to 2.3e-4 in linear
     // light, and the sRGB curve magnifies that in the shadows.
     [Theory]
@@ -61,6 +62,7 @@ public class JxlConformanceLoadTests
     [InlineData("bike", typeof(Rgb24), ReferenceSpace.AsCoded)]
     [InlineData("noise", typeof(Rgb24), ReferenceSpace.AsCoded)]
     [InlineData("animation_spline", typeof(Rgb24), ReferenceSpace.AsCoded)]
+    [InlineData("progressive", typeof(Rgb24), ReferenceSpace.LinearSrgb)]
     public async Task Load_PicksThePixelTypeAndIsWithinOneStepOfTheReference(string id, Type pixelType, ReferenceSpace space)
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
@@ -104,6 +106,7 @@ public class JxlConformanceLoadTests
     [InlineData("patches", 1600, 1096, 32, null, null, 1, true)]
     [InlineData("noise", 500, 606, 24, "Rgb", "Srgb", 0, true)]
     [InlineData("animation_spline", 320, 320, 24, "Rgb", "Srgb", 0, true)]
+    [InlineData("progressive", 4064, 2704, 24, null, null, 0, true)] // The image size, not the DC frame's.
     public async Task Identify_ReportsSizeChannelsAndColourEncoding(string id, int width, int height, int bitsPerPixel, string colorSpace, string transferFunction, int extraChannels, bool xyb)
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);

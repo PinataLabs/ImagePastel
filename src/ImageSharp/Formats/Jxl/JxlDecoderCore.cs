@@ -462,7 +462,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         if (codecMetadata.M.HavePreview)
         {
-            // libjxl skips the preview frame, which comes first.
+            // libjxl skips the preview frame, which comes first. This port rejects the image: no slice
+            // has taken the preview frame yet (docs/jxl/spec.md, "D13 done-check notes").
             JxlThrowHelper.ThrowNotSupportedException("Preview frames");
         }
 
