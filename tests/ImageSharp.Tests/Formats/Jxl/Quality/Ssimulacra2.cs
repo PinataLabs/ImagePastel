@@ -27,8 +27,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 /// much as 0.2. So the port follows the arithmetic of the x64 binary on AVX2 and AVX-512 where it
 /// rounds: the four-lane horizontal blur, and the fused multiply-adds (Highway's <c>MulAdd</c>) of the
 /// blur, the sRGB curve, the opsin absorbance and the cube root. libjxl's scalar code is ported as
-/// plain arithmetic, as its baseline build does not fuse. Against the Windows x64 binary on AVX2 it
-/// agrees to about 1e-5 on the same PNGs.
+/// plain arithmetic, as its baseline build does not fuse. Against the Linux x64 binary on AVX2 it
+/// agrees to about 1e-5 on the same PNGs, on every platform; the Windows binary scores about 0.02 lower,
+/// because its C runtime rounds the cube root of the opsin bias one ulp high.
 /// </para>
 /// <para>
 /// Departures from libjxl, each of which moves the score by far less than the 0.5 that the
@@ -59,7 +60,10 @@ internal static class Ssimulacra2
     private static readonly float M21 = 0.20476744424496821F;
     private static readonly float M22 = (1.0F - M20) - M21;
     private static readonly float OpsinBias = 0.0037930732552754493F;
-    private static readonly float NegBiasCbrt = -MathF.Cbrt(OpsinBias);
+
+    // -cbrtf(OpsinBias), correctly rounded, as JxlXybEncoder has it. MathF.Cbrt calls the C runtime, and
+    // the Windows one returns a value one ulp higher than glibc and macOS, which moves a score by about 0.02.
+    private static readonly float NegBiasCbrt = -0.15595419704914093F;
 
     private static readonly RecursiveGaussian Gaussian = RecursiveGaussian.Create(1.5);
 

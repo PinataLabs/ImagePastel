@@ -36,16 +36,17 @@ public class Ssimulacra2Tests
 
     /// <summary>
     /// The score of a copy whose colour samples keep only their top four bits, as the libjxl v0.12.0
-    /// <c>ssimulacra2</c> binary (Windows x64, AVX2) prints it for the same two PNGs. The port follows the
+    /// <c>ssimulacra2</c> binary (Linux x64, AVX2) prints it for the same two PNGs. The port follows the
     /// binary's rounding, so it agrees to about 1e-5; bike-small has alpha, so it takes the worse of two
-    /// backgrounds.
+    /// backgrounds. The Windows binary prints about 0.02 less, because its C runtime's <c>cbrtf</c> of the
+    /// opsin bias is one ulp above the correctly rounded value that glibc and the port use.
     /// </summary>
     /// <param name="file">The image.</param>
     /// <param name="binary">The binary's score.</param>
     [Theory]
-    [InlineData("Png/Bike.png", 60.93139144)]
-    [InlineData("Png/bike-small.png", 58.09229444)]
-    [InlineData("Jxl/Calibration/gradient.png", 19.07080815)]
+    [InlineData("Png/Bike.png", 60.95262422)]
+    [InlineData("Png/bike-small.png", 58.09856585)]
+    [InlineData("Jxl/Calibration/gradient.png", 19.07678468)]
     public void QuantisedCopy_ScoresAsTheBinary(string file, double binary)
     {
         using Image<Rgba32> original = Image.Load<Rgba32>(TestFile.GetInputFileFullPath(file));
