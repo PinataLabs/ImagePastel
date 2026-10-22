@@ -1,7 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/encode.cc (JxlEncoderSetBasicInfo, JxlEncoderSetColorEncoding, JxlEncoderSetICCProfile, and the
+// lib/jxl/encode.cc (JxlEncoderSetBasicInfo, JxlEncoderSetColorEncoding, JxlEncoderSetICCProfile,
+// JxlEncoderSetFrameDistance, and the
 // codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
 // (ColorEncoding::SetICCRaw) and lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
@@ -25,6 +26,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// </summary>
 internal sealed class JxlEncoderCore : IImageEncoderInternals
 {
+    // libjxl's largest distance (JxlEncoderSetFrameDistance).
+    private const float MaxDistance = 25.0f;
+
     private readonly MemoryAllocator memoryAllocator;
     private readonly float distance;
     private readonly JxlEffort effort;
@@ -50,7 +54,15 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         this.CheckOptions();
         cancellationToken.ThrowIfCancellationRequested();
 
-        JxlCodecMetadata metadata = CreateMetadata<TPixel>(image);
+        bool lossy = this.distance != 0;
+        if (lossy)
+        {
+            CheckLossyInput(image);
+        }
+
+        JxlCodecMetadata metadata = CreateMetadata<TPixel>(image, lossy);
+
+        // A lossy image has no profile (CheckLossyInput), so its colour encoding stays the sRGB enum.
         byte[] icc = SetIccProfile(metadata.M.ColorEncoding, image.Metadata.IccProfile);
 
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
@@ -65,16 +77,25 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         writer.ZeroPadToByte();
 
-        JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
+        if (lossy)
+        {
+            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.memoryAllocator, writer);
+        }
+        else
+        {
+            JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
+        }
+
         stream.Write(writer.GetSpan());
     }
 
-    // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding for a lossless image: the
-    // image's own colour space (not XYB-encoded), the sample depth, and straight alpha at the colour
-    // depth when the pixel type has alpha. The depth is the one JxlMetadata gives, as cjxl keeps the
-    // depth of the file it reads, when it holds every sample losslessly; otherwise it is the depth of
-    // the pixel type (see JxlEncoderInput.ChooseBitDepth).
-    private static JxlCodecMetadata CreateMetadata<TPixel>(Image<TPixel> image)
+    // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding: the image's own colour space,
+    // XYB-encoded for a lossy image (libjxl's uses_original_profile is off), the sample depth, and
+    // straight alpha at the colour depth when the pixel type has alpha. The depth is the one JxlMetadata
+    // gives, as cjxl keeps the depth of the file it reads, when it holds every sample losslessly;
+    // otherwise it is the depth of the pixel type (see JxlEncoderInput.ChooseBitDepth). For a lossy
+    // image the depth is only metadata.
+    private static JxlCodecMetadata CreateMetadata<TPixel>(Image<TPixel> image, bool lossy)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         JxlCodecMetadata metadata = new();
@@ -90,8 +111,8 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         SetBitDepth(m.BitDepth, bitDepth);
 
         // Lossless sets libjxl's uses_original_profile (the samples are not XYB-encoded), so a 16-bit
-        // buffer is enough up to 12 bits.
-        m.Modular16BitBufferSufficient = bitDepth.BitsPerSample <= 12;
+        // buffer is enough up to 12 bits. XYB samples always fit, so for lossy only alpha counts.
+        m.Modular16BitBufferSufficient = lossy || bitDepth.BitsPerSample <= 12;
         if (JxlEncoderInput<TPixel>.HasAlpha)
         {
             JxlExtraChannelInfo alpha = new()
@@ -104,7 +125,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
             m.Modular16BitBufferSufficient &= bitDepth.BitsPerSample <= 12;
         }
 
-        m.XybEncoded = false;
+        m.XybEncoded = lossy;
         SetColorEncoding(m.ColorEncoding, JxlEncoderInput<TPixel>.IsGray);
         return metadata;
     }
@@ -179,12 +200,40 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         _ => JxlSpeedTier.Squirrel,
     };
 
-    // Lossless is ported at every effort. Lossy names the slice of the spec that adds it.
+    // Lossless is ported at every effort, and lossy at Fastest. Lossy at the other efforts names the
+    // slice of the spec that adds it. The distance must be in libjxl's range (JxlEncoderSetFrameDistance).
     private void CheckOptions()
     {
-        if (this.distance != 0)
+        if (!(this.distance >= 0 && this.distance <= MaxDistance))
         {
-            throw new NotSupportedException($"JPEG XL lossy encoding (distance {this.distance}) is not supported yet; slice E3 adds it.");
+            JxlThrowHelper.ThrowImageFormatException($"JPEG XL distance {this.distance} is out of range: it has to be in [0.0..25.0].");
+        }
+
+        if (this.distance != 0 && this.effort != JxlEffort.Fastest)
+        {
+            string slice = this.effort == JxlEffort.Default ? "E4" : "E5";
+            throw new NotSupportedException($"JPEG XL lossy encoding at effort {this.effort} is not supported yet; slice {slice} adds it.");
+        }
+    }
+
+    // The lossy input slice E3a encodes: integer RGB of 8 bits, with no alpha and no ICC profile. The
+    // rest names the slice that adds it.
+    private static void CheckLossyInput<TPixel>(Image<TPixel> image)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (JxlEncoderInput<TPixel>.HasAlpha)
+        {
+            throw new NotSupportedException($"JPEG XL lossy encoding of a pixel type with alpha ({typeof(TPixel).Name}) is not supported yet; slice E3c adds it.");
+        }
+
+        if (JxlEncoderInput<TPixel>.IsGray || !JxlEncoderInput<TPixel>.IsInteger8)
+        {
+            throw new NotSupportedException($"JPEG XL lossy encoding of {typeof(TPixel).Name} is not supported yet; slice E3d adds grey, 16-bit and float samples.");
+        }
+
+        if (image.Metadata.IccProfile is not null)
+        {
+            throw new NotSupportedException("JPEG XL lossy encoding of an image with an ICC profile is not supported yet; slice E3e adds the colour rules.");
         }
     }
 }

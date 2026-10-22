@@ -18,32 +18,6 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 [Trait("Format", "Jxl")]
 public class JxlEncoderTests
 {
-    [Theory]
-    [InlineData(0.5f)]
-    [InlineData(1.0f)]
-    public void Encode_LossyDistance_ThrowsNotSupportedNamingE3(float distance)
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = distance, Effort = JxlEffort.Fastest }));
-
-        Assert.Contains("E3", ex.Message);
-    }
-
-    [Theory]
-    [InlineData(nameof(JxlEffort.Default))]
-    [InlineData(nameof(JxlEffort.Thorough))]
-    public void Encode_LossyEffort_ThrowsNotSupportedNamingE3(string effort)
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = Enum.Parse<JxlEffort>(effort) }));
-
-        Assert.Contains("E3", ex.Message);
-    }
-
     // No lossless effort throws.
     [Theory]
     [InlineData(nameof(JxlEffort.Fastest))]

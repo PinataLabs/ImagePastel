@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_modular.cc (float_to_int and the channel copy of ModularFrameEncoder::ComputeEncodingData),
-// lib/jxl/enc_external_image.cc (the integer scale of ConvertFromExternalPlaneNoSizeCheck) and
+// lib/jxl/enc_external_image.cc (the integer scale of ConvertFromExternalPlaneNoSizeCheck),
+// lib/jxl/enc_frame.cc (CopyColorChannels, for integer buffers) and
 // lib/jxl/encode.cc (CheckValidBitdepth).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -58,6 +59,9 @@ internal static class JxlEncoderInput<TPixel>
     /// channel at the colour depth.
     /// </summary>
     public static bool HasAlpha => Layout.HasAlpha;
+
+    /// <summary>Gets a value indicating whether the pixel type's samples are 8-bit integers.</summary>
+    public static bool IsInteger8 => Layout.Kind == SampleKind.Integer8;
 
     /// <summary>
     /// Checks that a bit depth can be written, as libjxl's <c>CheckValidBitdepth</c>: 1 to 24 bits for
@@ -129,6 +133,45 @@ internal static class JxlEncoderInput<TPixel>
     {
         int colorChannels = IsGray ? 1 : 3;
         CopyChannels(image, 0, colorChannels, bitDepth, gi, 0);
+    }
+
+    /// <summary>
+    /// Copies the colour samples of <paramref name="image"/> into the top-left of three float planes,
+    /// scaled to [0, 1], as libjxl's <c>CopyColorChannels</c> loads an integer buffer for a lossy frame:
+    /// each sample times 1 / (2^bits - 1), a multiply by the reciprocal. A grey sample goes into all three.
+    /// </summary>
+    /// <param name="image">The image, of an 8- or 16-bit integer pixel type.</param>
+    /// <param name="planes">The three planes, at least the size of the image.</param>
+    public static void CopyColorPlanes(Image<TPixel> image, Buffer2D<float>[] planes)
+    {
+        // Half, float and signed samples come with slice E3d.
+        if (Layout.ExponentBitsPerSample != 0 || Layout.Kind == SampleKind.ScaledFloat)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Lossy JPEG XL encoding of float samples (slice E3d)");
+        }
+
+        float scale = Layout.Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
+        using RowReader reader = new(image);
+        Span<int> samples = reader.Samples;
+        for (int y = 0; y < image.Height; y++)
+        {
+            reader.Read(y);
+            for (int c = 0; c < 3; c++)
+            {
+                Span<float> output = planes[c].DangerousGetRowSpan(y).Slice(0, image.Width);
+                if (IsGray && c > 0)
+                {
+                    planes[0].DangerousGetRowSpan(y).Slice(0, image.Width).CopyTo(output);
+                    continue;
+                }
+
+                reader.GetIntegers(c, samples);
+                for (int x = 0; x < samples.Length; x++)
+                {
+                    output[x] = samples[x] * scale;
+                }
+            }
+        }
     }
 
     /// <summary>
