@@ -239,6 +239,67 @@ internal static class JxlEncoderRoundTrip
         return configuration;
     }
 
+    /// <summary>
+    /// Skips the test when <paramref name="reader"/> cannot run here: Magick.NET without a JPEG XL delegate
+    /// or under code coverage, and djxl without <c>JXL_TOOLS_DIR</c>. Call it before an encode, so that a
+    /// skipped test does not encode.
+    /// </summary>
+    /// <param name="reader">The reader.</param>
+    public static void SkipUnlessReaderRuns(Reader reader)
+    {
+        switch (reader)
+        {
+            case Reader.Magick:
+                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
+                SkipMagickUnderCoverage(reader);
+                break;
+            case Reader.Djxl:
+                JxlTools.GetToolPath("djxl");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Decodes an encode through one reader, for the lossy tests: our decoder, Magick.NET, or djxl through a
+    /// PNG in the test output folder. Skips as <see cref="SkipUnlessReaderRuns"/> does.
+    /// </summary>
+    /// <typeparam name="TPixel">The pixel type to decode to.</typeparam>
+    /// <param name="reader">The reader.</param>
+    /// <param name="encoded">The encoded file.</param>
+    /// <param name="outputFolder">The folder under the Jxl test output folder, for djxl's files.</param>
+    /// <param name="name">The name of djxl's files.</param>
+    /// <param name="highBitDepth">Whether Magick.NET keeps its samples above 8 bits.</param>
+    /// <param name="djxlArguments">djxl's arguments after the input and output paths.</param>
+    /// <returns>The decoded image.</returns>
+    public static async Task<Image<TPixel>> DecodeAsync<TPixel>(Reader reader, byte[] encoded, string outputFolder, string name, bool highBitDepth = false, params string[] djxlArguments)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        SkipUnlessReaderRuns(reader);
+        switch (reader)
+        {
+            case Reader.Ours:
+                return Image.Load<TPixel>(CreateConfiguration(), encoded);
+            case Reader.Magick:
+            {
+                MagickReferenceDecoder magick = highBitDepth ? MagickReferenceDecoder.HighBitDepthInstance : MagickReferenceDecoder.Instance;
+                using MemoryStream stream = new(encoded);
+                return magick.Decode<TPixel>(Configuration.Default, stream, CancellationToken.None);
+            }
+
+            default:
+            {
+                CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+                string directory = TestEnvironment.CreateOutputDirectory("Jxl", outputFolder);
+                string jxlPath = Path.Combine(directory, name + ".jxl");
+                string pngPath = Path.Combine(directory, name + ".djxl.png");
+                File.Delete(pngPath);
+                await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
+                await JxlTools.RunAsync("djxl", cancellationToken, [jxlPath, pngPath, .. djxlArguments]);
+                return Image.Load<TPixel>(pngPath);
+            }
+        }
+    }
+
     // A Magick round trip runs the same encoder code as its twin through our decoder, and coverage
     // counts only the library, so under coverage it would add minutes and no coverage. The test jobs
     // without coverage still run it.

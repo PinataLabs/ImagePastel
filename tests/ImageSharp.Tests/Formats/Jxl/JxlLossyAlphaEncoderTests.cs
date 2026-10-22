@@ -2,15 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.IO;
 using System.Security.Cryptography;
-using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -43,7 +39,7 @@ public class JxlLossyAlphaEncoderTests
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
 
-        using Image<Rgba32> decoded = await DecodeAsync(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, $"{mask}-{sizeCase}");
+        using Image<Rgba32> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgba32>(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, "LossyAlphaEncoder", $"{mask}-{sizeCase}");
         string label = $"{mask} {sizeCase}, {encoded.Length} bytes";
         AssertAlphaExact(image, decoded, label);
         AssertVisibleColourWithinInterimBound(image, decoded, label);
@@ -205,35 +201,6 @@ public class JxlLossyAlphaEncoderTests
         for (int c = 0; c < 3; c++)
         {
             Assert.True(rmse[c] <= InterimRmseBound, $"{label}: channel {c} visible RMSE {rmse[c]:F2} > {InterimRmseBound}");
-        }
-    }
-
-    private static async Task<Image<Rgba32>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
-    {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<Rgba32>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the same encode runs through our decoder.");
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.Instance.Decode<Rgba32>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                // Resolve the tool first, so the test skips before it writes anything.
-                JxlTools.GetToolPath("djxl");
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyAlphaEncoder");
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, TestContext.Current.CancellationToken);
-                await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, jxlPath, pngPath);
-                return Image.Load<Rgba32>(pngPath);
-            }
         }
     }
 

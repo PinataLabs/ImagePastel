@@ -4,14 +4,11 @@
 using System;
 using System.IO;
 using System.Numerics;
-using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -178,36 +175,6 @@ public class JxlLossyDepthEncoderTests
         where TPixel : unmanaged, IPixel<TPixel>
         => typeof(TPixel) == typeof(HalfSingle) || typeof(TPixel) == typeof(HalfVector2) || typeof(TPixel) == typeof(HalfVector4);
 
-    private static async Task<Image<TPixel>> DecodeAsync<TPixel>(JxlEncoderRoundTrip.Reader reader, byte[] encoded, string name)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<TPixel>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the same encode runs through our decoder.");
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.HighBitDepthInstance.Decode<TPixel>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                // Resolve the tool first, so the test skips before it writes anything.
-                JxlTools.GetToolPath("djxl");
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyDepthEncoder");
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, TestContext.Current.CancellationToken);
-                await JxlTools.RunAsync("djxl", TestContext.Current.CancellationToken, jxlPath, pngPath);
-                return Image.Load<TPixel>(pngPath);
-            }
-        }
-    }
-
     // Alpha is compared exactly; the colour of each visible pixel within the bound, in 8-bit steps of the
     // full range. A grey image's colour is its one channel.
     private static void AssertAlphaExactAndColourWithinBound<TPixel>(Image<TPixel> expected, Image<TPixel> actual, string label)
@@ -295,7 +262,7 @@ public class JxlLossyDepthEncoderTests
             byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(this.Distance));
 
             string name = $"{typeof(TPixel).Name}-d{this.Distance.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
-            using Image<TPixel> decoded = await DecodeAsync<TPixel>(this.Reader, encoded, name);
+            using Image<TPixel> decoded = await JxlEncoderRoundTrip.DecodeAsync<TPixel>(this.Reader, encoded, "LossyDepthEncoder", name, highBitDepth: true);
             AssertAlphaExactAndColourWithinBound(image, decoded, $"{name} {this.Reader}, {encoded.Length} bytes");
         }
     }

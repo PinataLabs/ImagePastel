@@ -4,15 +4,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
@@ -116,7 +112,7 @@ public class JxlLossyCalibrationTests
         JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
         MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
         JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);
-        SkipUnlessReaderRuns(readerKind);
+        JxlEncoderRoundTrip.SkipUnlessReaderRuns(readerKind);
         using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
 
         byte[] encoded = Encode(row);
@@ -145,48 +141,11 @@ public class JxlLossyCalibrationTests
             return JxlEncoderRoundTrip.Encode(rgb, encoder);
         })).Value;
 
-    // Magick reads the same encode as our decoder, so under coverage it adds minutes and no coverage.
-    private static void SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader reader)
-    {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Magick:
-                MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-                Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the same encode runs through our decoder.");
-                break;
-            case JxlEncoderRoundTrip.Reader.Djxl:
-                // Resolve the tool first, so the test skips before it encodes anything.
-                JxlTools.GetToolPath("djxl");
-                break;
-        }
-    }
-
     // Decodes to 16 bits per sample, at least the precision of djxl's PNG, which the table scores.
-    private static async Task<Image<Rgba64>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, JxlCalibrationRow row, byte[] encoded)
+    private static Task<Image<Rgba64>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, JxlCalibrationRow row, byte[] encoded)
     {
-        switch (reader)
-        {
-            case JxlEncoderRoundTrip.Reader.Ours:
-                return Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-            case JxlEncoderRoundTrip.Reader.Magick:
-            {
-                using MemoryStream stream = new(encoded);
-                return MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-            }
-
-            default:
-            {
-                CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-                string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyCalibration");
-                string name = $"{row.Image.Name}_e{row.Effort}_d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
-                string jxlPath = Path.Combine(directory, name + ".jxl");
-                string pngPath = Path.Combine(directory, name + ".djxl.png");
-                File.Delete(pngPath);
-                await File.WriteAllBytesAsync(jxlPath, encoded, cancellationToken);
-                await JxlTools.RunAsync("djxl", cancellationToken, new[] { jxlPath, pngPath }.Concat(JxlCalibrationTable.Instance.DjxlArguments).ToArray());
-                return Image.Load<Rgba64>(pngPath);
-            }
-        }
+        string name = $"{row.Image.Name}_e{row.Effort}_d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
+        return JxlEncoderRoundTrip.DecodeAsync<Rgba64>(reader, encoded, "LossyCalibration", name, highBitDepth: true, [.. JxlCalibrationTable.Instance.DjxlArguments]);
     }
 
     /// <summary>One Fastest row of the table and our encode of it, as measured.</summary>
