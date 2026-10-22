@@ -239,12 +239,12 @@ internal static partial class JxlFrameEncoder
         {
             for (int y = 0; y < ysize; ++y)
             {
-                System.Span<float> row = image[c].DangerousGetRowSpan(y);
-                System.Span<float> prow = y > 0 ? image[c].DangerousGetRowSpan(y - 1) : default;
-                System.Span<float> nrow = y + 1 < ysize ? image[c].DangerousGetRowSpan(y + 1) : default;
-                System.Span<float> a = alpha.DangerousGetRowSpan(y);
-                System.Span<float> pa = y > 0 ? alpha.DangerousGetRowSpan(y - 1) : default;
-                System.Span<float> na = y + 1 < ysize ? alpha.DangerousGetRowSpan(y + 1) : default;
+                Span<float> row = image[c].DangerousGetRowSpan(y);
+                Span<float> prow = y > 0 ? image[c].DangerousGetRowSpan(y - 1) : default;
+                Span<float> nrow = y + 1 < ysize ? image[c].DangerousGetRowSpan(y + 1) : default;
+                Span<float> a = alpha.DangerousGetRowSpan(y);
+                Span<float> pa = y > 0 ? alpha.DangerousGetRowSpan(y - 1) : default;
+                Span<float> na = y + 1 < ysize ? alpha.DangerousGetRowSpan(y + 1) : default;
                 for (int x = 0; x < xsize; ++x)
                 {
                     if (a[x] != 0)
@@ -326,14 +326,14 @@ internal static partial class JxlFrameEncoder
         {
             for (int y = 0; y < ysizeOrig; y++)
             {
-                System.Span<float> row = image[c].DangerousGetRowSpan(y);
+                Span<float> row = image[c].DangerousGetRowSpan(y);
                 for (int x = xsizeOrig; x < xsize; x++)
                 {
                     row[x] = row[xsizeOrig - 1];
                 }
             }
 
-            System.Span<float> rowSrc = image[c].DangerousGetRowSpan(ysizeOrig - 1).Slice(0, xsize);
+            Span<float> rowSrc = image[c].DangerousGetRowSpan(ysizeOrig - 1).Slice(0, xsize);
             for (int y = ysizeOrig; y < ysize; y++)
             {
                 rowSrc.CopyTo(image[c].DangerousGetRowSpan(y));
@@ -370,8 +370,8 @@ internal static partial class JxlFrameEncoder
     private static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular)
     {
         // Exact powers of 1.25 for the scales the encoder writes.
-        encState.XQmMultiplier = System.MathF.Pow(1.25f, frameHeader.XQmScale - 2.0f);
-        encState.BQmMultiplier = System.MathF.Pow(1.25f, frameHeader.BQmScale - 2.0f);
+        encState.XQmMultiplier = MathF.Pow(1.25f, frameHeader.XQmScale - 2.0f);
+        encState.BQmMultiplier = MathF.Pow(1.25f, frameHeader.BQmScale - 2.0f);
 
         // libjxl rescales the global scale and the DC quantisation by cparams.quant_ac_rescale here, which
         // is 1, so both stay as they are.
