@@ -23,7 +23,9 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 [Trait("Format", "Jxl")]
 public class JxlLossyAlphaEncoderTests
 {
-    // E3a's interim bound on each colour channel's RMSE, in 8-bit steps (JxlLossyEncoderTests).
+    // E3a's interim bound on each colour channel's RMSE, in 8-bit steps (JxlLossyEncoderTests). These masks
+    // are not in the calibration table, so they keep it; the table's photo with alpha (bike-small.png) is
+    // checked against cjxl's SSIMULACRA2, with alpha exact, in JxlLossyCalibrationTests (E3f).
     private const double InterimRmseBound = 20.0;
 
     public static TheoryData<string, string, string> AlphaReaderCases { get; } = CreateAlphaReaderCases();

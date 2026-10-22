@@ -26,8 +26,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// </summary>
 /// <remarks>
 /// The interim error bound: each channel's RMSE against the source, in 8-bit steps, is at most
-/// <see cref="InterimRmseBound"/>. It only catches a broken encoder; E3f replaces it with the SSIMULACRA2
-/// calibration check (T2). For reference, cjxl v0.12.0 <c>-e 3</c> on the flower crop gives RMSE (R, G, B)
+/// <see cref="InterimRmseBound"/>. It only catches a broken encoder. Where an image is in the calibration
+/// table (Bike, CalliphoraPartial), the SSIMULACRA2 check of <c>JxlLossyCalibrationTests</c> replaces it
+/// (E3f); the flower crop, the odd and tiny sizes and the gradient over two LF groups are not in the table,
+/// so they keep it. For reference, cjxl v0.12.0 <c>-e 3</c> on the flower crop gives RMSE (R, G, B)
 /// of (3.78, 2.10, 9.29) at d1, (5.62, 3.40, 11.92) at d2 and (7.55, 4.99, 14.01) at d4, and djxl decodes
 /// this encoder's files of the crop to the same 8-bit pixels as cjxl's.
 /// </remarks>
@@ -416,7 +418,9 @@ public class JxlLossyEncoderTests
         TheoryData<string, string> cases = new();
         foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
         {
-            foreach (string sizeCase in new[] { "flower-256x244", "flower-17x23", "dot-1x1", "bike-582x453", "gradient-2049x9" })
+            // Bike (six groups, odd in both sides) is a calibration image: JxlLossyCalibrationTests checks it
+            // through each reader at d1, d2 and d4 against cjxl's SSIMULACRA2, in place of the interim bound.
+            foreach (string sizeCase in new[] { "flower-256x244", "flower-17x23", "dot-1x1", "gradient-2049x9" })
             {
                 cases.Add(reader.ToString(), sizeCase);
             }
