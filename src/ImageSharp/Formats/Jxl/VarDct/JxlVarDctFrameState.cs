@@ -42,7 +42,12 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// <param name="frameHeader">The frame header.</param>
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="matrices">The frame's dequantization matrices.</param>
-    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices)
+    /// <param name="dcFrame">
+    /// For a frame that uses a DC frame, the DC slot it takes its DC from, at least
+    /// <see cref="JxlFrameDimensions.XSizeBlocks"/> by <see cref="JxlFrameDimensions.YSizeBlocks"/>;
+    /// otherwise <see langword="null"/>.
+    /// </param>
+    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, JxlReferenceFrame dcFrame = null)
     {
         this.allocator = allocator;
         this.FrameDim = frameDim;
@@ -54,10 +59,23 @@ internal sealed class JxlVarDctFrameState : IDisposable
         {
             this.RawQuantField = allocator.Allocate2D<int>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
             this.EpfSharpness = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+
+            // InitializePassesSharedState: a frame that uses a DC frame has a quantised DC of zeros (the
+            // buckets of its block contexts), and its DC is the DC frame's image. libjxl points at the slot;
+            // here the DC is a copy of it, as nothing in the frame changes it (FinalizeDc skips the smoothing,
+            // and ProcessDcGroup the DC groups' DC).
             this.QuantDc = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
             for (int c = 0; c < 3; c++)
             {
                 this.Dc[c] = allocator.Allocate2D<float>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+                if (dcFrame != null)
+                {
+                    DebugGuard.IsTrue(dcFrame.Width >= this.XSizeBlocks && dcFrame.Height >= this.YSizeBlocks, "The frame decoder checks the DC frame's size");
+                    for (int y = 0; y < this.YSizeBlocks; y++)
+                    {
+                        dcFrame.Planes[c].DangerousGetRowSpan(y).Slice(0, this.XSizeBlocks).CopyTo(this.Dc[c].DangerousGetRowSpan(y));
+                    }
+                }
             }
         }
         catch

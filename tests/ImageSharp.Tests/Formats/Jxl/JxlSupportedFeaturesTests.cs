@@ -17,8 +17,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// The frame features of later slices: each is rejected on its own with
 /// <see cref="NotSupportedException"/>, so that a slice can lift one rejection at a time. The features
 /// that D10 and D11 lifted decode. Patches on VarDCT frames, which D12a lifted, are checked against djxl
-/// in JxlXybVarDctTests and the conformance tests, noise, which D12c lifted, in JxlNoiseTests, and
-/// splines, which D12b lifted, in JxlSplinesTests.
+/// in JxlXybVarDctTests and the conformance tests, noise, which D12c lifted, in JxlNoiseTests,
+/// splines, which D12b lifted, in JxlSplinesTests, and DC frames, which D13c lifted, in JxlDcFrameTests.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlSupportedFeaturesTests
@@ -27,7 +27,6 @@ public class JxlSupportedFeaturesTests
     private const int Height = 16;
 
     [Theory]
-    [InlineData(32, "DC frame")]
     [InlineData(4, "frame flags")]
     [InlineData(8, "frame flags")]
     [InlineData(64, "frame flags")]

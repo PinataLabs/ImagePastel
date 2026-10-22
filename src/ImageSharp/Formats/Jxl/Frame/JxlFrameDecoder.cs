@@ -4,8 +4,9 @@
 // lib/jxl/dec_frame.h and lib/jxl/dec_frame.cc (DecodeFrame, FrameDecoder: InitFrame, ProcessDCGlobal,
 // ProcessDCGroup, FinalizeDC, AllocateOutput, ProcessACGlobal, ProcessACGroup, ProcessSections, FinalizeFrame), the
 // per-frame steps of the frame loop in JxlDecoderProcessCodestream (lib/jxl/decode.cc), the
-// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc) with its spline stage,
-// and the frame counters that seed the noise (visible_frame_index and nonvisible_frame_index in
+// pipeline set-up of PassesDecoderState::PreparePipeline (lib/jxl/dec_cache.cc) with its spline stage and
+// its DC-slot write, the DC-frame part of InitializePassesSharedState (lib/jxl/passes_state.cc), and the
+// frame counters that seed the noise (visible_frame_index and nonvisible_frame_index in
 // lib/jxl/dec_cache.h).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -70,8 +71,9 @@ internal sealed class JxlFrameDecoder
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
         CheckSupported(frameHeader);
 
-        // InitFrame counts the shown frames, and the frames since the last shown one. libjxl also counts a
-        // preview frame as not shown; JxlDecoderCore rejects images with a preview.
+        // InitFrame counts the shown frames, and the frames since the last shown one. A DC frame is never
+        // shown, so it counts as not shown. libjxl also counts a preview frame as not shown; JxlDecoderCore
+        // rejects images with a preview.
         if ((frameHeader.IsLast || frameHeader.AnimationFrame.Duration > 0) &&
             (frameHeader.FrameType == JxlFrameType.Regular || frameHeader.FrameType == JxlFrameType.SkipProgressive))
         {
@@ -115,6 +117,8 @@ internal sealed class JxlFrameDecoder
 
         frameEnd = offset + (int)pos;
 
+        JxlReferenceFrame dcFrame = (frameHeader.Flags & JxlFrameFlags.UseDcFrame) != 0 ? this.GetDcFrame(frameHeader, frameDim) : null;
+
         bool isLastOfStill = IsLastOfStill(frameHeader);
 
         // PreparePipeline: the blending stage checks its reference slots before any section is decoded.
@@ -145,7 +149,7 @@ internal sealed class JxlFrameDecoder
         int numColorPlanes = frameHeader.NumDecodedColorPlanes;
         JxlChannelShift[] channelShifts = JxlRenderPipeline.ChannelShifts(numColorPlanes, frameHeader.ExtraChannelUpsampling.Count, upsampling.Chroma, upsampling.BeforePatches, upsampling.AfterPatches);
         using JxlRenderPipeline pipeline = new(this.configuration.MemoryAllocator, frameDim, numColorPlanes, channelShifts, withNoisePlanes: features.Noise != null);
-        using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices) : null;
+        using JxlVarDctFrameState varDct = frameHeader.Encoding == JxlFrameEncoding.VarDct ? new JxlVarDctFrameState(this.configuration.MemoryAllocator, frameHeader, frameDim, matrices, dcFrame) : null;
 
         // libjxl makes a new colour-correlation map for each frame. A VarDCT frame decodes its own; a
         // Modular frame keeps the defaults, base ratios 0 and 1. The splines and the noise take it.
@@ -177,7 +181,7 @@ internal sealed class JxlFrameDecoder
         IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, varDct));
 
         JxlNoiseStages noiseStages = features.Noise != null ? new JxlNoiseStages(features.Noise, cmap, pipeline.NoiseChannel) : null;
-        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, noiseStages, colorStages, blending, isLastOfStill ? sink : null, cancellationToken);
+        JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), patchesStage, splinesStage, upsampling.AfterPatches, noiseStages, colorStages, blending, isLastOfStill ? sink : null, cancellationToken, this.references);
 
         // FinalizeFrame: the slot changes only once the frame is done, as the frame may blend from it.
         if (saved != null)
@@ -251,8 +255,8 @@ internal sealed class JxlFrameDecoder
         long gx = dcGroupId % frameDim.XSizeDcGroups;
         long gy = dcGroupId / frameDim.XSizeDcGroups;
 
-        // A frame that uses a DC frame (D13) has no VarDCT DC of its own; CheckSupported rejects it.
-        if (varDct != null)
+        // A frame that uses a DC frame has no VarDCT DC of its own: its DC is the DC frame's.
+        if (varDct != null && (frameHeader.Flags & JxlFrameFlags.UseDcFrame) == 0)
         {
             modularFrameDecoder.DecodeVarDctDc(frameHeader, dcGroupId, br, varDct);
         }
@@ -263,6 +267,34 @@ internal sealed class JxlFrameDecoder
         {
             modularFrameDecoder.DecodeAcMetadata(frameHeader, dcGroupId, br, varDct);
         }
+    }
+
+    // InitializePassesSharedState: a frame that uses a DC frame takes its DC from the DC slot of its own
+    // DC level, which a DC frame of the next level wrote. Returns that slot.
+    private JxlReferenceFrame GetDcFrame(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim)
+    {
+        uint dcLevel = frameHeader.DcLevel;
+        if (dcLevel == JxlReferenceFrames.NumDcSlots)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException($"Invalid DC level for kUseDcFrame: {dcLevel}");
+        }
+
+        JxlReferenceFrame dcFrame = this.references.GetDc(dcLevel);
+        if (dcFrame == null)
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException($"kUseDcFrame specified for dc_level {dcLevel}, but no frame was decoded with level {dcLevel + 1}");
+        }
+
+        // A departure from libjxl, which reads the DC frame's image at the VarDCT frame's block positions
+        // without checking its size. A DC frame is the image size divided by 8 per level, rounded up, which
+        // covers the blocks of a frame of the image size; a frame with a larger custom size would read past
+        // it, so such a frame is rejected here.
+        if (frameHeader.Encoding == JxlFrameEncoding.VarDct && (dcFrame.Width < frameDim.XSizeBlocks || dcFrame.Height < frameDim.YSizeBlocks))
+        {
+            JxlThrowHelper.ThrowInvalidImageContentException("The DC frame is smaller than the blocks of the frame that uses it");
+        }
+
+        return dcFrame;
     }
 
     // Rejects everything a later slice of the port decodes, so such files fail cleanly instead of
@@ -286,16 +318,7 @@ internal sealed class JxlFrameDecoder
             }
         }
 
-        if (frameHeader.FrameType == JxlFrameType.Dc)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("DC frames (a DC frame)");
-        }
-
         JxlFrameFlags flags = frameHeader.Flags;
-        if ((flags & JxlFrameFlags.UseDcFrame) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("DC frames (the frame uses a DC frame)");
-        }
 
         // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
         const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;

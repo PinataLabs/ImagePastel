@@ -428,9 +428,20 @@ internal sealed class JxlTestLayers
             w.Write(2, 0); // one pass
         }
 
-        bool crop = frame.Crop || frame.XSize != 0;
+        // A DC frame has a DC level, U32(Val(1), Val(2), Val(3), Val(4)), and no crop or reference slot.
+        bool dcFrame = frame.Type == JxlFrameType.Dc;
+        if (dcFrame)
+        {
+            w.Write(2, frame.DcLevel - 1);
+        }
+
+        bool crop = !dcFrame && (frame.Crop || frame.XSize != 0);
         bool isPartialFrame = false;
-        w.Bit(crop);
+        if (!dcFrame)
+        {
+            w.Bit(crop);
+        }
+
         if (crop)
         {
             if (regular)
@@ -463,7 +474,7 @@ internal sealed class JxlTestLayers
             w.Bit(isLast);
         }
 
-        if (!isLast)
+        if (!isLast && !dcFrame)
         {
             w.Write(2, frame.SaveAsReference);
         }
@@ -589,6 +600,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public JxlTestBlending[] ExtraChannels { get; init; }
 
     public uint Duration { get; init; }
+
+    /// <summary>Gets the DC level of a <see cref="JxlFrameType.Dc"/> frame, 1 to 4.</summary>
+    public uint DcLevel { get; init; } = 1;
 
     /// <summary>Gets the frame name, up to 47 UTF-8 bytes.</summary>
     public string Name { get; init; }

@@ -282,7 +282,7 @@ djxl vardct_identity_afv.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 | `vardct_xyb_sizes_smooth.jxl` | The same kind of frame at `-d 1`, with smooth colour only: 64x64 and 32x64 blocks in their natural coefficient order. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_sizes_smooth.npy` |
 | `vardct_xyb_identity_afv.jxl` | `Png/bike-small.png`, 288 x 163 8-bit RGBA, at `-e 7` with no loop filters, which has Identity and AFV0 to AFV3 blocks (D9f), an adaptive quant field and a non-zero chroma-from-luma map. Two groups. | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_identity_afv.npy` |
 | `vardct_xyb_passes.jxl` | The 64 x 64 image at `-e 2 --progressive_ac`: three passes (D13). | None: decoding throws `NotSupportedException` |
-| `vardct_xyb_dc_frame.jxl` | The 64 x 64 image at `-e 2 --progressive_dc=1`: a Modular DC frame comes first (D13). | None: decoding throws `NotSupportedException` |
+| `vardct_xyb_dc_frame.jxl` | The 64 x 64 image at `-e 2 --progressive_dc=1`: a Modular DC frame comes first, and the VarDCT frame takes its DC from it (D13c). See "How the DC-frame files were made". | `External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dc_frame.npy` |
 
 ```sh
 py -3 make_vardct_xyb.py
@@ -673,3 +673,25 @@ djxl vardct_grey_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/var
 - `jxlinfo -v noise_animation.jxl` lists the second frame as a "Layer" with a duration of 0. `djxl` writes the three shown frames to the `.npy`, coalesced onto the full canvas.
 - The noise comes from libjxl's `Xorshift128Plus`, seeded by the counts of shown and hidden frames and by the position of each tile, so a decoder that seeds a tile wrongly fails the comparison. A decoder that seeds the hidden frame's noise as a shown frame's misses `noise_animation`'s second frame by an RMSE of 9.0e-4; one that seeds every tile of a group with the group's position misses `noise_resampling_2x`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.4e-6 and 4.2e-5 (`noise_resampling_2x`) and, in the worst frame, 1.5e-6 and 4.1e-5 (`noise_animation`). libjxl fuses the multiplies and adds of the noise stages on AVX2, and this port does not (ADR 0004). `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.
+
+#### How the DC-frame files were made
+
+Lossy VarDCT frames that take their DC from a DC frame (D13c), which `cjxl` writes with `--progressive_dc`. `JxlDcFrameTests` checks them. Neither file permutes its TOC or splits a frame into passes.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `progressive_dc1.jxl` | `Png/Bike.png`, 582 x 453 8-bit RGB, at `-d 1 --progressive_dc=1`: a Modular DC frame at level 1 (73 x 57), then the VarDCT frame (3 x 2 groups) that uses it. | `External/ReferenceOutput/JxlDecoderTests/progressive_dc1.npy` |
+| `progressive_dc2.jxl` | The same image at `-d 1 --progressive_dc=2`: a Modular DC frame at level 2 (10 x 8), a VarDCT DC frame at level 1 that uses it, then the VarDCT frame that uses that. | `External/ReferenceOutput/JxlDecoderTests/progressive_dc2.npy` |
+
+```sh
+cjxl ../../Png/Bike.png progressive_dc1.jxl -d 1 --progressive_dc=1
+cjxl ../../Png/Bike.png progressive_dc2.jxl -d 1 --progressive_dc=2
+djxl progressive_dc1.jxl ../../../External/ReferenceOutput/JxlDecoderTests/progressive_dc1.npy
+djxl progressive_dc2.jxl ../../../External/ReferenceOutput/JxlDecoderTests/progressive_dc2.npy
+djxl vardct_xyb_dc_frame.jxl ../../../External/ReferenceOutput/JxlDecoderTests/vardct_xyb_dc_frame.npy
+```
+
+- `cjxl` codes the smallest DC frame as Modular and any larger one as VarDCT in its max-error mode (`enc_cache.cc`), so `progressive_dc2` decodes a VarDCT DC frame from a DC frame.
+- The DC frames are not shown: `djxl` writes one frame, and so does `Image.Load`.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 9.7e-7 and 1.7e-5 (`progressive_dc1`), 1.0e-6 and 1.2e-5 (`progressive_dc2`), and 9.1e-7 and 1.2e-5 (`vardct_xyb_dc_frame`). `Image.Load<Rgb24>` is within 0.502 of one 8-bit step of the clamped reference.
+- A decoder that leaves the DC at zero instead of taking it from the DC frame misses both files by an RMSE of 0.59. One that does so only for the level-1 DC frame of `progressive_dc2` misses that file by 0.55.

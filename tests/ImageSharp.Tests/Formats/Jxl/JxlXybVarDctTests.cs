@@ -375,10 +375,9 @@ public class JxlXybVarDctTests
         Assert.True(frames[1].IsLast);
     }
 
-    // The 64 x 64 image with one of the features of a later slice each.
+    // The 64 x 64 image with a feature of a later slice.
     [Theory]
     [InlineData("vardct_xyb_passes", "Progressive passes")]
-    [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
     {
         using FileStream stream = File.OpenRead(InputPath(name));
