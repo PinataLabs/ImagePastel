@@ -1,9 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (do_transform, maybe_do_transform, try_palettes, and
-// ModularFrameEncoder: Init, ComputeEncodingData, PrepareStreamParams, ComputeTree, ComputeTokens,
-// EncodeGlobalInfo, EncodeStream).
+// lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (MergeTrees, do_transform, maybe_do_transform,
+// try_palettes, and ModularFrameEncoder: Init, ComputeEncodingData, PrepareStreamParams, ComputeTree,
+// ComputeTokens, EncodeGlobalInfo, EncodeStream, and the 4:4:4 effort-3 paths of AddVarDCTDC and
+// AddACMetadata).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -27,7 +28,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Gradient and Weighted predictors at efforts 5 and 7, with the per-group RCT search and local
 /// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
 /// palette by the estimated cost. Squeeze and quantisation are not ported.
-/// It is the mirror of <see cref="JxlModularFrameDecoder"/>.
+/// For a lossy VarDCT frame it codes the quantised DC and the AC metadata of each LF group, with libjxl's
+/// predefined trees of effort 3 merged into one by stream id. It is the mirror of
+/// <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
 {
@@ -62,12 +65,18 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         (1 * 7) + 2, (2 * 7) + 1, (2 * 7) + 2, (2 * 7) + 3, (4 * 7) + 4, (4 * 7) + 5, (0 * 7) + 2, (0 * 7) + 1, (0 * 7) + 3,
     };
 
+    // The VarDCT DC channels in the order libjxl quantises them: Y first, which X and B are predicted from.
+    private static readonly int[] YxbOrder = { 1, 0, 2 };
+
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlSpeedTier speedTier;
     private readonly JxlModularImage[] streamImages;
     private readonly JxlModularOptions[] streamOptions;
+    private readonly JxlModularOptions baseOptions;
     private readonly JxlHistogramParams histogramParams;
+    private readonly bool modularMode;
+    private readonly List<long> treeSplits = new();
     private readonly List<StreamParams> streamParams = new();
     private readonly List<List<JxlToken>> treeTokens = new();
     private readonly JxlEntropyEncodingData code = new();
@@ -82,11 +91,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlModularFrameEncoder"/> class, as libjxl's
-    /// <c>ModularFrameEncoder::Init</c> does for a lossless frame: no responsive mode, the tree-learning
-    /// parameters and predictor of the speed tier, the <c>kWPFixedDC</c> tree at effort 3, and the
-    /// Modular histogram parameters.
+    /// <c>ModularFrameEncoder::Init</c> does for a lossless Modular frame or a VarDCT frame whose Modular
+    /// part is lossless: no responsive mode, the tree-learning parameters and predictor of the speed tier,
+    /// the <c>kWPFixedDC</c> tree at effort 3, the chunks of streams that each get their own tree, and
+    /// the Modular histogram parameters.
     /// </summary>
-    /// <param name="frameHeader">The frame header.</param>
+    /// <param name="frameHeader">The frame header; a VarDCT frame is libjxl's <c>modular_mode == false</c>.</param>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="allocator">The allocator.</param>
     public JxlModularFrameEncoder(JxlFrameHeader frameHeader, JxlSpeedTier speedTier, MemoryAllocator allocator)
@@ -94,6 +104,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.allocator = allocator;
         this.speedTier = speedTier;
         this.frameDim = frameHeader.ToFrameDimensions();
+        this.modularMode = frameHeader.Encoding == JxlFrameEncoding.Modular;
 
         long numStreams = JxlModularStreamId.ModularAc(this.frameDim, 0, frameHeader.Passes.NumPasses);
         this.streamImages = new JxlModularImage[numStreams];
@@ -111,11 +122,27 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         };
         SetTreeLearningParameters(options, speedTier, numStreams, frameHeader.NonserializedMetadata.M);
         options.NbRepeats = Math.Min(1.0f, options.NbRepeats);
-        options.Predictor = DefaultPredictor(speedTier);
+        options.Predictor = DefaultPredictor(speedTier, this.modularMode);
+        this.treeSplits.Add(0);
+        if (!this.modularMode)
+        {
+            options.FastDecodeMultiplier = 1.0f;
+            this.treeSplits.Add(JxlModularStreamId.VarDctDc(this.frameDim, 0));
+            this.treeSplits.Add(JxlModularStreamId.ModularDc(this.frameDim, 0));
+            this.treeSplits.Add(JxlModularStreamId.AcMetadata(this.frameDim, 0));
+            this.treeSplits.Add(JxlModularStreamId.QuantTable(this.frameDim, 0));
+            this.treeSplits.Add(JxlModularStreamId.ModularAc(this.frameDim, 0, 0));
+            this.AcMetadataSize = new int[this.frameDim.NumDcGroups];
+            this.ExtraDcPrecision = new int[this.frameDim.NumDcGroups];
+        }
+
+        this.treeSplits.Add(numStreams);
         options.MaxChanSize = this.frameDim.GroupDimension;
         options.GroupDim = this.frameDim.GroupDimension;
 
-        // TODO(veluca): figure out how to use different predictor sets per channel.
+        // TODO(veluca): figure out how to use different predictor sets per channel. Every stream but the
+        // first shares these options until a step gives it a copy of its own (libjxl copies them by value).
+        this.baseOptions = options;
         this.streamOptions = new JxlModularOptions[numStreams];
         Array.Fill(this.streamOptions, options);
         this.streamOptions[0] = options.Clone();
@@ -124,8 +151,14 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             this.streamOptions[0].Kind = JxlModularOptions.TreeKind.WPFixedDC;
         }
 
-        this.histogramParams = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, options.Predictor);
+        this.histogramParams = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, options.Predictor);
     }
+
+    /// <summary>Gets the number of AC metadata entries (varblocks) of each LF group of a VarDCT frame.</summary>
+    public int[] AcMetadataSize { get; } = Array.Empty<int>();
+
+    /// <summary>Gets the extra DC precision of each LF group of a VarDCT frame.</summary>
+    public int[] ExtraDcPrecision { get; } = Array.Empty<int>();
 
     /// <summary>
     /// Fills the Modular image of the global stream from <paramref name="image"/>, then the images of
@@ -238,38 +271,82 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// </summary>
     public void ComputeTree()
     {
-        // libjxl gives the tree learning the multipliers of quantised channels here; lossless has none.
+        // libjxl gives the tree learning the multipliers of quantised channels here; a lossless Modular
+        // part has none.
         List<JxlModularMultiplierInfo> multiplierInfo = new();
-        if (this.speedTier < JxlSpeedTier.Falcon)
+        if (this.speedTier < JxlSpeedTier.Falcon || !this.modularMode)
         {
-            // libjxl splits the streams into chunks (tree_splits_) and learns one tree per chunk, then
-            // merges them under splits on the stream id. A Modular frame has one chunk, all the streams,
-            // so MergeTrees only copies its tree.
-            // Avoid creating a tree with leaves that don't correspond to any pixels.
-            int start = 0;
-            int stop = this.streamImages.Length;
-            while (start < stop && this.streamImages[start].IsEmpty)
+            // Avoid creating a tree with leaves that don't correspond to any pixels. A Modular frame has
+            // one chunk, all the streams; a VarDCT frame has one per kind of stream.
+            List<long> usefulSplits = new(this.treeSplits.Count);
+            for (int chunk = 0; chunk < this.treeSplits.Count - 1; chunk++)
             {
-                ++start;
-            }
+                bool hasPixels = false;
+                for (long i = this.treeSplits[chunk]; i < this.treeSplits[chunk + 1]; i++)
+                {
+                    if (!this.streamImages[i].IsEmpty)
+                    {
+                        hasPixels = true;
+                    }
+                }
 
-            while (start < stop && this.streamImages[stop - 1].IsEmpty)
-            {
-                --stop;
+                if (hasPixels)
+                {
+                    usefulSplits.Add(this.treeSplits[chunk]);
+                }
             }
 
             // Don't do anything if modular mode does not have any pixels in this image
-            if (start == stop)
+            if (usefulSplits.Count == 0)
             {
                 return;
             }
 
-            // libjxl builds a predefined tree here for a chunk whose first stream does not learn one,
-            // which only VarDCT frames have.
-            List<JxlPropertyDecisionNode> learned = JxlModularEncoder.LearnTree(this.streamImages, this.streamOptions, start, stop, multiplierInfo);
+            usefulSplits.Add(this.treeSplits[^1]);
+
+            // The chunks are independent: this loop is where libjxl learns their trees in parallel.
+            List<JxlPropertyDecisionNode>[] trees = new List<JxlPropertyDecisionNode>[usefulSplits.Count - 1];
+            for (int chunk = 0; chunk < trees.Length; chunk++)
+            {
+                int start = (int)usefulSplits[chunk];
+                int stop = (int)usefulSplits[chunk + 1];
+                while (start < stop && this.streamImages[start].IsEmpty)
+                {
+                    ++start;
+                }
+
+                while (start < stop && this.streamImages[stop - 1].IsEmpty)
+                {
+                    --stop;
+                }
+
+                if (this.streamOptions[start].Kind == JxlModularOptions.TreeKind.Learn)
+                {
+                    trees[chunk] = JxlModularEncoder.LearnTree(this.streamImages, this.streamOptions, start, stop, multiplierInfo);
+                }
+                else
+                {
+                    long chunkPixels = 0;
+                    for (int i = start; i < stop; i++)
+                    {
+                        foreach (JxlModularChannel ch in this.streamImages[i].Channel)
+                        {
+                            chunkPixels += (long)ch.W * ch.H;
+                        }
+                    }
+
+                    chunkPixels = Math.Max(chunkPixels, 1);
+
+                    // libjxl passes a bit depth of 8 here, whatever the depth of the samples.
+                    trees[chunk] = JxlModularEncoder.PredefinedTree(this.streamOptions[start].Kind, chunkPixels, 8);
+                }
+            }
+
+            List<JxlPropertyDecisionNode> merged = new();
+            MergeTrees(trees, usefulSplits, 0, trees.Length, merged);
             this.treeTokens.Clear();
             this.treeTokens.Add(new List<JxlToken>());
-            this.tree = JxlModularEncoder.TokenizeTree(learned, this.treeTokens[0]);
+            this.tree = JxlModularEncoder.TokenizeTree(merged, this.treeTokens[0]);
             return;
         }
 
@@ -290,6 +367,165 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.treeTokens.Clear();
         this.treeTokens.Add(new List<JxlToken>());
         this.tree = JxlModularEncoder.TokenizeTree(fixedTree, this.treeTokens[0]);
+    }
+
+    /// <summary>
+    /// Fills the VarDCT DC stream of LF group <paramref name="groupIndex"/> with the quantised DC of its
+    /// blocks, as libjxl's <c>AddVarDCTDC</c> does for a 4:4:4 frame without near-lossless DC (effort 3
+    /// and faster): the channels in Y, X, B order, X and B after the chroma-from-luma prediction from the
+    /// quantised Y, each rounded half away from zero.
+    /// </summary>
+    /// <param name="dc">The X, Y and B DC of each block of the frame, rows <paramref name="stride"/> apart.</param>
+    /// <param name="stride">The width of the frame in blocks.</param>
+    /// <param name="r">The LF group's rectangle, in blocks.</param>
+    /// <param name="groupIndex">The LF group.</param>
+    /// <param name="nlDc">Whether to quantise the DC near-losslessly, which libjxl does below Falcon.</param>
+    /// <param name="quantizer">The quantiser, which sets the DC steps.</param>
+    /// <param name="colorCorrelation">The chroma-from-luma parameters, whose DC factors predict X and B.</param>
+    public void AddVarDctDc(float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, VarDct.JxlQuantizer quantizer, VarDct.JxlColorCorrelation colorCorrelation)
+    {
+        if (nlDc)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("Near-lossless DC (libjxl effort 4 and up; slice E4)");
+        }
+
+        this.ExtraDcPrecision[groupIndex] = 0;
+        float mul = 1 << this.ExtraDcPrecision[groupIndex];
+
+        long streamId = JxlModularStreamId.VarDctDc(this.frameDim, groupIndex);
+        JxlModularOptions options = this.baseOptions.Clone();
+        this.streamOptions[streamId] = options;
+        options.MaxChanSize = 0xFFFFFF;
+        options.Predictor = JxlPredictor.Weighted;
+        options.WpTreeMode = JxlModularOptions.TreeMode.WPOnly;
+        if (this.speedTier >= JxlSpeedTier.Squirrel)
+        {
+            options.Kind = JxlModularOptions.TreeKind.WPFixedDC;
+        }
+
+        if (this.speedTier < JxlSpeedTier.Squirrel)
+        {
+            JxlThrowHelper.ThrowNotSupportedException("A learned tree for the VarDCT DC (libjxl effort 8 and up)");
+        }
+
+        int xs = (int)r.XSize;
+        int ys = (int)r.YSize;
+        JxlModularImage image = JxlModularImage.Create(this.allocator, xs, ys, 8, 3);
+        this.streamImages[streamId].Dispose();
+        this.streamImages[streamId] = image;
+
+        // The decoder's 4:4:4 order: Y, X, B.
+        ReadOnlySpan<float> dcFactors = colorCorrelation.DcFactors;
+        foreach (int c in YxbOrder)
+        {
+            float invFactor = quantizer.GetInvDcStep(c) * mul;
+            float yFactor = quantizer.GetDcStep(1) / mul;
+            float cflFactor = dcFactors[c];
+            for (int y = 0; y < ys; y++)
+            {
+                Span<int> quantRow = image.Channel[c < 2 ? c ^ 1 : c].Row(y);
+                ReadOnlySpan<float> row = dc[c].AsSpan((int)(((r.Y0 + y) * stride) + r.X0), xs);
+                if (c == 1)
+                {
+                    for (int x = 0; x < xs; x++)
+                    {
+                        quantRow[x] = (int)MathF.Round(row[x] * invFactor, MidpointRounding.AwayFromZero);
+                    }
+                }
+                else
+                {
+                    ReadOnlySpan<int> quantRowY = image.Channel[0].Row(y);
+                    for (int x = 0; x < xs; x++)
+                    {
+                        quantRow[x] = (int)MathF.Round((row[x] - (quantRowY[x] * (yFactor * cflFactor))) * invFactor, MidpointRounding.AwayFromZero);
+                    }
+                }
+            }
+        }
+
+        // libjxl's DequantDC here fills the encoder's own reconstruction of the DC and the quantised-DC
+        // buckets. Neither is read at effort 3: the default block context map has no DC thresholds.
+    }
+
+    /// <summary>
+    /// Fills the AC metadata stream of LF group <paramref name="groupIndex"/>, as libjxl's
+    /// <c>AddACMetadata</c>: the chroma-from-luma factors of each colour tile, the strategy and quant field
+    /// of each varblock, and the EPF sharpness of each block.
+    /// </summary>
+    /// <param name="r">The LF group's rectangle, in blocks.</param>
+    /// <param name="groupIndex">The LF group.</param>
+    /// <param name="encState">The encoder state with the per-block choices.</param>
+    public void AddAcMetadata(JxlRect r, long groupIndex, VarDct.JxlPassesEncoderState encState)
+    {
+        long streamId = JxlModularStreamId.AcMetadata(this.frameDim, groupIndex);
+        JxlModularOptions options = this.baseOptions.Clone();
+        this.streamOptions[streamId] = options;
+        options.MaxChanSize = 0xFFFFFF;
+        if (options.Predictor != JxlPredictor.Weighted)
+        {
+            options.WpTreeMode = JxlModularOptions.TreeMode.NoWP;
+        }
+
+        if (this.speedTier >= JxlSpeedTier.Falcon)
+        {
+            options.Kind = JxlModularOptions.TreeKind.FalconACMeta;
+        }
+        else
+        {
+            // libjxl's kACMeta tree above Kitten, and a learned one below.
+            JxlThrowHelper.ThrowNotSupportedException("The AC metadata tree of libjxl effort 4 and up (slice E4)");
+        }
+
+        // YToX, YToB, ACS + QF, EPF
+        int xs = (int)r.XSize;
+        int ys = (int)r.YSize;
+        JxlModularImage image = JxlModularImage.Create(this.allocator, xs, ys, 8, 4);
+        this.streamImages[streamId].Dispose();
+        this.streamImages[streamId] = image;
+
+        // The colour tiles are 8 blocks.
+        JxlRect cr = new(r.X0 >> 3, r.Y0 >> 3, (r.XSize + 7) >> 3, (r.YSize + 7) >> 3);
+        ReplaceChannel(image, 0, JxlModularChannel.Create(this.allocator, (int)cr.XSize, (int)cr.YSize, 3, 3));
+        ReplaceChannel(image, 1, JxlModularChannel.Create(this.allocator, (int)cr.XSize, (int)cr.YSize, 3, 3));
+        ReplaceChannel(image, 2, JxlModularChannel.Create(this.allocator, xs * ys, 2));
+        VarDct.JxlColorCorrelation cmap = encState.Cmap;
+        for (int y = 0; y < cr.YSize; y++)
+        {
+            Span<int> rowX = image.Channel[0].Row(y);
+            Span<int> rowB = image.Channel[1].Row(y);
+            int tileRow = (int)((cr.Y0 + y) * cmap.XSizeTiles);
+            for (int x = 0; x < cr.XSize; x++)
+            {
+                rowX[x] = cmap.YtoXMap[tileRow + cr.X0 + x];
+                rowB[x] = cmap.YtoBMap[tileRow + cr.X0 + x];
+            }
+        }
+
+        int num = 0;
+        Span<int> outAcs = image.Channel[2].Row(0);
+        Span<int> outQf = image.Channel[2].Row(1);
+        for (int y = 0; y < ys; y++)
+        {
+            Span<int> rowOutEpf = image.Channel[3].Row(y);
+            for (int x = 0; x < xs; x++)
+            {
+                int blockIndex = encState.BlockIndex(r.X0 + x, r.Y0 + y);
+                rowOutEpf[x] = encState.EpfSharpness[blockIndex];
+                VarDct.JxlAcStrategy acs = encState.AcStrategy.Get((int)(r.X0 + x), (int)(r.Y0 + y));
+                if (!acs.IsFirstBlock)
+                {
+                    continue;
+                }
+
+                outAcs[num] = acs.RawStrategy;
+                outQf[num] = encState.RawQuantField[blockIndex] - 1;
+                num++;
+            }
+        }
+
+        // The channel keeps its plane; only its width shrinks, as libjxl's does.
+        image.Channel[2].W = num;
+        this.AcMetadataSize[groupIndex] = num;
     }
 
     /// <summary>
@@ -329,7 +565,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         writer.Write(1, 1);
 
         // Write tree
-        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, modularMode: true, this.streamOptions[0].Predictor);
+        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, this.baseOptions.Predictor);
         JxlEntropyEncodingData treeCode = new();
         JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlMaTree.NumTreeContexts, this.treeTokens, treeCode, writer);
         JxlEntropyEncoder.WriteTokens(this.treeTokens[0], treeCode, 0, writer);
@@ -660,11 +896,60 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
     }
 
-    // libjxl's default predictor for a lossless, non-responsive Modular frame with no lossy palette:
-    // every predictor in the slowest modes, Gradient and Weighted below Falcon, Weighted at Falcon and
-    // Gradient above it.
-    private static JxlPredictor DefaultPredictor(JxlSpeedTier speedTier)
+    // Merges the trees in `trees` using nodes that decide on stream_id, as defined by `treeSplits`.
+    private static void MergeTrees(List<JxlPropertyDecisionNode>[] trees, List<long> treeSplits, int begin, int end, List<JxlPropertyDecisionNode> tree)
     {
+        DebugGuard.IsTrue(trees.Length + 1 == treeSplits.Count, "One split more than trees");
+        DebugGuard.IsTrue(end > begin && end <= trees.Length, "A range of trees");
+        if (end == begin + 1)
+        {
+            // Insert the tree, adding the opportune offset to all child nodes. This will make the leaf
+            // IDs wrong, but subsequent roundtripping will fix them.
+            uint sz = (uint)tree.Count;
+            foreach (JxlPropertyDecisionNode node in trees[begin])
+            {
+                JxlPropertyDecisionNode moved = node;
+                moved.LChild += sz;
+                moved.RChild += sz;
+                tree.Add(moved);
+            }
+
+            return;
+        }
+
+        int mid = (begin + end) / 2;
+        int splitval = (int)(treeSplits[mid] - 1);
+        int cur = tree.Count;
+
+        // Property 1 is the stream id.
+        tree.Add(new JxlPropertyDecisionNode(1, splitval, 0, 0, JxlPredictor.Zero, 0, 1));
+        JxlPropertyDecisionNode split = tree[cur];
+        split.LChild = (uint)tree.Count;
+        tree[cur] = split;
+        MergeTrees(trees, treeSplits, mid, end, tree);
+        split = tree[cur];
+        split.RChild = (uint)tree.Count;
+        tree[cur] = split;
+        MergeTrees(trees, treeSplits, begin, mid, tree);
+    }
+
+    private static void ReplaceChannel(JxlModularImage image, int index, JxlModularChannel channel)
+    {
+        image.Channel[index].Dispose();
+        image.Channel[index] = channel;
+    }
+
+    // libjxl's default predictor for a non-responsive frame with no lossy palette: for a lossless Modular
+    // frame, every predictor in the slowest modes, Gradient and Weighted below Falcon, Weighted at Falcon
+    // and Gradient above it; for a VarDCT frame (which is not libjxl's IsLossless), Gradient.
+    private static JxlPredictor DefaultPredictor(JxlSpeedTier speedTier, bool modularMode)
+    {
+        if (!modularMode)
+        {
+            // If not responsive and lossy. TODO(veluca): use near_lossless instead?
+            return JxlPredictor.Gradient;
+        }
+
         if (speedTier <= JxlSpeedTier.Glacier)
         {
             // TODO(veluca): allow all predictors that don't break residual multipliers in lossy mode.

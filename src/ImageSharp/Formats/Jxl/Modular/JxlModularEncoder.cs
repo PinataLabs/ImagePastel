@@ -30,6 +30,21 @@ internal static class JxlModularEncoder
     };
 
     /// <summary>
+    /// Returns libjxl's <c>PredefinedTree</c> of a kind other than <see cref="JxlModularOptions.TreeKind.Learn"/>.
+    /// </summary>
+    /// <param name="treeKind">The kind of tree.</param>
+    /// <param name="totalPixels">The number of pixels in all channels of the streams the tree codes.</param>
+    /// <param name="bitdepth">The bit depth the cutoffs scale with.</param>
+    /// <returns>The tree.</returns>
+    public static List<JxlPropertyDecisionNode> PredefinedTree(JxlModularOptions.TreeKind treeKind, long totalPixels, int bitdepth) => treeKind switch
+    {
+        // All the data is 0 except the quant field. TODO(veluca): make that 0 too.
+        JxlModularOptions.TreeKind.FalconACMeta => new List<JxlPropertyDecisionNode> { Leaf(JxlPredictor.Left) },
+        JxlModularOptions.TreeKind.WPFixedDC => PredefinedTreeWpFixedDc(totalPixels, bitdepth),
+        _ => throw new ArgumentOutOfRangeException(nameof(treeKind), treeKind, "A learned tree is not predefined."),
+    };
+
+    /// <summary>
     /// Returns libjxl's predefined <c>kWPFixedDC</c> tree, the one effort 3 uses: the Weighted
     /// predictor, split on its error property, with fewer levels for small images. libjxl's
     /// <c>PredefinedTree</c> also builds the trees of the VarDCT metadata and of effort 2; they come
