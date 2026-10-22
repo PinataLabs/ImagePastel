@@ -103,20 +103,25 @@ internal sealed partial class JxlColorEncoding : JxlFields
     /// <returns>The copy.</returns>
     public JxlColorEncoding Clone()
     {
-        JxlColorEncoding clone = new()
-        {
-            WantIcc = this.WantIcc,
-            ColorSpace = this.ColorSpace,
-            WhitePoint = this.WhitePoint,
-            Primaries = this.Primaries,
-            RenderingIntent = this.RenderingIntent,
-        };
-        clone.White.CopyFrom(this.White);
-        clone.Red.CopyFrom(this.Red);
-        clone.Green.CopyFrom(this.Green);
-        clone.Blue.CopyFrom(this.Blue);
-        clone.Tf.CopyFrom(this.Tf);
+        JxlColorEncoding clone = new();
+        clone.CopyFrom(this);
         return clone;
+    }
+
+    /// <summary>Copies the fields of <paramref name="other"/> into this instance.</summary>
+    /// <param name="other">The encoding to copy.</param>
+    public void CopyFrom(JxlColorEncoding other)
+    {
+        this.WantIcc = other.WantIcc;
+        this.ColorSpace = other.ColorSpace;
+        this.WhitePoint = other.WhitePoint;
+        this.Primaries = other.Primaries;
+        this.RenderingIntent = other.RenderingIntent;
+        this.White.CopyFrom(other.White);
+        this.Red.CopyFrom(other.Red);
+        this.Green.CopyFrom(other.Green);
+        this.Blue.CopyFrom(other.Blue);
+        this.Tf.CopyFrom(other.Tf);
     }
 
     public override void VisitFields(JxlVisitor visitor)

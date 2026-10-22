@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_frame.cc (ParamsPostInit, LoopFilterFromParams, MakeFrameHeader, SimplifyInvisible,
+// lib/jxl/enc_xyb.cc (ToXYB), lib/jxl/enc_frame.cc (ParamsPostInit, LoopFilterFromParams, MakeFrameHeader, SimplifyInvisible,
 // ComputeChromacityAdjustments, ComputeVarDCTEncodingData, ComputeAllCoeffOrders, TokenizeAllCoefficients, EncodeGlobalDCInfo,
 // EncodeGlobalACInfo, the VarDCT parts of EncodeGroups and ComputeEncodingData), lib/jxl/enc_cache.cc
 // (InitializePassesEncoder, ComputeACMetadata), lib/jxl/enc_group.cc (EncodeGroupTokenizedCoefficients),
@@ -10,6 +10,7 @@
 // lib/jxl/enc_chroma_from_luma.cc (ColorCorrelationEncodeDC), for the default values each writes.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
@@ -150,20 +151,7 @@ internal static partial class JxlFrameEncoder
             // every colour space below takes three planes.
             JxlEncoderInput<TPixel>.CopyColorPlanes(image, color);
 
-            // ToXYB for sRGB (no profile). libjxl's IsSRGB covers grey too, so a grey image takes this
-            // branch with the same planes as RGB. A profile (slice E3e) adds libjxl's other branches: linear
-            // sRGB, and the colour transform to linear sRGB, which for a grey kTRC profile is its curve on
-            // each of the three planes. libjxl keeps a linear copy from Kitten down, for its butteraugli
-            // search, which would be simplified too.
-            float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(metadata.M.ToneMapping.IntensityTarget);
-            for (int y = 0; y < image.Height; y++)
-            {
-                JxlXybEncoder.SrgbRowToXyb(
-                    color[0].DangerousGetRowSpan(y).Slice(0, image.Width),
-                    color[1].DangerousGetRowSpan(y).Slice(0, image.Width),
-                    color[2].DangerousGetRowSpan(y).Slice(0, image.Width),
-                    premulAbsorb);
-            }
+            ToXyb(metadata.M.ColorEncoding, metadata.M.ToneMapping.IntensityTarget, color, image.Width, image.Height);
 
             // libjxl simplifies the invisible pixels of straight alpha in a regular frame, unless
             // keep_invisible is set (by default it is set only for lossless), the extra channels are
@@ -209,6 +197,34 @@ internal static partial class JxlFrameEncoder
         encModular.ComputeTree();
         encModular.ComputeTokens();
         return EncodeVarDctGroups(frameHeader, frameDim, encState, encModular);
+    }
+
+    // ToXYB: the colour planes of the image's colour encoding to X, Y and B in place. Linear sRGB goes
+    // straight through the opsin matrix and sRGB through its curve first (libjxl's IsSRGB covers grey too,
+    // so a grey image, whose grey is in all three planes, takes the same branches). Any other encoding is
+    // converted to linear sRGB, or linear grey (JxlLinearSrgbTransform), then goes through the opsin
+    // matrix. libjxl keeps a linear copy from Kitten down, for its butteraugli search; Falcon does not.
+    private static void ToXyb(JxlColorEncoding c, float intensityTarget, Buffer2D<float>[] color, int width, int height)
+    {
+        float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(intensityTarget);
+        bool srgbSpace = c.WhitePoint == JxlWhitePoint.D65 && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
+        bool linearSrgb = srgbSpace && c.Tf.IsLinear;
+        bool srgb = srgbSpace && c.Tf.IsSrgb;
+        JxlLinearSrgbTransform transform = linearSrgb || srgb ? null : new JxlLinearSrgbTransform(c, intensityTarget);
+        for (int y = 0; y < height; y++)
+        {
+            Span<float> row0 = color[0].DangerousGetRowSpan(y).Slice(0, width);
+            Span<float> row1 = color[1].DangerousGetRowSpan(y).Slice(0, width);
+            Span<float> row2 = color[2].DangerousGetRowSpan(y).Slice(0, width);
+            if (srgb)
+            {
+                JxlXybEncoder.SrgbRowToXyb(row0, row1, row2, premulAbsorb);
+                continue;
+            }
+
+            transform?.ConvertRow(row0, row1, row2);
+            JxlXybEncoder.LinearRgbRowToXyb(row0, row1, row2, premulAbsorb);
+        }
     }
 
     // Replace invisible pixels with a weighted average of the pixel to the left, the pixel to the

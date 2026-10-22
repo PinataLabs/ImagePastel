@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_xyb.cc (OpsinAbsorbance, StoreXYB, LinearRGBToXYB, SRGBToXYB, ComputePremulAbsorb and the
-// sRGB branch of ToXYB), lib/jxl/base/fast_math-inl.h (CubeRootAndAdd) and lib/jxl/cms/opsin_params.h
+// lib/jxl/enc_xyb.cc (OpsinAbsorbance, StoreXYB, LinearRGBToXYB, LinearRGBRowToXYB, SRGBToXYB and
+// ComputePremulAbsorb), lib/jxl/base/fast_math-inl.h (CubeRootAndAdd) and lib/jxl/cms/opsin_params.h
 // (kOpsinAbsorbanceMatrix, kOpsinAbsorbanceBias), for one lane.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -86,6 +86,21 @@ internal static class JxlXybEncoder
             float inG = JxlTransferFunctions.SrgbDisplayFromEncoded(row1[x]);
             float inB = JxlTransferFunctions.SrgbDisplayFromEncoded(row2[x]);
             LinearRgbToXyb(inR, inG, inB, premulAbsorb, out row0[x], out row1[x], out row2[x]);
+        }
+    }
+
+    /// <summary>
+    /// Converts rows of linear RGB samples to X, Y and B in place, as libjxl's <c>LinearRGBRowToXYB</c>.
+    /// </summary>
+    /// <param name="row0">The red samples, then X.</param>
+    /// <param name="row1">The green samples, then Y.</param>
+    /// <param name="row2">The blue samples, then B.</param>
+    /// <param name="premulAbsorb">The values of <see cref="ComputePremulAbsorb"/>.</param>
+    public static void LinearRgbRowToXyb(Span<float> row0, Span<float> row1, Span<float> row2, ReadOnlySpan<float> premulAbsorb)
+    {
+        for (int x = 0; x < row0.Length; x++)
+        {
+            LinearRgbToXyb(row0[x], row1[x], row2[x], premulAbsorb, out row0[x], out row1[x], out row2[x]);
         }
     }
 
