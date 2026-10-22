@@ -57,6 +57,7 @@ public class JxlXybVarDctTests
     [InlineData("vardct_xyb_hlg", 3)] // HLG (OpHlg), the OOTF with the BT.2100 luminances, steep in the shadows: RMSE 3.5e-6, peak 1.7e-4
     [InlineData("vardct_xyb_grey_hlg", 1)] // Grey HLG (OpHlg), the OOTF with the sRGB luminances: RMSE 1.8e-7, peak 2.5e-6
     [InlineData("vardct_xyb_grey_patches", 1)] // Grey, with patches from a three-plane XYB reference frame: RMSE 1.4e-7, peak 7.2e-7
+    [InlineData("vardct_xyb_passes", 3)] // Three passes (D13b): RMSE 1.1e-6, peak 1.2e-5
     public void DecodeToPlanes_MatchesDjxl(string name, int planes)
     {
         NpyArray expected = LoadReference(name);
@@ -377,7 +378,6 @@ public class JxlXybVarDctTests
 
     // The 64 x 64 image with one of the features of a later slice each.
     [Theory]
-    [InlineData("vardct_xyb_passes", "Progressive passes")]
     [InlineData("vardct_xyb_dc_frame", "a DC frame")]
     public void Decode_FeatureOfALaterSlice_IsNotSupported(string name, string feature)
     {

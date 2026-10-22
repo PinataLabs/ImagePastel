@@ -425,7 +425,14 @@ internal sealed class JxlTestLayers
 
         if (frame.Type != JxlFrameType.ReferenceOnly)
         {
-            w.Write(2, 0); // one pass
+            if (frame.Passes != null)
+            {
+                frame.Passes(w);
+            }
+            else
+            {
+                w.Write(2, 0); // one pass
+            }
         }
 
         bool crop = frame.Crop || frame.XSize != 0;
@@ -604,6 +611,12 @@ internal sealed record JxlTestFrame(byte[] Section)
     /// replaces <see cref="Section"/>, and the frame cannot have patches or splines.
     /// </summary>
     public byte[][] Sections { get; init; }
+
+    /// <summary>
+    /// Gets the writer of the frame header's passes field (libjxl's <c>Passes</c>), for a frame of more
+    /// than one pass. When it is not set, the frame has one pass.
+    /// </summary>
+    public Action<JxlTestBitWriter> Passes { get; init; }
 
     /// <summary>Gets the patch dictionary; when set, the patches flag is set too.</summary>
     public JxlTestPatchDictionary Patches { get; init; }
