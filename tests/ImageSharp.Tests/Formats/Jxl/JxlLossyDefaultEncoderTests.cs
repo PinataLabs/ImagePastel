@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -16,7 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// Lossy encoding at Default (libjxl effort 5, <c>kHare</c>), slice E4. E4a is the tracer: Gaborish,
 /// near-lossless DC, the <c>kACMeta</c> tree for the AC metadata and a learned tree for alpha are libjxl's
 /// Hare stages, and the heuristics that later tickets port keep their Fastest form for now (a constant
-/// quant field, DCT8 everywhere, the default chroma-from-luma and block context maps).
+/// quant field, DCT8 everywhere, the default chroma-from-luma map). E4e chooses the block context map.
 /// </summary>
 /// <remarks>
 /// The colour is checked against E3a's interim bound (<see cref="JxlLossyEncoderTests"/>): each channel's
@@ -77,8 +78,7 @@ public class JxlLossyDefaultEncoderTests
     // libjxl's choices at Hare, read back through the decoder's parse: XYB VarDCT; Gaborish above d0.5
     // (LoopFilterFromParams); the EPF iterations and X quantisation scale as at Fastest; near-lossless DC,
     // so one bit of extra DC precision in every LF group (the gradient has two). E4a's temporary departures
-    // are visible too: every block DCT8, one quant field value, and the default chroma-from-luma and
-    // block context maps.
+    // are visible too: every block DCT8 and one quant field value.
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -121,11 +121,44 @@ public class JxlLossyDefaultEncoderTests
         JxlColorCorrelation defaultCmap = new(header.ToFrameDimensions().XSize, header.ToFrameDimensions().YSize);
         Assert.Equal(defaultCmap.DcFactors.ToArray(), frame.State.Cmap.DcFactors.ToArray());
 
-        // Temporary departure until E4e (block context map).
-        JxlBlockCtxMap defaultBlockCtxMap = new();
-        Assert.Empty(frame.State.BlockCtxMap.QfThresholds);
-        Assert.Equal(defaultBlockCtxMap.NumCtxs, frame.State.BlockCtxMap.NumCtxs);
-        Assert.Equal(defaultBlockCtxMap.CtxMap, frame.State.BlockCtxMap.CtxMap);
+        // The block context map (E4e) is chosen for frames of at least 1024·d blocks: the flower's 48x31
+        // blocks at d0.5 and d1; the gradient's 257x2 and the flower at d2 and d4 keep the default.
+        bool chosen = sizeCase == "flower-384x244" && distance <= 1.0f;
+        Assert.Equal(!chosen, frame.State.BlockCtxMap.IsDefault);
+    }
+
+    // libjxl's FindBestBlockEntropyModel through the decoder's parse: Bike's 73x57 blocks at d1 get a map of
+    // one quant field segment (fewer than 8192·d blocks) with two luma clusters and one chroma cluster
+    // (4161 / 1024 / 2 and / 3, clamped), so three contexts. Below 1024·d blocks the map keeps its default
+    // bit: Bike at d8, text (40x25 blocks) and bike_alpha at d1.
+    [Theory]
+    [InlineData("bike", 1.0f, false, 3)]
+    [InlineData("bike", 8.0f, true, 15)]
+    [InlineData("text", 1.0f, true, 15)]
+    [InlineData("bike_alpha", 1.0f, true, 15)]
+    public void Encode_CalibrationImage_ChoosesTheBlockContextMapOfLargeFrames(string name, float distance, bool expectedDefault, int expectedNumCtxs)
+    {
+        string path = Quality.JxlCalibrationTable.Instance.Images.Single(i => i.Name == name).FullPath;
+        byte[] encoded;
+        if (name == "bike_alpha")
+        {
+            using Image<Rgba32> image = Image.Load<Rgba32>(path);
+            encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
+        }
+        else
+        {
+            using Image<Rgb24> image = Image.Load<Rgb24>(path);
+            encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
+        }
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(encoded);
+
+        JxlBlockCtxMap map = frame.State.BlockCtxMap;
+        TestContext.Current.TestOutputHelper?.WriteLine($"{name} d{distance}: {frame.State.XSizeBlocks}x{frame.State.YSizeBlocks} blocks, QfThresholds [{string.Join(",", map.QfThresholds)}], NumCtxs {map.NumCtxs}, CtxMap [{string.Join(",", map.CtxMap)}]");
+        Assert.Equal(expectedDefault, map.IsDefault);
+        Assert.Empty(map.QfThresholds);
+        Assert.Equal(expectedNumCtxs, map.NumCtxs);
+        Assert.Equal(1, map.NumDcCtxs);
     }
 
     // At Hare libjxl fits the AC chroma-from-luma map of each 64x64 tile by least squares (the fast
@@ -210,16 +243,16 @@ public class JxlLossyDefaultEncoderTests
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "BCA7137FD028345C724A90AB83B8E9631223DC5EFBADAE0E181E474F6A03F63B")]
-    [InlineData("flower-384x244", "", 1.0f, "8F90253721AD382F9A2E2DC464E6F46A72D730B5764C91D7C97DA7775443074F")]
+    [InlineData("flower-384x244", "", 0.5f, "5C250863952FAD5431B5ABACBEE0E848201F7A68757BB9986AF211CB26E0BD0C")]
+    [InlineData("flower-384x244", "", 1.0f, "04DDF6A5C8621E25B723DE42A1F5069B09CB4A537F8A8842767C5F375AAF3BDE")]
     [InlineData("flower-384x244", "", 2.0f, "0393457176A64CCD5960FA5288B019F185A833294F1E2E39BB35E5A0AFF0A2E9")]
     [InlineData("flower-384x244", "", 4.0f, "4C40C4B44709B5D4F29FA067957EE6A5437A4F84482E9CEEA531B31593AC5366")]
     [InlineData("flower-17x23", "", 1.0f, "B398A6CA525E189365B160BA0CCEFA9AF80C2C626004CAC1B37EA12BBBABC803")]
     [InlineData("dot-1x1", "", 1.0f, "325ADA26DA3104663BA288B60DFDD7942D3533BEFD809FA43594FD851860C1C8")]
-    [InlineData("bike-582x453", "", 1.0f, "44D69E8FDACAFB0DE0702CD91E6F3D303796F353DEFA46FBB3395539B4C2C8E4")]
+    [InlineData("bike-582x453", "", 1.0f, "D1F7DA706867245DD2ACEE06342C6762C1315FAF3FCBFDBBA85FA75026A22074")]
     [InlineData("gradient-2049x9", "", 2.0f, "42F759B81AAF3046CC7BEBFB8D85BB6C2A24435F04A77AD913F3993680CD1F10")]
     [InlineData("flower-256x244", "soft", 1.0f, "2E4595BE3A645F9E990B9133601591B5619D4AF4106AC0A848F00A1A5BD81A31")]
-    [InlineData("bike-582x453", "hard", 1.0f, "72F77A43190D8DD613D170DFCC87124279453E74C686FE0FCA3488306B5B72E5")]
+    [InlineData("bike-582x453", "hard", 1.0f, "A90358B317CB176284DC61A244A5A0DB4F181303650782C319FA79E940EEDD76")]
     public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded;
