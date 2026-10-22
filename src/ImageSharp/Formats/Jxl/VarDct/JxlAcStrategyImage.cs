@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/ac_strategy.h and lib/jxl/ac_strategy.cc (AcStrategyRow, AcStrategyImage, FillDCT8).
+// lib/jxl/ac_strategy.h and lib/jxl/ac_strategy.cc (AcStrategyRow, AcStrategyImage, FillDCT8, Set).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -48,7 +48,23 @@ internal sealed class JxlAcStrategyImage
     /// <param name="x">The first block's column.</param>
     /// <param name="y">The first block's row.</param>
     /// <param name="type">The strategy.</param>
-    public void SetNoBoundsCheck(int x, int y, JxlAcStrategyType type)
+    public void SetNoBoundsCheck(int x, int y, JxlAcStrategyType type) => this.Set(x, y, type, check: true);
+
+    /// <summary>
+    /// Sets the strategy whose first block is (<paramref name="x"/>, <paramref name="y"/>) on every
+    /// block it covers, over whatever was there, as the encoder's <c>Set</c> does. The strategy must fit.
+    /// </summary>
+    /// <param name="x">The first block's column.</param>
+    /// <param name="y">The first block's row.</param>
+    /// <param name="type">The strategy.</param>
+    public void Set(int x, int y, JxlAcStrategyType type)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)type);
+        DebugGuard.IsTrue(y + acs.CoveredBlocksY <= this.YSize && x + acs.CoveredBlocksX <= this.XSize, "The strategy must fit in the image");
+        this.Set(x, y, type, check: false);
+    }
+
+    private void Set(int x, int y, JxlAcStrategyType type, bool check)
     {
         JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)type);
         for (int iy = 0; iy < acs.CoveredBlocksY; iy++)
@@ -56,7 +72,7 @@ internal sealed class JxlAcStrategyImage
             for (int ix = 0; ix < acs.CoveredBlocksX; ix++)
             {
                 int pos = ((y + iy) * this.XSize) + x + ix;
-                if (this.layers[pos] != Invalid)
+                if (check && this.layers[pos] != Invalid)
                 {
                     JxlThrowHelper.ThrowInvalidImageContentException("Invalid AC strategy: block overlap");
                 }
