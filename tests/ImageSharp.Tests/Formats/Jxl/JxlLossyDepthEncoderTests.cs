@@ -20,8 +20,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// Lossy encoding at Fastest (libjxl effort 3) of grey, 16-bit and float input (slice E3d). libjxl loads
 /// integer samples scaled to [0, 1] at the depth of the pixel format and float samples as they are, copies
 /// a grey plane into all three colour planes, and computes XYB from them (<c>ToXYB</c>, where the grey
-/// sRGB encoding counts as sRGB). The bit depth in the header is only metadata for an XYB image; the
-/// encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
+/// sRGB encoding counts as sRGB). The bit depth in the header is only metadata when the image is
+/// XYB-encoded; the encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyDepthEncoderTests
