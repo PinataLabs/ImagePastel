@@ -673,3 +673,20 @@ djxl vardct_grey_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/var
 - `jxlinfo -v noise_animation.jxl` lists the second frame as a "Layer" with a duration of 0. `djxl` writes the three shown frames to the `.npy`, coalesced onto the full canvas.
 - The noise comes from libjxl's `Xorshift128Plus`, seeded by the counts of shown and hidden frames and by the position of each tile, so a decoder that seeds a tile wrongly fails the comparison. A decoder that seeds the hidden frame's noise as a shown frame's misses `noise_animation`'s second frame by an RMSE of 9.0e-4; one that seeds every tile of a group with the group's position misses `noise_resampling_2x`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 1.4e-6 and 4.2e-5 (`noise_resampling_2x`) and, in the worst frame, 1.5e-6 and 4.1e-5 (`noise_animation`). libjxl fuses the multiplies and adds of the noise stages on AVX2, and this port does not (ADR 0004). `Image.Load<Rgb24>` is within 0.50 of one 8-bit step of the clamped reference.
+
+#### How the permuted-TOC file was made
+
+`cjxl --group_order=1` stores the groups centre first, so the frame's TOC starts with a permutation (D13a). `JxlPermutedTocTests` checks the file.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `group_order_centre.jxl` | `Png/Bike.png`, 582 x 453 8-bit RGB, at `cjxl -d 1 --group_order=1` (default effort), 44,849 bytes: one VarDCT frame of 3 x 2 groups, so nine sections, stored in a permuted order. | `External/ReferenceOutput/JxlDecoderTests/group_order_centre.npy` |
+
+```sh
+cjxl ../../Png/Bike.png group_order_centre.jxl -d 1 --group_order=1
+djxl group_order_centre.jxl ../../../External/ReferenceOutput/JxlDecoderTests/group_order_centre.npy
+```
+
+- The TOC, read from the frame header (`CentreFirst_IsOneVarDctFrameWithAPermutedToc`): the permuted bit is set, and the permutation of the nine sections is not the identity.
+- `cjxl -d 1` of the same image without `--group_order=1` gives a file 6 bytes smaller whose `djxl` output is byte-identical: the group order changes only where each section is stored.
+- Measured on x64 against `djxl` with AVX2, the worst channel RMSE is 1.0e-6 and the peak error 1.2e-5.
