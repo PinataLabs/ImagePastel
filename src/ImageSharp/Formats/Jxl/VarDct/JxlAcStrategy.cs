@@ -158,7 +158,14 @@ internal readonly struct JxlAcStrategy
     /// increasing "anisotropic" frequency of the continuous DCT basis.
     /// </summary>
     /// <param name="order">The order, <see cref="CoveredBlocksX"/> x <see cref="CoveredBlocksY"/> x 64 entries.</param>
-    public void ComputeNaturalCoeffOrder(Span<uint> order) => this.CoeffOrderAndLut(order);
+    public void ComputeNaturalCoeffOrder(Span<uint> order) => this.CoeffOrderAndLut(order, isLut: false);
+
+    /// <summary>
+    /// Writes the inverse of <see cref="ComputeNaturalCoeffOrder"/>: for each coefficient, its index in
+    /// the natural order.
+    /// </summary>
+    /// <param name="lut">The look-up table, <see cref="CoveredBlocksX"/> x <see cref="CoveredBlocksY"/> x 64 entries.</param>
+    public void ComputeNaturalCoeffOrderLut(Span<uint> lut) => this.CoeffOrderAndLut(lut, isLut: true);
 
     /// <summary>
     /// Swaps <paramref name="rows"/> and <paramref name="columns"/> so the rows are the smaller: DCT
@@ -177,8 +184,8 @@ internal readonly struct JxlAcStrategy
     // Tries to generalize zig-zag order to non-square blocks. Surprisingly, in square block frequency
     // along the (i + j == const) diagonals is roughly the same. For historical reasons, consecutive
     // diagonals are traversed in alternating directions - so called "zig-zag" (or "snake") order.
-    // libjxl's template also writes the inverse look-up table, which the decoder never uses.
-    private void CoeffOrderAndLut(Span<uint> output)
+    // With isLut, the inverse look-up table instead (libjxl's template parameter), which only the encoder uses.
+    private void CoeffOrderAndLut(Span<uint> output, bool isLut)
     {
         const int blockDim = JxlFrameDimensions.BlockDim;
         int cx = this.CoveredBlocksX;
@@ -220,7 +227,14 @@ internal readonly struct JxlAcStrategy
                     val = cur++;
                 }
 
-                output[val] = (uint)((y * cx * blockDim) + x);
+                if (isLut)
+                {
+                    output[(y * cx * blockDim) + x] = (uint)val;
+                }
+                else
+                {
+                    output[val] = (uint)((y * cx * blockDim) + x);
+                }
             }
         }
 
@@ -244,7 +258,14 @@ internal readonly struct JxlAcStrategy
 
                 y >>= xss;
                 int val = cur++;
-                output[val] = (uint)((y * cx * blockDim) + x);
+                if (isLut)
+                {
+                    output[(y * cx * blockDim) + x] = (uint)val;
+                }
+                else
+                {
+                    output[val] = (uint)((y * cx * blockDim) + x);
+                }
             }
         }
     }

@@ -52,9 +52,10 @@ internal static partial class JxlFrameEncoder
     /// <param name="image">The image.</param>
     /// <param name="speedTier">The speed tier, which the effort sets.</param>
     /// <param name="distance">The butteraugli distance, above 0.</param>
+    /// <param name="naturalCoeffOrders">Whether to keep every coefficient order natural (for tests).</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, MemoryAllocator allocator, JxlBitWriter writer)
+    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, bool naturalCoeffOrders, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances, then keep the distance as the
@@ -69,7 +70,7 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        JxlPassesEncoderState encState = new(frameDim, speedTier, distance, originalDistance);
+        JxlPassesEncoderState encState = new(frameDim, speedTier, distance, originalDistance) { NaturalCoeffOrders = naturalCoeffOrders };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
 
@@ -387,12 +388,13 @@ internal static partial class JxlFrameEncoder
     private static void ComputeAllCoeffOrders(JxlPassesEncoderState encState)
     {
         (uint usedOrders, uint customizedOrders) = JxlEncCoeffOrder.ComputeUsedOrders(encState.SpeedTier, encState.AcStrategy);
+        if (encState.NaturalCoeffOrders)
+        {
+            customizedOrders = 0;
+        }
 
-        // Departure (ADR 0001), temporary: libjxl customises the orders of customizedOrders here; slice
-        // E3a writes every order in its natural order, and E3b passes customizedOrders.
-        _ = customizedOrders;
         uint allUsedOrders = 0;
-        JxlEncCoeffOrder.ComputeCoeffOrder(0, usedOrders, ref allUsedOrders, encState.CoeffOrders);
+        JxlEncCoeffOrder.ComputeCoeffOrder(encState.SpeedTier, encState.Coeffs, encState.AcStrategy, encState.FrameDim, ref allUsedOrders, usedOrders, customizedOrders, encState.CoeffOrders);
         encState.UsedOrders = allUsedOrders;
         encState.UsedAcs |= usedOrders;
     }
@@ -484,7 +486,7 @@ internal static partial class JxlFrameEncoder
 
         // Encode coefficient orders (one pass).
         JxlFieldCoders.WriteU32(JxlVarDctFrameState.OrderEnc, encState.UsedOrders, writer);
-        JxlEncCoeffOrder.EncodeCoeffOrders(encState.UsedOrders);
+        JxlEncCoeffOrder.EncodeCoeffOrders(encState.UsedOrders, encState.CoeffOrders, writer);
 
         // Encode histograms. libjxl caps them at 6 from decoding speed tier 1, which the encoder has no
         // option for.
