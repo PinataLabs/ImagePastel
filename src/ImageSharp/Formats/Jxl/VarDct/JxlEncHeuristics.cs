@@ -89,8 +89,9 @@ internal static class JxlEncHeuristics
         // AdjustQuantField only changes the field under blocks larger than 8x8, so it leaves q.
         Array.Fill(encState.RawQuantField, encState.Quantizer.RawQuantField(q));
 
-        // Refine quantization levels. libjxl's FindBestQuantizer only runs from Kitten down.
-        Array.Fill(encState.EpfSharpness, (byte)4);
+        // Refine quantization levels: libjxl fills the EPF sharpness with 4 for FindBestQuantizer, which only
+        // searches from Kitten down. ComputeArHeuristics sets the sharpness before anything reads it, so
+        // this skips the fill.
 
         // The block context map is chosen below Falcon (FindBestBlockEntropyModel), so it keeps its default.
         if (speedTier < JxlSpeedTier.Falcon)
