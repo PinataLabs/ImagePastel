@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.Memory;
 
@@ -91,12 +92,14 @@ internal sealed class JxlModularImage : IDisposable
     /// here the failing transform throws <see cref="InvalidImageContentException"/>.
     /// </summary>
     /// <param name="wpHeader">The weighted predictor parameters, which delta palettes use.</param>
-    public void UndoTransforms(JxlWeightedHeader wpHeader)
+    /// <param name="cancellationToken">The cancellation token, checked per transform and per squeeze step (#293).</param>
+    public void UndoTransforms(JxlWeightedHeader wpHeader, CancellationToken cancellationToken = default)
     {
         while (this.Transform.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             JxlTransform t = this.Transform[^1];
-            t.Inverse(this, wpHeader);
+            t.Inverse(this, wpHeader, cancellationToken);
             this.Transform.RemoveAt(this.Transform.Count - 1);
         }
     }

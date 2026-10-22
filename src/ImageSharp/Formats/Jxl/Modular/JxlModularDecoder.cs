@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -35,6 +36,10 @@ internal static class JxlModularDecoder
     /// <param name="tree">The global tree, or <see langword="null"/>.</param>
     /// <param name="code">The global histograms, or <see langword="null"/>.</param>
     /// <param name="ctxMap">The global context map, or <see langword="null"/>.</param>
+    /// <param name="cancellationToken">
+    /// The cancellation token, checked per transform, per squeeze step and per channel. libjxl has no
+    /// cancellation (#293).
+    /// </param>
     public static void ModularGenericDecompress(
         JxlBitReader br,
         JxlModularImage image,
@@ -44,7 +49,8 @@ internal static class JxlModularDecoder
         bool undoTransforms,
         List<JxlPropertyDecisionNode> tree,
         JxlAnsCode code,
-        byte[] ctxMap)
+        byte[] ctxMap,
+        CancellationToken cancellationToken = default)
     {
         List<(int W, int H)> reqSizes = new(image.Channel.Count);
         foreach (JxlModularChannel c in image.Channel)
@@ -53,10 +59,10 @@ internal static class JxlModularDecoder
         }
 
         header ??= new JxlGroupHeader();
-        ModularDecode(br, image, header, groupId, options, tree, code, ctxMap);
+        ModularDecode(br, image, header, groupId, options, tree, code, ctxMap, cancellationToken);
         if (undoTransforms)
         {
-            image.UndoTransforms(header.WpHeader);
+            image.UndoTransforms(header.WpHeader, cancellationToken);
         }
 
         if (image.Error)
@@ -235,7 +241,8 @@ internal static class JxlModularDecoder
         JxlModularOptions options,
         List<JxlPropertyDecisionNode> globalTree,
         JxlAnsCode globalCode,
-        byte[] globalCtxMap)
+        byte[] globalCtxMap,
+        CancellationToken cancellationToken)
     {
         if (image.Channel.Count == 0)
         {
@@ -249,7 +256,8 @@ internal static class JxlModularDecoder
         image.Transform = new List<JxlTransform>(header.Transforms);
         foreach (JxlTransform transform in image.Transform)
         {
-            transform.MetaApply(image);
+            cancellationToken.ThrowIfCancellationRequested();
+            transform.MetaApply(image, cancellationToken);
         }
 
         if (image.Error)
@@ -340,6 +348,7 @@ internal static class JxlModularDecoder
                 continue; // skip empty channels
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             DecodeModularChannelMaAns(br, reader, contextMap, tree, header.WpHeader, nextChannel, groupId, image);
 
             // Truncated group.

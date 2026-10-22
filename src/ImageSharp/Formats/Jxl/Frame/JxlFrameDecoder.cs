@@ -143,7 +143,7 @@ internal sealed class JxlFrameDecoder
 
         // InitFrame resets the dequantization matrices to their defaults for each frame.
         JxlDequantMatrices matrices = new();
-        using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices);
+        using JxlModularFrameDecoder modularFrameDecoder = new(this.configuration.MemoryAllocator, frameDim, matrices, cancellationToken);
 
         // The upsampling stages give the channel shifts, so they are built with the pipeline; the loop
         // filters come once the sections are decoded.
