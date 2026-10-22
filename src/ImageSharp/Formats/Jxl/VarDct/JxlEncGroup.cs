@@ -44,12 +44,7 @@ internal static class JxlEncGroup
         JxlQuantizer quantizer = encState.Quantizer;
         JxlColorCorrelation cmap = encState.Cmap;
 
-        // Only use error diffusion in Squirrel mode or slower; it is not ported, and Fastest does not use it.
-        bool errorDiffusion = encState.SpeedTier <= JxlSpeedTier.Squirrel;
-        if (errorDiffusion)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Error diffusion in the AC quantisation (libjxl effort 7 and up)");
-        }
+        // libjxl passes error_diffusion (Squirrel mode or slower) to QuantizeBlockAC, which no longer reads it.
 
         // One pass, so libjxl's progressive splitter copies each block's coefficients as they are.
         int[][] coeffs = new int[3][];
