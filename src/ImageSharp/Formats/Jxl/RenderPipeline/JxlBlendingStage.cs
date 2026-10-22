@@ -112,7 +112,7 @@ internal sealed class JxlBlendingStage : IDisposable
 
         for (int i = 0; i < this.ecBg.Length; i++)
         {
-            bgPlanes[this.numColorPlanes + i] = this.ecBg[i]?.Planes[this.numColorPlanes + i];
+            bgPlanes[this.numColorPlanes + i] = this.ecBg[i] != null ? ExtraChannelPlane(this.ecBg[i], i, m.NumExtraChannels) : null;
         }
 
         this.bgRows = new JxlBlendingRows(bgPlanes, zeros);
@@ -179,12 +179,13 @@ internal sealed class JxlBlendingStage : IDisposable
     {
         for (int c = 0; c < this.numColorPlanes; c++)
         {
-            this.CopyBackgroundRow(this.bg, output, c, ypos);
+            CopyBackgroundRow(this.bg?.Planes[c], output[c], this.ImageXSize, ypos);
         }
 
         for (int ec = 0; ec < this.extraChannelInfo.Count; ec++)
         {
-            this.CopyBackgroundRow(this.ecBg[ec], output, this.numColorPlanes + ec, ypos);
+            JxlReferenceFrame background = this.ecBg[ec];
+            CopyBackgroundRow(background != null ? ExtraChannelPlane(background, ec, this.extraChannelInfo.Count) : null, output[this.numColorPlanes + ec], this.ImageXSize, ypos);
         }
     }
 
@@ -210,19 +211,26 @@ internal sealed class JxlBlendingStage : IDisposable
         return new JxlPatchBlending(mode, info.AlphaChannel, info.Clamp);
     }
 
-    // Copies row ypos of channel c from the background, or clears it when the slot is empty.
-    private void CopyBackgroundRow(JxlReferenceFrame background, Buffer2D<float>[] output, int c, int ypos)
+    // Copies row ypos of a background plane, or clears it when the slot is empty.
+    private static void CopyBackgroundRow(Buffer2D<float> background, Buffer2D<float> output, int xsize, int ypos)
     {
-        Span<float> row = output[c].DangerousGetRowSpan(ypos).Slice(0, this.ImageXSize);
+        Span<float> row = output.DangerousGetRowSpan(ypos).Slice(0, xsize);
         if (background == null)
         {
             row.Clear();
         }
         else
         {
-            background.Planes[c].DangerousGetRowSpan(ypos).Slice(0, this.ImageXSize).CopyTo(row);
+            background.DangerousGetRowSpan(ypos).Slice(0, xsize).CopyTo(row);
         }
     }
+
+    // Extra channel i of a slot. libjxl's slot keeps its extra channels apart from its three colour
+    // channels; here they follow the slot's colour planes, which number one for a grey image that is not
+    // XYB, but three when a grey YCbCr frame was saved before its colour transform. So the extra channels
+    // are counted from the end, and an extra channel may blend from such a slot, as in libjxl.
+    private static Buffer2D<float> ExtraChannelPlane(JxlReferenceFrame frame, int i, int numExtraChannels)
+        => frame.Planes[frame.Planes.Length - numExtraChannels + i];
 
     // verify_bg_size. A slot's frame always starts at the image origin here: libjxl sets an origin only
     // on the decoded frame, never on the frame it keeps for referencing.

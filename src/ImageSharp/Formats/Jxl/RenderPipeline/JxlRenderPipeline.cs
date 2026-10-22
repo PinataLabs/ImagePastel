@@ -274,8 +274,10 @@ internal sealed class JxlRenderPipeline : IDisposable
             // so the frame drops to grey before them, and the first plane comes out the same.
             // A YCbCr frame mixes the colour channels in its colour transform, so it keeps three planes
             // through it and drops to its first plane, R, after it (JxlFrameHeader.DropsToGreyAfterColorTransform).
-            // JxlFrameDecoder.CheckSupported rejects the grey YCbCr frames that would need three planes
-            // earlier: patches and a save before the colour transform, as grey reference slots hold one plane.
+            // So its patches blend all three, and a save before the colour transform keeps Cb, Y and Cr in
+            // the slot, as libjxl does. Only patches read such a slot: blending rejects a slot saved before
+            // the colour transform. The patches and the extra-channel blending count the slot's colour
+            // planes from its own planes, so they read it as libjxl reads its three colour channels.
             JxlImageMetadata metadata = frameHeader.NonserializedMetadata.M;
             bool dropsToGreyAfterColorTransform = frameHeader.DropsToGreyAfterColorTransform;
             bool isDcFrame = frameHeader.DcLevel != 0;

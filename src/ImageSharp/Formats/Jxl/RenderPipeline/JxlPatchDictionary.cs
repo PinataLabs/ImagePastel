@@ -362,10 +362,12 @@ internal sealed class JxlPatchDictionary
             if (reference != this.fgReference)
             {
                 // A departure from libjxl: a grey image that is not XYB keeps one colour plane in its
-                // reference slots, where libjxl keeps three. A frame with noise blends three colour
-                // planes (JxlRenderPipeline.Finish), so each takes the slot's grey plane. That is libjxl's
-                // result whenever the reference's three planes are equal, as rgb_from_gray makes them for a
-                // Modular frame without splines or noise.
+                // reference slots, where libjxl keeps three. A frame with noise or the YCbCr transform
+                // blends three colour planes (JxlRenderPipeline.Finish), so each takes the slot's grey
+                // plane. That is libjxl's result whenever the reference's three planes are equal, as
+                // rgb_from_gray makes them for a Modular frame without splines or noise. A slot that a grey
+                // YCbCr frame saved before its colour transform holds three planes, as in libjxl: a frame
+                // with three takes each, and a grey frame takes the first, Cb, as libjxl outputs channel 0.
                 int refColorPlanes = reference.Planes.Length - numEc;
                 for (int c = 0; c < numChannels; c++)
                 {

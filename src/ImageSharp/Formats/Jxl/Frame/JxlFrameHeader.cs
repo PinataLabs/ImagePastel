@@ -117,11 +117,11 @@ internal sealed class JxlFrameHeader : JxlFields
 
     /// <summary>
     /// Gets a value indicating whether the frame is a grey image's YCbCr frame, which drops to one colour
-    /// plane only after its colour transform. A departure from libjxl, which keeps three colour planes to
-    /// the output: this port drops the frame of a grey image that is not XYB to one plane before the
-    /// patches, as its patches, reference slots and blending hold one
-    /// (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The YCbCr transform mixes the three
-    /// planes, so such a frame keeps them through it.
+    /// plane only after its colour transform. libjxl keeps three colour planes to the output. This port
+    /// drops the other frames of a grey image that is not XYB to one plane before the patches, where no
+    /// later stage mixes the colour planes (<see cref="RenderPipeline.JxlRenderPipeline.Finish"/>). The
+    /// YCbCr transform mixes the three planes, so such a frame keeps them through its patches, its save
+    /// before the colour transform and the transform itself, as libjxl does.
     /// </summary>
     public bool DropsToGreyAfterColorTransform
         => this.ColorTransform == JxlColorTransform.YCbCr && this.NonserializedMetadata.M.NumColorPlanes == 1;

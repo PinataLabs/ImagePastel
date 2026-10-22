@@ -6,7 +6,6 @@ using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
@@ -17,7 +16,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// The YCbCr colour transform (D10c), on 4:4:4 frames. The generated files are Modular YCbCr frames
 /// written by <c>jxl_from_tree</c>, which need neither VarDCT nor chroma upsampling. The hand-built frames
-/// check the channel order and the constants, and grey images. The 4:4:4 JPEG transcodes, VarDCT YCbCr
+/// check the channel order and the constants, and grey images (and JxlGreyYCbCrTests the grey frames that
+/// need three planes before the colour transform). The 4:4:4 JPEG transcodes, VarDCT YCbCr
 /// frames, are conformance vectors (<see cref="Conformance.JxlConformanceDecoderTests"/>).
 /// </summary>
 [Trait("Format", "Jxl")]
@@ -122,43 +122,9 @@ public class JxlYCbCrTests
         Assert.Equal(2 * 298.1F / 255, grey[5, 7], 1e-6F);
     }
 
-    // Grey reference slots hold one plane, so a grey frame saved before a YCbCr transform, which needs
-    // three, is rejected: a departure from libjxl, which keeps three planes. JPEG transcodes never write it.
-    [Fact]
-    public void Decode_GreyYCbCrFrameSavedBeforeTheColourTransform_IsNotSupported()
-    {
-        JxlTestLayers layers = GreyLayers(out byte[] section)
-            .Add(new JxlTestFrame(JxlTestLayers.ColourA) { YCbCr = true, SaveAsReference = 1, SaveBeforeColorTransform = true })
-            .Add(JxlTestFrame.Last(section));
-
-        AssertNotSupported(layers, "grey");
-    }
-
-    // The patches of a grey image take one plane from a one-plane slot, before the colour transform.
-    [Fact]
-    public void Decode_GreyYCbCrFrameWithPatches_IsNotSupported()
-    {
-        JxlTestRefPatch refPatch = new(3, 0, 0, 1, 1, new JxlTestPatch(0, 0, new JxlTestPatchBlending(JxlPatchBlendMode.Replace)));
-        JxlTestLayers layers = GreyLayers(out byte[] section)
-            .Add(new JxlTestFrame(section) { Type = JxlFrameType.ReferenceOnly, SaveAsReference = 3, SaveBeforeColorTransform = true })
-            .Add(JxlTestFrame.Last(JxlTestLayers.ColourA) with { YCbCr = true, Patches = new JxlTestPatchDictionary(refPatch) });
-
-        AssertNotSupported(layers, "grey");
-    }
-
-    private static void AssertNotSupported(JxlTestLayers layers, string feature)
-    {
-        using MemoryStream stream = new(layers.ToArray());
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken));
-        Assert.Contains(feature, ex.Message, StringComparison.Ordinal);
-    }
-
     // The generated 64 x 64 8-bit grey file's image header, with no frame.
-    private static JxlTestLayers GreyLayers() => GreyLayers(out _);
-
-    private static JxlTestLayers GreyLayers(out byte[] section)
-        => JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "greyscale.jxl")), out section);
+    private static JxlTestLayers GreyLayers()
+        => JxlTestLayers.FromFile(File.ReadAllBytes(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "greyscale.jxl")), out _);
 
     private static JxlDecodedImage DecodeToPlanes(byte[] codestream)
     {

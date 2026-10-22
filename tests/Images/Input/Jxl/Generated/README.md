@@ -744,3 +744,27 @@ djxl vardct_xyb_dc_frame.jxl ../../../External/ReferenceOutput/JxlDecoderTests/v
 - The DC frames are not shown: `djxl` writes one frame, and so does `Image.Load`.
 - Measured on x64 against `djxl` with AVX2, the worst channel RMSE and the peak error are 9.7e-7 and 1.7e-5 (`progressive_dc1`), 1.0e-6 and 1.2e-5 (`progressive_dc2`), and 9.1e-7 and 1.2e-5 (`vardct_xyb_dc_frame`). `Image.Load<Rgb24>` is within 0.502 of one 8-bit step of the clamped reference.
 - A decoder that leaves the DC at zero instead of taking it from the DC frame misses both files by an RMSE of 0.59. One that does so only for the level-1 DC frame of `progressive_dc2` misses that file by 0.55.
+
+#### How the grey YCbCr files were made
+
+Hand-built codestreams of grey YCbCr frames that need three colour planes before their colour transform (D14b). `jxl_from_tree` cannot write a grey image, a save before the colour transform or patches. So `JxlGreyYCbCrTests.Build` builds the files with `JxlTestLayers`, from these parts:
+
+- the image header and frame section of `greyscale.jxl` (64 x 64 8-bit grey) or `greyscale_alpha.jxl` (64 x 64 16-bit grey and alpha);
+- the `ColourA` section of `JxlTestLayers`, which codes Cb = 200, Y = 100, Cr = 50 and alpha 128 in a YCbCr frame.
+
+`JxlGreyYCbCrTests.CommittedFile_IsTheHandBuiltCodestream` checks that each file holds the bytes that `Build` writes. It also writes them to `tests/Images/ActualOutput/Jxl/JxlGreyYCbCrTests/`, from where they were copied.
+
+| File | Why it is here | Reference |
+|---|---|---|
+| `grey_ycbcr_saved_before_ct.jxl` | A reference-only grey YCbCr frame saved before its colour transform in slot 1, then the grey frame of `greyscale.jxl` with two patches from that slot, one added and one replacing. libjxl's slot keeps Cb, Y and Cr, and a grey frame's patches take channel 0, Cb. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy` |
+| `grey_ycbcr_patches.jxl` | The grey frame of `greyscale.jxl` in slot 2 and a grey YCbCr frame in slot 1, both reference-only and saved before their colour transform, then a grey YCbCr frame with an added patch from each. The patches blend all three colour planes before the YCbCr transform mixes them. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy` |
+| `grey_ycbcr_alpha_blending.jxl` | A reference-only grey YCbCr frame with alpha, saved before its colour transform in slot 1, then the frame of `greyscale_alpha.jxl`, whose alpha is added to the alpha of slot 1. The colour planes of that slot are three, not one. | `External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy`, two channels |
+
+```sh
+djxl grey_ycbcr_saved_before_ct.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_saved_before_ct.npy
+djxl grey_ycbcr_patches.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_patches.npy
+djxl grey_ycbcr_alpha_blending.jxl ../../../External/ReferenceOutput/JxlDecoderTests/grey_ycbcr_alpha_blending.npy
+```
+
+- libjxl does not let a frame blend its colour onto a slot saved before the colour transform ("Trying to blend XYB reference frame"). So patches are the only colour use of such a slot. libjxl does not check the slot that an extra channel blends onto.
+- Measured on x64 against `djxl` with AVX2: `grey_ycbcr_saved_before_ct` and `grey_ycbcr_alpha_blending` are exact. `grey_ycbcr_patches` has a worst channel RMSE of 3.6e-8 and a peak error of 2.4e-7, the float rounding of the YCbCr transform.

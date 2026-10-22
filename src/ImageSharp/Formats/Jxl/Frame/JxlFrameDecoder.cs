@@ -52,8 +52,7 @@ internal sealed class JxlFrameDecoder
     /// <summary>
     /// Decodes the frame that starts at byte <paramref name="offset"/>: blends it onto its reference
     /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
-    /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data,
-    /// <see cref="NotSupportedException"/> for the departures from libjxl that <c>CheckSupported</c> names, and
+    /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data, and
     /// <see cref="InvalidMemoryOperationException"/> for frames over the pixel cap.
     /// </summary>
     /// <param name="data">The codestream.</param>
@@ -66,10 +65,11 @@ internal sealed class JxlFrameDecoder
     {
         int availIn = data.Length - offset;
         JxlBitReader reader = new(data, offset, availIn);
+        // libjxl's FrameHeader reads the flags as a U64 and never checks the bits it does not define (4, 8,
+        // 64, and 256 and up), so a frame with them decodes as the same frame without them. This port does the same.
         JxlFrameHeader frameHeader = new(this.metadata);
         JxlBundle.Read(reader, frameHeader);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        CheckSupported(frameHeader);
 
         // InitFrame counts the shown frames, and the frames since the last shown one. A DC frame is never
         // shown, so it counts as not shown. libjxl also counts a preview frame as not shown; JxlDecoderCore
@@ -307,38 +307,6 @@ internal sealed class JxlFrameDecoder
         }
 
         return dcFrame;
-    }
-
-    // Rejects the frames this port does not decode, so such files fail cleanly instead of decoding badly.
-    // Since D13 every frame feature libjxl decodes is decoded, and only the commented departures below are
-    // rejected: two kinds of grey YCbCr frame (D10), and frame flags libjxl does not define.
-    private static void CheckSupported(JxlFrameHeader frameHeader)
-    {
-        // A departure from libjxl: a grey image's YCbCr frame keeps three planes until after its colour
-        // transform (JxlFrameHeader.DropsToGreyAfterColorTransform), but grey reference slots and patches
-        // hold one. So such a frame cannot be saved before its colour transform, nor take patches, which
-        // libjxl allows with three planes. JPEG transcodes never write such a frame.
-        if (frameHeader.DropsToGreyAfterColorTransform)
-        {
-            if (frameHeader.CanBeReferenced && frameHeader.SaveBeforeColorTransform)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("A YCbCr frame of a grey image saved before its colour transform");
-            }
-
-            if ((frameHeader.Flags & JxlFrameFlags.Patches) != 0)
-            {
-                JxlThrowHelper.ThrowNotSupportedException("Patches on a YCbCr frame of a grey image");
-            }
-        }
-
-        JxlFrameFlags flags = frameHeader.Flags;
-
-        // libjxl ignores the flags it does not define. This port has always rejected them, and still does.
-        const JxlFrameFlags knownFlags = JxlFrameFlags.Noise | JxlFrameFlags.Patches | JxlFrameFlags.Splines | JxlFrameFlags.UseDcFrame | JxlFrameFlags.SkipAdaptiveDcSmoothing;
-        if ((flags & ~knownFlags) != 0)
-        {
-            JxlThrowHelper.ThrowNotSupportedException($"Unknown frame flags 0x{(ulong)(flags & ~knownFlags):X}");
-        }
     }
 
     private static void ProcessSections(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlBitReader[] sections, JxlImageFeatures features, JxlColorCorrelation cmap, JxlDequantMatrices matrices, JxlModularFrameDecoder modularFrameDecoder, JxlVarDctFrameState varDct, JxlRenderPipeline pipeline, CancellationToken cancellationToken)
