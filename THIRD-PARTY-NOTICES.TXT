@@ -25,6 +25,8 @@ License notice for libjxl
 
 The JPEG XL codec under src/ImageSharp/Formats/Jxl is ported from libjxl
 (commit ef67fde2). Each ported file names its libjxl source files.
+The SSIMULACRA2 metric under tests/ImageSharp.Tests/Formats/Jxl/Quality is
+ported from libjxl tools/ssimulacra2.cc at the same commit, as test code.
 Licensed under the BSD 3-Clause License, with an additional patent grant
 from Google (the PATENTS file of libjxl).
 https://github.com/libjxl/libjxl
@@ -76,6 +78,9 @@ The files under tests/Images/Input/Jxl/libjxl come from the libjxl testdata
 repository and are licensed under the Creative Commons Attribution 4.0
 International License, Copyright (c) the JPEG XL Project Authors.
 https://github.com/libjxl/testdata
+
+The calibration images under tests/Images/Input/Jxl/Calibration were made for
+this repository, or are its existing test images; see the README.md there.
 
 The README.md in each directory lists the source, licence and author of every file.
 
