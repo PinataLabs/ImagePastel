@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 
@@ -150,7 +151,8 @@ internal static class JxlSqueeze
     /// </summary>
     /// <param name="image">The image.</param>
     /// <param name="parameters">The steps.</param>
-    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters)
+    /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
+    public static void MetaSqueeze(JxlModularImage image, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken = default)
     {
         if (parameters.Count == 0)
         {
@@ -159,6 +161,7 @@ internal static class JxlSqueeze
 
         foreach (JxlSqueezeParams parameter in parameters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CheckMetaSqueezeParams(parameter, image.Channel.Count);
             bool horizontal = parameter.Horizontal;
             bool inPlace = parameter.InPlace;
@@ -228,11 +231,13 @@ internal static class JxlSqueeze
     /// <summary>Undoes the squeeze steps, last step first. Throws <see cref="InvalidImageContentException"/> on failure.</summary>
     /// <param name="input">The image.</param>
     /// <param name="parameters">The steps, as <see cref="MetaSqueeze"/> left them.</param>
-    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters)
+    /// <param name="cancellationToken">The cancellation token, checked per step. libjxl has no cancellation (#293).</param>
+    public static void InvSqueeze(JxlModularImage input, List<JxlSqueezeParams> parameters, CancellationToken cancellationToken = default)
     {
         List<JxlModularChannel> channels = input.Channel;
         for (int i = parameters.Count - 1; i >= 0; i--)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CheckMetaSqueezeParams(parameters[i], channels.Count);
             bool horizontal = parameters[i].Horizontal;
             bool inPlace = parameters[i].InPlace;
