@@ -303,6 +303,72 @@ internal static partial class JxlDct
         }
     }
 
+    /// <summary>
+    /// Gives the DC values of the 8x8 blocks a block covers from its coefficients (libjxl's encoder
+    /// <c>DCFromLowestFrequencies</c>): the first coefficient for a block of one 8x8 block, else an inverse
+    /// DCT of the lowest frequencies, rescaled to the DC image's size. The inverse of
+    /// <see cref="LowestFrequenciesFromDc"/>.
+    /// </summary>
+    /// <param name="strategy">The strategy.</param>
+    /// <param name="block">The coefficients of the block, in its layout.</param>
+    /// <param name="dc">The DC value of the first 8x8 block of the block.</param>
+    /// <param name="dcStride">The distance between rows of DC values.</param>
+    /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
+    public static void DcFromLowestFrequencies(JxlAcStrategyType strategy, ReadOnlySpan<float> block, Span<float> dc, int dcStride, Span<float> scratch)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)strategy);
+        int rows = acs.CoveredBlocksY;
+        int cols = acs.CoveredBlocksX;
+        if (rows * cols == 1)
+        {
+            dc[0] = block[0];
+            return;
+        }
+
+        // ReinterpretingIDCT<DCT_ROWS = 8 * ROWS, DCT_COLS = 8 * COLS, LF_ROWS = ROWS, LF_COLS = COLS,
+        // ROWS, COLS>, from block with a stride of the block's larger side. libjxl puts the scaled lowest
+        // frequencies first in its scratch space and ComputeScaledIDCT's own space after them; here they go
+        // after the rows * cols floats that ComputeScaledIdct takes for its block.
+        int inputStride = Math.Max(rows, cols) * BlockDim;
+        Span<float> lowest = scratch.Slice(MaxCoveredBlocks * MaxCoveredBlocks, rows * cols);
+        ReadOnlySpan<float> rowScales = InverseResampleScales(rows);
+        ReadOnlySpan<float> colScales = InverseResampleScales(cols);
+        if (rows < cols)
+        {
+            for (int y = 0; y < rows; y++)
+            {
+                for (int x = 0; x < cols; x++)
+                {
+                    lowest[(y * cols) + x] = block[(y * inputStride) + x] * rowScales[y] * colScales[x];
+                }
+            }
+        }
+        else
+        {
+            for (int y = 0; y < cols; y++)
+            {
+                for (int x = 0; x < rows; x++)
+                {
+                    lowest[(y * rows) + x] = block[(y * inputStride) + x] * colScales[y] * rowScales[x];
+                }
+            }
+        }
+
+        ComputeScaledIdct(rows, cols, lowest, dc, dcStride, scratch);
+    }
+
+    // DCTTotalResampleScale<8 * N, N>.
+    private static ReadOnlySpan<float> InverseResampleScales(int n) => n switch
+    {
+        1 => ResampleScales8To1,
+        2 => ResampleScales16To2,
+        4 => ResampleScales32To4,
+        8 => ResampleScales64To8,
+        16 => ResampleScales128To16,
+        32 => ResampleScales256To32,
+        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a block count of a strategy"),
+    };
+
     // DCTTotalResampleScale<N, 8 * N>.
     private static ReadOnlySpan<float> ResampleScales(int n) => n switch
     {

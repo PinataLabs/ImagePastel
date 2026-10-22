@@ -84,6 +84,70 @@ public class JxlForwardDctTests
         Assert.Equal(sha256, Sha256(coefficients));
     }
 
+    // The decoder's LowestFrequenciesFromDc of the DC values gives the lowest frequencies back. The
+    // coefficients are random, in [-0.5, 0.5).
+    [Theory]
+    [MemberData(nameof(HareStrategies))]
+    public void LowestFrequenciesFromDc_OfDcFromLowestFrequencies_GivesTheLowestFrequenciesBack(int rawStrategy)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
+        int cx = acs.CoveredBlocksX;
+        int cy = acs.CoveredBlocksY;
+        float[] block = LcgBlock(cx * cy * 64, (uint)rawStrategy + 100);
+        float[] dc = new float[cx * cy];
+        float[] scratch = new float[JxlDct.ScratchSize];
+
+        JxlDct.DcFromLowestFrequencies(acs.Strategy, block, dc, cx, scratch);
+        float[] llf = new float[cx * cy * 64];
+        JxlDct.LowestFrequenciesFromDc(acs, dc, cx, llf, scratch);
+
+        // The lowest frequencies are min(cx, cy) rows of max(cx, cy), in rows of the block's larger side.
+        int stride = Math.Max(cx, cy) * 8;
+        double worst = 0;
+        for (int y = 0; y < Math.Min(cx, cy); y++)
+        {
+            for (int x = 0; x < Math.Max(cx, cy); x++)
+            {
+                worst = Math.Max(worst, Math.Abs((double)block[(y * stride) + x] - llf[(y * stride) + x]));
+            }
+        }
+
+        Assert.True(worst <= 1e-5, $"max abs error {worst}");
+    }
+
+    // libjxl's DCFromLowestFrequencies of the coefficients of TransformFromPixels_MatchesLibjxlBitForBit,
+    // bit for bit: the SHA-256 of the DC values (rows of the covered blocks across) as little-endian floats.
+    // From the same harness.
+    [Theory]
+    [InlineData((int)JxlAcStrategyType.Dct, "A7B4CBF23CD5164A7556993458FDA37D202210DC27AC1EB9157AB622E3A1DA74")]
+    [InlineData((int)JxlAcStrategyType.Identity, "CCB10FC76B6D6B7AA1F8EAF0DC65C45B16253223F336CB454811D59565E294A5")]
+    [InlineData((int)JxlAcStrategyType.Dct2X2, "DBF3570EC4D598D7B129291F0E4BE58266B918B1687F61B958549DFC918462D4")]
+    [InlineData((int)JxlAcStrategyType.Dct4X4, "F18DBAAB0EDEB047F1A308ED1AA24C094F508777EB00E05829EA934E60F75C14")]
+    [InlineData((int)JxlAcStrategyType.Dct16X16, "C6D150E7AE96C2F4B0392B5E43608EDF9815CF73792514C3881556B9A366FC17")]
+    [InlineData((int)JxlAcStrategyType.Dct32X32, "08D43F8701986A6A89003CC854361A6B08BEAAF094ED8D45055E222C6D49C95C")]
+    [InlineData((int)JxlAcStrategyType.Dct16X8, "C74B5ED9419666430987A79A69C8B23C54DF0A9878890FD13210BC4BD0487A22")]
+    [InlineData((int)JxlAcStrategyType.Dct8X16, "72296C9773D52D73E843F052D686B0F71FD601D9276A5421CAF2FAA16603DD98")]
+    [InlineData((int)JxlAcStrategyType.Dct32X16, "85DA06C0291395B697DFD4D497F8FB6FE9298DEA090EFFA81BFC14794D1D3F24")]
+    [InlineData((int)JxlAcStrategyType.Dct16X32, "BE248878991C9387827BE7EC0F9544B9E6443D8C8FAC9EADD34885D6363E1D35")]
+    [InlineData((int)JxlAcStrategyType.Dct64X64, "F43C230F39C1BA924380AEDD5C93B3AC7C4FC0B830332987660315163EF209BE")]
+    [InlineData((int)JxlAcStrategyType.Dct64X32, "0B8CCB33CD8DD30B2A7CC30225073A3A6744D179870D23B338921CE95B882385")]
+    [InlineData((int)JxlAcStrategyType.Dct32X64, "8381AA5DE67E536EFDFAE8EEE650D880F1A0575BA498D915A3E3D524646DC36B")]
+    public void DcFromLowestFrequencies_MatchesLibjxlBitForBit(int rawStrategy, string sha256)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
+        int cx = acs.CoveredBlocksX;
+        int cy = acs.CoveredBlocksY;
+        float[] pixels = LcgBlock(cx * cy * 64, (uint)rawStrategy + 1);
+        float[] coefficients = new float[cx * cy * 64];
+        float[] scratch = new float[JxlDct.ScratchSize];
+        JxlDct.TransformFromPixels(acs.Strategy, pixels, cx * 8, coefficients, scratch);
+        float[] dc = new float[cx * cy];
+
+        JxlDct.DcFromLowestFrequencies(acs.Strategy, coefficients, dc, cx, scratch);
+
+        Assert.Equal(sha256, Sha256(dc));
+    }
+
     // The block of the libjxl harness: an LCG's values with 16 fraction bits, exact in float.
     private static float[] LcgBlock(int count, uint seed)
     {
