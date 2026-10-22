@@ -146,10 +146,15 @@ internal static partial class JxlFrameEncoder
                 color[c] = allocator.Allocate2D<float>(paddedX, paddedY, AllocationOptions.Clean);
             }
 
+            // A grey image fills all three planes with its grey, as libjxl's CopyColorChannels does, so
+            // every colour space below takes three planes.
             JxlEncoderInput<TPixel>.CopyColorPlanes(image, color);
 
-            // ToXYB for sRGB (no profile). libjxl keeps a linear copy from Kitten down, for its
-            // butteraugli search, which would be simplified too.
+            // ToXYB for sRGB (no profile). libjxl's IsSRGB covers grey too, so a grey image takes this
+            // branch with the same planes as RGB. A profile (slice E3e) adds libjxl's other branches: linear
+            // sRGB, and the colour transform to linear sRGB, which for a grey kTRC profile is its curve on
+            // each of the three planes. libjxl keeps a linear copy from Kitten down, for its butteraugli
+            // search, which would be simplified too.
             float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(metadata.M.ToneMapping.IntensityTarget);
             for (int y = 0; y < image.Height; y++)
             {

@@ -218,16 +218,11 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         }
     }
 
-    // The lossy input slices E3a and E3c encode: integer RGB of 8 bits, with or without alpha, and no ICC
-    // profile. The rest names the slice that adds it.
+    // Lossy encoding takes every pixel type that lossless does: grey or RGB, integer or float, with or
+    // without alpha. An ICC profile still throws, naming the slice that adds the colour rules.
     private static void CheckLossyInput<TPixel>(Image<TPixel> image)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        if (JxlEncoderInput<TPixel>.IsGray || !JxlEncoderInput<TPixel>.IsInteger8)
-        {
-            throw new NotSupportedException($"JPEG XL lossy encoding of {typeof(TPixel).Name} is not supported yet; slice E3d adds grey, 16-bit and float samples.");
-        }
-
         if (image.Metadata.IccProfile is not null)
         {
             throw new NotSupportedException("JPEG XL lossy encoding of an image with an ICC profile is not supported yet; slice E3e adds the colour rules.");

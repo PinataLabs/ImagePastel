@@ -22,7 +22,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// Lossy encoding at Fastest (libjxl effort 3): an 8-bit RGB image with no profile and no alpha becomes
 /// an XYB VarDCT frame of DCT8 blocks with a constant quant field (E3a) and a custom DCT8 coefficient
-/// order (E3b).
+/// order (E3b). Alpha is E3c's (<see cref="JxlLossyAlphaEncoderTests"/>), and grey, 16-bit and float
+/// input E3d's (<see cref="JxlLossyDepthEncoderTests"/>).
 /// </summary>
 /// <remarks>
 /// The interim error bound: each channel's RMSE against the source, in 8-bit steps, is at most
@@ -306,23 +307,6 @@ public class JxlLossyEncoderTests
         Assert.Equal(0, stream.Length);
     }
 
-    // Lossy input that a later E3 slice adds: grey, 16-bit and float samples, with or without alpha (E3d).
-    // 8-bit RGB with alpha is E3c's (JxlLossyAlphaEncoderTests).
-    [Theory]
-    [InlineData(nameof(La16), "E3d")]
-    [InlineData(nameof(Rgba64), "E3d")]
-    [InlineData(nameof(RgbaVector), "E3d")]
-    [InlineData(nameof(L8), "E3d")]
-    [InlineData(nameof(L16), "E3d")]
-    [InlineData(nameof(Rgb48), "E3d")]
-    [InlineData(nameof(HalfVector2), "E3d")]
-    public void Encode_LossyInputOfALaterSlice_ThrowsNotSupportedNamingIt(string pixelType, string slice)
-    {
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => JxlPixelTypes.Call(pixelType, new EncodePixel(Lossy(1.0f))));
-
-        Assert.Contains(slice, ex.Message);
-    }
-
     // The colour rules for a profile come with E3e: until then any profile throws.
     [Fact]
     public void Encode_LossyWithAProfile_ThrowsNotSupportedNamingE3e()
@@ -492,16 +476,5 @@ public class JxlLossyEncoderTests
 
         public override string ToString()
             => $"RMSE R {this.Rmse[0]:F2} G {this.Rmse[1]:F2} B {this.Rmse[2]:F2}, peak R {this.Peak[0]} G {this.Peak[1]} B {this.Peak[2]}";
-    }
-
-    // Encodes a 1x1 image of a pixel type.
-    private sealed record EncodePixel(JxlEncoder Encoder) : IJxlPixelTypeCall<byte[]>
-    {
-        public byte[] Invoke<TPixel>()
-            where TPixel : unmanaged, IPixel<TPixel>
-        {
-            using Image<TPixel> image = new(1, 1);
-            return JxlEncoderRoundTrip.Encode(image, this.Encoder);
-        }
     }
 }
