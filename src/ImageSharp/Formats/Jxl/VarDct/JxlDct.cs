@@ -4,7 +4,8 @@
 // lib/jxl/dct-inl.h (CoeffBundle, DCT1DImpl, IDCT1DImpl, DCT1D, IDCT1D, ComputeScaledDCT,
 // ComputeScaledIDCT), lib/jxl/dct_scales.h (kSqrt2, DCTTotalResampleScale), lib/jxl/transpose-inl.h
 // (the generic transpose) and lib/jxl/dec_transforms-inl.h (ReinterpretingDCT, IDCT2TopBlock, and the
-// cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs).
+// cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs), and the
+// DCT8 cases of TransformFromPixels and DCFromLowestFrequencies in lib/jxl/enc_transforms-inl.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -186,6 +187,23 @@ internal static partial class JxlDct
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Transforms the pixels of an 8x8 block into its DCT coefficients, as the encoder's
+    /// <c>TransformFromPixels</c> does for <see cref="JxlAcStrategyType.Dct"/>, the only strategy the
+    /// encoder chooses so far. The block's DC is the first coefficient (<c>DCFromLowestFrequencies</c>).
+    /// </summary>
+    /// <param name="strategy">The strategy, <see cref="JxlAcStrategyType.Dct"/>.</param>
+    /// <param name="pixels">The first pixel of the block.</param>
+    /// <param name="pixelsStride">The distance between pixel rows.</param>
+    /// <param name="coefficients">The 64 coefficients.</param>
+    /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
+    public static void TransformFromPixels(JxlAcStrategyType strategy, ReadOnlySpan<float> pixels, int pixelsStride, Span<float> coefficients, Span<float> scratch)
+    {
+        // The other strategies come with the AC strategy search (E4).
+        DebugGuard.IsTrue(strategy == JxlAcStrategyType.Dct, "The encoder only chooses DCT8");
+        ComputeScaledDct(BlockDim, BlockDim, pixels, pixelsStride, coefficients, scratch);
     }
 
     /// <summary>

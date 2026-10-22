@@ -25,7 +25,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// codes each LF group with its own tree and histograms. This port always takes the one-shot path,
 /// which libjxl takes for 8 groups or fewer. The output is valid either way.
 /// </remarks>
-internal static class JxlFrameEncoder
+internal static partial class JxlFrameEncoder
 {
     /// <summary>Encodes <paramref name="image"/> as the only frame of a still image.</summary>
     /// <typeparam name="TPixel">The pixel type.</typeparam>
@@ -43,7 +43,12 @@ internal static class JxlFrameEncoder
         List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular);
 
         WriteFrameHeader(frameHeader, writer);
+        WriteSections(groupCodes, writer);
+    }
 
+    // The TOC, then the sections.
+    private static void WriteSections(List<JxlBitWriter> groupCodes, JxlBitWriter writer)
+    {
         // PermuteGroups returns no permutation: libjxl's centerfirst is off by default.
         List<uint> groupSizes = new(groupCodes.Count);
         foreach (JxlBitWriter bw in groupCodes)

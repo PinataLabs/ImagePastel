@@ -99,6 +99,49 @@ internal sealed class JxlHistogramParams
     public IReadOnlyList<int> ImageWidths { get; set; } = Array.Empty<int>();
 
     /// <summary>
+    /// Returns libjxl's histogram parameters for the AC tokens of a VarDCT frame: its
+    /// <c>HistogramParams(tier, num_ctx)</c> constructor, with LZ77 off above Tortoise as
+    /// <c>EncodeGlobalACInfo</c> sets it.
+    /// </summary>
+    /// <param name="speedTier">The speed tier.</param>
+    /// <returns>The parameters.</returns>
+    public static JxlHistogramParams ForAc(JxlSpeedTier speedTier)
+    {
+        JxlHistogramParams result = new();
+        if (speedTier > JxlSpeedTier.Falcon)
+        {
+            result.Clustering = ClusteringType.Fastest;
+            result.Lz77 = Lz77Method.None;
+        }
+        else if (speedTier > JxlSpeedTier.Tortoise)
+        {
+            result.Clustering = ClusteringType.Fast;
+        }
+        else
+        {
+            // libjxl's kBest clustering and LZ77 match finders of the slowest efforts are not ported.
+            JxlThrowHelper.ThrowNotSupportedException("The AC histograms of libjxl effort 9 and up");
+        }
+
+        if (speedTier > JxlSpeedTier.Tortoise)
+        {
+            result.UintMethod = HybridUintMethod.None;
+        }
+
+        if (speedTier >= JxlSpeedTier.Squirrel)
+        {
+            result.AnsStrategy = AnsHistogramStrategy.Approximate;
+        }
+
+        if (speedTier > JxlSpeedTier.Tortoise)
+        {
+            result.Lz77 = Lz77Method.None;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Returns libjxl's histogram parameters for Modular streams. libjxl also takes the extra DC
     /// precision of VarDCT frames, which only Modular-coded VarDCT DC uses; that comes with the lossy slices.
     /// </summary>

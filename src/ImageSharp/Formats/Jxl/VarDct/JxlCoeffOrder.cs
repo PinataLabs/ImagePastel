@@ -21,6 +21,9 @@ internal static class JxlCoeffOrder
     /// <summary>The number of contexts of a permutation.</summary>
     public const int PermutationContexts = 8;
 
+    /// <summary>The number of coefficients of one set of orders for every strategy (libjxl's <c>kCoeffOrderMaxSize</c>).</summary>
+    public const int CoeffOrderMaxSize = CoeffOrderLimit * DctBlockSize;
+
     private const int CoeffOrderLimit = 6156;
 
     private const int DctBlockSize = 64;

@@ -38,8 +38,8 @@ internal sealed class JxlModularOptions
     }
 
     /// <summary>
-    /// The kind of tree to use. libjxl also has predefined trees for VarDCT metadata and the
-    /// Gradient fixed tree of effort 2; they come with the slices that use them.
+    /// The kind of tree to use. libjxl also has predefined trees for the VarDCT metadata of slower efforts
+    /// and of JPEG transcodes, and the Gradient fixed tree of effort 2; they come with the slices that use them.
     /// </summary>
     public enum TreeKind
     {
@@ -48,6 +48,9 @@ internal sealed class JxlModularOptions
 
         /// <summary>The predefined tree of effort 3: the Weighted predictor, split on its error property.</summary>
         WPFixedDC,
+
+        /// <summary>The VarDCT AC metadata tree of effort 3 and faster: a single leaf with the Left predictor.</summary>
+        FalconACMeta,
     }
 
     /// <summary>Gets or sets the largest channel decoded in this stream; larger channels are decoded per group.</summary>

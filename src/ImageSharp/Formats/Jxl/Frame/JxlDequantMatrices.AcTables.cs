@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/quant_weights.h and lib/jxl/quant_weights.cc (DctQuantWeightParams, QuantEncoding, QuantTable,
-// kAcStrategyToQuantTableMap, DequantMatrices: Decode, EnsureComputed, Matrix, required_size_x/y;
+// kAcStrategyToQuantTableMap, DequantMatrices: Decode, EnsureComputed, Matrix, InvMatrix, required_size_x/y;
 // GetQuantWeightsDCT2, GetQuantWeightsIdentity, Interpolate, Mult, GetQuantWeights, ComputeQuantTable,
 // DecodeDctParams and Decode). The library tables are in JxlDequantMatrices.Library.cs; a raw table's
 // Modular stream is read by JxlModularFrameDecoder.DecodeQuantTable (lib/jxl/dec_modular.cc).
@@ -19,9 +19,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// The AC dequantization tables, which the AC global section of a VarDCT frame codes.
 /// </content>
 /// <remarks>
-/// Deliberate departures from libjxl: each table is allocated when it is first computed, rather than one
-/// block for all 17; and the inverse tables, which only the encoder reads, are not kept. A table is still
-/// checked as libjxl checks it.
+/// Deliberate departure from libjxl: each table and its inverse are allocated when they are first computed,
+/// rather than one block for all 17. A table is still checked as libjxl checks it.
 /// </remarks>
 internal sealed partial class JxlDequantMatrices
 {
@@ -35,6 +34,7 @@ internal sealed partial class JxlDequantMatrices
 
     private readonly JxlQuantEncoding[] encodings = CreateDefaultEncodings();
     private readonly float[][] tables = new float[NumQuantTables][];
+    private readonly float[][] invTables = new float[NumQuantTables][];
     private uint computedMask;
 
     /// <summary>The ways a quantization table is coded.</summary>
@@ -94,6 +94,20 @@ internal sealed partial class JxlDequantMatrices
         return this.tables[table].AsSpan(c * num, num);
     }
 
+    /// <summary>
+    /// Returns the quantization weights of channel <paramref name="c"/> for a strategy, the inverse of
+    /// <see cref="Matrix"/>, which the encoder quantises with. Its lowest-frequency entries are 0.
+    /// </summary>
+    /// <param name="quantKind">The strategy.</param>
+    /// <param name="c">The channel.</param>
+    /// <returns>The weights, one per coefficient.</returns>
+    public ReadOnlySpan<float> InvMatrix(JxlAcStrategyType quantKind, int c)
+    {
+        int table = AcStrategyToQuantTable[(int)quantKind];
+        int num = RequiredSizeX[table] * RequiredSizeY[table] * 64;
+        return this.invTables[table].AsSpan(c * num, num);
+    }
+
     /// <summary>Reads the encoding of every table from the AC global section.</summary>
     /// <param name="br">The reader.</param>
     /// <param name="modularFrameDecoder">
@@ -146,7 +160,7 @@ internal sealed partial class JxlDequantMatrices
             }
 
             JxlQuantEncoding encoding = this.encodings[table].Mode == QuantMode.Library ? LibraryEncoding(table) : this.encodings[table];
-            this.tables[table] = ComputeQuantTable(encoding, table);
+            this.tables[table] = ComputeQuantTable(encoding, table, out this.invTables[table]);
         }
 
         this.computedMask |= acsMask;
@@ -331,8 +345,8 @@ internal sealed partial class JxlDequantMatrices
         }
     }
 
-    // ComputeQuantTable: the weights of the table, then their reciprocals.
-    private static float[] ComputeQuantTable(JxlQuantEncoding encoding, int quantTableIdx)
+    // ComputeQuantTable: the weights of the table (the inverse table), then their reciprocals.
+    private static float[] ComputeQuantTable(JxlQuantEncoding encoding, int quantTableIdx, out float[] invTable)
     {
         const int n = 8;
         int wrows = 8 * RequiredSizeX[quantTableIdx];
@@ -454,6 +468,24 @@ internal sealed partial class JxlDequantMatrices
             table[i] = 1.0f / invVal;
         }
 
+        // Ensure that the lowest frequencies have a 0 inverse table. This does not affect en/decoding, but
+        // allows AC strategy selection to be slightly simpler. It also keeps the encoder's quantised
+        // lowest frequencies at 0, so the chroma-from-luma step does not subtract from the B DC twice.
+        int xs = RequiredSizeX[quantTableIdx];
+        int ys = RequiredSizeY[quantTableIdx];
+        JxlAcStrategy.CoefficientLayout(ref ys, ref xs);
+        for (int c = 0; c < 3; c++)
+        {
+            for (int y = 0; y < ys; y++)
+            {
+                for (int x = 0; x < xs; x++)
+                {
+                    weights[(c * ys * xs * 64) + (y * 8 * xs) + x] = 0;
+                }
+            }
+        }
+
+        invTable = weights;
         return table;
     }
 

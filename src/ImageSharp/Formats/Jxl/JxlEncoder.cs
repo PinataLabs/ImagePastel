@@ -10,9 +10,10 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Image encoder for writing an image to a stream as a JPEG XL codestream. Only lossless encoding
-/// (<see cref="Distance"/> 0) is supported so far, at every <see cref="JxlEffort"/>; a lossy distance
-/// throws <see cref="System.NotSupportedException"/>.
+/// Image encoder for writing an image to a stream as a JPEG XL codestream. Lossless encoding
+/// (<see cref="Distance"/> 0) is supported at every <see cref="JxlEffort"/>. Lossy encoding is supported
+/// at <see cref="JxlEffort.Fastest"/> for 8-bit RGB images with no alpha and no ICC profile; other lossy
+/// input, and lossy at the other efforts, throws <see cref="System.NotSupportedException"/>.
 /// </summary>
 internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {
