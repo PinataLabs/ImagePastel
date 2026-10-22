@@ -126,16 +126,8 @@ internal sealed class JxlLinearSrgbTransform
     // the encoding's primaries to XYZ, adapted from its white to D50 (Bradford), then to linear sRGB.
     private static float[,] PrimariesToLinearSrgb(JxlColorEncoding c)
     {
-        JxlColorEncoding srgb = new();
-        ((double X, double Y) R, (double X, double Y) G, (double X, double Y) B) s = srgb.PrimariesXy;
-        (double X, double Y) d65 = srgb.WhitePointXy;
-        float[,] srgbToXyzD50 = IccProfileBuilder.PrimariesToXyzD50(
-            (float)s.R.X, (float)s.R.Y, (float)s.G.X, (float)s.G.Y, (float)s.B.X, (float)s.B.Y, (float)d65.X, (float)d65.Y, IccProfileBuilder.LibjxlD50);
-
-        (double X, double Y) w = c.WhitePointXy;
-        float[,] adaptToD50 = IccProfileBuilder.AdaptToXyzD50((float)w.X, (float)w.Y, IccProfileBuilder.LibjxlD50);
-        float[,] originalToXyzD50 = IccProfileBuilder.Mul3x3Matrix(adaptToD50, c.PrimariesToXyz().ToXyz);
-        return IccProfileBuilder.Mul3x3Matrix(IccProfileBuilder.Inv3x3Matrix(srgbToXyzD50), originalToXyzD50);
+        float[,] originalToXyzD50 = JxlMatrix3x3.ToXyzD50(c.WhitePointXy, c.PrimariesToXyz().ToXyz);
+        return IccProfileBuilder.Mul3x3Matrix(IccProfileBuilder.Inv3x3Matrix(JxlMatrix3x3.SrgbToXyzD50()), originalToXyzD50);
     }
 
     private float DisplayFromEncoded(float e)
