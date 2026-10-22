@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_modular.cc (float_to_int and the channel copy of ModularFrameEncoder::ComputeEncodingData),
-// lib/jxl/enc_external_image.cc (the integer scale of ConvertFromExternalPlaneNoSizeCheck) and
+// lib/jxl/enc_external_image.cc (ConvertFromExternalPlaneNoSizeCheck: integers scaled, floats as they are),
+// lib/jxl/enc_frame.cc (CopyColorChannels) and
 // lib/jxl/encode.cc (CheckValidBitdepth).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -132,6 +133,53 @@ internal static class JxlEncoderInput<TPixel>
     }
 
     /// <summary>
+    /// Copies the colour samples of <paramref name="image"/> into the top-left of three float planes, as
+    /// libjxl's <c>CopyColorChannels</c> loads the caller's buffer for a lossy frame
+    /// (<c>ConvertFromExternalPlaneNoSizeCheck</c>): an integer sample is scaled to [0, 1] by the depth of
+    /// the pixel format, times 1 / (2^bits - 1), a multiply by the reciprocal; a float sample is taken as
+    /// it is, outside [0, 1] too. A grey sample goes into all three planes.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <param name="planes">The three planes, at least the size of the image.</param>
+    public static void CopyColorPlanes(Image<TPixel> image, Buffer2D<float>[] planes)
+    {
+        using RowReader reader = new(image);
+        for (int y = 0; y < image.Height; y++)
+        {
+            reader.Read(y);
+            for (int c = 0; c < 3; c++)
+            {
+                Span<float> output = planes[c].DangerousGetRowSpan(y).Slice(0, image.Width);
+                if (IsGray && c > 0)
+                {
+                    planes[0].DangerousGetRowSpan(y).Slice(0, image.Width).CopyTo(output);
+                    continue;
+                }
+
+                ReadPlaneRow(reader, c, output);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies the alpha samples of <paramref name="image"/> into the top-left of a float plane, loaded as
+    /// <see cref="CopyColorPlanes"/> loads the colour: libjxl's interleaved alpha of
+    /// <c>CopyColorChannels</c>, which a lossy frame reads to simplify the invisible pixels. Float alpha is
+    /// not rescaled, so a negative alpha is neither 0 nor visible to <c>SimplifyInvisible</c>.
+    /// </summary>
+    /// <param name="image">The image, of a pixel type with alpha.</param>
+    /// <param name="plane">The plane, at least the size of the image.</param>
+    public static void CopyAlphaPlane(Image<TPixel> image, Buffer2D<float> plane)
+    {
+        using RowReader reader = new(image);
+        for (int y = 0; y < image.Height; y++)
+        {
+            reader.Read(y);
+            ReadPlaneRow(reader, 3, plane.DangerousGetRowSpan(y).Slice(0, image.Width));
+        }
+    }
+
+    /// <summary>
     /// Copies the alpha samples of <paramref name="image"/> into channel <paramref name="c"/> of
     /// <paramref name="gi"/>, at the depth of <paramref name="eci"/>. It is libjxl's extra channel loop
     /// for the one extra channel a pixel type can have.
@@ -250,6 +298,26 @@ internal static class JxlEncoderInput<TPixel>
             f |= (uint)exp << mantBits;
             f |= (uint)mantissa;
             rowOut[x] = unchecked((int)f);
+        }
+    }
+
+    // One component of the row read last, as libjxl loads it into a float plane: integers scaled to
+    // [0, 1] by the depth of the pixel type, floats as they are. A half is read exactly; a signed or
+    // out-of-range sample is read through its scaled vector, the floats that lossless stores.
+    private static void ReadPlaneRow(RowReader reader, int component, Span<float> output)
+    {
+        if (Layout.ExponentBitsPerSample != 0)
+        {
+            reader.GetFloats(component, output);
+            return;
+        }
+
+        float scale = Layout.Kind == SampleKind.Integer8 ? 1F / 255 : 1F / 65535;
+        Span<int> samples = reader.Samples;
+        reader.GetIntegers(component, samples);
+        for (int x = 0; x < samples.Length; x++)
+        {
+            output[x] = samples[x] * scale;
         }
     }
 

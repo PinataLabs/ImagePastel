@@ -21,6 +21,9 @@ internal static class JxlCoeffOrder
     /// <summary>The number of contexts of a permutation.</summary>
     public const int PermutationContexts = 8;
 
+    /// <summary>The number of coefficients of one set of orders for every strategy (libjxl's <c>kCoeffOrderMaxSize</c>).</summary>
+    public const int CoeffOrderMaxSize = CoeffOrderLimit * DctBlockSize;
+
     private const int CoeffOrderLimit = 6156;
 
     private const int DctBlockSize = 64;
@@ -241,8 +244,13 @@ internal static class JxlCoeffOrder
         }
     }
 
-    // HybridUintConfig(0, 0, 0).Encode(val) gives token 0 for 0 and 1 + FloorLog2(val) otherwise.
-    private static int CoeffOrderContext(uint val)
+    /// <summary>
+    /// Returns the context of a permutation token that follows <paramref name="val"/>: the token of
+    /// <c>HybridUintConfig(0, 0, 0)</c>, which is 0 for 0 and 1 + FloorLog2(val) otherwise, at most 7.
+    /// </summary>
+    /// <param name="val">The previous value, or the size for the first token.</param>
+    /// <returns>The context.</returns>
+    public static int CoeffOrderContext(uint val)
     {
         uint token = val == 0 ? 0 : 1 + (uint)JxlBits.FloorLog2Nonzero(val);
         return (int)Math.Min(token, PermutationContexts - 1);

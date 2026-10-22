@@ -10,9 +10,12 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Image encoder for writing an image to a stream as a JPEG XL codestream. Only lossless encoding
-/// (<see cref="Distance"/> 0) is supported so far, at every <see cref="JxlEffort"/>; a lossy distance
-/// throws <see cref="System.NotSupportedException"/>.
+/// Image encoder for writing an image to a stream as a JPEG XL codestream. Lossless encoding
+/// (<see cref="Distance"/> 0) is supported at every <see cref="JxlEffort"/>. Lossy encoding is supported
+/// at <see cref="JxlEffort.Fastest"/> only, for any pixel type, with or without alpha. Its colour space is
+/// sRGB, or the one an ICC profile describes when the encoder recognises the profile as a JPEG XL colour
+/// encoding; the file then carries that encoding instead of the profile. Lossy encoding at the other
+/// efforts, or with a profile that is not recognised, throws <see cref="System.NotSupportedException"/>.
 /// </summary>
 internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {
@@ -21,6 +24,15 @@ internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 
     /// <inheritdoc/>
     public JxlEffort Effort { get; set; } = JxlEffort.Default;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a lossy frame keeps every coefficient order natural. For
+    /// tests only; see <see cref="IJxlEncoderOptions.NaturalCoeffOrders"/>.
+    /// </summary>
+    internal bool NaturalCoeffOrders { get; set; }
+
+    /// <inheritdoc/>
+    bool IJxlEncoderOptions.NaturalCoeffOrders => this.NaturalCoeffOrders;
 
     /// <inheritdoc/>
     public void Encode<TPixel>(Image<TPixel> image, Stream stream)

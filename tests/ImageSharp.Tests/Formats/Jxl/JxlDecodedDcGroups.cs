@@ -2,12 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using Xunit;
 
@@ -17,16 +19,20 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// The first frame of a bare VarDCT codestream, decoded up to its DC groups with the decoder's own steps
 /// (<see cref="JxlFrameDecoder.ProcessDcGlobal"/> and <see cref="JxlFrameDecoder.ProcessDcGroup"/>), so
 /// that a test can read what they fill: the AC metadata, the quant field and the chroma-from-luma maps.
+/// <see cref="DecodeAcGlobal"/> then reads the AC global section, for the coefficient orders.
 /// </summary>
 internal sealed class JxlDecodedDcGroups : IDisposable
 {
     private readonly JxlModularFrameDecoder modularFrameDecoder;
 
-    private JxlDecodedDcGroups(JxlFrameHeader frameHeader, JxlVarDctFrameState state, JxlModularFrameDecoder modularFrameDecoder)
+    private readonly JxlBitReader acGlobal;
+
+    private JxlDecodedDcGroups(JxlFrameHeader frameHeader, JxlVarDctFrameState state, JxlModularFrameDecoder modularFrameDecoder, JxlBitReader acGlobal)
     {
         this.FrameHeader = frameHeader;
         this.State = state;
         this.modularFrameDecoder = modularFrameDecoder;
+        this.acGlobal = acGlobal;
     }
 
     /// <summary>Gets the frame header.</summary>
@@ -34,6 +40,9 @@ internal sealed class JxlDecodedDcGroups : IDisposable
 
     /// <summary>Gets the VarDCT state, with every DC group decoded.</summary>
     public JxlVarDctFrameState State { get; }
+
+    /// <summary>Gets the transforms of the global Modular stream, which codes the extra channels.</summary>
+    public IReadOnlyList<JxlTransform> GlobalTransforms => this.modularFrameDecoder.GlobalTransforms;
 
     /// <summary>Decodes the DC global section and the DC groups of the first frame.</summary>
     /// <param name="codestream">A bare codestream whose first frame is VarDCT, with no patches.</param>
@@ -71,7 +80,21 @@ internal sealed class JxlDecodedDcGroups : IDisposable
             JxlFrameDecoder.ProcessDcGroup(i, singleSection ? sections[0] : sections[1 + i], frameHeader, frameDim, modularFrameDecoder, state);
         }
 
-        return new JxlDecodedDcGroups(frameHeader, state, modularFrameDecoder);
+        // The AC global section follows the DC groups; in a frame of one section it is the rest of it.
+        JxlBitReader acGlobal = singleSection ? sections[0] : sections[1 + frameDim.NumDcGroups];
+        return new JxlDecodedDcGroups(frameHeader, state, modularFrameDecoder, acGlobal);
+    }
+
+    /// <summary>
+    /// Reads the AC global section with the decoder's own steps (<see cref="JxlVarDctFrameState.InitForAc"/>
+    /// and <see cref="JxlVarDctFrameState.ProcessAcGlobal"/>): the dequantization matrices, the number of
+    /// histogram sets, and the coefficient orders and histograms of each pass.
+    /// </summary>
+    public void DecodeAcGlobal()
+    {
+        int numPasses = (int)this.FrameHeader.Passes.NumPasses;
+        this.State.InitForAc(numPasses);
+        this.State.ProcessAcGlobal(this.acGlobal, numPasses, this.modularFrameDecoder);
     }
 
     /// <summary>

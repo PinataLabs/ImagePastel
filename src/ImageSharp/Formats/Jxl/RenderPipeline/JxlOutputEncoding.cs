@@ -9,6 +9,7 @@
 
 using System;
 using SixLabors.ImageSharp.ColorManagement.Icc;
+using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
@@ -229,15 +230,8 @@ internal sealed class JxlOutputEncoding
     // originalToXyz is the output primaries' XYZ matrix (original_to_xyz), and w their white point.
     private static float[,] AdaptToPrimaries((double X, double Y) w, float[,] originalToXyz, float[,] origInverseMatrix)
     {
-        // The default colour encoding is sRGB.
-        JxlColorEncoding srgbEncoding = new();
-        ((double X, double Y) R, (double X, double Y) G, (double X, double Y) B) srgb = srgbEncoding.PrimariesXy;
-        (double X, double Y) d65 = srgbEncoding.WhitePointXy;
-        float[,] srgbToXyzD50 = IccProfileBuilder.PrimariesToXyzD50(
-            (float)srgb.R.X, (float)srgb.R.Y, (float)srgb.G.X, (float)srgb.G.Y, (float)srgb.B.X, (float)srgb.B.Y, (float)d65.X, (float)d65.Y, IccProfileBuilder.LibjxlD50);
-
-        float[,] adaptToD50 = IccProfileBuilder.AdaptToXyzD50((float)w.X, (float)w.Y, IccProfileBuilder.LibjxlD50);
-        float[,] xyzd50ToOriginal = IccProfileBuilder.Inv3x3Matrix(IccProfileBuilder.Mul3x3Matrix(adaptToD50, originalToXyz));
+        float[,] xyzd50ToOriginal = IccProfileBuilder.Inv3x3Matrix(JxlMatrix3x3.ToXyzD50(w, originalToXyz));
+        float[,] srgbToXyzD50 = JxlMatrix3x3.SrgbToXyzD50();
         float[,] srgbToOriginal = IccProfileBuilder.Mul3x3Matrix(xyzd50ToOriginal, srgbToXyzD50);
         return IccProfileBuilder.Mul3x3Matrix(srgbToOriginal, origInverseMatrix);
     }
