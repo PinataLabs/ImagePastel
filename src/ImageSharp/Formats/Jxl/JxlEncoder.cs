@@ -28,6 +28,15 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// it lossless, or convert the image to sRGB first.
 /// </para>
 /// <para>
+/// The image's <see cref="Metadata.ImageMetadata.ExifProfile"/> and
+/// <see cref="Metadata.ImageMetadata.XmpProfile"/> are written in <c>Exif</c> and <c>xml </c> boxes of a
+/// JPEG XL container, uncompressed. An Exif profile without values and an empty XMP profile are not
+/// written. The container is used only for these boxes: an image without them is written as a bare
+/// codestream. An Exif or XMP profile over 64 MiB, the most the JPEG XL decoder reads, throws
+/// <see cref="ImageFormatException"/>. The ICC profile is part of the codestream, not a box. IPTC, JUMBF
+/// and gain maps are not written.
+/// </para>
+/// <para>
 /// Only the root frame is written. From <see cref="JxlMetadata"/> the encoder reads only
 /// <see cref="JxlMetadata.BitsPerSample"/>, <see cref="JxlMetadata.ExponentBitsPerSample"/> and
 /// <see cref="JxlMetadata.IntensityTarget"/>; it ignores the other members.

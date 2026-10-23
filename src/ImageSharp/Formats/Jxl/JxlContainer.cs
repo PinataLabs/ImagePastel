@@ -28,7 +28,7 @@ internal static class JxlContainer
     // reconstruction. Departure (#112): this decoder caps every Exif and XMP box it reads at this size,
     // plain or Brotli-compressed, and throws for a larger one. libjxl applies the limit only to the
     // boxes it decodes for JPEG reconstruction ("EXIF/XMP box is too large"), and hands other boxes to
-    // the caller at any size.
+    // the caller at any size. Internal for the encoder, which never writes a larger box (JxlMetadataBoxes).
     internal const int BlockSizeLimit = 64 << 20;
 
     // The buffer that measures a Brotli-compressed box before it is decompressed into its own array.
