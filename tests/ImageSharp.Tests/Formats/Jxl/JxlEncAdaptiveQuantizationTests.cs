@@ -114,6 +114,69 @@ public class JxlEncAdaptiveQuantizationTests
         }
     }
 
+    // Through the decoder's parse: the quant field of a photo varies from block to block, and its scale
+    // (raw value times the quantiser's scale) follows libjxl's global scale of 0.39 / d, so that d times
+    // its mean stays near 0.39. Measured on Bike, min / mean / max of the scaled field (E4b, before
+    // AdjustQuantBlockAC): d1 0.2340 / 0.5443 / 0.7799, d2 0.1170 / 0.2702 / 0.3899, d4 0.0585 / 0.1248 /
+    // 0.1754; mean times d 0.544, 0.540, 0.499 (the modulations are dampened above d2).
+    [Theory]
+    [InlineData(1.0f)]
+    [InlineData(2.0f)]
+    [InlineData(4.0f)]
+    public void Encode_Photo_HasAnAdaptiveQuantFieldWhoseMeanFollowsTheDistance(float distance)
+    {
+        using Image<Rgb24> bike = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(bike, JxlLossyDefaultEncoderTests.Lossy(distance)));
+
+        (float min, float mean, float max) = ScaledFieldRange(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: min {min:0.0000}, mean {mean:0.0000}, max {max:0.0000}, mean * d {mean * distance:0.0000}");
+        Assert.True(min < max, $"The field is constant at {min}");
+        Assert.InRange(mean * distance, 0.39f * 0.75f, 0.39f * 1.5f);
+    }
+
+    // At d0.5 Gaborish is off, so libjxl computes the field at 0.62 d (LossyFrameHeuristics). The field read
+    // back is that one, not the field at d: its mean is nearer the mean of SetQuantFieldRect over
+    // InitialQuantField(0.31) than over InitialQuantField(0.5), at the frame's global scale. (Means rather
+    // than every block, as AdjustQuantBlockAC moves single blocks.)
+    [Fact]
+    public void Encode_AtHalfDistance_ComputesTheFieldAt062TimesTheDistance()
+    {
+        const float distance = 0.5f;
+        using Image<Rgb24> bike = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(bike, JxlLossyDefaultEncoderTests.Lossy(distance)));
+
+        Assert.False(frame.FrameHeader.LoopFilter.Gab);
+        double parsed = MeanRaw(frame);
+        double at062 = MeanOf(RawQuantField(bike, distance, distanceForIqf: 0.62f * distance));
+        double atD = MeanOf(RawQuantField(bike, distance, distanceForIqf: distance));
+        TestContext.Current.TestOutputHelper?.WriteLine($"parsed {parsed:0.00}, at 0.62 d {at062:0.00}, at d {atD:0.00}");
+        Assert.True(Math.Abs(parsed - at062) < Math.Abs(parsed - atD) / 4, $"parsed {parsed}, at 0.62 d {at062}, at d {atD}");
+    }
+
+    // A 16x16 block takes the maximum of its four values at d1 (the mixer is 1 up to d1.54138) and their
+    // mean from d3.31 (the mixer reaches 0); the 8x8 blocks keep theirs.
+    [Theory]
+    [InlineData(1.0f, 4.0f)]
+    [InlineData(4.0f, 2.5f)]
+    public void AdjustQuantField_GivesAMultiBlockItsMaximumOrMean(float distance, float expected)
+    {
+        JxlAcStrategyImage acs = new(4, 2);
+        acs.FillDct8();
+        acs.Set(0, 0, JxlAcStrategyType.Dct16X16);
+        using Buffer2D<float> field = Configuration.Default.MemoryAllocator.Allocate2D<float>(4, 2);
+        float[] values = { 1, 2, 5, 6, 3, 4, 7, 8 };
+        for (int i = 0; i < values.Length; i++)
+        {
+            field[i % 4, i / 4] = values[i];
+        }
+
+        JxlEncAdaptiveQuantization.AdjustQuantField(acs, new JxlRect(0, 0, 4, 2), distance, field);
+
+        Assert.Equal(new[] { expected, expected, 5, 6, expected, expected, 7, 8 }, new[] { field[0, 0], field[1, 0], field[2, 0], field[3, 0], field[0, 1], field[1, 1], field[2, 1], field[3, 1] });
+    }
+
     // The opsin of an sRGB image as the encoder makes it: XYB, padded to whole blocks by repeating the last
     // column and row.
     internal static Buffer2D<float>[] CreateOpsin(Image<Rgb24> image)
@@ -174,6 +237,56 @@ public class JxlEncAdaptiveQuantizationTests
         {
             JxlPlanes.DisposeAll(opsin);
         }
+    }
+
+    // The raw quant field the encoder sets from the field at distanceForIqf, at the global scale of d.
+    private static int[] RawQuantField(Image<Rgb24> image, float distance, float distanceForIqf)
+    {
+        Buffer2D<float>[] opsin = CreateOpsin(image);
+        try
+        {
+            using Buffer2D<float> field = JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, out Buffer2D<float> mask1x1);
+            mask1x1.Dispose();
+            return RawQuantField(field, distance);
+        }
+        finally
+        {
+            JxlPlanes.DisposeAll(opsin);
+        }
+    }
+
+    private static double MeanOf(int[] values)
+    {
+        double sum = 0;
+        foreach (int v in values)
+        {
+            sum += v;
+        }
+
+        return sum / values.Length;
+    }
+
+    private static double MeanRaw(JxlDecodedDcGroups frame)
+    {
+        double sum = 0;
+        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        {
+            Span<int> row = frame.State.RawQuantField.DangerousGetRowSpan(by);
+            for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
+            {
+                sum += row[bx];
+            }
+        }
+
+        return sum / (frame.State.XSizeBlocks * frame.State.YSizeBlocks);
+    }
+
+    // The quant field read back, scaled to libjxl's float field: each raw value times the quantiser's scale.
+    private static (float Min, float Mean, float Max) ScaledFieldRange(JxlDecodedDcGroups frame)
+    {
+        float scale = frame.State.Quantizer.Scale;
+        (int min, int max) = frame.QuantFieldRange();
+        return (min * scale, (float)MeanRaw(frame) * scale, max * scale);
     }
 
     private static int[] RawQuantField(Buffer2D<float> field, float distance)

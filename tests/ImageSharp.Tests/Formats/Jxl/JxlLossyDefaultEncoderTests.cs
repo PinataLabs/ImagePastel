@@ -77,7 +77,7 @@ public class JxlLossyDefaultEncoderTests
     // libjxl's choices at Hare, read back through the decoder's parse: XYB VarDCT; Gaborish above d0.5
     // (LoopFilterFromParams); the EPF iterations and X quantisation scale as at Fastest; near-lossless DC,
     // so one bit of extra DC precision in every LF group (the gradient has two). E4a's temporary departures
-    // are visible too: every block DCT8, one quant field value, and the default chroma-from-luma and
+    // are visible too: every block DCT8, and the default chroma-from-luma and
     // block context maps.
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
@@ -103,7 +103,7 @@ public class JxlLossyDefaultEncoderTests
         Assert.Equal(header.ToFrameDimensions().NumDcGroups, frame.ExtraDcPrecision.Length);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // Temporary departures until E4g (strategies) and E4b (quant field).
+        // Temporary departure until E4g (strategies).
         for (int by = 0; by < frame.State.YSizeBlocks; by++)
         {
             for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
@@ -113,8 +113,9 @@ public class JxlLossyDefaultEncoderTests
             }
         }
 
+        // E4b: the adaptive quant field varies from block to block.
         (int min, int max) = frame.QuantFieldRange();
-        Assert.Equal(min, max);
+        Assert.True(min < max, $"The quant field is constant at {min}");
 
         // Temporary departures until E4d (chroma-from-luma) and E4e (block context map).
         JxlColorCorrelation defaultCmap = new(header.ToFrameDimensions().XSize, header.ToFrameDimensions().YSize);
@@ -146,16 +147,16 @@ public class JxlLossyDefaultEncoderTests
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "7DA51E672F36D8E261B93F2E8F05C872A0825ADAEC220F9785D7CA59B40B1986")]
-    [InlineData("flower-384x244", "", 1.0f, "5CCBF69756487289AD2FB472D8266E88CE7F96D90152B25DCDAF63A18F39C149")]
-    [InlineData("flower-384x244", "", 2.0f, "389A786B664E1E110F12CB6BC81E3050AD780811593EBBCF92F501637B629D9B")]
-    [InlineData("flower-384x244", "", 4.0f, "17CD37A73A106C4382C8D5D748F8CE817A342ACB61054D55C342CE0E2856FA24")]
-    [InlineData("flower-17x23", "", 1.0f, "B398A6CA525E189365B160BA0CCEFA9AF80C2C626004CAC1B37EA12BBBABC803")]
-    [InlineData("dot-1x1", "", 1.0f, "325ADA26DA3104663BA288B60DFDD7942D3533BEFD809FA43594FD851860C1C8")]
-    [InlineData("bike-582x453", "", 1.0f, "74F8C81F98135462F573958B1EA4CD09947A45AF69DF62D6B6DB36F8CEF0EA1B")]
-    [InlineData("gradient-2049x9", "", 2.0f, "A58E35BF3F749154E9B08B44CEFC7CC0BAE07A2299E4E04C6FF17D241DF9FFFA")]
-    [InlineData("flower-256x244", "soft", 1.0f, "566F2BFFDB2D22E82B71DFBCC0505973A9547E94EEC8528C24508E2FDCFECC38")]
-    [InlineData("bike-582x453", "hard", 1.0f, "064CF8AF56881D8D606C9743284F07AA0A639E4A046CBAC89301BAA8150980F6")]
+    [InlineData("flower-384x244", "", 0.5f, "A7DC315368763A4EB4780AF40E722CC4EA4B29A78858C86BCFEB77635E9BC788")]
+    [InlineData("flower-384x244", "", 1.0f, "9268D41C1309156AF285D6A31B41F73467531DCF0DB24C9B9DCA518339C0568C")]
+    [InlineData("flower-384x244", "", 2.0f, "84C22C32FD0756839D0684BD4127CC3A302B132B409FAF89C0A4A70C1E0F6246")]
+    [InlineData("flower-384x244", "", 4.0f, "1DF9931B894CEF7298E6BD2E54E5CC4D0F2BDC1310DE588F2776B95DBA7BED3D")]
+    [InlineData("flower-17x23", "", 1.0f, "F97B31CE1536497DDAAC182703A880C1BE517426F70205EEF90624C0318805C9")]
+    [InlineData("dot-1x1", "", 1.0f, "7EC547A13BF30BC6D3982B49520CC5EF34E471C2F85033636834388E1F7A13AB")]
+    [InlineData("bike-582x453", "", 1.0f, "AFDFF32CE96C74EE9DAB663FF0192BEF6A00EBA3159EFFD5D5A127366187701F")]
+    [InlineData("gradient-2049x9", "", 2.0f, "D068C6DBEEF95737187651E2DC859D5C0F65E3F519B9D9B6D9C270A2CC6B9B7B")]
+    [InlineData("flower-256x244", "soft", 1.0f, "F3B0ED82D513793DA4B8ED0DE8A493A2B7E07F10B73217B9E65E22FDE91D6D8F")]
+    [InlineData("bike-582x453", "hard", 1.0f, "F7456ECF59D8900BED0BD21337BC83321FBE46C7CE05C27C420CCE1DC24660E6")]
     public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded;

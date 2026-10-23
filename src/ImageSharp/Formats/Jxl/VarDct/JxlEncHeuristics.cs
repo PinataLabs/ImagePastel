@@ -3,13 +3,14 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, with the effort 5 searches in their
 // effort 3 form for now, and ComputeARHeuristics),
-// lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; AdjustQuantField and FindBestQuantizer, which do
-// nothing at effort 3), lib/jxl/enc_ac_strategy.cc (AcStrategyHeuristics::Init and ProcessRect from Cheetah up)
+// lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; FindBestQuantizer, which does nothing above
+// effort 7), lib/jxl/enc_ac_strategy.cc (AcStrategyHeuristics::Init and ProcessRect from Cheetah up)
 // and lib/jxl/quantizer.cc (SetQuantFieldRect).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
@@ -17,8 +18,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// <summary>
 /// The encoder's choices for a lossy frame before the coefficients: the quantiser, the strategy of each
 /// block, the quant field, the chroma-from-luma map and the EPF sharpness. libjxl gates each search by
-/// speed tier; from Falcon (effort 3) up, each is a constant. At Hare (effort 5) the opsin is also
-/// inverse-Gaborish filtered.
+/// speed tier; from Falcon (effort 3) up, each is a constant. At Hare (effort 5) the quant field adapts to
+/// the image (<see cref="JxlEncAdaptiveQuantization"/>) and the opsin is inverse-Gaborish filtered.
 /// </summary>
 internal static class JxlEncHeuristics
 {
@@ -26,6 +27,9 @@ internal static class JxlEncHeuristics
     private const float DcMul = 0.3f;
     private const float DcQuantPow = 0.83f;
     private const float DcQuant = 1.095924047623553f;
+
+    // libjxl's kEncTileDimInBlocks: the heuristics run per tile of 8x8 blocks (64x64 pixels).
+    private const int EncTileDimInBlocks = 8;
 
     // libjxl's kMinButteraugliForDynamicAR.
     private const float MinButteraugliForDynamicAr = 0.5f;
@@ -55,11 +59,10 @@ internal static class JxlEncHeuristics
     /// context map. The dequantization matrices keep their defaults.
     /// </summary>
     /// <remarks>
-    /// Temporary departures (E4a, the Default tracer): from Hare down libjxl computes an adaptive quant
-    /// field, searches the AC strategies, fits a chroma-from-luma map per tile and chooses a block context
-    /// map. Until the tickets that port them land, each runs its Falcon form here, at every tier: the
-    /// constant field of <c>q = 0.79 / d</c> (E4b), DCT8 everywhere (E4g), the default chroma-from-luma map
-    /// (E4d) and the default block context map (E4e). Each is marked where it runs.
+    /// Temporary departures (E4a, the Default tracer): from Hare down libjxl searches the AC strategies,
+    /// fits a chroma-from-luma map per tile and chooses a block context map. Until the tickets that port them land, each runs its Falcon form here, at every tier: DCT8
+    /// everywhere (E4g), the default chroma-from-luma map (E4d) and the default block context map (E4e).
+    /// Each is marked where it runs.
     /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>
@@ -77,13 +80,37 @@ internal static class JxlEncHeuristics
 
         float quantDc = InitialQuantDc(encState.Distance);
 
-        // Compute an initial estimate of the quantization field. InitialQuantField runs only in Hare mode
-        // or slower; Falcon sets a constant. libjxl's masking field only feeds the AC strategy search.
-        // Temporary departure (E4a): Hare takes Falcon's constant field and its 0.79 / d until E4b ports
-        // InitialQuantField (on the opsin before Gaborish) and the global scale from 0.39 / d.
-        // A double quotient rounded to float, as libjxl's `float q = 0.79 / cparams.butteraugli_distance`.
-        float q = (float)(0.79 / encState.Distance);
-        encState.Quantizer.ComputeGlobalScaleAndQuant(quantDc, q, 0);
+        // Compute an initial estimate of the quantization field. Call InitialQuantField only in Hare mode or
+        // slower; Falcon sets a constant.
+        if (speedTier > JxlSpeedTier.Hare)
+        {
+            encState.InitialQuantField = allocator.Allocate2D<float>(encState.XSizeBlocks, encState.YSizeBlocks);
+
+            // A double quotient rounded to float, as libjxl's `float q = 0.79 / cparams.butteraugli_distance`.
+            float q = (float)(0.79 / encState.Distance);
+            for (int y = 0; y < encState.YSizeBlocks; y++)
+            {
+                encState.InitialQuantField.DangerousGetRowSpan(y).Fill(q);
+            }
+
+            // libjxl also fills its masking image with 1 / (q + 0.001); only the AC strategy search reads it,
+            // which does not run here.
+            encState.Quantizer.ComputeGlobalScaleAndQuant(quantDc, q, 0);
+        }
+        else
+        {
+            // Call this here, as it relies on pre-gaborish values.
+            float butteraugliDistanceForIqf = encState.Distance;
+            if (!gaborish)
+            {
+                butteraugliDistanceForIqf *= 0.62f;
+            }
+
+            encState.InitialQuantField = JxlEncAdaptiveQuantization.InitialQuantField(butteraugliDistanceForIqf, opsin, 1.0f, allocator, out Buffer2D<float> mask1x1);
+            encState.InitialQuantMasking1x1 = mask1x1;
+            float q = (float)(0.39 / encState.Distance);
+            encState.Quantizer.ComputeGlobalScaleAndQuant(quantDc, q, 0);
+        }
 
         // Apply inverse-gaborish.
         if (gaborish)
@@ -100,8 +127,24 @@ internal static class JxlEncHeuristics
         encState.Matrices.EnsureComputed(1);
         encState.AcStrategy.FillDct8();
 
-        // AdjustQuantField only changes the field under blocks larger than 8x8, so it leaves q.
-        Array.Fill(encState.RawQuantField, encState.Quantizer.RawQuantField(q));
+        // Per 64x64 tile, in tile order (libjxl's process_tile, after the strategies of the tile): always set
+        // the initial quant field, so we can compute the CfL map with more accuracy. The initial quant field
+        // might change in slower modes, but adjusting the quant field with butteraugli when all the other
+        // encoding parameters are fixed is likely a more reliable choice anyway.
+        int numTilesX = (int)JxlBits.DivCeil(encState.XSizeBlocks, EncTileDimInBlocks);
+        int numTiles = numTilesX * (int)JxlBits.DivCeil(encState.YSizeBlocks, EncTileDimInBlocks);
+        for (int tid = 0; tid < numTiles; tid++)
+        {
+            int tx = tid % numTilesX;
+            int ty = tid / numTilesX;
+            int by0 = ty * EncTileDimInBlocks;
+            int by1 = Math.Min((ty + 1) * EncTileDimInBlocks, encState.YSizeBlocks);
+            int bx0 = tx * EncTileDimInBlocks;
+            int bx1 = Math.Min((tx + 1) * EncTileDimInBlocks, encState.XSizeBlocks);
+            JxlRect r = new(bx0, by0, bx1 - bx0, by1 - by0);
+            JxlEncAdaptiveQuantization.AdjustQuantField(encState.AcStrategy, r, encState.Distance, encState.InitialQuantField);
+            encState.Quantizer.SetQuantFieldRect(encState.InitialQuantField, r, encState.RawQuantField, encState.XSizeBlocks);
+        }
 
         // Compute a non-default CfL map if we are at Hare speed, or slower.
         // Temporary departure (E4a): Hare keeps the default map until E4d ports the fast CfL search.
