@@ -243,7 +243,8 @@ internal static partial class JxlDct
             case JxlAcStrategyType.Afv1:
             case JxlAcStrategyType.Afv2:
             case JxlAcStrategyType.Afv3:
-                throw new NotSupportedException($"The JPEG XL encoder's {strategy} transform is not supported yet; slice E5 adds it.");
+                JxlThrowHelper.ThrowNotSupportedException($"The encoder's {strategy} transform (libjxl effort 6 and up; slice E5)");
+                break;
 
             default:
             {
