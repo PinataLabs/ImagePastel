@@ -5,7 +5,7 @@
 // JxlEncoderSetFrameDistance, and the
 // codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
 // (ColorEncoding::SetICCRaw), lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB) and
-// lib/jxl/luminance.cc (SetIntensityTarget).
+// lib/jxl/luminance.cc (SetIntensityTarget), and the Exif orientation rule of tools/cjxl_main.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -63,6 +63,16 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         bool lossy = this.distance != 0;
         JxlCodecMetadata metadata = CreateMetadata<TPixel>(image, lossy);
+
+        // cjxl's rule (InterpretExif before the encode): a valid Exif orientation becomes the codestream
+        // orientation. The pixels and the Exif box are written as they are, so the two stay in sync, as
+        // libjxl's encode.h asks; a decoder that applies the orientation then resets the Exif to 1.
+        if (boxes.Exif is not null)
+        {
+            uint orientation = metadata.M.Orientation;
+            JxlExif.InterpretExif(boxes.Exif, ref orientation);
+            metadata.M.Orientation = orientation;
+        }
 
         // Lossless embeds a matching profile verbatim; lossy writes the colour encoding it recognises.
         byte[] icc = lossy
