@@ -58,8 +58,21 @@ public class JxlLossyCalibrationTests
     /// thinnest passing margins: text d4 +1.20, calliphora d4 +1.22, bike_alpha d1 +2.00, text d1 +2.17.
     /// line_art still fails: d1 -2.62, d2 -6.41, d4 -6.42.
     /// </para>
+    /// <para>
+    /// E5e (the CfL pre-pass and Newton fit): 16 of 18. text d2 passes (+0.46) and line_art d1 passes
+    /// (+2.68); line_art still fails at d2 (-1.13) and d4 (-3.63). Smallest passing margins: text d2 +0.46,
+    /// calliphora d4 +1.10, text d4 +1.78. E5e merged with E5c (AFV): 18 of 18. Smallest margins:
+    /// line_art d2 +0.31, text d2 +0.34, line_art d4 +0.48, calliphora d4 +1.46.
+    /// </para>
+    /// <para>
+    /// E5b merged after E5c and E5e: 17 of 18, lowered on purpose. DCT4X8 and DCT8X4 match libjxl bit for
+    /// bit (the transforms and EstimateEntropy against the harnesses), so the loss is not a port error. It
+    /// is a real Squirrel stage that moves line_art d2 from +0.31 to -0.11 (70.60 against a floor of
+    /// 70.71). Other margins: text d2 +0.31, line_art d4 +0.74, calliphora d4 +1.22, text d4 +1.39. The
+    /// stages still in Hare form (E5d merges, E5f qm scales, E5h EPF sharpness) are expected to win it back.
+    /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 14;
+    private const int ThoroughRowsPassing = 17;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

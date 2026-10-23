@@ -51,11 +51,11 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
 /// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
 /// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries DCT4X8, DCT8X4 and AFV0 to AFV3.
-/// The other Squirrel stages are still in their Default form, each a temporary departure named in its
-/// code with the slice that ports it: the merges are the aligned ones (the non-aligned 16x16 and 32x32
-/// merges come with E5d); there is no chroma-from-luma pre-pass, and the fit after the search is the
-/// fast least squares (the DCT8 pre-pass and the Newton fit come with E5e); the X and B quantisation scales come from
-/// the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
+/// Each 64x64 tile first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and
+/// the fit after the search uses Newton's method. The other Squirrel stages are still in their Default
+/// form, each a temporary departure named in its code with the slice that ports it: the merges are the
+/// aligned ones (the non-aligned 16x16 and 32x32 merges come with E5d); the X and B quantisation scales
+/// come from the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
 /// search, which decodes the frame in the encoder, comes with E5h).
 /// </para>
 /// </content>
