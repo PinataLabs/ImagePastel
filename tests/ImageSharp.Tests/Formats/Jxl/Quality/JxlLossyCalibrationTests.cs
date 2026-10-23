@@ -65,6 +65,20 @@ public class JxlLossyCalibrationTests
     /// E5h merged with E5c and E5e: 18 of 18. line_art scores 71.65 at d2 and 63.45 at d4 (margins +0.94 and
     /// +2.48, against +0.31 and +0.48 without E5h). Smallest margins: text d2 +0.88, line_art d2 +0.94,
     /// bike_alpha d1 +2.42, line_art d4 +2.48.
+    /// <para>
+    /// E5f (the pixel-statistics X and B scales, cjxl -e 7's on every row: B 5 on line_art, X 4 and B 3 on
+    /// text, X 5 and B 4 on bike_alpha; the other rows keep Default's) alone: 16 of 18. text d2 passes
+    /// (+0.81) and line_art d1 passes (+2.30); line_art d2 (-1.52) and d4 (-4.10) fail. E5f merged with E5c
+    /// and E5g: 17 of 18 (line_art d2 +0.07, d4 -2.53). E5f merged with E5c, E5e and E5g: 18 of 18.
+    /// Smallest margins: line_art d4 +0.23 (E5e's tip had +0.48), text d2 +1.28, calliphora d4 +1.46,
+    /// text d4 +2.02; line_art d2 +2.83 and d1 +3.48.
+    /// </para>
+    /// <para>
+    /// E5h merged with E5c, E5e and E5f: 18 of 18. line_art scores 74.29 at d2 and 63.01 at d4 (margins
+    /// +3.57 and +2.05, against +2.83 and +0.23 without E5h; E5a's were -9.52 and -9.33). Its d2 sharpness
+    /// histogram is 212 / 43 / 769 blocks at 0 / 2 / 7, cjxl -e 7's 205 / 43 / 776. Smallest margins:
+    /// line_art d4 +2.05, text d2 +2.17, text d4 +2.71, bike d4 +3.10.
+    /// </para>
     /// </remarks>
     private const int ThoroughRowsPassing = 18;
 
