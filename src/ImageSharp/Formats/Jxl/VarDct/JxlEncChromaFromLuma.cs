@@ -47,11 +47,9 @@ internal static class JxlEncChromaFromLuma
     /// <param name="fast">Whether to fit by least squares (libjxl's fast search, from Wombat up).</param>
     public static void ComputeMap(JxlPassesEncoderState encState, Buffer2D<float>[] opsin, bool fast)
     {
-        if (!fast)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("The chroma-from-luma Newton search (libjxl effort 7 and up; slice E5)");
-        }
-
+        // Temporary departure (E5a): below Wombat (fast = false) libjxl fits each multiplier with Newton's
+        // method on its CFLFunction. E5e ports it; until then every tier takes the fast least squares, as
+        // Hare does, and fast is not read.
         Scratch scratch = new();
         int xsizeBlocks = encState.XSizeBlocks;
         int ysizeBlocks = encState.YSizeBlocks;

@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, and ComputeARHeuristics),
+// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3, 5 and 7, and ComputeARHeuristics),
 // lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; FindBestQuantizer, which acts only from kKitten
 // down, effort 8 and up, so it is not ported) and lib/jxl/quantizer.cc (SetQuantFieldRect).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
@@ -63,12 +63,17 @@ internal static class JxlEncHeuristics
     {
         JxlSpeedTier speedTier = encState.SpeedTier;
 
-        // Splines and patches are found from Squirrel down.
-        if (speedTier <= JxlSpeedTier.Squirrel)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Lossy splines and patches (libjxl effort 7 and up; slice E5)");
-        }
+        // Find and subtract splines. libjxl does this from Squirrel down (speed_tier <= kSquirrel), but its
+        // FindSplines returns an empty set at ef67fde2 ("TODO: implement spline detection",
+        // enc_splines.cc:103-106), and the encoder has no custom splines. Drawing and subtracting no splines
+        // leaves the opsin as it is, and the frame keeps its splines flag off, so the step is a no-op at
+        // every tier and nothing runs here.
 
+        // Departure (ADR 0001): from Squirrel down libjxl also finds patches and dots
+        // (FindBestPatchDictionary) and subtracts them from the opsin; the PRD leaves them out. Measured
+        // with cjxl v0.12.0 -e 7, --patches=0 against --patches=1 on the calibration images: only text
+        // changes, 1.18x the size and 0.34 (d1), 1.49 (d2) and 1.18 (d4) lower in SSIMULACRA2, within the
+        // comparer's slack; line_art and the photos are byte-identical.
         float quantDc = InitialQuantDc(encState.Distance);
 
         // Compute an initial estimate of the quantization field. Call InitialQuantField only in Hare mode or
@@ -131,7 +136,10 @@ internal static class JxlEncHeuristics
             int bx1 = Math.Min((tx + 1) * EncTileDimInBlocks, encState.XSizeBlocks);
             JxlRect r = new(bx0, by0, bx1 - bx0, by1 - by0);
 
-            // The chroma-from-luma map is still the default here, as libjxl's is before this tile's fit.
+            // For speeds up to Wombat, libjxl computes a first color correlation map of the tile here
+            // (speed_tier <= kSquirrel: CfLHeuristics::ComputeTile on DCT8 blocks with no quant field, and
+            // fast = false), and the search below reads it. Temporary departure (E5a): that pre-pass is not
+            // ported until E5e, so at every tier the search reads the default map, as at Hare.
             JxlEncAcStrategy.ProcessRect(acsConfig, speedTier, encState.Distance, r, encState.Cmap, encState.AcStrategy, acsScratch);
             JxlEncAdaptiveQuantization.AdjustQuantField(encState.AcStrategy, r, encState.Distance, encState.InitialQuantField);
             encState.Quantizer.SetQuantFieldRect(encState.InitialQuantField, r, encState.RawQuantField, encState.XSizeBlocks);
@@ -174,6 +182,9 @@ internal static class JxlEncHeuristics
             return;
         }
 
-        JxlThrowHelper.ThrowNotSupportedException("The EPF sharpness search (libjxl effort 6 and up; slice E5)");
+        // Temporary departure (E5a): from Wombat down libjxl chooses each block's sharpness by decoding the
+        // frame once per EPF step (ReconstructImage) and comparing the errors. E5h ports it, on E5g's
+        // encoder-side reconstruction; until then the sharpness is the constant 4 of Hare.
+        Array.Fill(encState.EpfSharpness, (byte)4);
     }
 }

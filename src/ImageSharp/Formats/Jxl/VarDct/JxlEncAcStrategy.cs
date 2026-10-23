@@ -58,7 +58,7 @@ internal static class JxlEncAcStrategy
     private static readonly float[] ChannelMul = { (float)Math.Pow(8.2, 8.0), 1.0f, (float)Math.Pow(1.03, 8.0) };
 
     // libjxl's kTransforms8x8: each 8x8 strategy, the slowest speed tier that skips it, and its entropy
-    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat (lossy Thorough, slice E5).
+    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat (see the departure in FindBest8x8Transform).
     private static readonly (JxlAcStrategyType Type, int EncodingSpeedTierMaxLimit, double EntropyMul)[] Transforms8x8 =
     {
         (JxlAcStrategyType.Dct, 9, 0.8),
@@ -148,7 +148,7 @@ internal static class JxlEncAcStrategy
     /// </summary>
     /// <remarks>
     /// From Hare down the search then merges the 8x8 choices into 16x8 up to 64x64 blocks, aligned to their
-    /// size, where that lowers the estimate. The non-aligned merges below Hare are slice E5.
+    /// size, where that lowers the estimate. The non-aligned merges below Hare are not ported yet (E5d).
     /// </remarks>
     /// <param name="config">The search's configuration.</param>
     /// <param name="speedTier">The speed tier.</param>
@@ -374,6 +374,19 @@ internal static class JxlEncAcStrategy
                 continue;
             }
 
+            // Temporary departure (E5a): from Wombat down libjxl also tries DCT4X8 and DCT8X4, which E5b
+            // adds, and AFV0 to AFV3, which E5c adds. Their forward transforms are not ported yet, so every
+            // tier tries only Hare's four.
+            if (type is JxlAcStrategyType.Dct4X8 or JxlAcStrategyType.Dct8X4)
+            {
+                continue;
+            }
+
+            if (type is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3)
+            {
+                continue;
+            }
+
             float entropyMul = (float)(txEntropyMul / Transforms8x8[0].EntropyMul);
             if ((type == JxlAcStrategyType.Dct2X2 || type == JxlAcStrategyType.Identity) && butteraugliTarget < 5.0)
             {
@@ -555,14 +568,14 @@ internal static class JxlEncAcStrategy
             }
         }
 
-        // From Hare up libjxl stops here. Below Hare it tries non-aligned 16x8, 8x16, 16x16, 32x16, 16x32
-        // and 32x32 merges, which lossy Thorough (slice E5) adds.
         if (speedTier >= JxlSpeedTier.Hare)
         {
             return;
         }
 
-        JxlThrowHelper.ThrowNotSupportedException("The non-aligned AC-strategy merges (libjxl effort 6 and up; slice E5)");
+        // Temporary departure (E5a): below Hare libjxl then tries non-aligned 16x8, 8x16 and 16x16 merges,
+        // and non-aligned 32x16, 16x32 and 32x32 ones. E5d adds them; until then every tier keeps the
+        // aligned merges only, as Hare does.
     }
 
     // Whether a multi-block strategy crosses the horizontal line of blocks from start_x to end_x on row y:

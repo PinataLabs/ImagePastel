@@ -26,8 +26,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// <content>
 /// <para>
 /// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest, libjxl's
-/// <c>kFalcon</c>) and effort 5 (Default, <c>kHare</c>): XYB, the DC and AC metadata in Modular streams,
-/// and the AC tokens. This is the one place that lists what each effort does; other comments point here.
+/// <c>kFalcon</c>), effort 5 (Default, <c>kHare</c>) and effort 7 (Thorough, <c>kSquirrel</c>): XYB, the
+/// DC and AC metadata in Modular streams, and the AC tokens. This is the one place that lists what each
+/// effort does; other comments point here.
 /// </para>
 /// <para>
 /// Fastest codes every block as DCT8 with a constant quant field of 0.79 / distance, the default
@@ -44,7 +45,19 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// The frame then adds Gaborish above distance 0.5, near-lossless DC, <c>AdjustQuantBlockAC</c>, the
 /// <c>kACMeta</c> tree for the AC metadata, a learned tree for alpha, and custom coefficient orders for every
 /// order the blocks use. <c>FindBestQuantizer</c> does nothing at Default, so there is no butteraugli loop.
-/// The searches of effort 7 and up (Thorough; slice E5) throw <see cref="NotSupportedException"/>.
+/// </para>
+/// <para>
+/// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
+/// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
+/// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
+/// <c>FindBestQuantizer</c> still does nothing. The other Squirrel stages are still in their Default form,
+/// each a temporary departure named in its code with the slice that ports it, so an image without alpha
+/// is the same file as at Default: the 8x8 level tries only Default's four strategies (DCT4X8 and DCT8X4
+/// come with E5b, AFV with E5c); the merges are the aligned ones (the non-aligned 16x16 and 32x32 merges
+/// come with E5d); there is no chroma-from-luma pre-pass, and the fit after the search is the fast least
+/// squares (the DCT8 pre-pass and the Newton fit come with E5e); the X and B quantisation scales come from
+/// the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
+/// search, which decodes the frame in the encoder, comes with E5h).
 /// </para>
 /// </content>
 /// <remarks>
@@ -367,11 +380,9 @@ internal static partial class JxlFrameEncoder
     // one runs from Squirrel down; without it, its adjustments are 0, so the B scale is 2.
     private static void ComputeChromacityAdjustments(JxlFrameHeader frameHeader, JxlPassesEncoderState encState)
     {
-        if (encState.SpeedTier <= JxlSpeedTier.Squirrel)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("The pixel-based chromacity adjustment (libjxl effort 7 and up; slice E5)");
-        }
-
+        // Temporary departure (E5a): from Squirrel down libjxl measures how pixelized the X and B channels
+        // are (PixelStatsForChromacityAdjustment, speed_tier <= kSquirrel) and may raise both scales. E5f
+        // ports it; until then its adjustments are 0 at every tier, as above Squirrel.
         float[] xQmScaleSteps = { 2.5f, 5.5f, 9.5f };
         frameHeader.XQmScale = 3;
         foreach (float step in xQmScaleSteps)

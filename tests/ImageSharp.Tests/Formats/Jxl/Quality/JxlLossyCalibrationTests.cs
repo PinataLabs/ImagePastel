@@ -17,7 +17,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 /// E3's done-check (#270) and E4's (#306): every Fastest (libjxl effort 3) and Default (effort 5) row of the
 /// calibration table, encoded by our encoder at the row's distance and effort, meets the quality bar of #107
 /// against cjxl's row. Our decoder checks it on every leg, Magick.NET on every leg but coverage, and djxl in
-/// <c>jxl-oracle</c>.
+/// <c>jxl-oracle</c>. E5 (#318) logs how many Thorough (effort 7) rows pass, as its progress meter.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyCalibrationTests
@@ -35,6 +35,25 @@ public class JxlLossyCalibrationTests
     /// (<see cref="DefaultRows"/>), calliphora d4 among them, where cjxl itself scores only 38.14.
     /// </summary>
     private const double DefaultSlack = 3;
+
+    /// <summary>
+    /// The slack below cjxl's score at Thorough, on top of the comparer's 0.5: #107's starting value.
+    /// </summary>
+    private const double ThoroughSlack = 3;
+
+    /// <summary>
+    /// How many of the 18 Thorough rows (cjxl v0.12.0 <c>-e 7</c>) pass at <see cref="ThoroughSlack"/>
+    /// through our decoder, as the last E5 ticket that changed it recorded it.
+    /// </summary>
+    /// <remarks>
+    /// E5a (net10.0, x64): 14 of 18. The tracer runs Hare's VarDCT choices, so each row without alpha is
+    /// the Default encode (bike_alpha differs only in its alpha tree). The photos and the gradient pass
+    /// (smallest margins: calliphora d4 +1.20, text d4 +1.16, bike_alpha d1 +2.23, text d1 +2.21; text is
+    /// 1.11x to 1.17x cjxl's size, which has patches). text d2 fails (-0.99), and line_art fails at every
+    /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
+    /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
+    /// </remarks>
+    private const int ThoroughRowsPassing = 14;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
@@ -168,6 +187,36 @@ public class JxlLossyCalibrationTests
     [InlineData(nameof(RgbaVector), "bike", 4.0)]
     public void Encode_DefaultCalibrationRowAtAHigherDepth_MeetsTheQualityBar(string pixelType, string image, double distance)
         => AssertWidenedRowMeetsTheQualityBar(JxlEffort.Default, DefaultRows, DefaultSlack, pixelType, image, distance);
+
+    // E5's progress meter (#318): every Thorough (libjxl effort 7) row of the table, encoded at the row's
+    // distance and decoded by our decoder, against the comparer at the Thorough slack. Only E5i must pass
+    // them all; until then each ticket logs how many pass, and this asserts that no ticket passes fewer than
+    // ThoroughRowsPassing, the count recorded by the last ticket that changed it.
+    [Fact]
+    public void Encode_ThoroughCalibrationRows_PassAtLeastTheRecordedCount()
+    {
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: JxlLossyThoroughEncoderTests runs the same encoder code.");
+        JxlCalibrationRow[] rows = JxlCalibrationTable.Instance.Rows
+            .Where(r => r.Effort == JxlCalibrationTable.LibjxlEffort(JxlEffort.Thorough))
+            .ToArray();
+
+        int passed = 0;
+        foreach (JxlCalibrationRow row in rows)
+        {
+            using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+            byte[] encoded = Encode(row, JxlEffort.Thorough);
+            using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+            JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, ThoroughSlack);
+            passed += result.Passed ? 1 : 0;
+            TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{(result.Passed ? "pass" : "FAIL")} {result}; score margin {result.Score - result.MinimumScore:F4}, size ratio {(double)result.Size / row.Size:F4}"));
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"{passed} of {rows.Length} Thorough rows pass (recorded {ThoroughRowsPassing}).");
+        Assert.Equal(18, rows.Length);
+        Assert.True(passed >= ThoroughRowsPassing, $"{passed} of {rows.Length} Thorough rows pass; {ThoroughRowsPassing} did before.");
+    }
 
     private static async Task AssertRowMeetsTheQualityBarAsync(JxlEffort effort, MeasuredRow[] measuredRows, double slack, string reader, string image, double distance)
     {
