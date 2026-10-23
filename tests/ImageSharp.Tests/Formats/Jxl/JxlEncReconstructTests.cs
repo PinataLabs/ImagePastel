@@ -84,17 +84,6 @@ public class JxlEncReconstructTests
 
         Assert.True(differing > 0);
         AssertEqualsDecodedOpsin(reconstruction, $"{sizeCase} d{distance}, patterned sharpness");
-
-        static void SetPattern(JxlPassesEncoderState encState)
-        {
-            for (int by = 0; by < encState.YSizeBlocks; by++)
-            {
-                for (int bx = 0; bx < encState.XSizeBlocks; bx++)
-                {
-                    encState.EpfSharpness[encState.BlockIndex(bx, by)] = Pattern(bx, by);
-                }
-            }
-        }
     }
 
     // Fastest has no Gaborish, every block DCT8 and a constant quant field; EPF is on from d0.7.
@@ -112,8 +101,35 @@ public class JxlEncReconstructTests
         AssertEqualsDecodedOpsin(reconstruction, $"{sizeCase} d{distance} Fastest");
     }
 
+    // Thorough (kSquirrel), where E5h calls the reconstruction, with the patterned sharpness E5h's search
+    // would try.
+    [Theory]
+    [InlineData("bike-582x453", 1.0f)]
+    [InlineData("flower-384x244", 4.0f)]
+    public void ReconstructImage_ThoroughEncode_EqualsTheDecodedOpsinPlanes(string sizeCase, float distance)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
+
+        using Reconstruction reconstruction = EncodeAndReconstruct(image, JxlEffort.Thorough, distance, SetPattern);
+
+        Assert.True(reconstruction.FrameHeader.LoopFilter.Gab);
+        Assert.True(reconstruction.FrameHeader.LoopFilter.EpfIters > 0);
+        AssertEqualsDecodedOpsin(reconstruction, $"{sizeCase} d{distance} Thorough");
+    }
+
     // Every value 0 to 7, in a pattern that differs from a block's top and left neighbours.
     private static byte Pattern(int bx, int by) => (byte)(((bx * 3) + (by * 5)) % 8);
+
+    private static void SetPattern(JxlPassesEncoderState encState)
+    {
+        for (int by = 0; by < encState.YSizeBlocks; by++)
+        {
+            for (int bx = 0; bx < encState.XSizeBlocks; bx++)
+            {
+                encState.EpfSharpness[encState.BlockIndex(bx, by)] = Pattern(bx, by);
+            }
+        }
+    }
 
     // Encodes the image, calling ReconstructImage from the probe after setting the sharpness, if asked.
     private static Reconstruction EncodeAndReconstruct(Image<Rgb24> image, JxlEffort effort, float distance, Action<JxlPassesEncoderState> setSharpness)
