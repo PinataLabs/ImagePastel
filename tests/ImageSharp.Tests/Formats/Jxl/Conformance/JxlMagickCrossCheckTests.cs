@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Memory;
@@ -35,12 +36,15 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 /// </para>
 /// <para>
 /// Lossless vectors are compared exactly, in the pixel type that <c>Image.Load</c> picks. Three of them, whose
-/// samples above 8 bits are blended, may round one 16-bit step apart on arm64 (see <see cref="Cases"/>).
+/// samples above 8 bits are blended, may round one 16-bit step apart on arm64 only (see <see cref="Cases"/>).
 /// </para>
 /// </remarks>
 [Trait("Format", "Jxl")]
 public class JxlMagickCrossCheckTests
 {
+    // The difference at one pixel of frame f, row y and column x, whose Magick sample is expected.
+    private delegate double PixelDifference(int f, int y, int x, Rgba64 expected);
+
     /// <summary>How this decoder's output relates to Magick's.</summary>
     public enum Comparison
     {
@@ -81,7 +85,7 @@ public class JxlMagickCrossCheckTests
     // Those samples fall between 16-bit steps, and thousands of them lie within one float ulp of a half
     // step. On arm64, where FMA is always available, Magick's libjxl can fuse a multiply and an add that this
     // decoder keeps apart (ADR 0004), so a few of them round the other way: one 16-bit step, measured on the
-    // macOS arm64 legs. On Windows and Linux x64 they match exactly.
+    // macOS arm64 legs. On Windows and Linux x64 they match exactly, so OnArm64 allows the step on arm64 only.
     public static TheoryData<string, Comparison, double, ushort> Cases { get; } = new()
     {
         { "alpha_nonpremultiplied", Comparison.Exact, 0, 1 },
@@ -99,7 +103,7 @@ public class JxlMagickCrossCheckTests
         // A JPEG transcode, with orientation 5 (transposed).
         { "bench_oriented_brg", Comparison.Lossy, 1.01, 5 }, // 0.9923
         { "bicycles", Comparison.Lossy, 1.01, 1 }, // 0.9922
-        { "blendmodes", Comparison.Exact, 1, 1 }, // 12-bit; 0 on x64, 1 on arm64
+        { "blendmodes", Comparison.Exact, OnArm64(1), 1 }, // 12-bit; 0 on x64, 1 on arm64
 
         // Blending the layers gives samples between steps, so libjxl dithers them.
         { "cmyk_layers", Comparison.CmykPlanes, 1, 1 }, // 0.9882
@@ -122,10 +126,10 @@ public class JxlMagickCrossCheckTests
         { "patches_lossless", Comparison.Exact, 0, 1 },
 
         // Both decoders render the spot colours over the colour.
-        { "spot", Comparison.Exact, 1, 1 }, // 16-bit; 0 on x64, 1 on arm64
+        { "spot", Comparison.Exact, OnArm64(1), 1 }, // 16-bit; 0 on x64, 1 on arm64
 
         // Orientation 7 (anti-transposed).
-        { "sunset_logo", Comparison.Exact, 1, 7 }, // 10-bit; 0 on x64, 1 on arm64
+        { "sunset_logo", Comparison.Exact, OnArm64(1), 7 }, // 10-bit; 0 on x64, 1 on arm64
         { "upsampling", Comparison.Lossy, 1.01, 1 }, // 0.9922
     };
 
@@ -181,25 +185,11 @@ public class JxlMagickCrossCheckTests
         using Image<Rgba64> actual = image.CloneAs<Rgba64>();
         AssertSameFrames(reference, actual);
 
-        int worst = 0;
-        for (int f = 0; f < actual.Frames.Count; f++)
+        return LargestDifference(reference, (f, y, x, q) =>
         {
-            Buffer2D<Rgba64> a = actual.Frames[f].PixelBuffer;
-            Buffer2D<Rgba64> e = reference.Frames[f].PixelBuffer;
-            for (int y = 0; y < a.Height; y++)
-            {
-                Span<Rgba64> actualRow = a.DangerousGetRowSpan(y);
-                Span<Rgba64> expectedRow = e.DangerousGetRowSpan(y);
-                for (int x = 0; x < actualRow.Length; x++)
-                {
-                    Rgba64 p = actualRow[x];
-                    Rgba64 q = expectedRow[x];
-                    worst = Math.Max(worst, Math.Max(Math.Max(Math.Abs(p.R - q.R), Math.Abs(p.G - q.G)), Math.Max(Math.Abs(p.B - q.B), Math.Abs(p.A - q.A))));
-                }
-            }
-        }
-
-        return worst;
+            Rgba64 p = actual.Frames[f].PixelBuffer[x, y];
+            return Math.Max(Math.Max(Math.Abs(p.R - q.R), Math.Abs(p.G - q.G)), Math.Max(Math.Abs(p.B - q.B), Math.Abs(p.A - q.A)));
+        });
     }
 
     // The largest difference in steps of Magick's depth.
@@ -209,30 +199,17 @@ public class JxlMagickCrossCheckTests
         AssertSameFrames(reference, actual);
         double steps = MagickSteps(actual.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample);
 
-        double worst = 0;
-        for (int f = 0; f < actual.Frames.Count; f++)
+        return LargestDifference(reference, (f, y, x, q) =>
         {
-            Buffer2D<RgbaVector> a = actual.Frames[f].PixelBuffer;
-            Buffer2D<Rgba64> e = reference.Frames[f].PixelBuffer;
-            for (int y = 0; y < a.Height; y++)
-            {
-                Span<RgbaVector> actualRow = a.DangerousGetRowSpan(y);
-                Span<Rgba64> expectedRow = e.DangerousGetRowSpan(y);
-                for (int x = 0; x < actualRow.Length; x++)
-                {
-                    RgbaVector p = actualRow[x];
-                    Rgba64 q = expectedRow[x];
-                    double alpha = p.A;
-                    double expectedAlpha = q.A / 65535.0;
-                    worst = Math.Max(worst, Math.Abs(alpha - expectedAlpha) * steps);
-                    worst = Math.Max(worst, ColourDifference(p.R, q.R, alpha, expectedAlpha, comparison) * steps);
-                    worst = Math.Max(worst, ColourDifference(p.G, q.G, alpha, expectedAlpha, comparison) * steps);
-                    worst = Math.Max(worst, ColourDifference(p.B, q.B, alpha, expectedAlpha, comparison) * steps);
-                }
-            }
-        }
-
-        return worst;
+            RgbaVector p = actual.Frames[f].PixelBuffer[x, y];
+            double alpha = p.A;
+            double expectedAlpha = q.A / 65535.0;
+            double worst = Math.Abs(alpha - expectedAlpha);
+            worst = Math.Max(worst, ColourDifference(p.R, q.R, alpha, expectedAlpha, comparison));
+            worst = Math.Max(worst, ColourDifference(p.G, q.G, alpha, expectedAlpha, comparison));
+            worst = Math.Max(worst, ColourDifference(p.B, q.B, alpha, expectedAlpha, comparison));
+            return worst * steps;
+        });
     }
 
     private static double ColourDifference(float actual, ushort expected, double alpha, double expectedAlpha, Comparison comparison)
@@ -255,27 +232,39 @@ public class JxlMagickCrossCheckTests
         // C, M and Y, then the extra channels in stream order: Black, then alpha.
         Assert.Equal(reference.Frames.Count, planes.Frames.Count);
         Assert.Equal(5, planes.Frames[0].Planes.Count);
-        int[] compared = [0, 1, 2, 4];
-        double steps = MagickSteps(8);
-
-        double worst = 0;
         for (int f = 0; f < planes.Frames.Count; f++)
         {
+            Assert.Equal(reference.Frames[f].Width, planes.Frames[f].Planes[0].Width);
+            Assert.Equal(reference.Frames[f].Height, planes.Frames[f].Planes[0].Height);
+        }
+
+        double steps = MagickSteps(8);
+        return LargestDifference(reference, (f, y, x, q) =>
+        {
+            IReadOnlyList<Buffer2D<float>> plane = planes.Frames[f].Planes;
+            double worst = PlaneDifference(plane[0][x, y], q.R);
+            worst = Math.Max(worst, PlaneDifference(plane[1][x, y], q.G));
+            worst = Math.Max(worst, PlaneDifference(plane[2][x, y], q.B));
+            worst = Math.Max(worst, PlaneDifference(plane[4][x, y], q.A));
+            return worst * steps;
+        });
+    }
+
+    private static double PlaneDifference(float actual, ushort expected) => Math.Abs(Math.Clamp(actual, 0F, 1F) - (expected / 65535.0));
+
+    // The largest difference over every pixel of every frame of the reference.
+    private static double LargestDifference(Image<Rgba64> reference, PixelDifference difference)
+    {
+        double worst = 0;
+        for (int f = 0; f < reference.Frames.Count; f++)
+        {
             Buffer2D<Rgba64> e = reference.Frames[f].PixelBuffer;
-            Assert.Equal(e.Width, planes.Frames[f].Planes[0].Width);
-            Assert.Equal(e.Height, planes.Frames[f].Planes[0].Height);
             for (int y = 0; y < e.Height; y++)
             {
                 Span<Rgba64> expectedRow = e.DangerousGetRowSpan(y);
-                for (int c = 0; c < compared.Length; c++)
+                for (int x = 0; x < expectedRow.Length; x++)
                 {
-                    Span<float> plane = planes.Frames[f].Planes[compared[c]].DangerousGetRowSpan(y);
-                    for (int x = 0; x < expectedRow.Length; x++)
-                    {
-                        Rgba64 q = expectedRow[x];
-                        ushort expected = c switch { 0 => q.R, 1 => q.G, 2 => q.B, _ => q.A };
-                        worst = Math.Max(worst, Math.Abs(Math.Clamp(plane[x], 0F, 1F) - (expected / 65535.0)) * steps);
-                    }
+                    worst = Math.Max(worst, difference(f, y, x, expectedRow[x]));
                 }
             }
         }
@@ -294,7 +283,10 @@ public class JxlMagickCrossCheckTests
     }
 
     // libjxl gives Magick 8-bit samples for images of up to 8 bits, and 16-bit samples otherwise.
-    private static double MagickSteps(uint bitsPerSample) => bitsPerSample <= 8 ? 255 : 65535;
+    private static double MagickSteps(int bitsPerSample) => bitsPerSample <= 8 ? 255 : 65535;
+
+    // A tolerance that applies on arm64 only; on x64 the row is exact.
+    private static double OnArm64(double tolerance) => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? tolerance : 0;
 
     // The sRGB decoding of IEC 61966-2-1, in double precision.
     private static double SrgbToLinear(double v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);

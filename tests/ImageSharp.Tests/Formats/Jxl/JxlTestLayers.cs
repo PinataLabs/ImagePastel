@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
@@ -229,9 +228,9 @@ internal sealed class JxlTestLayers
             // ColorEncoding: not all default, no ICC, RGB, D65, sRGB primaries, then the transfer
             // function and the relative intent.
             w.Bit(false).Bit(false);
-            WriteEnum(w, (uint)JxlColorSpace.Rgb);
-            WriteEnum(w, (uint)JxlWhitePoint.D65);
-            WriteEnum(w, (uint)JxlPrimaries.Srgb);
+            w.WriteEnum((uint)JxlColorSpace.Rgb);
+            w.WriteEnum((uint)JxlWhitePoint.D65);
+            w.WriteEnum((uint)JxlPrimaries.Srgb);
             w.Bit(this.Gamma != 0);
             if (this.Gamma != 0)
             {
@@ -239,10 +238,10 @@ internal sealed class JxlTestLayers
             }
             else
             {
-                WriteEnum(w, (uint)this.TransferFunction.Value);
+                w.WriteEnum((uint)this.TransferFunction.Value);
             }
 
-            WriteEnum(w, (uint)JxlRenderingIntent.Relative);
+            w.WriteEnum((uint)JxlRenderingIntent.Relative);
         }
 
         if (this.Animation)
@@ -259,23 +258,6 @@ internal sealed class JxlTestLayers
         }
 
         return w.ToArray();
-    }
-
-    // An enum field: U32(Val(0), Val(1), BitsOffset(4, 2), BitsOffset(6, 18)).
-    internal static void WriteEnum(JxlTestBitWriter w, uint value)
-    {
-        if (value < 2)
-        {
-            w.Write(2, value);
-        }
-        else if (value < 18)
-        {
-            w.Write(2, 2).Write(4, value - 2);
-        }
-        else
-        {
-            w.Write(2, 3).Write(6, value - 18);
-        }
     }
 
     private static void WriteSide(JxlTestBitWriter w, int size)
@@ -355,29 +337,6 @@ internal sealed class JxlTestLayers
         else
         {
             w.Write(2, 3).Write(32, duration);
-        }
-    }
-
-    // VisitNameString: the length as U32(Val(0), Bits(4), BitsOffset(5, 16), BitsOffset(10, 48)), then the bytes.
-    internal static void WriteName(JxlTestBitWriter w, string name)
-    {
-        byte[] bytes = Encoding.UTF8.GetBytes(name ?? string.Empty);
-        if (bytes.Length == 0)
-        {
-            w.Write(2, 0);
-        }
-        else if (bytes.Length < 16)
-        {
-            w.Write(2, 1).Write(4, (ulong)bytes.Length);
-        }
-        else
-        {
-            w.Write(2, 2).Write(5, (ulong)bytes.Length - 16);
-        }
-
-        foreach (byte b in bytes)
-        {
-            w.Write(8, b);
         }
     }
 
@@ -527,7 +486,7 @@ internal sealed class JxlTestLayers
             w.Bit(frame.SaveBeforeColorTransform);
         }
 
-        WriteName(w, frame.Name);
+        w.WriteName(frame.Name);
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
@@ -612,7 +571,7 @@ internal readonly record struct JxlTestExtraChannel(JxlExtraChannelType Type, st
     public void Write(JxlTestBitWriter w)
     {
         w.Bit(false); // not all default
-        JxlTestLayers.WriteEnum(w, (uint)this.Type);
+        w.WriteEnum((uint)this.Type);
 
         // BitDepth: the float flag, bits_per_sample as U32(Val(8), Val(10), Val(12), BitsOffset(6, 1)) for
         // integers or U32(Val(32), Val(16), Val(24), BitsOffset(6, 1)) for floats, then a float's
@@ -648,7 +607,7 @@ internal readonly record struct JxlTestExtraChannel(JxlExtraChannelType Type, st
                 break;
         }
 
-        JxlTestLayers.WriteName(w, this.Name);
+        w.WriteName(this.Name);
         switch (this.Type)
         {
             case JxlExtraChannelType.Alpha:

@@ -30,7 +30,7 @@ internal static class JxlDjxlProfiles
     {
         // The files are bare codestreams, so the header bundle is read straight from them.
         string path = Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", "colour_" + name + ".jxl");
-        JxlColorEncodingHeader c = JxlCodestreamFrames.ReadImageHeader(File.ReadAllBytes(path), out _).M.ColorEncoding;
+        JxlColorEncodingHeader c = JxlCodestreamFrames.ReadColorEncoding(File.ReadAllBytes(path));
         Assert.False(c.WantIcc);
         return c;
     }

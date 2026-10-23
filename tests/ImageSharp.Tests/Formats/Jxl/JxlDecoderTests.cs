@@ -336,7 +336,7 @@ public class JxlDecoderTests
 
         Assert.IsType<Image<Rgba32>>(image);
         Assert.Null(image.Metadata.IccProfile);
-        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.Header.DataColorSpace);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile.Header.DataColorSpace);
     }
 
     // A dim_shift of 3 makes the extra channel 8x smaller, upsampled 8x on decode, which decodes since

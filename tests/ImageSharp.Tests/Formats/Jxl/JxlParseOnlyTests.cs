@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -50,8 +51,8 @@ public class JxlParseOnlyTests
         byte[] without = TrafficAnimation(timecodes: false);
         Assert.True(withTimecodes.Length > without.Length);
 
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), withTimecodes);
-        using Image<Rgba32> expected = Image.Load<Rgba32>(CreateConfiguration(), without);
+        using Image<Rgba32> image = Image.Load<Rgba32>(Configuration.Default, withTimecodes);
+        using Image<Rgba32> expected = Image.Load<Rgba32>(Configuration.Default, without);
 
         Assert.Equal(3, expected.Frames.Count);
         Assert.Equal(expected.Frames.Count, image.Frames.Count);
@@ -79,19 +80,11 @@ public class JxlParseOnlyTests
     }
 
     [Fact]
-    public async Task DecodeToPlanes_AnimationWithTimecodes_MatchesDjxl()
-    {
-        byte[] codestream = TrafficAnimation(timecodes: true);
-        string input = await WriteOutputAsync("animation_timecodes.jxl", codestream);
-        string output = Path.ChangeExtension(input, ".npy");
-
-        await JxlTools.RunAsync("djxl", CancellationToken, input, output);
-
-        using MemoryStream stream = new(codestream);
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
-        Assert.Equal(3, decoded.Frames.Count);
-        JxlConformanceComparer.AssertMatchesDjxl(NpyArray.Load(output), JxlConformanceImages.ToNpy(decoded));
-    }
+    public Task DecodeToPlanes_AnimationWithTimecodes_MatchesDjxl()
+        => AssertPlanesMatchDjxlAsync(
+            "animation_timecodes.jxl",
+            TrafficAnimation(timecodes: true),
+            decoded => Assert.Equal(3, decoded.Frames.Count));
 
     [Theory]
     [MemberData(nameof(DroppedChannelIndices))]
@@ -99,8 +92,8 @@ public class JxlParseOnlyTests
     {
         JxlTestExtraChannel channel = DroppedChannels[index];
 
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Ramp(channel));
-        using Image<Rgba32> expected = Image.Load<Rgba32>(CreateConfiguration(), Ramp());
+        using Image<Rgba32> image = Image.Load<Rgba32>(Configuration.Default, Ramp(channel));
+        using Image<Rgba32> expected = Image.Load<Rgba32>(Configuration.Default, Ramp());
 
         ImageComparer.Exact.VerifySimilarity(expected, image);
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
@@ -113,8 +106,8 @@ public class JxlParseOnlyTests
     [MemberData(nameof(DroppedChannelIndices))]
     public void Load_ExtraChannelAfterTheAlpha_KeepsThePixelTypeOfTheFileWithout(int index)
     {
-        using Image image = Image.Load(CreateConfiguration(), Ramp(DroppedChannels[index]));
-        using Image expected = Image.Load(CreateConfiguration(), Ramp());
+        using Image image = Image.Load(Configuration.Default, Ramp(DroppedChannels[index]));
+        using Image expected = Image.Load(Configuration.Default, Ramp());
 
         Assert.IsType(expected.GetType(), image);
     }
@@ -135,8 +128,8 @@ public class JxlParseOnlyTests
     [Fact]
     public void Load_AllTheDroppedTypes_DecodesLikeTheFileWithout()
     {
-        using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Ramp(DroppedChannels));
-        using Image<Rgba32> expected = Image.Load<Rgba32>(CreateConfiguration(), Ramp());
+        using Image<Rgba32> image = Image.Load<Rgba32>(Configuration.Default, Ramp(DroppedChannels));
+        using Image<Rgba32> expected = Image.Load<Rgba32>(Configuration.Default, Ramp());
 
         ImageComparer.Exact.VerifySimilarity(expected, image);
     }
@@ -144,19 +137,11 @@ public class JxlParseOnlyTests
     // The planes of every extra channel, dim_shifts upsampled, match djxl's: the decoder reads them
     // before it drops them from the pixels.
     [Fact]
-    public async Task DecodeToPlanes_AllTheDroppedTypes_MatchesDjxl()
-    {
-        byte[] codestream = Ramp(DroppedChannels);
-        string input = await WriteOutputAsync("all_dropped_extra_channels.jxl", codestream);
-        string output = Path.ChangeExtension(input, ".npy");
-
-        await JxlTools.RunAsync("djxl", CancellationToken, input, output);
-
-        using MemoryStream stream = new(codestream);
-        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
-        Assert.Equal(4 + DroppedChannels.Length, decoded.Frames[0].Planes.Count);
-        JxlConformanceComparer.AssertMatchesDjxl(NpyArray.Load(output), JxlConformanceImages.ToNpy(decoded));
-    }
+    public Task DecodeToPlanes_AllTheDroppedTypes_MatchesDjxl()
+        => AssertPlanesMatchDjxlAsync(
+            "all_dropped_extra_channels.jxl",
+            Ramp(DroppedChannels),
+            decoded => Assert.Equal(4 + DroppedChannels.Length, decoded.Frames[0].Planes.Count));
 
     // libjxl's ExtraChannelInfo::VisitFields rejects kUnknown (15) and the reserved values (7 to 14), so
     // the decoder cannot describe them: an unknown type is invalid, as in djxl.
@@ -169,7 +154,7 @@ public class JxlParseOnlyTests
         byte[] data = Ramp(new JxlTestExtraChannel((JxlExtraChannelType)type, "?"));
 
         Assert.Throws<InvalidImageContentException>(() => Identify(data));
-        Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(CreateConfiguration(), data));
+        Assert.Throws<InvalidImageContentException>(() => Image.Load<Rgba32>(Configuration.Default, data));
     }
 
     [Theory]
@@ -223,8 +208,8 @@ public class JxlParseOnlyTests
     {
         Assert.Equal(expected.Type, actual.Type);
         Assert.Equal(expected.Name, actual.Name);
-        Assert.Equal(expected.Bits, actual.BitsPerSample);
-        Assert.Equal(expected.ExponentBits, actual.ExponentBitsPerSample);
+        Assert.Equal((int)expected.Bits, actual.BitsPerSample);
+        Assert.Equal((int)expected.ExponentBits, actual.ExponentBitsPerSample);
         Assert.Equal(expected.Float, actual.IsFloatingPoint);
     }
 
@@ -239,6 +224,20 @@ public class JxlParseOnlyTests
         return durations;
     }
 
+    // Decodes the codestream with djxl and with DecodeToPlanes, checks the planes' shape, and compares them.
+    private static async Task AssertPlanesMatchDjxlAsync(string name, byte[] codestream, Action<JxlDecodedImage> assertShape)
+    {
+        string input = await WriteOutputAsync(name, codestream);
+        string output = Path.ChangeExtension(input, ".npy");
+
+        await JxlTools.RunAsync("djxl", CancellationToken, input, output);
+
+        using MemoryStream stream = new(codestream);
+        using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
+        assertShape(decoded);
+        JxlConformanceComparer.AssertMatchesDjxl(NpyArray.Load(output), JxlConformanceImages.ToNpy(decoded));
+    }
+
     private static async Task<string> WriteOutputAsync(string name, byte[] data)
     {
         string path = Path.Combine(TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlParseOnlyTests)), name);
@@ -249,14 +248,6 @@ public class JxlParseOnlyTests
     private static IImageInfo Identify(byte[] data)
     {
         using MemoryStream stream = new(data);
-        return Image.Identify(CreateConfiguration(), stream);
-    }
-
-    private static Configuration CreateConfiguration()
-    {
-        Configuration configuration = Configuration.CreateDefaultInstance();
-        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
-        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
-        return configuration;
+        return Image.Identify(Configuration.Default, stream);
     }
 }

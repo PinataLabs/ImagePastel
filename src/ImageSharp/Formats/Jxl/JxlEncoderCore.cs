@@ -106,9 +106,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         metadata.Size.Set((ulong)image.Width, (ulong)image.Height);
 
         JxlMetadata jxlMetadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        JxlBitDepth requested = jxlMetadata.BitsPerSample == 0
-            ? null
-            : JxlEncoderInput<TPixel>.CreateBitDepth(jxlMetadata.BitsPerSample, jxlMetadata.ExponentBitsPerSample);
+        JxlBitDepth requested = jxlMetadata.BitsPerSample == 0 ? null : CreateRequestedBitDepth<TPixel>(jxlMetadata);
         JxlBitDepth bitDepth = JxlEncoderInput<TPixel>.ChooseBitDepth(image, requested);
 
         JxlImageMetadata m = metadata.M;
@@ -132,6 +130,21 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         m.XybEncoded = lossy;
         SetColorEncoding(m.ColorEncoding, JxlEncoderInput<TPixel>.IsGray);
         return metadata;
+    }
+
+    // The public depth is an int (issue #108), and the bundle's a uint, as libjxl's. A negative depth is
+    // invalid, as one that CheckValidBitdepth rejects is.
+    private static JxlBitDepth CreateRequestedBitDepth<TPixel>(JxlMetadata jxlMetadata)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        int bits = jxlMetadata.BitsPerSample;
+        int exponentBits = jxlMetadata.ExponentBitsPerSample;
+        if (bits < 0 || exponentBits < 0)
+        {
+            JxlThrowHelper.ThrowImageFormatException($"Invalid JPEG XL bit depth: {bits} bits with {exponentBits} exponent bits per sample.");
+        }
+
+        return JxlEncoderInput<TPixel>.CreateBitDepth((uint)bits, (uint)exponentBits);
     }
 
     private static void SetBitDepth(JxlBitDepth bitDepth, JxlBitDepth source)

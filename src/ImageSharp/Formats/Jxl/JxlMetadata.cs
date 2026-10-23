@@ -27,7 +27,7 @@ public sealed class JxlMetadata : IDeepCloneable
         this.BitsPerSample = other.BitsPerSample;
         this.ExponentBitsPerSample = other.ExponentBitsPerSample;
         this.IntensityTarget = other.IntensityTarget;
-        this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
+        this.EmbeddedIccProfile = other.EmbeddedIccProfile?.DeepClone();
         this.LoopCount = other.LoopCount;
         this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
         this.TicksPerSecondDenominator = other.TicksPerSecondDenominator;
@@ -38,10 +38,9 @@ public sealed class JxlMetadata : IDeepCloneable
 
     /// <summary>
     /// Gets the enumerated colour encoding of the image, or null when the stream signals an ICC profile
-    /// instead (see <see cref="OriginalIccProfile"/>).
+    /// instead (see <see cref="EmbeddedIccProfile"/>).
     /// </summary>
-    // The setter is internal: JxlColorEncoding has no public constructor, and the encoder does not read it.
-    // A public setter can be added later without a break; removing one could not.
+    // The setter is internal because JxlColorEncoding has no public constructor: only the decoder makes one.
     public JxlColorEncoding ColorEncoding { get; internal set; }
 
     /// <summary>
@@ -57,13 +56,13 @@ public sealed class JxlMetadata : IDeepCloneable
     // For the encoder (internal until E6): when it is not 0, the encoder checks that it is a valid depth,
     // and writes it if it holds every sample of the pixel type losslessly; otherwise the encoder takes the
     // depth of the pixel type.
-    public uint BitsPerSample { get; set; }
+    public int BitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the exponent bits per colour sample: 0 for integer samples, 8 for float32. The decoder
     /// sets it with <see cref="BitsPerSample"/>.
     /// </summary>
-    public uint ExponentBitsPerSample { get; set; }
+    public int ExponentBitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the intensity target: the luminance, in nits, that the largest sample stands for. The
@@ -78,7 +77,7 @@ public sealed class JxlMetadata : IDeepCloneable
     /// colour with a colour encoding. It is set even where it does not describe the decoded pixels
     /// (XYB and CMYK images), so it is not always the pixel profile.
     /// </summary>
-    public IccProfile OriginalIccProfile { get; set; }
+    public IccProfile EmbeddedIccProfile { get; set; }
 
     /// <summary>
     /// Gets or sets how many times an animation plays; 0 means forever. It is 0 for a still image.

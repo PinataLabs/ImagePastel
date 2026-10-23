@@ -39,8 +39,8 @@ public class JxlEncoderSampleFormatTests
 
         IImageInfo info = Image.Identify(configuration, new MemoryStream(encoded));
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        Assert.Equal(12u, metadata.BitsPerSample);
-        Assert.Equal(0u, metadata.ExponentBitsPerSample);
+        Assert.Equal(12, metadata.BitsPerSample);
+        Assert.Equal(0, metadata.ExponentBitsPerSample);
         Assert.Equal(48, info.PixelType.BitsPerPixel);
         using Image<Rgba64> reDecoded = Image.Load<Rgba64>(configuration, encoded);
         ImageComparer.Exact.VerifySimilarity(decoded, reDecoded);
@@ -56,11 +56,11 @@ public class JxlEncoderSampleFormatTests
     public void Encode_MetadataBitDepthThatHoldsTheSamples_IsTheStoredDepth(int bits)
     {
         using Image<Rgba64> image = CreateImageAtDepth(bits, 17, 23);
-        image.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample = (uint)bits;
+        image.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample = bits;
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image);
 
-        AssertStoredDepth(encoded, (uint)bits, 0);
+        AssertStoredDepth(encoded, bits, 0);
         using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
         ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
@@ -94,10 +94,10 @@ public class JxlEncoderSampleFormatTests
     // Float layouts at least as wide as f16 in both exponent and mantissa hold every half, so a half
     // image keeps them; the decoder reads these layouts too.
     [Theory]
-    [InlineData(32u, 8u)]
-    [InlineData(24u, 8u)]
-    [InlineData(18u, 6u)]
-    public void Encode_FloatMetadataLayoutThatHoldsTheHalves_IsTheStoredLayout(uint bits, uint exponentBits)
+    [InlineData(32, 8)]
+    [InlineData(24, 8)]
+    [InlineData(18, 6)]
+    public void Encode_FloatMetadataLayoutThatHoldsTheHalves_IsTheStoredLayout(int bits, int exponentBits)
     {
         using Image<HalfVector4> image = CreateWideRangeImage<HalfVector4>(halfSamples: true);
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
@@ -111,14 +111,17 @@ public class JxlEncoderSampleFormatTests
     }
 
     // The integer range, then each float rule: more than 8 exponent bits, fewer than 3 + exponent
-    // bits, and more than 24 + exponent bits.
+    // bits, and more than 24 + exponent bits. The public depth is an int (#108), so a negative one is
+    // invalid too.
     [Theory]
-    [InlineData(25u, 0u)]
-    [InlineData(32u, 9u)]
-    [InlineData(10u, 8u)]
-    [InlineData(3u, 1u)]
-    [InlineData(33u, 8u)]
-    public void Encode_InvalidMetadataBitDepth_ThrowsImageFormatExceptionAndWritesNothing(uint bits, uint exponentBits)
+    [InlineData(25, 0)]
+    [InlineData(32, 9)]
+    [InlineData(10, 8)]
+    [InlineData(3, 1)]
+    [InlineData(33, 8)]
+    [InlineData(-1, 0)]
+    [InlineData(16, -1)]
+    public void Encode_InvalidMetadataBitDepth_ThrowsImageFormatExceptionAndWritesNothing(int bits, int exponentBits)
     {
         using Image<Rgb24> image = new(1, 1);
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
@@ -142,8 +145,8 @@ public class JxlEncoderSampleFormatTests
     {
         JxlConformanceVector vector = JxlConformanceVector.Load(id);
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(vector.DirectoryPath, "test.json")));
-        uint expectedBits = json.RootElement.GetProperty("bits_per_sample")[0].GetUInt32();
-        uint expectedExponentBits = json.RootElement.GetProperty("exp_bits_per_sample")[0].GetUInt32();
+        int expectedBits = json.RootElement.GetProperty("bits_per_sample")[0].GetInt32();
+        int expectedExponentBits = json.RootElement.GetProperty("exp_bits_per_sample")[0].GetInt32();
 
         using FileStream stream = File.OpenRead(vector.CommittedInputPath);
         JxlMetadata metadata = Image.Identify(JxlEncoderRoundTrip.CreateConfiguration(), stream).Metadata.GetFormatMetadata(JxlFormat.Instance);
@@ -214,8 +217,8 @@ public class JxlEncoderSampleFormatTests
         Configuration configuration = JxlEncoderRoundTrip.CreateConfiguration();
         using Image<Rgba64> decoded = Image.Load<Rgba64>(configuration, EncodeHalfFloatFile());
         JxlMetadata metadata = decoded.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        Assert.Equal(16u, metadata.BitsPerSample);
-        Assert.Equal(5u, metadata.ExponentBitsPerSample);
+        Assert.Equal(16, metadata.BitsPerSample);
+        Assert.Equal(5, metadata.ExponentBitsPerSample);
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(decoded);
 
@@ -226,9 +229,9 @@ public class JxlEncoderSampleFormatTests
 
     // The f16 layout of the file holds the samples of HalfVector4, but not those of RgbaVector.
     [Theory]
-    [InlineData(nameof(HalfVector4), 16u, 5u)]
-    [InlineData(nameof(RgbaVector), 32u, 8u)]
-    public void ReEncode_HalfFloatFile_AsFloatPixels_KeepsF16OnlyWhereItHoldsTheSamples(string pixelType, uint bits, uint exponentBits)
+    [InlineData(nameof(HalfVector4), 16, 5)]
+    [InlineData(nameof(RgbaVector), 32, 8)]
+    public void ReEncode_HalfFloatFile_AsFloatPixels_KeepsF16OnlyWhereItHoldsTheSamples(string pixelType, int bits, int exponentBits)
         => JxlPixelTypes.Verify(pixelType, new ReEncodeHalfFloatFile(bits, exponentBits));
 
     [Theory]
@@ -255,8 +258,8 @@ public class JxlEncoderSampleFormatTests
 
         JxlMetadata clone = (JxlMetadata)metadata.DeepClone();
 
-        Assert.Equal(32u, clone.BitsPerSample);
-        Assert.Equal(8u, clone.ExponentBitsPerSample);
+        Assert.Equal(32, clone.BitsPerSample);
+        Assert.Equal(8, clone.ExponentBitsPerSample);
     }
 
     // Negative values, values above 1, a negative zero, a subnormal and the extremes of float32, in
@@ -382,7 +385,7 @@ public class JxlEncoderSampleFormatTests
         }
     }
 
-    private static void AssertStoredDepth(byte[] encoded, uint bits, uint exponentBits)
+    private static void AssertStoredDepth(byte[] encoded, int bits, int exponentBits)
     {
         JxlMetadata metadata = Image.Identify(JxlEncoderRoundTrip.CreateConfiguration(), new MemoryStream(encoded)).Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.Equal(bits, metadata.BitsPerSample);
@@ -417,7 +420,7 @@ public class JxlEncoderSampleFormatTests
 
             byte[] encoded = JxlEncoderRoundTrip.Encode(image);
 
-            AssertStoredDepth(encoded, this.HalfSamples ? 16u : 32u, this.HalfSamples ? 5u : 8u);
+            AssertStoredDepth(encoded, this.HalfSamples ? 16 : 32, this.HalfSamples ? 5 : 8);
             AssertPlanesRebuildThePixels(image, encoded, this.Planes, this.HalfSamples);
             return true;
         }
@@ -443,7 +446,7 @@ public class JxlEncoderSampleFormatTests
         }
     }
 
-    private sealed record ReEncodeHalfFloatFile(uint Bits, uint ExponentBits) : IJxlPixelTypeCall<bool>
+    private sealed record ReEncodeHalfFloatFile(int Bits, int ExponentBits) : IJxlPixelTypeCall<bool>
     {
         public bool Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>

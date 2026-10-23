@@ -47,8 +47,8 @@ public class JxlLossyColorEncoderTests
 
         JxlMetadata metadata = Identify(encoded);
         Assert.True(metadata.IsXybEncoded);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_DCI_Per_SRG"), JxlCodestreamFrames.ReadImageHeader(encoded, out _).M.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_DCI_Per_SRG"), JxlCodestreamFrames.ReadColorEncoding(encoded));
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public class JxlLossyColorEncoderTests
         Assert.Equal(0, stream.Length);
         JxlMetadata lossless = Identify(JxlEncoderRoundTrip.Encode(image));
         Assert.Null(lossless.ColorEncoding);
-        Assert.Equal(profile, lossless.OriginalIccProfile.ToByteArray());
+        Assert.Equal(profile, lossless.EmbeddedIccProfile.ToByteArray());
     }
 
     // The CMYK profile the JPEG decoder leaves on its RGB output, and a grey profile on RGB pixels, do not
@@ -98,8 +98,8 @@ public class JxlLossyColorEncoderTests
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
 
         JxlMetadata metadata = Identify(encoded);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_SRG_Rel_SRG"), JxlCodestreamFrames.ReadImageHeader(encoded, out _).M.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_SRG_Rel_SRG"), JxlCodestreamFrames.ReadColorEncoding(encoded));
     }
 
     // libjxl's SetIntensityTarget: 10,000 nits for PQ, 1,000 for HLG and 255 otherwise, unless the caller
@@ -163,8 +163,8 @@ public class JxlLossyColorEncoderTests
         byte[] second = Encode(decoded);
 
         JxlMetadata metadata = Identify(second);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(expected, JxlCodestreamFrames.ReadImageHeader(second, out _).M.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(expected, JxlCodestreamFrames.ReadColorEncoding(second));
         Assert.Equal(Identify(first).IntensityTarget, metadata.IntensityTarget);
 
         static byte[] Encode(Image image)

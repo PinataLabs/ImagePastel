@@ -61,7 +61,8 @@ public sealed class JxlColorEncoding
 
     /// <summary>
     /// Gets the primaries. When they are <see cref="JxlPrimaries.Custom"/>, <see cref="CustomRedPrimary"/>,
-    /// <see cref="CustomGreenPrimary"/> and <see cref="CustomBluePrimary"/> give their chromaticities.
+    /// <see cref="CustomGreenPrimary"/> and <see cref="CustomBluePrimary"/> give their chromaticities;
+    /// otherwise all three are null.
     /// A grey or XYB colour space has no primaries, and then this is <see cref="JxlPrimaries.Srgb"/>, as in libjxl.
     /// </summary>
     public JxlPrimaries Primaries { get; }
@@ -92,19 +93,22 @@ public sealed class JxlColorEncoding
 
     /// <summary>
     /// Gets the chromaticity of the red primary when <see cref="Primaries"/> is
-    /// <see cref="JxlPrimaries.Custom"/>, otherwise null.
+    /// <see cref="JxlPrimaries.Custom"/>, otherwise null. The three custom primaries are set together, or
+    /// are all null.
     /// </summary>
     public CieXyChromaticityCoordinates? CustomRedPrimary { get; }
 
     /// <summary>
     /// Gets the chromaticity of the green primary when <see cref="Primaries"/> is
-    /// <see cref="JxlPrimaries.Custom"/>, otherwise null.
+    /// <see cref="JxlPrimaries.Custom"/>, otherwise null. The three custom primaries are set together, or
+    /// are all null.
     /// </summary>
     public CieXyChromaticityCoordinates? CustomGreenPrimary { get; }
 
     /// <summary>
     /// Gets the chromaticity of the blue primary when <see cref="Primaries"/> is
-    /// <see cref="JxlPrimaries.Custom"/>, otherwise null.
+    /// <see cref="JxlPrimaries.Custom"/>, otherwise null. The three custom primaries are set together, or
+    /// are all null.
     /// </summary>
     public CieXyChromaticityCoordinates? CustomBluePrimary { get; }
 

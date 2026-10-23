@@ -24,6 +24,19 @@ public class JxlContainerTests
 {
     private static readonly byte[] Codestream = File.ReadAllBytes(JxlConformanceVector.Load("delta_palette").CommittedInputPath);
 
+    /// <summary>Where an ignored box sits relative to the codestream.</summary>
+    public enum BoxPosition
+    {
+        /// <summary>Before the <c>jxlc</c> box.</summary>
+        Before,
+
+        /// <summary>After the <c>jxlc</c> box.</summary>
+        After,
+
+        /// <summary>Between two <c>jxlp</c> boxes.</summary>
+        Between,
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -235,16 +248,16 @@ public class JxlContainerTests
     // and has no use for jxll or a type it does not know; so none of them changes the decoded image,
     // wherever it sits.
     [Theory]
-    [InlineData("jbrd", "before")]
-    [InlineData("jbrd", "after")]
-    [InlineData("jbrd", "between")]
-    [InlineData("jxll", "before")]
-    [InlineData("jxll", "after")]
-    [InlineData("jxll", "between")]
-    [InlineData("zZz0", "before")]
-    [InlineData("zZz0", "after")]
-    [InlineData("zZz0", "between")]
-    public void Load_IgnoredBox_DecodesLikeTheBareCodestream(string type, string position)
+    [InlineData("jbrd", BoxPosition.Before)]
+    [InlineData("jbrd", BoxPosition.After)]
+    [InlineData("jbrd", BoxPosition.Between)]
+    [InlineData("jxll", BoxPosition.Before)]
+    [InlineData("jxll", BoxPosition.After)]
+    [InlineData("jxll", BoxPosition.Between)]
+    [InlineData("zZz0", BoxPosition.Before)]
+    [InlineData("zZz0", BoxPosition.After)]
+    [InlineData("zZz0", BoxPosition.Between)]
+    public void Load_IgnoredBox_DecodesLikeTheBareCodestream(string type, BoxPosition position)
     {
         byte[] container = WithIgnoredBox(Box(type, IgnoredBoxContents(type)), position);
 
@@ -255,10 +268,10 @@ public class JxlContainerTests
     }
 
     [Theory]
-    [InlineData("jbrd", "before")]
-    [InlineData("jxll", "between")]
-    [InlineData("zZz0", "after")]
-    public void Identify_IgnoredBox_IdentifiesLikeTheBareCodestream(string type, string position)
+    [InlineData("jbrd", BoxPosition.Before)]
+    [InlineData("jxll", BoxPosition.Between)]
+    [InlineData("zZz0", BoxPosition.After)]
+    public void Identify_IgnoredBox_IdentifiesLikeTheBareCodestream(string type, BoxPosition position)
     {
         using MemoryStream stream = new(WithIgnoredBox(Box(type, IgnoredBoxContents(type)), position));
         using MemoryStream bare = new(Codestream);
@@ -316,14 +329,14 @@ public class JxlContainerTests
         => type == "jxll" ? new byte[] { 10 } : new byte[] { 0xFF, 0x0A, 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01 };
 
     // delta_palette's codestream with the box before its jxlc box, after it, or between two jxlp boxes.
-    private static byte[] WithIgnoredBox(byte[] box, string position)
+    private static byte[] WithIgnoredBox(byte[] box, BoxPosition position)
     {
         byte[][] parts = Split(Codestream, 2);
         return position switch
         {
-            "before" => Container(box, Box("jxlc", Codestream)),
-            "after" => Container(Box("jxlc", Codestream), box),
-            "between" => Container(Jxlp(0, parts[0]), box, Jxlp(1, parts[1], last: true)),
+            BoxPosition.Before => Container(box, Box("jxlc", Codestream)),
+            BoxPosition.After => Container(Box("jxlc", Codestream), box),
+            BoxPosition.Between => Container(Jxlp(0, parts[0]), box, Jxlp(1, parts[1], last: true)),
             _ => throw new ArgumentOutOfRangeException(nameof(position), position, null),
         };
     }

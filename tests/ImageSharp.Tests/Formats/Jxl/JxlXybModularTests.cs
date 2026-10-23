@@ -76,7 +76,7 @@ public class JxlXybModularTests
 
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 3), (i, c) => (float)LinearToSrgb(Math.Clamp(expected.Data[(i * 3) + c], 0F, 1F)));
         Assert.Null(image.Metadata.IccProfile);
-        Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+        Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile);
     }
 
     // Measured: worst channel RMSE 4.2e-7, peak 3.8e-6.
@@ -129,7 +129,7 @@ public class JxlXybModularTests
         Assert.Equal(JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
         Assert.Equal(JxlTransferFunction.Gamma, metadata.ColorEncoding.TransferFunction);
         Assert.Equal(0.45455, metadata.ColorEncoding.Gamma.Value, 1e-7);
-        Assert.Null(metadata.OriginalIccProfile);
+        Assert.Null(metadata.EmbeddedIccProfile);
     }
 
     // The image renders to its own gamma encoding, so its pixels get that encoding's parametric profile,

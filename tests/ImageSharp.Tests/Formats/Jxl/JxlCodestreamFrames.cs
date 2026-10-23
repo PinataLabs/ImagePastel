@@ -81,4 +81,10 @@ internal static class JxlCodestreamFrames
         reader.Close();
         return metadata;
     }
+
+    /// <summary>Reads the colour encoding from the image header of a bare codestream.</summary>
+    /// <param name="codestream">A bare codestream.</param>
+    /// <returns>The colour encoding header bundle.</returns>
+    public static JxlColorEncodingHeader ReadColorEncoding(byte[] codestream)
+        => ReadImageHeader(codestream, out _).M.ColorEncoding;
 }

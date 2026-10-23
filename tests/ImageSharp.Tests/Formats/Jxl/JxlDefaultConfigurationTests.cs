@@ -61,7 +61,7 @@ public class JxlDefaultConfigurationTests
     }
 
     [Fact]
-    public void GetJxlMetadata_Spot_GivesTheExtraChannelsAndTheOriginalProfile()
+    public void GetJxlMetadata_Spot_GivesTheExtraChannelsAndTheEmbeddedProfile()
     {
         using Image image = Image.Load(InputPath("spot"));
 
@@ -69,13 +69,13 @@ public class JxlDefaultConfigurationTests
         Assert.Equal(
             new[] { JxlExtraChannelType.Alpha, JxlExtraChannelType.SpotColor, JxlExtraChannelType.SpotColor },
             jxl.ExtraChannels.Select(c => c.Type));
-        Assert.All(jxl.ExtraChannels, c => Assert.Equal(16u, c.BitsPerSample));
-        Assert.Equal(16u, jxl.BitsPerSample);
-        Assert.Equal(0u, jxl.ExponentBitsPerSample);
+        Assert.All(jxl.ExtraChannels, c => Assert.Equal(16, c.BitsPerSample));
+        Assert.Equal(16, jxl.BitsPerSample);
+        Assert.Equal(0, jxl.ExponentBitsPerSample);
 
         // The stream signals a 940-byte ICC profile, so there is no enumerated colour encoding.
         Assert.Null(jxl.ColorEncoding);
-        Assert.Equal(940, jxl.OriginalIccProfile.ToByteArray().Length);
+        Assert.Equal(940, jxl.EmbeddedIccProfile.ToByteArray().Length);
 
         // The frames are coalesced into one, which takes the name of the last layer.
         ImageFrame frame = Assert.Single(image.Frames);
@@ -114,9 +114,9 @@ public class JxlDefaultConfigurationTests
         using Image ignored = Image.Load(InputPath("spot"), new JxlDecoder { IgnoreMetadata = true });
 
         Assert.NotNull(kept.Metadata.IccProfile);
-        Assert.NotNull(kept.Metadata.GetJxlMetadata().OriginalIccProfile);
+        Assert.NotNull(kept.Metadata.GetJxlMetadata().EmbeddedIccProfile);
         Assert.Null(ignored.Metadata.IccProfile);
-        Assert.Null(ignored.Metadata.GetJxlMetadata().OriginalIccProfile);
+        Assert.Null(ignored.Metadata.GetJxlMetadata().EmbeddedIccProfile);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class JxlDefaultConfigurationTests
 
         Assert.NotNull(asStored.Metadata.IccProfile);
         Assert.Null(converted.Metadata.IccProfile);
-        Assert.NotNull(converted.Metadata.GetJxlMetadata().OriginalIccProfile);
+        Assert.NotNull(converted.Metadata.GetJxlMetadata().EmbeddedIccProfile);
         Assert.NotEqual(Pixels(asStored), Pixels(converted));
     }
 

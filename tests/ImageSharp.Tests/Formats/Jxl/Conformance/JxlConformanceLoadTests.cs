@@ -123,13 +123,13 @@ public class JxlConformanceLoadTests
         if (colorSpace is null)
         {
             Assert.Null(metadata.ColorEncoding);
-            Assert.NotNull(metadata.OriginalIccProfile);
+            Assert.NotNull(metadata.EmbeddedIccProfile);
         }
         else
         {
             Assert.Equal(colorSpace, metadata.ColorEncoding.ColorSpace.ToString());
             Assert.Equal(transferFunction, metadata.ColorEncoding.TransferFunction.ToString());
-            Assert.Null(metadata.OriginalIccProfile);
+            Assert.Null(metadata.EmbeddedIccProfile);
         }
     }
 

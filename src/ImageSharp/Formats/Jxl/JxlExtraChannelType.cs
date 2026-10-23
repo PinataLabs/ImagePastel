@@ -53,7 +53,7 @@ public enum JxlExtraChannelType : uint
     Thermal = 6,
 
     /// <summary>
-    /// A channel of a type that the stream does not name.
+    /// An unknown channel type. The decoder never gives it: as in libjxl, a stream that signals it is invalid.
     /// </summary>
     Unknown = 15,
 
