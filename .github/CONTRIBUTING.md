@@ -1,12 +1,12 @@
-# How to contribute to PinataLabs.ImageSharp
+# How to contribute to PinataLabs.ImagePastel
 
 ## Report a bug
 
-1. Search the [open and closed issues](https://github.com/PinataLabs/ImageSharp/issues?q=is%3Aissue) to find out if somebody reported the bug before.
-2. If no issue exists, [open a new issue](https://github.com/PinataLabs/ImageSharp/issues/new/choose).
+1. Search the [open and closed issues](https://github.com/PinataLabs/ImagePastel/issues?q=is%3Aissue) to find out if somebody reported the bug before.
+2. If no issue exists, [open a new issue](https://github.com/PinataLabs/ImagePastel/issues/new/choose).
 3. Give the package version, a clear description, and a code sample or a test case that shows the problem.
 
-To report a security problem, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md). Do not open a public issue.
+To report a security problem, read [SECURITY.md](https://github.com/PinataLabs/ImagePastel/blob/main/SECURITY.md). Do not open a public issue.
 
 ## Change the code
 

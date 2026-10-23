@@ -1,8 +1,8 @@
 # PinataLabs.ImagePastel
 
-[![CI](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/PinataLabs/ImageSharp/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImageSharp.svg)](https://www.nuget.org/packages/PinataLabs.ImageSharp/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE)
+[![CI](https://github.com/PinataLabs/ImagePastel/actions/workflows/ci.yml/badge.svg)](https://github.com/PinataLabs/ImagePastel/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImagePastel.svg)](https://www.nuget.org/packages/PinataLabs.ImagePastel/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImagePastel/blob/main/LICENSE)
 
 PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
@@ -17,14 +17,14 @@ It also decodes JPEG XL images. JPEG XL is decode only until the encoder is rele
 
 This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
 
-To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImageSharp/blob/main/SECURITY.md).
+To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImagePastel/blob/main/SECURITY.md).
 
 ## Install
 
 Add the package to your project:
 
 ```bash
-dotnet add package PinataLabs.ImageSharp
+dotnet add package PinataLabs.ImagePastel
 ```
 
 ## Move from SixLabors.ImageSharp 2.1.x
@@ -33,8 +33,24 @@ The public API and the `SixLabors.ImageSharp` namespace are the same as in SixLa
 You do not have to change your code.
 
 1. Remove the `SixLabors.ImageSharp` package reference.
-2. Add the `PinataLabs.ImageSharp` package reference.
+2. Add the `PinataLabs.ImagePastel` package reference.
 3. Build and test your application.
+
+Do not reference both packages in one application.
+The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
+
+## Move from PinataLabs.ImageSharp 2.1.14
+
+Version 2.1.14 of this fork was published as `PinataLabs.ImageSharp`.
+That package gets no more releases. Later versions are published as `PinataLabs.ImagePastel`.
+The public API and the `SixLabors.ImageSharp` namespace do not change.
+
+1. Remove the `PinataLabs.ImageSharp` package reference.
+2. Add the `PinataLabs.ImagePastel` package reference.
+3. Build and test your application.
+
+The assembly name changes from `PinataLabs.ImageSharp` to `PinataLabs.ImagePastel`.
+If your code or configuration names the assembly (for example, in reflection, `InternalsVisibleTo`, or binding redirects), change it to the new name.
 
 Do not reference both packages in one application.
 The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
@@ -60,7 +76,7 @@ The package does not support .NET Framework.
 
 Versions continue the 2.x line and start at 2.2.0. The project uses [semantic versioning](https://semver.org/).
 
-Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImageSharp/).
+Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImagePastel/).
 A maintainer starts each one by hand. A push to `main` does not publish a package.
 
 ## Documentation
@@ -75,7 +91,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Git LFS](
 The test images are in Git LFS.
 
 1. On Windows, enable long file paths in Git: `git config --system core.longpaths true`.
-2. Clone the repository: `git clone https://github.com/PinataLabs/ImageSharp`.
+2. Clone the repository: `git clone https://github.com/PinataLabs/ImagePastel`.
 3. Get the test images: `git lfs pull`.
 4. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
 5. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
@@ -87,16 +103,16 @@ The package does not include `net11.0` yet, because releases use the .NET 10 SDK
 
 ## Contributing
 
-Read the [contribution guide](https://github.com/PinataLabs/ImageSharp/blob/main/.github/CONTRIBUTING.md) before you open an issue or a pull request.
+Read the [contribution guide](https://github.com/PinataLabs/ImagePastel/blob/main/.github/CONTRIBUTING.md) before you open an issue or a pull request.
 
 This project uses the code of conduct of the [Contributor Covenant](https://contributor-covenant.org/).
 For more information, read the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
 
 ## License
 
-PinataLabs.ImagePastel is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImageSharp/blob/main/LICENSE).
-The [NOTICE](https://github.com/PinataLabs/ImageSharp/blob/main/NOTICE) file gives the origin of the code and the changes that Pinata Labs made.
-Third-party code is listed in [THIRD-PARTY-NOTICES.TXT](https://github.com/PinataLabs/ImageSharp/blob/main/THIRD-PARTY-NOTICES.TXT).
+PinataLabs.ImagePastel is licensed under the [Apache License, Version 2.0](https://github.com/PinataLabs/ImagePastel/blob/main/LICENSE).
+The [NOTICE](https://github.com/PinataLabs/ImagePastel/blob/main/NOTICE) file gives the origin of the code and the changes that Pinata Labs made.
+Third-party code is listed in [THIRD-PARTY-NOTICES.TXT](https://github.com/PinataLabs/ImagePastel/blob/main/THIRD-PARTY-NOTICES.TXT).
 
 ## Credits
 

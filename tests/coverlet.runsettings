@@ -14,7 +14,7 @@
                       The library, from ImageSharp.Tests, and the source generator, from
                       ImageSharp.SourceGenerators.Tests. Each test project loads only one of them.
                     -->
-                    <Include>[PinataLabs.ImageSharp]*,[ImageSharp.SourceGenerators]*</Include>
+                    <Include>[PinataLabs.ImagePastel]*,[ImageSharp.SourceGenerators]*</Include>
                     <!-- Output of gen/ImageSharp.SourceGenerators, written under obj/.../generated/. -->
                     <ExcludeByFile>**/generated/ImageSharp.SourceGenerators/**/*.cs</ExcludeByFile>
                     <!--
