@@ -72,7 +72,7 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
 
