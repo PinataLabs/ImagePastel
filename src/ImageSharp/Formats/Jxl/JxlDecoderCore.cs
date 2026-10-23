@@ -46,6 +46,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // Whether the image is CMYK: it has a Black extra channel and its embedded ICC profile is CMYK.
     private bool isCmyk;
 
+    // Whether the frames skip their colour-transform stages (DecodeToPlanes, for tests).
+    private bool skipColorTransform;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class with the default options.
     /// </summary>
@@ -207,13 +210,18 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     }
 
     /// <summary>
-    /// Decodes the image into float planes, without clamping, for the conformance tests.
+    /// Decodes the image into float planes, without clamping, for the conformance tests. With
+    /// <paramref name="skipColorTransform"/>, the frames skip their colour-transform stages
+    /// (<see cref="JxlFrameDecoder.SkipColorTransform"/>), so an XYB image comes out as its opsin planes, for
+    /// the tests of the encoder's reconstruction of its frame.
     /// </summary>
     /// <param name="stream">The stream.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="skipColorTransform">Whether the frames skip their colour-transform stages.</param>
     /// <returns>The decoded planes. The caller disposes them.</returns>
-    public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken)
+    public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken, bool skipColorTransform = false)
     {
+        this.skipColorTransform = skipColorTransform;
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
         byte[] data = this.ReadCodestream(bufferedStream, cancellationToken);
         int frameOffset = this.ReadHeaders(data, cancellationToken);
@@ -246,7 +254,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
     {
         using JxlReferenceFrames references = new();
-        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references);
+        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references) { SkipColorTransform = this.skipColorTransform };
         List<JxlFrameHeader> displayed = new();
 
         // The preview frame comes first. libjxl skips it when the preview is not wanted, as here: this
