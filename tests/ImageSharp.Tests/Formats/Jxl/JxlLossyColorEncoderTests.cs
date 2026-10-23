@@ -20,6 +20,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// the ICC), and the pixels reach XYB through its transfer function and primaries; a profile it does not
 /// recognise throws; a profile whose colour space does not match the pixels is ignored. The intensity
 /// target follows the transfer function, unless <see cref="JxlMetadata.IntensityTarget"/> sets it.
+/// The Display P3 checks also run at Default (slice E4, #297 story 6).
 /// </summary>
 /// <remarks>
 /// The decoders give the pixels in the image's own colour space (ours attaches a profile it builds for the
@@ -38,12 +39,18 @@ public class JxlLossyColorEncoderTests
         nameof(JxlEncoderRoundTrip.Reader.Djxl),
     };
 
-    [Fact]
-    public void Encode_DisplayP3Lossy_WritesTheP3EnumAndNoIcc()
+    // Each reader at Fastest and at Default (#297 story 6: a wide-gamut input works at Default as at
+    // Fastest).
+    public static TheoryData<string, string> ReaderEfforts { get; } = CreateReaderEfforts();
+
+    [Theory]
+    [InlineData(nameof(JxlEffort.Fastest))]
+    [InlineData(nameof(JxlEffort.Default))]
+    public void Encode_DisplayP3Lossy_WritesTheP3EnumAndNoIcc(string effort)
     {
         using Image<Rgb24> image = LoadPhoto(TestImages.Icc.CompactDisplayP3V4);
 
-        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(effort, 1.0f));
 
         JxlMetadata metadata = Identify(encoded);
         Assert.True(metadata.IsXybEncoded);
@@ -52,15 +59,15 @@ public class JxlLossyColorEncoderTests
     }
 
     [Theory]
-    [MemberData(nameof(Readers))]
-    public async Task Encode_DisplayP3Lossy_DecodesThroughEachReaderToTheP3SamplesWithinTheInterimBound(string reader)
+    [MemberData(nameof(ReaderEfforts))]
+    public async Task Encode_DisplayP3Lossy_DecodesThroughEachReaderToTheP3SamplesWithinTheInterimBound(string reader, string effort)
     {
         using Image<Rgb24> image = LoadPhoto(TestImages.Icc.CompactDisplayP3V4);
 
-        byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(effort, 1.0f));
 
-        using Image<Rgb24> decoded = await JxlLossyEncoderTests.DecodeAsync(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, "color_p3_d1");
-        JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"Display P3 d1 through {reader}, {encoded.Length} bytes");
+        using Image<Rgb24> decoded = await JxlLossyEncoderTests.DecodeAsync(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, $"color_p3_{effort}_d1");
+        JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"Display P3 d1 at {effort} through {reader}, {encoded.Length} bytes");
     }
 
     // A LUT-based profile (lut16 with an XYZ connection space, lutAToB) and one with a Lab connection space
@@ -336,6 +343,22 @@ public class JxlLossyColorEncoderTests
         Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
         image.Metadata.IccProfile = new IccProfile(File.ReadAllBytes(TestFile.GetInputFileFullPath(profilePath)));
         return image;
+    }
+
+    private static JxlEncoder Lossy(string effort, float distance) => new() { Distance = distance, Effort = Enum.Parse<JxlEffort>(effort) };
+
+    private static TheoryData<string, string> CreateReaderEfforts()
+    {
+        TheoryData<string, string> data = new();
+        foreach (string effort in new[] { nameof(JxlEffort.Fastest), nameof(JxlEffort.Default) })
+        {
+            foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
+            {
+                data.Add(reader.ToString(), effort);
+            }
+        }
+
+        return data;
     }
 
     private static JxlMetadata Identify(byte[] encoded)
