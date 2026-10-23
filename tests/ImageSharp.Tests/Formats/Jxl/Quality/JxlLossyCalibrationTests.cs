@@ -54,9 +54,10 @@ public class JxlLossyCalibrationTests
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
     /// E5e (the CfL pre-pass and Newton fit): 16 of 18. text d2 passes (+0.46) and line_art d1 passes
     /// (+2.68); line_art still fails at d2 (-1.13) and d4 (-3.63). Smallest passing margins: text d2 +0.46,
-    /// calliphora d4 +1.10, text d4 +1.78.
+    /// calliphora d4 +1.10, text d4 +1.78. E5e merged with E5c (AFV): 18 of 18. Smallest margins:
+    /// line_art d2 +0.31, text d2 +0.34, line_art d4 +0.48, calliphora d4 +1.46.
     /// </remarks>
-    private const int ThoroughRowsPassing = 16;
+    private const int ThoroughRowsPassing = 18;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

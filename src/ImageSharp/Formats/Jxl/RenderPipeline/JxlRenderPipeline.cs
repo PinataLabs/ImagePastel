@@ -412,6 +412,20 @@ internal sealed class JxlRenderPipeline : IDisposable
         }
     }
 
+    /// <summary>
+    /// Hands over the planes once <see cref="Finish"/> has run without a sink, as libjxl's write stage into an
+    /// image bundle that the encoder's reconstruction of its frame reads (<see cref="VarDct.JxlEncReconstruct"/>).
+    /// Every colour plane is kept, even for a grey image, which only the output to a sink drops to one. The
+    /// planes keep the padding past the frame size.
+    /// </summary>
+    /// <returns>The planes: the colour planes, then the extra channels. The caller disposes them.</returns>
+    public Buffer2D<float>[] TakeFinishedPlanes()
+    {
+        Buffer2D<float>[] planes = this.planes;
+        this.planes = Array.Empty<Buffer2D<float>>();
+        return planes;
+    }
+
     public void Dispose() => this.DisposePlanes();
 
     // SimpleRenderPipeline::ProcessBuffers for stages with kInOut channels: each stage reads the planes,

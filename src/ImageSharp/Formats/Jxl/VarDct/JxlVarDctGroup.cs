@@ -1,12 +1,13 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/dec_group.cc (DequantLane, DequantBlock, DecodeGroupImpl, DecodeACVarBlock,
-// GetBlockFromBitstream, DecodeGroup), without the JPEG reconstruction branches and the encoder's
-// GetBlockFromEncoder.
+// lib/jxl/dec_group.cc (DequantLane, DequantBlock, DecodeGroupImpl, DecodeACVarBlock, GetBlock,
+// GetBlockFromBitstream, GetBlockFromEncoder, DecodeGroup, DecodeGroupForRoundtrip), without the JPEG
+// reconstruction branches.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
@@ -29,6 +30,26 @@ internal static class JxlVarDctGroup
 {
     private const int BlockDim = JxlFrameDimensions.BlockDim;
     private const int DctBlockSize = BlockDim * BlockDim;
+
+    /// <summary>libjxl's <c>GetBlock</c>: where <c>DecodeGroupImpl</c> gets the quantised coefficients of each varblock.</summary>
+    private interface IGetBlock
+    {
+        /// <summary>Starts a block row of the group.</summary>
+        /// <param name="by">The block row, in the group.</param>
+        void StartRow(int by);
+
+        /// <summary>
+        /// Adds the quantised coefficients of the varblock whose first block is (<paramref name="bx"/>,
+        /// <paramref name="by"/>) of the group to the cleared blocks of each channel.
+        /// </summary>
+        /// <param name="bx">The block column, in the group.</param>
+        /// <param name="by">The block row, in the group.</param>
+        /// <param name="acs">The varblock's strategy.</param>
+        /// <param name="size">The number of coefficients of the varblock.</param>
+        /// <param name="log2CoveredBlocks">Log2 of the number of blocks the varblock covers.</param>
+        /// <param name="block">The X, Y and B blocks.</param>
+        void LoadBlock(int bx, int by, JxlAcStrategy acs, int size, int log2CoveredBlocks, int[][] block);
+    }
 
     // libjxl visits Y, then X, then B.
     private static ReadOnlySpan<byte> ChannelOrder => new byte[] { 1, 0, 2 };
@@ -72,7 +93,8 @@ internal static class JxlVarDctGroup
             decoders[pass] = new JxlAnsSymbolReader(state.Code[pass], readers[pass]);
         }
 
-        DecodeGroupImpl(frameHeader, readers, numPasses, blockRect, state, pipeline, cache);
+        GetBlockFromBitstream getBlock = new(frameHeader, readers, numPasses, blockRect, state, cache);
+        DecodeGroupImpl(frameHeader, ref getBlock, blockRect, state, pipeline, cache);
 
         for (int pass = 0; pass < numPasses; pass++)
         {
@@ -83,10 +105,37 @@ internal static class JxlVarDctGroup
         }
     }
 
-    private static void DecodeGroupImpl(JxlFrameHeader frameHeader, JxlBitReader[] readers, int numPasses, JxlRect blockRect, JxlVarDctFrameState state, JxlRenderPipeline pipeline, JxlVarDctGroupCache cache)
+    /// <summary>
+    /// Decodes AC group <paramref name="groupIdx"/> from the encoder's quantised coefficients rather than a
+    /// bitstream, as libjxl's <c>DecodeGroupForRoundtrip</c> does for the encoder's reconstruction of its
+    /// frame (<see cref="JxlEncReconstruct"/>): the same dequantisation and transforms as
+    /// <see cref="DecodeGroup"/>, into the colour planes of the render pipeline.
+    /// </summary>
+    /// <param name="frameHeader">The frame header, whose passes give each pass's shift.</param>
+    /// <param name="ac">
+    /// The quantised coefficients of each pass, laid out as <see cref="JxlPassesEncoderState.Coeffs"/>: for
+    /// each group and channel, the varblocks of the group in order, each one's coefficients in their natural
+    /// layout.
+    /// </param>
+    /// <param name="groupIdx">The AC group.</param>
+    /// <param name="state">The frame's VarDCT state, with the encoder's per-block choices and DC.</param>
+    /// <param name="cache">
+    /// The scratch space, sized for every strategy (libjxl's <c>InitOnce</c> with no passes and every
+    /// strategy).
+    /// </param>
+    /// <param name="pipeline">The render pipeline, whose padded colour planes receive the pixels.</param>
+    public static void DecodeGroupForRoundtrip(JxlFrameHeader frameHeader, IReadOnlyList<int[][][]> ac, long groupIdx, JxlVarDctFrameState state, JxlVarDctGroupCache cache, JxlRenderPipeline pipeline)
     {
-        int[] ctxOffset = cache.CtxOffset;
-        JxlAnsSymbolReader[] decoders = cache.Decoders;
+        GetBlockFromEncoder getBlock = new(ac, groupIdx, frameHeader.Passes.Shift);
+        DecodeGroupImpl(frameHeader, ref getBlock, state.FrameDim.BlockGroupRect(groupIdx), state, pipeline, cache);
+    }
+
+    // libjxl's DecodeGroupImpl, over the source of the quantised blocks: the bitstream (DecodeGroup) or the
+    // encoder (DecodeGroupForRoundtrip). libjxl calls it through a virtual interface; here it is a generic
+    // over a struct, so the bitstream's path is not slowed by the seam.
+    private static void DecodeGroupImpl<TGetBlock>(JxlFrameHeader frameHeader, ref TGetBlock getBlock, JxlRect blockRect, JxlVarDctFrameState state, JxlRenderPipeline pipeline, JxlVarDctGroupCache cache)
+        where TGetBlock : struct, IGetBlock
+    {
         int bx0 = (int)blockRect.X0;
         int by0 = (int)blockRect.Y0;
         int xsizeBlocks = (int)blockRect.XSize;
@@ -94,7 +143,6 @@ internal static class JxlVarDctGroup
         float invGlobalScale = state.Quantizer.InvGlobalScale;
         JxlYCbCrChromaSubsampling cs = frameHeader.ChromaSubsampling;
         JxlColorCorrelation colorCorrelation = state.Cmap;
-        JxlBlockCtxMap blockCtxMap = state.BlockCtxMap;
 
         Span<int> hshift = stackalloc int[] { cs.HShift(0), cs.HShift(1), cs.HShift(2) };
         Span<int> vshift = stackalloc int[] { cs.VShift(0), cs.VShift(1), cs.VShift(2) };
@@ -115,9 +163,7 @@ internal static class JxlVarDctGroup
             }
         }
 
-        // GroupDecCache: the non-zero counts of each pass and channel, and the block scratch space.
-        int nzerosStride = cache.NzerosStride;
-        int[][][] numNzeroes = cache.NumNzeroes;
+        // GroupDecCache: the block scratch space.
         int[][] qblock = cache.QBlock;
         float[] block = cache.Block;
 
@@ -130,11 +176,11 @@ internal static class JxlVarDctGroup
         Span<int> sby = stackalloc int[3];
         for (int by = 0; by < ysizeBlocks; ++by)
         {
+            getBlock.StartRow(by);
             sby[0] = by >> vshift[0];
             sby[1] = by >> vshift[1];
             sby[2] = by >> vshift[2];
             ReadOnlySpan<int> rowQuant = state.RawQuantField.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
-            ReadOnlySpan<byte> quantDcRow = state.QuantDc.DangerousGetRowSpan(by0 + by).Slice(bx0, xsizeBlocks);
 
             int ty = (by0 + by) / JxlColorCorrelation.ColorTileDimInBlocks;
             ReadOnlySpan<sbyte> rowCmapX = colorCorrelation.YtoXMap.AsSpan(ty * colorCorrelation.XSizeTiles, colorCorrelation.XSizeTiles);
@@ -174,42 +220,7 @@ internal static class JxlVarDctGroup
                         qblock[c].AsSpan(0, size).Clear();
                     }
 
-                    // GetBlockFromBitstream::LoadBlock.
-                    foreach (int c in ChannelOrder)
-                    {
-                        int csbx = bx >> hshift[c];
-                        int csby = by >> vshift[c];
-                        if ((csbx << hshift[c]) != bx || (csby << vshift[c]) != by)
-                        {
-                            continue;
-                        }
-
-                        for (int pass = 0; pass < numPasses; pass++)
-                        {
-                            Span<int> rowNzeros = numNzeroes[pass][c].AsSpan(csby * nzerosStride);
-                            ReadOnlySpan<int> rowNzerosTop = csby == 0 ? ReadOnlySpan<int>.Empty : numNzeroes[pass][c].AsSpan((csby - 1) * nzerosStride, nzerosStride);
-                            DecodeAcVarBlock(
-                                ctxOffset[pass],
-                                log2CoveredBlocks,
-                                rowNzeros,
-                                rowNzerosTop,
-                                nzerosStride,
-                                c,
-                                csbx,
-                                csby,
-                                bx,
-                                acs,
-                                state.CoeffOrders.AsSpan(pass * state.CoeffOrderSize),
-                                readers[pass],
-                                decoders[pass],
-                                state.ContextMap[pass],
-                                quantDcRow,
-                                rowQuant,
-                                blockCtxMap,
-                                qblock[c],
-                                (int)frameHeader.Passes.Shift[pass]);
-                        }
-                    }
+                    getBlock.LoadBlock(bx, by, acs, size, log2CoveredBlocks, qblock);
 
                     // Dequantize and add predictions.
                     DequantBlock(invGlobalScale, rowQuant[bx], state.XDmMultiplier, state.BDmMultiplier, xCcMul, bCcMul, acs.Strategy, size, state.Matrices, acs.CoveredBlocksY * acs.CoveredBlocksX, state.QuantBiases, qblock, block);
@@ -359,6 +370,126 @@ internal static class JxlVarDctGroup
         if (nzeros != 0)
         {
             JxlThrowHelper.ThrowInvalidImageContentException($"Invalid AC: nzeros at end of block is {nzeros}, should be 0. Block ({bx}, {by}), channel {c}");
+        }
+    }
+
+    // libjxl's GetBlockFromBitstream: decodes each varblock's coefficients from the passes' readers.
+    private struct GetBlockFromBitstream : IGetBlock
+    {
+        private readonly JxlFrameHeader frameHeader;
+        private readonly JxlBitReader[] readers;
+        private readonly int numPasses;
+        private readonly JxlRect rect;
+        private readonly JxlVarDctFrameState state;
+        private readonly JxlVarDctGroupCache groupDecCache;
+        private int by;
+
+        public GetBlockFromBitstream(JxlFrameHeader frameHeader, JxlBitReader[] readers, int numPasses, JxlRect rect, JxlVarDctFrameState state, JxlVarDctGroupCache groupDecCache)
+        {
+            this.frameHeader = frameHeader;
+            this.readers = readers;
+            this.numPasses = numPasses;
+            this.rect = rect;
+            this.state = state;
+            this.groupDecCache = groupDecCache;
+            this.by = 0;
+        }
+
+        public void StartRow(int by) => this.by = by;
+
+        public readonly void LoadBlock(int bx, int by, JxlAcStrategy acs, int size, int log2CoveredBlocks, int[][] block)
+        {
+            DebugGuard.IsTrue(by == this.by, "The blocks of a row follow StartRow");
+            JxlYCbCrChromaSubsampling cs = this.frameHeader.ChromaSubsampling;
+            int x0 = (int)this.rect.X0;
+            int y = (int)this.rect.Y0 + by;
+            int xsize = (int)this.rect.XSize;
+            ReadOnlySpan<int> qfRow = this.state.RawQuantField.DangerousGetRowSpan(y).Slice(x0, xsize);
+            ReadOnlySpan<byte> quantDcRow = this.state.QuantDc.DangerousGetRowSpan(y).Slice(x0, xsize);
+            int nzerosStride = this.groupDecCache.NzerosStride;
+            int[][][] numNzeroes = this.groupDecCache.NumNzeroes;
+            foreach (int c in ChannelOrder)
+            {
+                int sbx = bx >> cs.HShift(c);
+                int sby = by >> cs.VShift(c);
+                if ((sbx << cs.HShift(c)) != bx || (sby << cs.VShift(c)) != by)
+                {
+                    continue;
+                }
+
+                for (int pass = 0; pass < this.numPasses; pass++)
+                {
+                    Span<int> rowNzeros = numNzeroes[pass][c].AsSpan(sby * nzerosStride);
+                    ReadOnlySpan<int> rowNzerosTop = sby == 0 ? ReadOnlySpan<int>.Empty : numNzeroes[pass][c].AsSpan((sby - 1) * nzerosStride, nzerosStride);
+                    DecodeAcVarBlock(
+                        this.groupDecCache.CtxOffset[pass],
+                        log2CoveredBlocks,
+                        rowNzeros,
+                        rowNzerosTop,
+                        nzerosStride,
+                        c,
+                        sbx,
+                        sby,
+                        bx,
+                        acs,
+                        this.state.CoeffOrders.AsSpan(pass * this.state.CoeffOrderSize),
+                        this.readers[pass],
+                        this.groupDecCache.Decoders[pass],
+                        this.state.ContextMap[pass],
+                        quantDcRow,
+                        qfRow,
+                        this.state.BlockCtxMap,
+                        block[c],
+                        (int)this.frameHeader.Passes.Shift[pass]);
+                }
+            }
+        }
+    }
+
+    // libjxl's GetBlockFromEncoder: reads each varblock's coefficients from the encoder's, which hold the
+    // group's varblocks one after another in the order DecodeGroupImpl visits them. libjxl's version
+    // supports no chroma subsampling, nor does the encoder.
+    private struct GetBlockFromEncoder : IGetBlock
+    {
+        // The coefficients of the group, for each pass and channel.
+        private readonly int[][][] rows;
+        private readonly uint[] shiftForPass;
+        private int offset;
+
+        public GetBlockFromEncoder(IReadOnlyList<int[][][]> ac, long groupIdx, uint[] shiftForPass)
+        {
+            this.rows = new int[ac.Count][][];
+            for (int i = 0; i < ac.Count; i++)
+            {
+                this.rows[i] = ac[i][groupIdx];
+            }
+
+            this.shiftForPass = shiftForPass;
+            this.offset = 0;
+        }
+
+        public readonly void StartRow(int by)
+        {
+        }
+
+        public void LoadBlock(int bx, int by, JxlAcStrategy acs, int size, int log2CoveredBlocks, int[][] block)
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                // for each pass
+                for (int i = 0; i < this.rows.Length; i++)
+                {
+                    int[] row = this.rows[i][c];
+                    int mul = 1 << (int)this.shiftForPass[i];
+                    int[] blockC = block[c];
+                    for (int k = 0; k < size; k++)
+                    {
+                        blockC[k] = unchecked(blockC[k] + (row[this.offset + k] * mul));
+                    }
+                }
+            }
+
+            this.offset += size;
         }
     }
 }

@@ -16,6 +16,7 @@ using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Formats.Jxl.Icc;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
@@ -34,6 +35,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     private readonly float distance;
     private readonly JxlEffort effort;
     private readonly bool naturalCoeffOrders;
+    private readonly Action<JxlFrameHeader, JxlPassesEncoderState> arHeuristicsProbe;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlEncoderCore"/> class.
@@ -46,6 +48,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         this.distance = options.Distance;
         this.effort = options.Effort;
         this.naturalCoeffOrders = options.NaturalCoeffOrders;
+        this.arHeuristicsProbe = options.ArHeuristicsProbe;
     }
 
     /// <inheritdoc/>
@@ -83,7 +86,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         if (lossy)
         {
-            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.naturalCoeffOrders, this.memoryAllocator, writer);
+            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.naturalCoeffOrders, this.arHeuristicsProbe, this.memoryAllocator, writer);
         }
         else
         {
