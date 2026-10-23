@@ -37,7 +37,8 @@ internal sealed class JxlMetadataBoxes
 
     /// <summary>
     /// Gets a value indicating whether there is no box to write. libjxl uses a container when boxes are
-    /// used (<c>MustUseContainer</c>), so the encoder writes a bare codestream then.
+    /// used (<c>MustUseContainer</c>), so the encoder writes a bare codestream then, unless the codestream
+    /// needs level 10.
     /// </summary>
     public bool IsEmpty => this.Exif is null && this.Xmp is null;
 

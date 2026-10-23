@@ -24,7 +24,7 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Writes an image as a JPEG XL codestream, in a container when it has Exif or XMP to store.
+/// Writes an image as a JPEG XL codestream, in a container when it has Exif or XMP to store or needs level 10.
 /// </summary>
 internal sealed class JxlEncoderCore : IImageEncoderInternals
 {

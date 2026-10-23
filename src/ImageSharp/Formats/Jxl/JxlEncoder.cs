@@ -31,10 +31,18 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// The image's <see cref="Metadata.ImageMetadata.ExifProfile"/> and
 /// <see cref="Metadata.ImageMetadata.XmpProfile"/> are written in <c>Exif</c> and <c>xml </c> boxes of a
 /// JPEG XL container, uncompressed. An Exif profile without values and an empty XMP profile are not
-/// written. The container is used only for these boxes: an image without them is written as a bare
-/// codestream. An Exif or XMP profile over 64 MiB, the most the JPEG XL decoder reads, throws
+/// written. An Exif or XMP profile over 64 MiB, the most the JPEG XL decoder reads, throws
 /// <see cref="ImageFormatException"/>. The ICC profile is part of the codestream, not a box. IPTC, JUMBF
 /// and gain maps are not written.
+/// </para>
+/// <para>
+/// The output is a bare codestream unless it needs a container, as in libjxl. It needs one when there is
+/// Exif or XMP to store, or when the codestream needs level 10. Level 10 is needed for lossless samples
+/// or alpha above 12 bits (for example a 16-bit image saved lossless, or 16-bit alpha at any
+/// <see cref="Distance"/>), and for a side over 2^18 pixels or more than 2^28 pixels. The container then
+/// has a <c>jxll</c> box that gives the level. A side over 2^30 pixels throws
+/// <see cref="ImageFormatException"/>. The JPEG XL decoder of this library refuses a frame over 2^28
+/// pixels, although such a file is a valid level-10 file.
 /// </para>
 /// <para>
 /// Only the root frame is written. From <see cref="JxlMetadata"/> the encoder reads only
