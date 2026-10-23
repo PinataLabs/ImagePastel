@@ -51,6 +51,14 @@ internal sealed class JxlFrameDecoder
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the frames skip their colour-transform stages, so that an XYB frame
+    /// reaches the sink as its opsin planes after the loop filters. No libjxl output does this: it is for the
+    /// tests that compare the encoder's reconstruction of its frame (<see cref="JxlEncReconstruct"/>) with the
+    /// decoded file.
+    /// </summary>
+    public bool SkipColorTransform { get; set; }
+
+    /// <summary>
     /// Decodes the frame that starts at byte <paramref name="offset"/>: blends it onto its reference
     /// slots, saves it to its own slot if it can be referenced, and hands it to <paramref name="sink"/>
     /// if it is displayed. Throws <see cref="InvalidImageContentException"/> for invalid data, and
@@ -141,7 +149,7 @@ internal sealed class JxlFrameDecoder
             ? new JxlPatchesStage(this.configuration.MemoryAllocator, features.Patches, this.metadata.M, (int)frameDim.XSize)
             : null;
         JxlSplinesStage splinesStage = features.Splines != null ? new JxlSplinesStage(features.Splines) : null;
-        IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
+        IJxlColorStage[] colorStages = this.SkipColorTransform ? Array.Empty<IJxlColorStage>() : JxlColorStages.Create(frameHeader, sink.DisplayEncoded);
         using JxlBlendingStage blending = JxlBlending.NeedsBlending(frameHeader)
             ? new JxlBlendingStage(this.configuration.MemoryAllocator, frameHeader, this.references, (int)frameDim.XSizeUpsampled)
             : null;
