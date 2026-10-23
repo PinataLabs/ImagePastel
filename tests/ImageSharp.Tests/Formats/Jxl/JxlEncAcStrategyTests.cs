@@ -166,11 +166,14 @@ public class JxlEncAcStrategyTests
         Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(map)));
     }
 
-    // Informative: how often our strategy map is cjxl -e 5's (v0.12.0, JXL_TOOLS_DIR) on the calibration
-    // photos, block by block (raw strategy and first block). cjxl dispatches to AVX2 with FMA (or AVX-512)
-    // at run time, so its estimates differ from ours in the last bits, and a block close to a tie can go the
-    // other way; a merge that flips moves every block it covers. Each floor is the measured share less some
-    // room for a CPU whose cjxl build dispatches to another target (measured on an AVX2 x64 machine).
+    // Informative, so it logs and does not fail: how often our strategy map is cjxl -e 5's (JXL_TOOLS_DIR)
+    // on the calibration photos, block by block (raw strategy and first block). cjxl dispatches to AVX2 with
+    // FMA (or AVX-512) at run time, so its estimates differ from ours in the last bits, and a block close to
+    // a tie can go the other way; a merge that flips moves every block it covers. Another cjxl version can
+    // choose differently, so the jxl-oracle leg must not depend on it. With v0.12.0 on an AVX2 x64 machine
+    // every row agreed on 100% of its blocks; each floor is that share less some room for a CPU whose cjxl
+    // build dispatches to another target, and the log says when a row falls below it. The harness map
+    // (Encode_Bike_ChoosesLibjxlsStrategyForEachBlock) is the check that fails.
     [Theory]
     [InlineData("bike-582x453", 1.0f, 0.99)]
     [InlineData("bike-582x453", 2.0f, 0.95)]
@@ -178,7 +181,7 @@ public class JxlEncAcStrategyTests
     [InlineData("calliphora-378x349", 1.0f, 0.95)]
     [InlineData("calliphora-378x349", 2.0f, 0.95)]
     [InlineData("calliphora-378x349", 4.0f, 0.95)]
-    public async Task Encode_Photo_AgreesWithCjxlOnMostOfItsBlocks(string sizeCase, float distance, double minShare)
+    public async Task Encode_Photo_LogsItsAgreementWithCjxlBlockByBlock(string sizeCase, float distance, double minShare)
     {
         JxlTools.GetToolPath("cjxl");
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
@@ -201,8 +204,8 @@ public class JxlEncAcStrategyTests
         }
 
         double share = (double)agree / ourMap.Length;
-        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} cjxl -e 5 -d {distance}: ours agree on {agree} of {ourMap.Length} blocks ({100 * share:F2}%); cjxl's coverage [{CoverageOf(theirMap)}], ours [{CoverageOf(ourMap)}]");
-        Assert.True(share >= minShare, $"{100 * share:F2}% agree");
+        string verdict = share >= minShare ? "at or above" : "BELOW";
+        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} cjxl -e 5 -d {distance}: ours agree on {agree} of {ourMap.Length} blocks ({100 * share:F2}%), {verdict} the floor of {100 * minShare:F0}%; cjxl's coverage [{CoverageOf(theirMap)}], ours [{CoverageOf(ourMap)}]");
     }
 
     // Through the decoder's parse: Bike and the calibration gradient merge blocks at d1, d2 and d4 (cjxl

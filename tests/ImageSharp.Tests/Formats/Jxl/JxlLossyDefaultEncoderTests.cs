@@ -368,11 +368,14 @@ public class JxlLossyDefaultEncoderTests
         }
     }
 
-    // Informative: with JXL_TOOLS_DIR, which of the used orders cjxl -e 5 codes on Bike, and whether its
-    // coded orders are ours. Its strategy map is ours (JxlEncAcStrategyTests), but its quantised
-    // coefficients can differ a little (its FMA builds), so an order may differ in a few places.
+    // Informative, so it logs and does not fail: with JXL_TOOLS_DIR, which of the used orders cjxl -e 5
+    // codes on Bike, and how many positions of each coded order are ours. With v0.12.0 the used orders, the
+    // coded orders and every position agreed. Its strategy map is ours (JxlEncAcStrategyTests), but its
+    // quantised coefficients can differ a little (its FMA builds), so an order may differ in a few places,
+    // and another cjxl version can choose differently; the jxl-oracle leg must not depend on it.
+    // Encode_Bike_CustomisesTheUsedOrdersUpTo32x32 is the check that fails.
     [Fact]
-    public async Task Encode_Bike_CodesTheOrdersCjxlCodes()
+    public async Task Encode_Bike_LogsWhichOrdersCjxlCodes()
     {
         JxlTools.GetToolPath("cjxl");
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
@@ -388,8 +391,9 @@ public class JxlLossyDefaultEncoderTests
         theirs.DecodeAcGlobal();
 
         int[] usedOrders = UsedOrders(ours);
-        Assert.Equal(usedOrders, UsedOrders(theirs));
-        foreach (int ord in usedOrders)
+        int[] theirUsedOrders = UsedOrders(theirs);
+        TestContext.Current.TestOutputHelper?.WriteLine($"used orders: ours [{string.Join(",", usedOrders)}], cjxl's [{string.Join(",", theirUsedOrders)}]{(usedOrders.SequenceEqual(theirUsedOrders) ? string.Empty : " DIFFER")}");
+        foreach (int ord in usedOrders.Intersect(theirUsedOrders))
         {
             JxlAcStrategy acs = StrategyOfOrder(ord);
             int size = 64 * acs.CoveredBlocksX * acs.CoveredBlocksY;
@@ -405,8 +409,7 @@ public class JxlLossyDefaultEncoderTests
                     same += ourOrder[k] == theirOrder[k] ? 1 : 0;
                 }
 
-                TestContext.Current.TestOutputHelper?.WriteLine($"order {ord} channel {c}: ours {(ourOrder.SequenceEqual(natural) ? "natural" : "custom")}, cjxl's {(theirOrder.SequenceEqual(natural) ? "natural" : "custom")}; {same} of {size} positions agree");
-                Assert.Equal(theirOrder.SequenceEqual(natural), ourOrder.SequenceEqual(natural));
+                TestContext.Current.TestOutputHelper?.WriteLine($"order {ord} channel {c}: ours {(ourOrder.SequenceEqual(natural) ? "natural" : "custom")}, cjxl's {(theirOrder.SequenceEqual(natural) ? "natural" : "custom")}; {same} of {size} positions agree{(same == size ? string.Empty : " (DIFFER)")}");
             }
         }
     }
