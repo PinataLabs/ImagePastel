@@ -59,8 +59,12 @@ public class JxlLossyCalibrationTests
     /// d2 (-1.52) and d4 (-4.10) still fail, at 1.00x to 1.03x cjxl's size. bike_alpha d1 +3.42, d2 +4.09,
     /// d4 +4.49.
     /// </para>
+    /// <para>
+    /// E5f merged with E5c (AFV) and E5g: 17 of 18. line_art d2 passes by +0.07 and d4 fails (-2.53),
+    /// line_art d1 +1.58; text d1 +3.08, d2 +1.22, d4 +0.94; calliphora d4 +1.45.
+    /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 16;
+    private const int ThoroughRowsPassing = 17;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
