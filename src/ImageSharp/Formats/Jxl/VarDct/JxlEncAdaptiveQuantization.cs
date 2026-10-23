@@ -28,7 +28,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// (<c>SumOfLanes</c>); its pre-erosion pass takes a vector path for whole vectors inside a row and a
 /// scalar one at the ends, with sums in another order. This port follows AVX2, which cjxl runs on x64:
 /// pixel <c>dx</c> of a block row goes to lane <c>dx</c>, the lanes add up as Highway's <c>SumOfLanes</c>
-/// adds them (see <see cref="SumOfLanes"/>), and the vector path covers runs of 8 pixels. On another
+/// adds them (see <see cref="JxlAvx2Lanes"/>), and the vector path covers runs of 8 pixels. On another
 /// vector width libjxl's values differ in the last bits.
 /// </para>
 /// </remarks>
@@ -42,7 +42,7 @@ internal static class JxlEncAdaptiveQuantization
     private const int BlockDim = 8;
 
     // The number of float lanes of AVX2, libjxl's Lanes(df) for its vector paths.
-    private const int Lanes = 8;
+    private const int Lanes = JxlAvx2Lanes.Count;
 
     private const float AcQuant = 0.765f;
 
@@ -325,8 +325,7 @@ internal static class JxlEncAdaptiveQuantization
                     float diff = gammacv * (inV - baseValue);
                     diff *= diff;
 
-                    // Highway's Min(diff, limit).
-                    diff = diff < PreErosionLimit ? diff : PreErosionLimit;
+                    diff = JxlAvx2Lanes.Min(diff, PreErosionLimit);
                     diff = MaskingSqrt(diff);
                     if ((y & 3) != 0)
                     {
@@ -528,8 +527,7 @@ internal static class JxlEncAdaptiveQuantization
                 float outVal = HfModulation(x, y, xybY, maskVal);
                 float blue = BlueModulation(x, y, xybX, xybY, xybB, maskVal);
 
-                // Highway's Min(out_val, blue).
-                outVal = outVal < blue ? outVal : blue;
+                outVal = JxlAvx2Lanes.Min(outVal, blue);
 
                 // We want multiplicative quantization field, so everything until this point has been
                 // modulating the exponent.
@@ -600,7 +598,7 @@ internal static class JxlEncAdaptiveQuantization
             }
         }
 
-        float overall = SumOfLanes(overallRatio) * (0.5f / 64);
+        float overall = JxlAvx2Lanes.SumOfLanes(overallRatio) * (0.5f / 64);
 
         // ideally -1.0, but likely optimal correction adds some entropy, so slightly less than that.
         const float gamma = 0.1005613337192697f;
@@ -631,15 +629,13 @@ internal static class JxlEncAdaptiveQuantization
                 float pyEffective = pyRaw + MathF.Abs(px);
                 if (pb > pyEffective)
                 {
-                    // Highway's Min(p_b - p_y_effective, limit).
-                    float d = pb - pyEffective;
-                    sum[dx] += d < limit ? d : limit;
+                    sum[dx] += JxlAvx2Lanes.Min(pb - pyEffective, limit);
                 }
             }
         }
 
         const float mul = 0.90590804735610064f;
-        float scalarSum = SumOfLanes(sum);
+        float scalarSum = JxlAvx2Lanes.SumOfLanes(sum);
 
         // If it is all blue, don't boost the quantization. All blue likely means low frequency blue.
         // Let's not make the most perfect sky ever.
@@ -676,15 +672,15 @@ internal static class JxlEncAdaptiveQuantization
                 // libjxl masks out the rightmost difference of each row (kMaskRight), which adds 0.
                 if (dx < 7)
                 {
-                    sumY[dx] += Min(valminY, MathF.Abs(py - rowInY[dx + 1]));
+                    sumY[dx] += JxlAvx2Lanes.Min(valminY, MathF.Abs(py - rowInY[dx + 1]));
                 }
 
-                sumY[dx] += Min(valminY, MathF.Abs(py - rowInYNext[dx]));
+                sumY[dx] += JxlAvx2Lanes.Min(valminY, MathF.Abs(py - rowInYNext[dx]));
             }
         }
 
         const float mulY = -0.38f;
-        float scalarSumY = SumOfLanes(sumY);
+        float scalarSumY = JxlAvx2Lanes.SumOfLanes(sumY);
         scalarSumY *= mulY;
 
         // higher value -> more bpp
@@ -694,21 +690,7 @@ internal static class JxlEncAdaptiveQuantization
         return scalarSumY + outVal;
     }
 
-    // Highway's Min(a, b) on x86.
-    private static float Min(float a, float b) => a < b ? a : b;
-
     private static float MaskingSqrt(float v) => 0.25f * MathF.Sqrt((v * MaskingSqrtMul) + MaskingLogOffset);
-
-    // Highway's SumOfLanes over AVX2's 8 float lanes: each lane of the lower block plus its partner in the
-    // upper block, then lanes 0 and 3 and lanes 1 and 2, then those two sums.
-    private static float SumOfLanes(ReadOnlySpan<float> lanes)
-    {
-        float l0 = lanes[0] + lanes[4];
-        float l1 = lanes[1] + lanes[5];
-        float l2 = lanes[2] + lanes[6];
-        float l3 = lanes[3] + lanes[7];
-        return (l0 + l3) + (l1 + l2);
-    }
 
     // Blur the mask1x1 to obtain the masking image. Before blurring it contains an image of absolute
     // value of the Laplacian of the intensity channel.

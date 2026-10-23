@@ -18,13 +18,13 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// </summary>
 /// <remarks>
 /// libjxl sums the accumulators in vector lanes and adds the lanes with Highway's <c>SumOfLanes</c>. This
-/// port sums in the 8 float lanes of AVX2, which cjxl runs on x64, as <c>JxlTreeLearner.EstimateBits</c>
-/// does, and its <c>MulAdd</c> is not fused (ADR 0004).
+/// port sums in the 8 float lanes of AVX2, which cjxl runs on x64 (<see cref="JxlAvx2Lanes"/>), and its
+/// <c>MulAdd</c> is not fused (ADR 0004).
 /// </remarks>
 internal static class JxlEncChromaFromLuma
 {
     private const int BlockDim = 8;
-    private const int Lanes = 8;
+    private const int Lanes = JxlAvx2Lanes.Count;
     private const int ColorTileDim = JxlColorCorrelation.ColorTileDim;
     private const int ColorTileDimInBlocks = JxlColorCorrelation.ColorTileDimInBlocks;
 
@@ -105,7 +105,7 @@ internal static class JxlEncChromaFromLuma
         }
 
         // + distance_mul * x^2 * num. libjxl multiplies the size_t count by the float, in float.
-        float x = -SumOfLanes(cb) / (SumOfLanes(ca) + ((float)num * distanceMul * 0.5f));
+        float x = -JxlAvx2Lanes.SumOfLanes(cb) / (JxlAvx2Lanes.SumOfLanes(ca) + ((float)num * distanceMul * 0.5f));
 
         // CFL seems to be tricky for larger transforms for HF components close to zero. This heuristic
         // brings the solutions closer to zero and reduces red-green oscillations.
@@ -222,17 +222,6 @@ internal static class JxlEncChromaFromLuma
         }
 
         JxlDct.TransformFromPixels(strategy, pixels, cols, coefficients, dctScratch);
-    }
-
-    // Highway's SumOfLanes over 8 lanes on AVX2: each lane of the lower block plus its partner in the upper
-    // block, then lanes 0 and 3 and lanes 1 and 2, then those two sums.
-    private static float SumOfLanes(ReadOnlySpan<float> lanes)
-    {
-        float l0 = lanes[0] + lanes[4];
-        float l1 = lanes[1] + lanes[5];
-        float l2 = lanes[2] + lanes[6];
-        float l3 = lanes[3] + lanes[7];
-        return (l0 + l3) + (l1 + l2);
     }
 
     // The working set of one tile. A block the encoder chooses lies in one tile, so a tile's area bounds

@@ -24,7 +24,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// libjxl sums the entropy, the non-zero count and the loss of <c>EstimateEntropy</c> in vector lanes and
 /// adds the lanes with Highway's <c>SumOfLanes</c>. This port uses AVX2's 8 lanes, as cjxl does on x64:
 /// coefficient <c>i</c> goes to lane <c>i % 8</c>, pixel <c>dx</c> of a block row to lane <c>dx</c>, and
-/// the lanes add up as <see cref="SumOfLanes"/> does. On another CPU libjxl's sums may differ by a few
+/// the lanes add up as <see cref="JxlAvx2Lanes.SumOfLanes"/> does. On another CPU libjxl's sums may differ by a few
 /// units in the last place.
 /// </para>
 /// <para>
@@ -39,7 +39,7 @@ internal static class JxlEncAcStrategy
     private const int DctBlockSize = BlockDim * BlockDim;
 
     // The vector lanes libjxl sums in: HWY_FULL(float) and HWY_CAPPED(float, 8) on AVX2.
-    private const int Lanes = 8;
+    private const int Lanes = JxlAvx2Lanes.Count;
 
     // libjxl's kColorTileDimInBlocks: the chroma-from-luma map has one entry per 64x64 tile.
     private const int ColorTileDimInBlocks = 8;
@@ -220,8 +220,8 @@ internal static class JxlEncAcStrategy
             // Taking max instead of 8th norm seems to work better for smallest blocks up to 16x8. Jyrki
             // couldn't get improvements in trying the same for 16x16 blocks.
             quantNorm16 = coveredY == 2
-                ? Max(config.Quant(x / 8, y / 8), config.Quant(x / 8, (y / 8) + 1))
-                : Max(config.Quant(x / 8, y / 8), config.Quant((x / 8) + 1, y / 8));
+                ? JxlAvx2Lanes.Max(config.Quant(x / 8, y / 8), config.Quant(x / 8, (y / 8) + 1))
+                : JxlAvx2Lanes.Max(config.Quant(x / 8, y / 8), config.Quant((x / 8) + 1, y / 8));
         }
         else
         {
@@ -321,8 +321,8 @@ internal static class JxlEncAcStrategy
                 loss[lane] = loss[lane] + lossc[lane];
             }
 
-            entropy += config.CostDelta * SumOfLanes(entropyV);
-            uint numNzeros = (uint)SumOfLanes(nzerosV);
+            entropy += config.CostDelta * JxlAvx2Lanes.SumOfLanes(entropyV);
+            uint numNzeros = (uint)JxlAvx2Lanes.SumOfLanes(nzerosV);
 
             // Add #bit of num_nonzeros, as an estimate of the cost for encoding the number of non-zeros of
             // the block.
@@ -343,7 +343,7 @@ internal static class JxlEncAcStrategy
             }
         }
 
-        float lossScalar = MathF.Pow(SumOfLanes(loss) / (numBlocks * DctBlockSize), 1.0f / 8.0f) * (numBlocks * DctBlockSize) / quantNorm16;
+        float lossScalar = MathF.Pow(JxlAvx2Lanes.SumOfLanes(loss) / (numBlocks * DctBlockSize), 1.0f / 8.0f) * (numBlocks * DctBlockSize) / quantNorm16;
         entropy *= entropyMul;
         entropy += config.InfoLossMultiplier * lossScalar;
         return entropy;
@@ -849,19 +849,5 @@ internal static class JxlEncAcStrategy
                 SetEntropyForTransform(cx, cy + blocksHalf, acsRawKxJ, entropyKxJBottom, entropyEstimate);
             }
         }
-    }
-
-    // Highway's Max on x86.
-    private static float Max(float a, float b) => a < b ? b : a;
-
-    // Highway's SumOfLanes over AVX2's 8 float lanes: each lane of the lower block plus its partner in the
-    // upper block, then lanes 0 and 3 and lanes 1 and 2, then those two sums.
-    private static float SumOfLanes(ReadOnlySpan<float> lanes)
-    {
-        float l0 = lanes[0] + lanes[4];
-        float l1 = lanes[1] + lanes[5];
-        float l2 = lanes[2] + lanes[6];
-        float l3 = lanes[3] + lanes[7];
-        return (l0 + l3) + (l1 + l2);
     }
 }
