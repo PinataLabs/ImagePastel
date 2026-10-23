@@ -14,7 +14,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// The <c>SaveAsJxl</c> and <c>SaveAsJxlAsync</c> extensions with <see cref="Configuration.Default"/>, as a
-/// user reaches the encoder (E6a, #331). Each file is read back by the default configuration's decoder.
+/// user reaches the encoder (E6a, #331; the done-check, #335). Each file is read back by the default
+/// configuration's decoder.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class ImageExtensionsTests
@@ -151,6 +152,49 @@ public class ImageExtensionsTests
         AssertJxl(file);
     }
 
+    // Image.Save picks the encoder by extension: the default configuration's is a new JxlEncoder, so the
+    // file is the lossy default (Distance 1, Effort Default).
+    [Fact]
+    public void Save_JxlExtension_WritesWhatTheDefaultJxlEncoderWrites()
+    {
+        string file = OutputPath("Save_JxlExtension_Default.jxl");
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("gradient", 37, 23);
+        using MemoryStream expected = new();
+        image.SaveAsJxl(expected, new JxlEncoder { Distance = 1, Effort = JxlEffort.Default });
+
+        image.Save(file);
+
+        Assert.Equal(expected.ToArray(), File.ReadAllBytes(file));
+    }
+
+    // Each effort, lossless and at the default distance, through SaveAsJxl and our decoder: lossless is
+    // exact, lossy is within the interim bound.
+    [Theory]
+    [InlineData(JxlEffort.Fastest, 0f)]
+    [InlineData(JxlEffort.Fastest, 1f)]
+    [InlineData(JxlEffort.Default, 0f)]
+    [InlineData(JxlEffort.Default, 1f)]
+    [InlineData(JxlEffort.Thorough, 0f)]
+    [InlineData(JxlEffort.Thorough, 1f)]
+    public void SaveAsJxl_Effort_DecodesBack(JxlEffort effort, float distance)
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("gradient", 37, 23);
+        using MemoryStream memoryStream = new();
+
+        image.SaveAsJxl(memoryStream, new JxlEncoder { Distance = distance, Effort = effort });
+
+        memoryStream.Position = 0;
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(memoryStream);
+        if (distance == 0)
+        {
+            ImageComparer.Exact.VerifySimilarity(image, decoded);
+        }
+        else
+        {
+            JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"SaveAsJxl at {effort}, d{distance}, {memoryStream.Length} bytes");
+        }
+    }
+
     [Fact]
     public void SaveAsJxl_LosslessThorough_KeepsEveryPixel()
     {
@@ -195,6 +239,47 @@ public class ImageExtensionsTests
 
         Assert.Throws<ImageFormatException>(() => image.SaveAsJxl(memoryStream, new JxlEncoder { Distance = distance, Effort = effort }));
         Assert.Equal(0, memoryStream.Length);
+    }
+
+    [Theory]
+    [InlineData(-0.01f, JxlEffort.Default)]
+    [InlineData(25.01f, JxlEffort.Default)]
+    [InlineData(float.NaN, JxlEffort.Default)]
+    [InlineData(1.0f, (JxlEffort)3)]
+    [InlineData(0.0f, (JxlEffort)(-1))]
+    public async Task SaveAsJxlAsync_OptionOutOfRange_ThrowsAndWritesNothing(float distance, JxlEffort effort)
+    {
+        using MemoryStream memoryStream = new();
+        using Image<Rgba32> image = CreateImage();
+
+        await Assert.ThrowsAsync<ImageFormatException>(() => image.SaveAsJxlAsync(memoryStream, new JxlEncoder { Distance = distance, Effort = effort }, TestContext.Current.CancellationToken));
+        Assert.Equal(0, memoryStream.Length);
+    }
+
+    // The boundaries are accepted: Distance 0 and 25, and the smallest lossy distance, which libjxl clamps
+    // to 0.05 (kMinButteraugliDistance), so it writes what 0.05 writes.
+    [Fact]
+    public void SaveAsJxl_DistanceAtTheBoundaries_IsAccepted()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("gradient", 37, 23);
+
+        byte[] lossless = Save(image, 0f);
+        byte[] smallest = Save(image, 0.01f);
+        byte[] clamped = Save(image, 0.05f);
+        byte[] largest = Save(image, 25f);
+
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(lossless);
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
+        Assert.Equal(clamped, smallest);
+        Assert.NotEqual(lossless, smallest);
+        Assert.Equal(new Size(37, 23), Image.Identify(largest).Size());
+
+        static byte[] Save(Image image, float distance)
+        {
+            using MemoryStream stream = new();
+            image.SaveAsJxl(stream, new JxlEncoder { Distance = distance });
+            return stream.ToArray();
+        }
     }
 
     private static string OutputPath(string fileName)
