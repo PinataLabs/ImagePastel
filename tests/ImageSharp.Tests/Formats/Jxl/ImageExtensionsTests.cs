@@ -1,11 +1,13 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -147,6 +149,35 @@ public class ImageExtensionsTests
         }
 
         AssertJxl(file);
+    }
+
+    [Fact]
+    public void SaveAsJxl_LosslessThorough_KeepsEveryPixel()
+    {
+        using Image<Rgba32> image = JxlEncoderRoundTrip.CreateImage<Rgba32>("translucent", 37, 23);
+        using MemoryStream memoryStream = new();
+
+        image.SaveAsJxl(memoryStream, new JxlEncoder { Distance = 0, Effort = JxlEffort.Thorough });
+
+        memoryStream.Position = 0;
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(memoryStream);
+        ImageComparer.Exact.VerifySimilarity(image, decoded);
+    }
+
+    // The defaults (Distance 1, Effort Default) through our decoder and Magick.
+    [Theory]
+    [InlineData(nameof(JxlEncoderRoundTrip.Reader.Ours))]
+    [InlineData(nameof(JxlEncoderRoundTrip.Reader.Magick))]
+    public async Task SaveAsJxl_LossyDefaults_DecodesThroughEachReaderWithinTheInterimBound(string reader)
+    {
+        using Image<Rgb24> image = JxlEncoderTransformTests.LoadPhoto();
+        using MemoryStream memoryStream = new();
+
+        image.SaveAsJxl(memoryStream);
+
+        byte[] encoded = memoryStream.ToArray();
+        using Image<Rgb24> decoded = await JxlLossyEncoderTests.DecodeAsync(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, "save_as_jxl_defaults");
+        JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"SaveAsJxl defaults through {reader}, {encoded.Length} bytes");
     }
 
     // Distance in [0, 25], as libjxl's JxlEncoderSetFrameDistance, and an Effort that JxlEffort defines.
