@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -200,6 +201,59 @@ public class JxlEncAcStrategyTests
         TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: {coverage}");
         Assert.Equal(expectedCoverage, coverage);
         Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(map)));
+    }
+
+    // One 64x64 tile of Bike (blocks 40-47 x 32-39) through ProcessRect at Squirrel, with the default CfL
+    // map, on the same opsin, quant field and masking image as the Hare map above: the strategy of each block
+    // is the one libjxl's ProcessRectACS gives at kSquirrel (e5-notes/e5d-scratch, acs_afv merge ... 3; its
+    // scalar and AVX2 builds give the same whole map). The harness restricts the 8x8 level to Hare's four
+    // candidates and AFV0 to AFV3, as the port does until E5b (DCT4X8, DCT8X4) lands; E5b must regenerate
+    // these with acs_full. Each byte is raw strategy << 1 | first block, 8 per row. The tile has merges off
+    // their size's grid at each distance: a DCT32X32 at block (44, 34) at d1, d2 and d4, and at d2 also a
+    // DCT32X32 at (40, 34) and a DCT16X16 at (41, 32). Hare's map of this tile has none.
+    [Theory]
+    [InlineData(1.0f, "01011D0101010105 0101010101010105 0F0E01050B0A0A0A 01010F0E0A0A0A0A 050109080A0A0A0A 1F0108080A0A0A0A 0101010117161616 0101010516161616")]
+    [InlineData(2.0f, "010908010F0E0908 1F080801011D0808 0B0A0A0A0B0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 010F0E0117161616 0101010116161616")]
+    [InlineData(4.0f, "09080D0117161616 08080C0116161616 171616160B0A0A0A 161616160A0A0A0A 0B0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A17161616 0A0A0A0A16161616")]
+    public void ProcessRect_BikeTileAtSquirrel_ChoosesLibjxlsStrategyForEachBlock(float distance, string expected)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+        MemoryAllocator allocator = Configuration.Default.MemoryAllocator;
+        Buffer2D<float>[] opsin = JxlEncAdaptiveQuantizationTests.CreateOpsin(image);
+        try
+        {
+            // LossyFrameHeuristics above d0.5: the field from the pre-Gaborish opsin, then Gaborish's inverse.
+            using Buffer2D<float> quantField = JxlEncAdaptiveQuantization.InitialQuantField(distance, opsin, 1.0f, allocator, out Buffer2D<float> mask1x1);
+            using Buffer2D<float> masking = mask1x1;
+            JxlEncGaborish.GaborishInverse(opsin, new[] { 1.0f, 1.0f, 1.0f }, allocator);
+            JxlAcsConfig config = JxlEncAcStrategy.Init(JxlSpeedTier.Squirrel, distance, opsin, quantField, masking, new JxlDequantMatrices());
+            JxlAcStrategyImage acStrategy = new(quantField.Width, quantField.Height);
+            acStrategy.FillInvalid();
+            JxlColorCorrelation cmap = new(quantField.Width * 8L, quantField.Height * 8L);
+            const int bx = 40;
+            const int by = 32;
+
+            JxlEncAcStrategy.ProcessRect(config, JxlSpeedTier.Squirrel, distance, new JxlRect(bx, by, 8, 8), cmap, acStrategy, new JxlAcsScratch());
+
+            string[] rows = new string[8];
+            for (int iy = 0; iy < 8; iy++)
+            {
+                byte[] row = new byte[8];
+                for (int ix = 0; ix < 8; ix++)
+                {
+                    JxlAcStrategy acs = acStrategy.Get(bx + ix, by + iy);
+                    row[ix] = (byte)((acs.RawStrategy << 1) | (acs.IsFirstBlock ? 1 : 0));
+                }
+
+                rows[iy] = Convert.ToHexString(row);
+            }
+
+            Assert.Equal(expected, string.Join(" ", rows));
+        }
+        finally
+        {
+            JxlPlanes.DisposeAll(opsin);
+        }
     }
 
     // Informative, so it logs and does not fail: how often our strategy map is cjxl -e 5's (JXL_TOOLS_DIR)

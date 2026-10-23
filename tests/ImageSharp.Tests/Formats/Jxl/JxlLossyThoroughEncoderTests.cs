@@ -161,6 +161,43 @@ public class JxlLossyThoroughEncoderTests
         AssertSearched(histogram, distance, $"{imageName} d{distance}");
     }
 
+    // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
+    // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
+    // once. With AFV (E5c) and the CfL pre-pass (E5e), and no DCT4X8 or DCT8X4 yet, Bike has 5, 17 and 23
+    // such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 5). The harness has no
+    // pre-pass, so this map is no longer its map; ProcessRect_BikeTileAtSquirrel checks the search itself.
+    [Theory]
+    [InlineData(1.0f)]
+    [InlineData(2.0f)]
+    [InlineData(4.0f)]
+    public void Encode_Bike_MergesSquaresOffTheirAlignedGrid(float distance)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
+        int xsize = frame.State.XSizeBlocks;
+        int off16 = 0;
+        int off32 = 0;
+        for (int i = 0; i < strategies.Length; i++)
+        {
+            if ((strategies[i] & 1) == 0)
+            {
+                continue;
+            }
+
+            int x = i % xsize;
+            int y = i / xsize;
+            JxlAcStrategyType strategy = (JxlAcStrategyType)(strategies[i] >> 1);
+            off16 += strategy == JxlAcStrategyType.Dct16X16 && ((x | y) % 2) != 0 ? 1 : 0;
+            off32 += strategy == JxlAcStrategyType.Dct32X32 && ((x | y) % 4) != 0 ? 1 : 0;
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"bike d{distance}: {off16} DCT16X16 and {off32} DCT32X32 off their grid; map {Convert.ToHexString(SHA256.HashData(strategies))} [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
+        Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
+    }
+
     // The X and B quantisation scales of each calibration image at Thorough, through the decoder's parse.
     // Default (Hare) writes the distance's X scale (3, or 4 above d2.5) and a B scale of 2; from Squirrel
     // down libjxl raises them from the pixel statistics of the XYB image. The photos stay at Default's
@@ -323,16 +360,16 @@ public class JxlLossyThoroughEncoderTests
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
     // (e5a-handoff.md says how). Since E5h (dynamic EPF) no row equals its Default pin.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "5935C26B6DA263D6B80EDE7C0FF1F20F76D6162E1BA2B4B22447195FCF04B00F")]
-    [InlineData("flower-384x244", "", 1.0f, "E2D3FA25EAC2A7E5D67D78D582075C9908D81F16C1BCDCEEB73BAD1FA9373E0C")]
-    [InlineData("flower-384x244", "", 2.0f, "28045CFCE575AE061C347D0A3D062F50238ADB66AD53975C5A2CA9A16E98E865")]
-    [InlineData("flower-384x244", "", 4.0f, "C84934400CAF1E28B100936FBD5B58C27395EF34D9907EAAE3D9B0DA3A2D68CC")]
+    [InlineData("flower-384x244", "", 0.5f, "115A19CEF679492A93AFA42A8F6A3058684A46D95D1B4AC005C348AEEB131A30")]
+    [InlineData("flower-384x244", "", 1.0f, "B31A23CFA13BBB25F18BCEDD21B218C9CD8047BA3CA1DE21201ECF3E46422FA7")]
+    [InlineData("flower-384x244", "", 2.0f, "5AE94A6ECE79371A0D2755F01761A03C454BDE27C9D5F793C153BD1310C67CC2")]
+    [InlineData("flower-384x244", "", 4.0f, "88A4645C94D084B4FAB50F66488C4863085FD70634B2079C1FDBF1C0E744FFBE")]
     [InlineData("flower-17x23", "", 1.0f, "FED88E8EE80F72986918E3BCCE5C1618AE86A3920766A671783EF90E525707EA")]
     [InlineData("dot-1x1", "", 1.0f, "A84E239F194B63933E2CF99F9088EB8661BE9E5BC3F0CD2DD4CB4F49E967B500")]
-    [InlineData("bike-582x453", "", 1.0f, "3F2DC23CCE29465CA206E3F5DE3E677BDCC318D009B680173D8A31172ED6951D")]
+    [InlineData("bike-582x453", "", 1.0f, "EB20A5CD1A7AA0DFE36DCA732486659EA9004C87906EF50299C9235146A9E943")]
     [InlineData("gradient-2049x9", "", 2.0f, "545D2ACBD3AD1991E0CAB1372E6E549037E98C2144ABFC6294D1CF326D698B67")]
-    [InlineData("flower-256x244", "soft", 1.0f, "6035F2E02756A9B5D1297C15DA2E9D35D8F5A8CA41B965528B633D8FCE85C112")]
-    [InlineData("bike-582x453", "hard", 1.0f, "1048EEB5973F17F216E5B30181282E403CFE30EC6770420DD142662DF4B6CD1F")]
+    [InlineData("flower-256x244", "soft", 1.0f, "95C938618EB8592A642B3F49A8EA035DE8CE7E1EAAD61EEA71335B812322DD85")]
+    [InlineData("bike-582x453", "hard", 1.0f, "25A11DC33B3D59007EC98E4F20DEDF6F6A3DB20E83F38BBD92BCBDC501412BD6")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));

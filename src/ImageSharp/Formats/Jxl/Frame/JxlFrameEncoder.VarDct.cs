@@ -54,13 +54,13 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and the fit after the
 /// search uses Newton's method. The X and B quantisation scales are raised from the pixel statistics of the
 /// XYB image (<see cref="JxlPixelStatsForChromacityAdjustment"/>), which leaves most photos at Default's
-/// scales. Where the frame has EPF (from distance 0.7), the EPF sharpness of each block is searched
-/// (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder reconstructs the frame once per
-/// sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and keeps the step of least masked
-/// error against the pre-Gaborish opsin. The other Squirrel stages are still in their Default form, each a
+/// scales. After the aligned merges the strategy search also merges blocks off their size's grid, as libjxl
+/// does below Hare. Where the frame has EPF (from distance 0.7), the EPF sharpness of each block is
+/// searched (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder reconstructs the frame once
+/// per sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and keeps the step of least
+/// masked error against the pre-Gaborish opsin. The other Squirrel stage is still in its Default form, a
 /// temporary departure named in its code with the slice that ports it: the 8x8 level does not try DCT4X8
-/// and DCT8X4 (they come with E5b); and the merges are the aligned ones (the non-aligned 16x16 and 32x32
-/// merges come with E5d).
+/// and DCT8X4 (they come with E5b).
 /// </para>
 /// </content>
 /// <remarks>

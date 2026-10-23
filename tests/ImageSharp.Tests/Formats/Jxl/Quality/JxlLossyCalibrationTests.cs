@@ -77,7 +77,9 @@ public class JxlLossyCalibrationTests
     /// E5h merged with E5c, E5e and E5f: 18 of 18. line_art scores 74.29 at d2 and 63.01 at d4 (margins
     /// +3.57 and +2.05, against +2.83 and +0.23 without E5h; E5a's were -9.52 and -9.33). Its d2 sharpness
     /// histogram is 212 / 43 / 769 blocks at 0 / 2 / 7, cjxl -e 7's 205 / 43 / 776. Smallest margins:
-    /// line_art d4 +2.05, text d2 +2.17, text d4 +2.71, bike d4 +3.10.
+    /// line_art d4 +2.05, text d2 +2.17, text d4 +2.71, bike d4 +3.10. With E5d (off-grid merges) too:
+    /// 18 of 18; line_art d2 +3.57 and d4 +2.00 (E5d's tip without E5h had d4 +0.14). Smallest margins:
+    /// line_art d4 +2.00, text d2 +2.15, text d4 +2.70, bike d4 +3.03.
     /// </para>
     /// </remarks>
     private const int ThoroughRowsPassing = 18;
