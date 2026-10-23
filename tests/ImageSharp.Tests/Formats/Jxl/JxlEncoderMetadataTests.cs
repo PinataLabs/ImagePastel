@@ -5,10 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
@@ -65,6 +68,71 @@ public class JxlEncoderMetadataTests
         Assert.Equal(image.Metadata.ExifProfile.ToByteArray(), decoded.Metadata.ExifProfile.ToByteArray());
         Assert.NotNull(decoded.Metadata.XmpProfile);
         Assert.Equal(image.Metadata.XmpProfile.ToByteArray(), decoded.Metadata.XmpProfile.ToByteArray());
+    }
+
+    // MagickReferenceDecoder drops metadata, so the profiles are read through MagickImage itself.
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(1f)]
+    public void SaveAsJxl_ExifAndXmp_MagickReadsTheProfilesBack(float distance)
+    {
+        JxlEncoderRoundTrip.SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader.Magick);
+        using Image<Rgba32> image = CreateImage(withExif: true, withXmp: true);
+        byte[] encoded = Save(image, new JxlEncoder { Distance = distance });
+
+        using ImageMagick.MagickImage magick = new(encoded);
+
+        ImageMagick.IExifProfile magickExif = magick.GetExifProfile();
+        Assert.NotNull(magickExif);
+
+        // ImageMagick keeps Exif as a JPEG APP1 segment does: "Exif\0\0" in place of the box's 4-byte offset.
+        byte[] magickExifBytes = magickExif.ToByteArray();
+        Assert.Equal("Exif\0\0"u8.ToArray(), magickExifBytes[..6]);
+        ExifProfile exif = new(magickExifBytes[6..]);
+        ExifProfile expected = image.Metadata.ExifProfile;
+        Assert.Equal(expected.Values.Count, exif.Values.Count);
+        foreach (IExifValue value in expected.Values)
+        {
+            Assert.Equal(value.GetValue(), exif.GetValueInternal(value.Tag)?.GetValue());
+        }
+
+        Assert.Equal(image.Metadata.XmpProfile.ToByteArray(), magick.GetXmpProfile()?.ToByteArray());
+    }
+
+    // cjxl v0.12.0 with --compress_boxes=0 on the same image saved as PNG: the same boxes in the same order,
+    // the same ftyp, and the same Exif offset and data. Then jxlinfo reads our file's boxes.
+    [Fact]
+    public async Task SaveAsJxl_ExifAndXmp_MatchesCjxlsBoxLayout()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        JxlTools.GetToolPath("cjxl");
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlEncoderMetadataTests));
+        string pngPath = Path.Combine(directory, "ExifAndXmp.png");
+        string cjxlPath = Path.Combine(directory, "ExifAndXmp.cjxl.jxl");
+        string oursPath = Path.Combine(directory, "ExifAndXmp.jxl");
+
+        using Image<Rgba32> image = CreateImage(withExif: true, withXmp: true);
+        await image.SaveAsPngAsync(pngPath, cancellationToken);
+        await image.SaveAsJxlAsync(oursPath, cancellationToken);
+        File.Delete(cjxlPath);
+        await JxlTools.RunAsync("cjxl", cancellationToken, pngPath, cjxlPath, "-d", "0", "-e", "1", "--compress_boxes=0");
+
+        IReadOnlyList<JxlBox> ours = JxlBoxList.Read(await File.ReadAllBytesAsync(oursPath, cancellationToken));
+        IReadOnlyList<JxlBox> cjxl = JxlBoxList.Read(await File.ReadAllBytesAsync(cjxlPath, cancellationToken));
+
+        Assert.Equal(JxlBoxList.Types(cjxl), JxlBoxList.Types(ours));
+        Assert.Equal(cjxl[1].Contents, ours[1].Contents);
+        Assert.Equal(JxlBoxList.JxlpIndex(cjxl[2]), JxlBoxList.JxlpIndex(ours[2]));
+        Assert.Equal(JxlBoxList.JxlpIndex(cjxl[5]), JxlBoxList.JxlpIndex(ours[5]));
+        Assert.Equal(cjxl[3].Contents, ours[3].Contents);
+        Assert.Equal(cjxl[4].Contents, ours[4].Contents);
+
+        (int exitCode, string output) = await JxlTools.RunForExitCodeAsync("jxlinfo", cancellationToken, oursPath);
+        Assert.True(exitCode == 0, output);
+
+        // jxlinfo gives the size of the whole box, its 8-byte header included.
+        Assert.Contains($"Uncompressed Exif metadata: {8 + ours[3].Contents.Length} bytes", output);
+        Assert.Contains($"Uncompressed xml  metadata: {8 + ours[4].Contents.Length} bytes", output);
     }
 
     [Theory]
