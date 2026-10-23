@@ -86,9 +86,9 @@ internal static class JxlAcTokenizer
 
                     int predictedNzeros = JxlBlockCtxMap.PredictFromTopAndLeft(rowNzerosTop, rowNzeros, bx, 32);
 
-                    // libjxl passes the block's quantised-DC bucket (DequantDC's quant_dc). The default
-                    // block context map has no DC thresholds, so every bucket is 0; E4 needs DequantDC
-                    // once FindBestBlockEntropyModel sets thresholds.
+                    // libjxl passes the block's quantised-DC bucket (DequantDC's quant_dc). Neither the
+                    // default block context map nor FindBestBlockEntropyModel's has DC thresholds, so
+                    // every bucket is 0.
                     int blockCtx = blockCtxMap.Context(0, encState.RawQuantField[blockIndex], ord, c);
                     int nzeroCtx = blockCtxMap.NonZeroContext(predictedNzeros, blockCtx);
 

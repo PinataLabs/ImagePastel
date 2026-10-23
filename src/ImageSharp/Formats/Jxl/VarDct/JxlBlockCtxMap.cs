@@ -36,8 +36,11 @@ internal sealed class JxlBlockCtxMap
     /// <summary>The number of coefficient orders, one per size class.</summary>
     public const int NumOrders = 13;
 
-    private static readonly JxlU32Enc DcThresholdDist = new(Bits(4), BitsOffset(8, 16), BitsOffset(16, 272), BitsOffset(32, 65808));
-    private static readonly JxlU32Enc QfThresholdDist = new(Bits(2), BitsOffset(3, 4), BitsOffset(5, 12), BitsOffset(8, 44));
+    /// <summary>The distribution of the packed DC thresholds (libjxl's <c>kDCThresholdDist</c>).</summary>
+    internal static readonly JxlU32Enc DcThresholdDist = new(Bits(4), BitsOffset(8, 16), BitsOffset(16, 272), BitsOffset(32, 65808));
+
+    /// <summary>The distribution of the quant field thresholds less one (libjxl's <c>kQFThresholdDist</c>).</summary>
+    internal static readonly JxlU32Enc QfThresholdDist = new(Bits(2), BitsOffset(3, 4), BitsOffset(5, 12), BitsOffset(8, 44));
 
     /// <summary>Initializes a new instance of the <see cref="JxlBlockCtxMap"/> class with the default map.</summary>
     public JxlBlockCtxMap() => this.SetDefault();
@@ -59,6 +62,11 @@ internal sealed class JxlBlockCtxMap
 
     /// <summary>Gets the number of AC contexts: non-zero counts, then coefficient symbols.</summary>
     public int NumAcContexts => this.NumCtxs * (NonZeroBuckets + ZeroDensityContextCount);
+
+    /// <summary>Gets a value indicating whether this is the default map, which is written as one bit.</summary>
+    public bool IsDefault
+        => this.DcThresholds[0].Length == 0 && this.DcThresholds[1].Length == 0 && this.DcThresholds[2].Length == 0
+        && this.QfThresholds.Length == 0 && this.CtxMap.AsSpan().SequenceEqual(DefaultCtxMap);
 
     // Default ctx map clusters all the large transforms together.
     private static ReadOnlySpan<byte> DefaultCtxMap => new byte[]
@@ -127,6 +135,24 @@ internal sealed class JxlBlockCtxMap
         {
             JxlThrowHelper.ThrowInvalidImageContentException("Invalid block context map: too many distinct contexts");
         }
+    }
+
+    /// <summary>
+    /// Sets a map without DC thresholds, as the encoder's <c>FindBestBlockEntropyModel</c> chooses it.
+    /// </summary>
+    /// <param name="qfThresholds">The quant field thresholds.</param>
+    /// <param name="ctxMap">The map: 3 channels x 13 orders x (thresholds + 1) quant field buckets.</param>
+    /// <param name="numCtxs">The number of distinct contexts.</param>
+    public void SetQfContexts(uint[] qfThresholds, byte[] ctxMap, int numCtxs)
+    {
+        DebugGuard.IsTrue(ctxMap.Length == 3 * NumOrders * (qfThresholds.Length + 1), "One entry per channel, order and quant field bucket");
+        this.DcThresholds[0] = Array.Empty<int>();
+        this.DcThresholds[1] = Array.Empty<int>();
+        this.DcThresholds[2] = Array.Empty<int>();
+        this.NumDcCtxs = 1;
+        this.QfThresholds = qfThresholds;
+        this.CtxMap = ctxMap;
+        this.NumCtxs = numCtxs;
     }
 
     /// <summary>Returns the block context.</summary>
