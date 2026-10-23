@@ -48,12 +48,14 @@ internal static class JxlContainerWriter
     /// The size of the codestream headers and the ICC profile, which end on a byte boundary before the frame.
     /// </param>
     /// <param name="boxes">The metadata boxes.</param>
-    /// <param name="level">The codestream level, 5 or 10 (see <see cref="JxlCodestreamLevel"/>).</param>
+    /// <param name="level">
+    /// The codestream level, <see cref="JxlCodestreamLevel.Level5"/> or <see cref="JxlCodestreamLevel.Level10"/>.
+    /// </param>
     public static void Write(Stream stream, ReadOnlySpan<byte> codestream, int headerSize, JxlMetadataBoxes boxes, int level)
     {
         // MustUseContainer: use_boxes, or a codestream level other than 5. cjxl uses boxes only when there
         // is metadata to store.
-        if (boxes.IsEmpty && level == 5)
+        if (boxes.IsEmpty && level == JxlCodestreamLevel.Level5)
         {
             stream.Write(codestream);
             return;
@@ -62,7 +64,7 @@ internal static class JxlContainerWriter
         WriteContainerHeader(stream);
 
         // The jxll box, right after ftyp, gives the codestream level.
-        if (level != 5)
+        if (level != JxlCodestreamLevel.Level5)
         {
             WriteBoxHeader(stream, "jxll"u8, 1);
             stream.WriteByte((byte)level);
