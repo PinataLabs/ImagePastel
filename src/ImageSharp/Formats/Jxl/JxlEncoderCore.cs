@@ -272,7 +272,8 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     /// <summary>
     /// Returns the libjxl speed tier of <paramref name="effort"/>, the one place the encoder maps the
     /// two: Fastest is libjxl's effort 3, Default effort 5 and Thorough effort 7. Every stage is then
-    /// gated by the speed tier, as libjxl gates it.
+    /// gated by the speed tier, as libjxl gates it. <see cref="CheckOptions"/> has already rejected an
+    /// effort that <see cref="JxlEffort"/> does not define, with the documented <see cref="ImageFormatException"/>.
     /// </summary>
     /// <param name="effort">The effort.</param>
     /// <returns>The speed tier.</returns>
@@ -281,7 +282,10 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         JxlEffort.Fastest => JxlSpeedTier.Falcon,
         JxlEffort.Default => JxlSpeedTier.Hare,
         JxlEffort.Thorough => JxlSpeedTier.Squirrel,
-        _ => throw new ArgumentOutOfRangeException(nameof(effort), effort, "The effort is not one that JxlEffort defines."),
+
+        // Unreachable: CheckOptions runs first and is the one check of the effort's range. A switch
+        // expression needs a default arm.
+        _ => throw new ArgumentOutOfRangeException(nameof(effort), effort, "Not a JxlEffort"),
     };
 
     // Lossless and lossy are ported at every effort. The distance must be in libjxl's range
