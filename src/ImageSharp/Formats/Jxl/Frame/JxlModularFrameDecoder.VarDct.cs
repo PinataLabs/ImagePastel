@@ -145,7 +145,7 @@ internal sealed partial class JxlModularFrameDecoder
                     JxlThrowHelper.ThrowInvalidImageContentException("Invalid AC strategy, y overflow");
                 }
 
-                acStrategy.SetNoBoundsCheck(x, y, acs.Strategy);
+                acStrategy.SetRejectingOverlap(x, y, acs.Strategy);
                 rowQf[ix] = 1 + Math.Max(0, Math.Min(JxlQuantizer.QuantMax - 1, rowIn2[num]));
                 num++;
             }
