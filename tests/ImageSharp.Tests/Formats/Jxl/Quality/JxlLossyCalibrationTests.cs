@@ -52,14 +52,21 @@ public class JxlLossyCalibrationTests
     /// 1.11x to 1.17x cjxl's size, which has patches). text d2 fails (-0.99), and line_art fails at every
     /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
+    /// E5e (the CfL pre-pass and Newton fit): 16 of 18. text d2 passes (+0.46) and line_art d1 passes
+    /// (+2.68); line_art still fails at d2 (-1.13) and d4 (-3.63). Smallest passing margins: text d2 +0.46,
+    /// calliphora d4 +1.10, text d4 +1.78. E5e merged with E5c (AFV): 18 of 18. Smallest margins:
+    /// line_art d2 +0.31, text d2 +0.34, line_art d4 +0.48, calliphora d4 +1.46.
     /// E5h (dynamic EPF sharpness), on E5a alone: still 14 of 18; line_art rises from 61.19 to 61.79 at d2
     /// and from 51.64 to 53.75 at d4. Its sharpness histogram is within a few percent of cjxl -e 7's (d2:
     /// ours 240 / 44 / 740 blocks at 0 / 2 / 7, cjxl's 205 / 43 / 776), but cjxl's B quantisation scale
     /// there is 5, not 2, which is E5f's. With E5c (AFV) merged: 15 of 18, as text d2 passes by +0.21;
     /// line_art scores 61.97 at d2 and 55.01 at d4 (margins d1 -2.61, d2 -8.75, d4 -5.96). Smallest
     /// passing margins: text d2 +0.21, text d4 +1.13, text d1 +2.30, bike_alpha d1 +2.39.
+    /// E5h merged with E5c and E5e: 18 of 18. line_art scores 71.65 at d2 and 63.45 at d4 (margins +0.94 and
+    /// +2.48, against +0.31 and +0.48 without E5h). Smallest margins: text d2 +0.88, line_art d2 +0.94,
+    /// bike_alpha d1 +2.42, line_art d4 +2.48.
     /// </remarks>
-    private const int ThoroughRowsPassing = 15;
+    private const int ThoroughRowsPassing = 18;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

@@ -50,16 +50,16 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
 /// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
 /// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
-/// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries AFV0 to AFV3. Where the frame has
-/// EPF (from distance 0.7), the EPF sharpness of each block is searched
-/// (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder reconstructs the frame once per
-/// sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and keeps the step of least masked
-/// error against the pre-Gaborish opsin. The other Squirrel stages are still in their Default form, each a
-/// temporary departure named in its code with the slice that ports it: the 8x8 level does not try DCT4X8
-/// and DCT8X4 (they come with E5b); the merges are the aligned ones (the non-aligned 16x16 and 32x32
-/// merges come with E5d); there is no chroma-from-luma pre-pass, and the fit after the search is the fast
-/// least squares (the DCT8 pre-pass and the Newton fit come with E5e); and the X and B quantisation scales
-/// come from the distance alone (the pixel statistics come with E5f).
+/// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries AFV0 to AFV3. Each 64x64 tile
+/// first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and the fit after the
+/// search uses Newton's method. Where the frame has EPF (from distance 0.7), the EPF sharpness of each
+/// block is searched (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder reconstructs the
+/// frame once per sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and keeps the step of
+/// least masked error against the pre-Gaborish opsin. The other Squirrel stages are still in their Default
+/// form, each a temporary departure named in its code with the slice that ports it: the 8x8 level does not
+/// try DCT4X8 and DCT8X4 (they come with E5b); the merges are the aligned ones (the non-aligned 16x16 and
+/// 32x32 merges come with E5d); and the X and B quantisation scales come from the distance alone (the
+/// pixel statistics come with E5f).
 /// </para>
 /// </content>
 /// <remarks>
