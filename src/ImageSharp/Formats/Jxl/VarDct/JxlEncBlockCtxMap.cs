@@ -129,8 +129,8 @@ internal static class JxlEncBlockCtxMap
         }
 
         List<byte> clusters = new(remap);
-        int nbClusters = Clamp1((int)(tot / sizeForCtxModel / 2), 2, 9);
-        int nbClustersChroma = Clamp1((int)(tot / sizeForCtxModel / 3), 1, 5);
+        int nbClusters = Math.Clamp((int)(tot / sizeForCtxModel / 2), 2, 9);
+        int nbClustersChroma = Math.Clamp((int)(tot / sizeForCtxModel / 3), 1, 5);
 
         // This is O(n^2 log n), but n is small.
         while (clusters.Count > nbClusters)
@@ -170,7 +170,7 @@ internal static class JxlEncBlockCtxMap
         remap.CopyTo(ctxMap, 0);
         for (int i = remap.Length; i < ctxMap.Length; i++)
         {
-            ctxMap[i] = (byte)(num + Clamp1(remap[i % remap.Length], 0, nbClustersChroma - 1));
+            ctxMap[i] = (byte)(num + Math.Clamp(remap[i % remap.Length], 0, nbClustersChroma - 1));
         }
 
         byte max = 0;
@@ -237,6 +237,4 @@ internal static class JxlEncBlockCtxMap
             clusters[k] = value;
         }
     }
-
-    private static int Clamp1(int value, int low, int high) => value < low ? low : value > high ? high : value;
 }
