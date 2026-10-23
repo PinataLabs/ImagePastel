@@ -8,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
@@ -446,21 +445,10 @@ public class JxlLossyCalibrationTests
 
     private static string Name(MeasuredRow row) => $"{row.Image} d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
 
-    // The table's images are 8-bit sRGB with no colour chunks; only bike_alpha has alpha. Each is encoded
-    // as the pixel type it is stored in, as cjxl reads it: RGB without an alpha channel, or RGBA.
+    // Each image is encoded as the pixel type it is stored in, as cjxl reads it (JxlCalibrationImage.Encode).
     private static byte[] Encode(JxlCalibrationRow row, JxlEffort effort)
-        => Encodes.GetOrAdd((row.Image.Name, row.Effort, row.Distance), _ => new Lazy<byte[]>(() =>
-        {
-            JxlEncoder encoder = new() { Distance = (float)row.Distance, Effort = effort };
-            if (Image.Identify(row.Image.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
-            {
-                using Image<Rgba32> rgba = Image.Load<Rgba32>(row.Image.FullPath);
-                return JxlEncoderRoundTrip.Encode(rgba, encoder);
-            }
-
-            using Image<Rgb24> rgb = Image.Load<Rgb24>(row.Image.FullPath);
-            return JxlEncoderRoundTrip.Encode(rgb, encoder);
-        })).Value;
+        => Encodes.GetOrAdd((row.Image.Name, row.Effort, row.Distance), _ => new Lazy<byte[]>(()
+            => row.Image.Encode(new JxlEncoder { Distance = (float)row.Distance, Effort = effort }))).Value;
 
     // Decodes to 16 bits per sample, at least the precision of djxl's PNG, which the table scores.
     private static Task<Image<Rgba64>> DecodeAsync(JxlEncoderRoundTrip.Reader reader, JxlCalibrationRow row, byte[] encoded)

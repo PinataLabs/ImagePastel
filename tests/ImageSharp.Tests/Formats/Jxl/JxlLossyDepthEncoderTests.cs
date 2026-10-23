@@ -20,7 +20,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// a grey plane into all three colour planes, and computes XYB from them (<c>ToXYB</c>, where the grey
 /// sRGB encoding counts as sRGB). The bit depth in the header is only metadata when the image is
 /// XYB-encoded; the encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
-/// The grey round trips and the grey-as-RGB frame check also run at Default (slice E4, #297 story 6).
+/// The grey round trips and the grey-as-RGB frame check also run at Default (slice E4, #297 story 6) and at
+/// Thorough (slice E5, #318 story 5).
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyDepthEncoderTests
@@ -32,7 +33,7 @@ public class JxlLossyDepthEncoderTests
 
     public static TheoryData<string, string, float> ReaderCases { get; } = CreateReaderCases();
 
-    public static TheoryData<string, string, float> DefaultGreyReaderCases { get; } = CreateDefaultGreyReaderCases();
+    public static TheoryData<string, string, float, string> SlowerGreyReaderCases { get; } = CreateSlowerGreyReaderCases();
 
     public static TheoryData<string> AllPixelTypes { get; } = CreateAllPixelTypes();
 
@@ -43,13 +44,14 @@ public class JxlLossyDepthEncoderTests
     public Task Encode_PixelType_DecodesThroughEachReaderWithinTheScaledBoundWithAlphaExact(string reader, string pixelType, float distance)
         => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance, JxlEffort.Fastest));
 
-    // #297 story 6: grey input, 8-bit and 16-bit, works at Default as at Fastest. Each decodes through each
-    // reader to its own type within the scaled bound. (Default's 16-bit and float colour input is checked
-    // against cjxl's scores by JxlLossyCalibrationTests, and its alpha by JxlLossyDefaultEncoderTests.)
+    // #297 story 6 and #318 story 5: grey input, 8-bit and 16-bit, works at Default and at Thorough as at
+    // Fastest. Each decodes through each reader to its own type within the scaled bound. (The 16-bit and
+    // float colour input of both efforts is checked against cjxl's scores by JxlLossyCalibrationTests, and
+    // their alpha by JxlLossyDefaultEncoderTests and JxlLossyThoroughEncoderTests.)
     [Theory]
-    [MemberData(nameof(DefaultGreyReaderCases))]
-    public Task Encode_GreyAtDefault_DecodesThroughEachReaderWithinTheScaledBound(string reader, string pixelType, float distance)
-        => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance, JxlEffort.Default));
+    [MemberData(nameof(SlowerGreyReaderCases))]
+    public Task Encode_GreyAtASlowerEffort_DecodesThroughEachReaderWithinTheScaledBound(string reader, string pixelType, float distance, string effort)
+        => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance, Enum.Parse<JxlEffort>(effort)));
 
     // Every pixel type that the lossless encoder takes encodes lossily: the 8-bit orders, the packed
     // types (16-bit integers), halves and the signed types (floats of their scaled values), with and
@@ -61,18 +63,27 @@ public class JxlLossyDepthEncoderTests
 
     // SHA-256 of this encoder's output for grey, 16-bit and float input with no profile, beside the 8-bit
     // pins of JxlLossyEncoderTests and the alpha pins of JxlLossyAlphaEncoderTests: any change to lossy
-    // Fastest output must update these on purpose. The test image is built with exact arithmetic, and the
-    // sRGB path uses no C runtime maths, so every leg gives the same file. A recognised profile's output is
-    // not pinned: its curves use Math.Pow.
+    // Fastest output must update these on purpose. The Thorough rows pin the grey encodes that
+    // Encode_GreyAtASlowerEffort_DecodesThroughEachReaderWithinTheScaledBound checks (#318 story 5), beside
+    // the 8-bit Thorough pins of JxlLossyThoroughEncoderTests. The test image is built with exact
+    // arithmetic, and the sRGB path uses no C runtime maths, so every leg gives the same file. A recognised
+    // profile's output is not pinned: its curves use Math.Pow.
     [Theory]
-    [InlineData(nameof(L8), "E11F06866DE27C6524B6F7F84A992058C4C44814734A360779C1F915E62B7F4B")]
-    [InlineData(nameof(Rgb48), "3B17B8175F5452883955891CACACA92D03A1825804D159BD565538AA24E351EE")]
-    [InlineData(nameof(RgbaVector), "AC360A23EF0260C3C845530962AE29724791E3180BEE817DA798A5D0C165F08F")]
-    public void Encode_LossyDepth_IsByteIdenticalToItsPin(string pixelType, string expectedSha256)
+    [InlineData(nameof(L8), nameof(JxlEffort.Fastest), 1.0f, "E11F06866DE27C6524B6F7F84A992058C4C44814734A360779C1F915E62B7F4B")]
+    [InlineData(nameof(Rgb48), nameof(JxlEffort.Fastest), 1.0f, "3B17B8175F5452883955891CACACA92D03A1825804D159BD565538AA24E351EE")]
+    [InlineData(nameof(RgbaVector), nameof(JxlEffort.Fastest), 1.0f, "AC360A23EF0260C3C845530962AE29724791E3180BEE817DA798A5D0C165F08F")]
+    [InlineData(nameof(L8), nameof(JxlEffort.Thorough), 1.0f, "0E44FD7E86BBC896427F6F310838AE12344AADDD57B91B6C7D58961E8CBDB7A0")]
+    [InlineData(nameof(L8), nameof(JxlEffort.Thorough), 4.0f, "792C246F2B0AAD15B942E057BAB2CB00F8B6A53A70ECD832DDB6F6F9CC8A0D01")]
+    [InlineData(nameof(L16), nameof(JxlEffort.Thorough), 1.0f, "8B090D75EF5E79522C4E769669687FD9815E72E6B038990E75BFC0B005EE7DA8")]
+    [InlineData(nameof(L16), nameof(JxlEffort.Thorough), 4.0f, "A435C1B22DCC4CA5B840D91D01A1C6DCF715191FA066B15F44D703501ED9711A")]
+    public void Encode_LossyDepth_IsByteIdenticalToItsPin(string pixelType, string effort, float distance, string expectedSha256)
     {
-        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeTestImage(1.0f));
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeTestImage(distance, Enum.Parse<JxlEffort>(effort)));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        // Logged in full, so that a change to the output on purpose can regenerate the rows.
+        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData(nameof({pixelType}), nameof(JxlEffort.{effort}), {distance:0.0#}f, \"{actual}\")]");
+        Assert.Equal(expectedSha256, actual);
     }
 
     // A grey image is written with the grey sRGB encoding, and its depth is the one E1's rules choose: the
@@ -129,6 +140,8 @@ public class JxlLossyDepthEncoderTests
     [InlineData(4.0f, nameof(JxlEffort.Fastest))]
     [InlineData(1.0f, nameof(JxlEffort.Default))]
     [InlineData(4.0f, nameof(JxlEffort.Default))]
+    [InlineData(1.0f, nameof(JxlEffort.Thorough))]
+    [InlineData(4.0f, nameof(JxlEffort.Thorough))]
     public void Encode_Grey_GivesTheFrameOfTheSameGreyAsRgb(float distance, string effort)
     {
         using Image<L8> grey = CreateImage<L8>();
@@ -283,16 +296,19 @@ public class JxlLossyDepthEncoderTests
         return data;
     }
 
-    private static TheoryData<string, string, float> CreateDefaultGreyReaderCases()
+    private static TheoryData<string, string, float, string> CreateSlowerGreyReaderCases()
     {
-        TheoryData<string, string, float> data = new();
-        foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
+        TheoryData<string, string, float, string> data = new();
+        foreach (string effort in new[] { nameof(JxlEffort.Default), nameof(JxlEffort.Thorough) })
         {
-            foreach (string pixelType in new[] { nameof(L8), nameof(L16) })
+            foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
             {
-                foreach (float distance in new[] { 1.0f, 4.0f })
+                foreach (string pixelType in new[] { nameof(L8), nameof(L16) })
                 {
-                    data.Add(reader.ToString(), pixelType, distance);
+                    foreach (float distance in new[] { 1.0f, 4.0f })
+                    {
+                        data.Add(reader.ToString(), pixelType, distance, effort);
+                    }
                 }
             }
         }
@@ -351,14 +367,14 @@ public class JxlLossyDepthEncoderTests
         }
     }
 
-    // Encodes the test image as the pixel type at the distance.
-    private sealed record EncodeTestImage(float Distance) : IJxlPixelTypeCall<byte[]>
+    // Encodes the test image as the pixel type at the distance and effort.
+    private sealed record EncodeTestImage(float Distance, JxlEffort Effort) : IJxlPixelTypeCall<byte[]>
     {
         public byte[] Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>
         {
             using Image<TPixel> image = CreateImage<TPixel>();
-            return JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(this.Distance));
+            return JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = this.Effort });
         }
     }
 

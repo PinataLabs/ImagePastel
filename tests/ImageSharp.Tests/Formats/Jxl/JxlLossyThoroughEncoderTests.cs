@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
@@ -180,14 +179,15 @@ public class JxlLossyThoroughEncoderTests
 
     // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
     // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
-    // once. With AFV (E5c) and the CfL pre-pass (E5e), and before DCT4X8 and DCT8X4 (E5b), Bike had 5, 17
-    // and 23 such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 5).
-    // Encode_Bike_ChoosesLibjxlsSquirrelStrategyForEachBlock checks the whole map against libjxl's.
+    // once. The counts of such first blocks (DCT16X16, DCT32X32) are recorded as measured after E5b
+    // (DCT4X8 and DCT8X4), on the map Encode_Bike_ChoosesLibjxlsSquirrelStrategyForEachBlock checks against
+    // libjxl's: 4 + 1, 14 + 3 and 17 + 7 at d1, d2 and d4. Before E5b, with AFV (E5c) and the CfL pre-pass
+    // (E5e), they were 4 + 1, 14 + 3 and 18 + 5.
     [Theory]
-    [InlineData(1.0f)]
-    [InlineData(2.0f)]
-    [InlineData(4.0f)]
-    public void Encode_Bike_MergesSquaresOffTheirAlignedGrid(float distance)
+    [InlineData(1.0f, 4, 1)]
+    [InlineData(2.0f, 14, 3)]
+    [InlineData(4.0f, 17, 7)]
+    public void Encode_Bike_MergesSquaresOffTheirAlignedGrid(float distance, int expectedOff16, int expectedOff32)
     {
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
 
@@ -213,6 +213,7 @@ public class JxlLossyThoroughEncoderTests
 
         TestContext.Current.TestOutputHelper?.WriteLine($"bike d{distance}: {off16} DCT16X16 and {off32} DCT32X32 off their grid; map {Convert.ToHexString(SHA256.HashData(strategies))} [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
         Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
+        Assert.Equal((expectedOff16, expectedOff32), (off16, off32));
     }
 
     // E5's whole search, through the decoder's parse: the strategy of every block of Bike (73x57 blocks) is
@@ -511,18 +512,7 @@ public class JxlLossyThoroughEncoderTests
     }
 
     // A calibration image as its PNG stores it, as cjxl reads it: RGB, or RGBA for bike_alpha.
-    private static byte[] EncodeCalibrationImage(JxlCalibrationRow row)
-    {
-        JxlEncoder encoder = Lossy((float)row.Distance);
-        if (Image.Identify(row.Image.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
-        {
-            using Image<Rgba32> rgba = Image.Load<Rgba32>(row.Image.FullPath);
-            return JxlEncoderRoundTrip.Encode(rgba, encoder);
-        }
-
-        using Image<Rgb24> rgb = Image.Load<Rgb24>(row.Image.FullPath);
-        return JxlEncoderRoundTrip.Encode(rgb, encoder);
-    }
+    private static byte[] EncodeCalibrationImage(JxlCalibrationRow row) => row.Image.Encode(Lossy((float)row.Distance));
 
     private static TheoryData<string, double> CreateCalibrationCases()
     {
