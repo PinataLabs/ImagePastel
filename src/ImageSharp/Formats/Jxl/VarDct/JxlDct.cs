@@ -6,7 +6,7 @@
 // (the generic transpose) and lib/jxl/dec_transforms-inl.h (ReinterpretingDCT, IDCT2TopBlock, and the
 // cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs), and
 // lib/jxl/enc_transforms-inl.h (ReinterpretingIDCT, DCT2TopBlock, and the cases of TransformFromPixels
-// and DCFromLowestFrequencies but DCT4X8, DCT8X4 and AFV).
+// and DCFromLowestFrequencies but AFV).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -192,15 +192,15 @@ internal static partial class JxlDct
 
     /// <summary>
     /// Transforms the pixels of a block into its coefficients, as the encoder's <c>TransformFromPixels</c>
-    /// does: the inverse of <see cref="TransformToPixels"/>. Every strategy but DCT4X8, DCT8X4 and AFV,
-    /// which come with lossy Thorough (E5).
+    /// does: the inverse of <see cref="TransformToPixels"/>. Every strategy but AFV, which comes with lossy
+    /// Thorough (E5c).
     /// </summary>
     /// <param name="strategy">The strategy.</param>
     /// <param name="pixels">The first pixel of the block.</param>
     /// <param name="pixelsStride">The distance between pixel rows.</param>
     /// <param name="coefficients">The coefficients, 64 per 8x8 block the strategy covers, in its layout.</param>
     /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
-    /// <exception cref="NotSupportedException">The strategy is DCT4X8, DCT8X4 or AFV.</exception>
+    /// <exception cref="NotSupportedException">The strategy is AFV.</exception>
     public static void TransformFromPixels(JxlAcStrategyType strategy, ReadOnlySpan<float> pixels, int pixelsStride, Span<float> coefficients, Span<float> scratch)
     {
         switch (strategy)
@@ -237,8 +237,48 @@ internal static partial class JxlDct
                 Dct2TopBlock(2, coefficients, BlockDim, coefficients);
                 break;
 
-            case JxlAcStrategyType.Dct4X8:
             case JxlAcStrategyType.Dct8X4:
+            {
+                // Two 8-row, 4-column DCTs side by side; ComputeScaledDCT<8, 4> gives each transposed, 4
+                // rows of 8, stored in alternate rows of the block.
+                Span<float> block = stackalloc float[4 * 8];
+                for (int x = 0; x < 2; x++)
+                {
+                    ComputeScaledDct(8, 4, pixels.Slice(x * 4), pixelsStride, block, scratch);
+                    for (int iy = 0; iy < 4; iy++)
+                    {
+                        for (int ix = 0; ix < 8; ix++)
+                        {
+                            // Store transposed.
+                            coefficients[((x + (iy * 2)) * 8) + ix] = block[(iy * 8) + ix];
+                        }
+                    }
+                }
+
+                HalfBlockDcsFromPixels(coefficients);
+                break;
+            }
+
+            case JxlAcStrategyType.Dct4X8:
+            {
+                // Two 4-row, 8-column DCTs one above the other, stored in alternate rows of the block.
+                Span<float> block = stackalloc float[4 * 8];
+                for (int y = 0; y < 2; y++)
+                {
+                    ComputeScaledDct(4, 8, pixels.Slice(y * 4 * pixelsStride), pixelsStride, block, scratch);
+                    for (int iy = 0; iy < 4; iy++)
+                    {
+                        for (int ix = 0; ix < 8; ix++)
+                        {
+                            coefficients[((y + (iy * 2)) * 8) + ix] = block[(iy * 8) + ix];
+                        }
+                    }
+                }
+
+                HalfBlockDcsFromPixels(coefficients);
+                break;
+            }
+
             case JxlAcStrategyType.Afv0:
             case JxlAcStrategyType.Afv1:
             case JxlAcStrategyType.Afv2:
@@ -405,6 +445,16 @@ internal static partial class JxlDct
         dcs[1] = block00 + block01 - block10 - block11;
         dcs[2] = block00 - block01 + block10 - block11;
         dcs[3] = block00 - block01 - block10 + block11;
+    }
+
+    // The encoder's DC of DCT4X8 and DCT8X4: coefficients 0 and 8 hold the two halves' DCs, and become
+    // their sum and difference, halved.
+    private static void HalfBlockDcsFromPixels(Span<float> coefficients)
+    {
+        float block0 = coefficients[0];
+        float block1 = coefficients[8];
+        coefficients[0] = (block0 + block1) * 0.5f;
+        coefficients[8] = (block0 - block1) * 0.5f;
     }
 
     // The encoder's mirror of SubBlockDcs: coefficients 0, 1, 8 and 9 hold the four sub-blocks' DCs, and

@@ -10,8 +10,9 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// The encoder's forward transforms of the AC strategies that the Default (Hare) search chooses, and the
-/// DC each block gives the DC image: each inverts the decoder's transform, and each gives libjxl's values.
+/// The encoder's forward transforms of the AC strategies that the Default (Hare) and Thorough (Squirrel)
+/// searches choose, and the DC each block gives the DC image: each inverts the decoder's transform, and
+/// each gives libjxl's values.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlForwardDctTests
@@ -34,9 +35,18 @@ public class JxlForwardDctTests
         (int)JxlAcStrategyType.Dct32X64,
     };
 
+    // The 8x8 kinds that libjxl's search tries only below Hare (enc_ac_strategy.cc kTransforms8x8, tier
+    // limit 4) and whose forward transforms are ported: DCT4X8 and DCT8X4.
+    public static TheoryData<int> SquirrelOnly8x8Strategies => new()
+    {
+        (int)JxlAcStrategyType.Dct4X8,
+        (int)JxlAcStrategyType.Dct8X4,
+    };
+
     // The decoder's inverse of the forward transform gives the block back. Values are in [-0.5, 0.5).
     [Theory]
     [MemberData(nameof(HareStrategies))]
+    [MemberData(nameof(SquirrelOnly8x8Strategies))]
     public void TransformToPixels_OfTransformFromPixels_GivesTheBlockBack(int rawStrategy)
     {
         JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
@@ -70,6 +80,8 @@ public class JxlForwardDctTests
     [InlineData((int)JxlAcStrategyType.Dct64X64, "9F851DFE6D81A344665177F90C16BDFA31C3B6DC443DADEEB0A6D5CD425CA3D4", 0.0017419431824237108f)]
     [InlineData((int)JxlAcStrategyType.Dct64X32, "59CA516FC8F13A6B920C9F1AE20AF48B494E69F993047B8EB962D0428FE1A63D", -0.004918401129543781f)]
     [InlineData((int)JxlAcStrategyType.Dct32X64, "61931CD8CDBD06625CC9BF525BFABFE6BD189AC803C770A6B8F58BA2044515D1", -0.006262142211198807f)]
+    [InlineData((int)JxlAcStrategyType.Dct4X8, "27985D2030D8DA9E9C48D0C5BF501769A90F108FBCF0C5C55E35CF87343475F9", -0.00014410167932510376f)]
+    [InlineData((int)JxlAcStrategyType.Dct8X4, "EB351496BBE96D2C5F358C55BD30EA8244157EFE9F0E1D4355173C2851708B08", -0.04865458607673645f)]
     public void TransformFromPixels_MatchesLibjxlBitForBit(int rawStrategy, string sha256, float coefficient1)
     {
         JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
@@ -132,6 +144,8 @@ public class JxlForwardDctTests
     [InlineData((int)JxlAcStrategyType.Dct64X64, "F43C230F39C1BA924380AEDD5C93B3AC7C4FC0B830332987660315163EF209BE")]
     [InlineData((int)JxlAcStrategyType.Dct64X32, "0B8CCB33CD8DD30B2A7CC30225073A3A6744D179870D23B338921CE95B882385")]
     [InlineData((int)JxlAcStrategyType.Dct32X64, "8381AA5DE67E536EFDFAE8EEE650D880F1A0575BA498D915A3E3D524646DC36B")]
+    [InlineData((int)JxlAcStrategyType.Dct4X8, "D4915D9A4D90C0F9A31E50CE101CB5E8E769A98C181F8BC7FABE7D1051557C3B")]
+    [InlineData((int)JxlAcStrategyType.Dct8X4, "0720EB36DE2A0496C36C6F6B96B3B70BB6295CB1C5DDCFD168D4FBA9A2C7C943")]
     public void DcFromLowestFrequencies_MatchesLibjxlBitForBit(int rawStrategy, string sha256)
     {
         JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
@@ -148,10 +162,8 @@ public class JxlForwardDctTests
         Assert.Equal(sha256, Sha256(dc));
     }
 
-    // The 8x8 kinds that libjxl's search tries only below Hare come with lossy Thorough.
+    // AFV, which libjxl's search tries only below Hare, comes with E5c.
     [Theory]
-    [InlineData((int)JxlAcStrategyType.Dct4X8)]
-    [InlineData((int)JxlAcStrategyType.Dct8X4)]
     [InlineData((int)JxlAcStrategyType.Afv0)]
     [InlineData((int)JxlAcStrategyType.Afv3)]
     public void TransformFromPixels_OfAThoroughOnlyStrategy_ThrowsNamingE5(int rawStrategy)

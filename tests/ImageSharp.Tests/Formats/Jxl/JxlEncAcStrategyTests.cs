@@ -73,7 +73,9 @@ public class JxlEncAcStrategyTests
     // One block of each kind with each 8x8 strategy (row 0, blocks 0 to 5), another entropy multiplier and a
     // non-default chroma-from-luma pair (X 0.1, B 0.9), and the multi-block paths that E4h's merges reach:
     // the maximum of two quant values (DCT16X8, DCT8X16), the 16th-power mean through FastPowf (DCT16X16,
-    // DCT32X32) and the X channel's extra weight. At d1.
+    // DCT32X32) and the X channel's extra weight. Then DCT4X8 (12) and DCT8X4 (13), which Thorough's 8x8
+    // level tries (E5b), on the same six blocks, and once with their own multiplier (0.859... / 0.8) and the
+    // other chroma-from-luma pair. At d1.
     [Theory]
     [InlineData(0, 0, 0, 1f, false, 0x439DF154u, 0x439DF154u)]
     [InlineData(3, 0, 0, 1f, false, 0x43DF5B1Bu, 0x43DF5B1Bu)]
@@ -105,6 +107,20 @@ public class JxlEncAcStrategyTests
     [InlineData(7, 24, 8, 1f, false, 0x449B43EBu, 0x449B43ECu)]
     [InlineData(4, 40, 16, 1f, false, 0x45A09F77u, 0x45A09F74u)]
     [InlineData(5, 0, 0, 1f, false, 0x46BD8AB7u, 0x46BD8ACDu)]
+    [InlineData(12, 0, 0, 1f, false, 0x43BFAA4Eu, 0x43BFAA4Fu)]
+    [InlineData(13, 0, 0, 1f, false, 0x43B075BBu, 0x43B075BBu)]
+    [InlineData(12, 8, 0, 1f, false, 0x436DB541u, 0x436DB541u)]
+    [InlineData(13, 8, 0, 1f, false, 0x43449598u, 0x43449598u)]
+    [InlineData(12, 16, 0, 1f, false, 0x4537C0F3u, 0x4537C0F3u)]
+    [InlineData(13, 16, 0, 1f, false, 0x4537DC82u, 0x4537DC81u)]
+    [InlineData(12, 24, 0, 1f, false, 0x445B4AFBu, 0x445B4AFBu)]
+    [InlineData(13, 24, 0, 1f, false, 0x43B8F310u, 0x43B8F310u)]
+    [InlineData(12, 32, 0, 1f, false, 0x446572BBu, 0x446572BCu)]
+    [InlineData(13, 32, 0, 1f, false, 0x445D7817u, 0x445D7816u)]
+    [InlineData(12, 40, 0, 1f, false, 0x443609B9u, 0x443609B9u)]
+    [InlineData(13, 40, 0, 1f, false, 0x440ED09Bu, 0x440ED09Bu)]
+    [InlineData(12, 24, 8, 1.07414544f, true, 0x4423CC8Bu, 0x4423CC8Bu)]
+    [InlineData(13, 24, 8, 1.07414544f, true, 0x4410278Fu, 0x4410278Fu)]
     public void EstimateEntropy_OnFixedBlocks_MatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
     {
         using FixedConfig fixedConfig = CreateFixedConfig(1.0f);
