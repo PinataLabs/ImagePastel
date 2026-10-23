@@ -1,11 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/extras/enc/jxl.cc (the metadata boxes of EncodeImageJXL) and lib/jxl/base/exif.h (IsExif).
+// lib/extras/enc/jxl.cc (the metadata boxes of EncodeImageJXL); IsExif is in JxlExif.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using System;
-using System.Buffers.Binary;
 using SixLabors.ImageSharp.Metadata;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -60,7 +58,7 @@ internal sealed class JxlMetadataBoxes
         // bytes come from ExifWriter, which starts them with a TIFF header; a profile parsed from bytes that
         // are not Exif has no values and gives no bytes.
         byte[] exif = metadata.ExifProfile?.ToByteArray();
-        if (exif is not null && !IsExif(exif))
+        if (exif is not null && !JxlExif.IsExif(exif, out _))
         {
             exif = null;
         }
@@ -84,19 +82,6 @@ internal sealed class JxlMetadataBoxes
         }
 
         return new JxlMetadataBoxes(exif, xmp);
-    }
-
-    // IsExif in lib/jxl/base/exif.h: at least 12 bytes, starting with a little- or big-endian TIFF header.
-    private static bool IsExif(ReadOnlySpan<byte> exif)
-    {
-        // not enough bytes for a valid exif blob
-        if (exif.Length < 12)
-        {
-            return false;
-        }
-
-        uint header = BinaryPrimitives.ReadUInt32LittleEndian(exif);
-        return header is 0x2A004D4D or 0x002A4949;
     }
 
     private static void CheckBoxSize(long size, string kind)
