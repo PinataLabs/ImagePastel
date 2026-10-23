@@ -52,11 +52,22 @@ public class JxlLossyThoroughEncoderTests
         JxlLossyAlphaEncoderTests.AssertVisibleColourWithinInterimBound(image, decoded, label);
     }
 
+    // The strategies Squirrel's search chooses so far: Hare's, and AFV0 to AFV3 at the 8x8 level (E5c).
+    // E5b adds DCT4X8 and DCT8X4, and E5d the non-aligned merges' DCT16X16 and DCT32X32 (already in it).
+    // Default's tracer test keeps Hare's set.
+    internal static readonly JxlAcStrategyType[] SquirrelStrategies =
+    {
+        JxlAcStrategyType.Dct, JxlAcStrategyType.Identity, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Dct4X4,
+        JxlAcStrategyType.Afv0, JxlAcStrategyType.Afv1, JxlAcStrategyType.Afv2, JxlAcStrategyType.Afv3,
+        JxlAcStrategyType.Dct16X8, JxlAcStrategyType.Dct8X16, JxlAcStrategyType.Dct16X16,
+        JxlAcStrategyType.Dct32X16, JxlAcStrategyType.Dct16X32, JxlAcStrategyType.Dct32X32,
+        JxlAcStrategyType.Dct64X32, JxlAcStrategyType.Dct32X64, JxlAcStrategyType.Dct64X64,
+    };
+
     // libjxl's choices at Squirrel, read back through the decoder's parse: XYB VarDCT, Gaborish above d0.5,
-    // near-lossless DC in every LF group, and every block covered once by a strategy of Hare's set. The
-    // qm scale checks are a temporary departure that E5f flips: the X quantisation scale from the distance
-    // alone and a B scale of 2. The EPF sharpness is E5h's search. The Hare set itself grows with E5b
-    // (DCT4X8, DCT8X4) and E5c (AFV).
+    // near-lossless DC in every LF group, and every block covered once by a strategy of Squirrel's set so
+    // far. The qm scale checks are a temporary departure that E5f flips: the X quantisation scale from the
+    // distance alone and a B scale of 2. The EPF sharpness is E5h's search.
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -80,14 +91,14 @@ public class JxlLossyThoroughEncoderTests
         Assert.Equal(JxlFrameFlags.None, header.Flags);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // Every block is covered once by one of Hare's strategies (no DCT4X8, DCT8X4 or AFV until E5b and
-        // E5c), and the tracer still merges into larger blocks.
+        // Every block is covered once by one of Squirrel's strategies so far (no DCT4X8 or DCT8X4 until
+        // E5b), and the search still merges into larger blocks.
         byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
         TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} d{distance}: [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
         foreach (byte b in strategies)
         {
             JxlAcStrategyType strategy = (JxlAcStrategyType)(b >> 1);
-            Assert.True(Array.IndexOf(JxlLossyDefaultEncoderTests.HareStrategies, strategy) >= 0, $"{strategy} is not in Hare's search");
+            Assert.True(Array.IndexOf(SquirrelStrategies, strategy) >= 0, $"{strategy} is not in Squirrel's search so far");
         }
 
         Assert.Contains(strategies, b => JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksX * JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksY > 1);
@@ -141,10 +152,29 @@ public class JxlLossyThoroughEncoderTests
         AssertSearched(histogram, distance, $"{imageName} d{distance}");
     }
 
+    // E5c: from Wombat down the 8x8 level tries AFV0 to AFV3, and Bike at d1 keeps some of them through the
+    // merges. Read back through the decoder's parse; the histogram (raw strategy: blocks covered) is logged.
+    // At E5c, before DCT4X8 and DCT8X4 (E5b) compete for the same blocks, it was 0:1578 1:37 2:255 4:152
+    // 5:304 6:138 7:130 10:128 11:224 14:44 15:40 16:37 17:38 18:768 19:128 20:160 (Default's is the same
+    // without the AFV kinds 14 to 17, and with 100 more DCT8, 10 more IDENTITY, 47 more DCT2X2 and 2 more
+    // DCT8X16 blocks).
+    [Fact]
+    public void Encode_BikeAtD1_ChoosesAfvBlocks()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+
+        byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"bike d1: [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
+        Assert.Contains(strategies, b => (JxlAcStrategyType)(b >> 1) is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3);
+    }
+
     // E5a's record: while every temporary departure was in place, Squirrel ran Hare's VarDCT choices, so an
     // image with no alpha was the same file at Thorough as at Default; with alpha it was not, as the alpha
-    // tree is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48).
-    // E5h's dynamic EPF sharpness broke the equality without alpha on purpose: every row here has EPF.
+    // tree is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). E5c
+    // (AFV at the 8x8 level) broke the equality for the flower and Bike; E5h's dynamic EPF sharpness broke
+    // it for the gradient too (every row here has EPF).
     [Theory]
     [InlineData("flower-384x244", "", 1.0f, false)]
     [InlineData("bike-582x453", "", 1.0f, false)]
@@ -164,18 +194,18 @@ public class JxlLossyThoroughEncoderTests
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). From E5h the rows with EPF differ from the Default pins.
+    // (e5a-handoff.md says how). Since E5h (dynamic EPF) no row equals its Default pin.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "88E6145ED0606797E70C0BEC85B59FF73562B4A68A4171AC5BA6F731082CDEB5")]
-    [InlineData("flower-384x244", "", 1.0f, "C86B8AA29ED8983E4054AA18C912DA02566A23B8883C57BBE0D2C08ED6802D2A")]
-    [InlineData("flower-384x244", "", 2.0f, "259C6E3219C6202C55F892E5B4A337563C75CF1D76427C9EDAC9EC4A4974DA4B")]
-    [InlineData("flower-384x244", "", 4.0f, "A12A57BA61F8447AE4D799034C9E3115220545CFE8E3A67D8244E8D083F14D02")]
+    [InlineData("flower-384x244", "", 0.5f, "25948546CC332E02E03CC592ABD42DC86D46DBBDDB42D49307E895C17B8FAE5B")]
+    [InlineData("flower-384x244", "", 1.0f, "0EBA90E2EB02BA0B8CAF4A4D807B6925757EC4AA69923FED3809F81CA4DEA7F0")]
+    [InlineData("flower-384x244", "", 2.0f, "072E7CA476D1707E868329A17D11702E8C5FC9EAEE45E8B8347DEEB51746CAD7")]
+    [InlineData("flower-384x244", "", 4.0f, "893778064F6AA34DC28A51F0E7F1649C15C44E5C440E48967EE685850DD62C93")]
     [InlineData("flower-17x23", "", 1.0f, "FED88E8EE80F72986918E3BCCE5C1618AE86A3920766A671783EF90E525707EA")]
     [InlineData("dot-1x1", "", 1.0f, "A84E239F194B63933E2CF99F9088EB8661BE9E5BC3F0CD2DD4CB4F49E967B500")]
-    [InlineData("bike-582x453", "", 1.0f, "9934FB423CC82EF2B93FD38A17276B79216C948A1B1C020F7A191CE2E27F34AC")]
+    [InlineData("bike-582x453", "", 1.0f, "ECC0244CFF526F120410FDAED8E8FC11B4F2E7B01CC2E03A35A79181F90C2A79")]
     [InlineData("gradient-2049x9", "", 2.0f, "2809346538E74C6E37171A5E31DFD88AC08EECDA28B914D55508996D2C83871C")]
-    [InlineData("flower-256x244", "soft", 1.0f, "20B2EF639264D6C0D44EF3FD57D91E9C61B57DCED37B416C4DF461A3930D2529")]
-    [InlineData("bike-582x453", "hard", 1.0f, "D64D4130B34CD16311FEA6CEDECCE2EE9FCC92A6D764009854666CFD12CD38A2")]
+    [InlineData("flower-256x244", "soft", 1.0f, "F234D6A9190EF93CC5C3D0D904EEF88613871573DA4762A50A56FC5BA5DF5DC7")]
+    [InlineData("bike-582x453", "hard", 1.0f, "1953CBEB4282B1CCA9B01B2CAE5E546A411AC36C995A1C91D11205D0021541EF")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));
