@@ -321,9 +321,11 @@ public class JxlLossyCalibrationTests
 
     // #318's user story 2: on the photo set Thorough is no larger than Default at the same distance, or, where
     // it is larger, cjxl -e 7 is larger than cjxl -e 5 by as much (to 1 % of Default's size), because the
-    // Squirrel stages spend those bytes on quality. That is so at bike d1 and d4 and calliphora d1, d2 and d4,
-    // and bike_alpha d1, where both encoders gain 0.15 to 2.3 points; e.g. bike d4: ours 18,473 against 17,859
-    // bytes (1.034x; cjxl 1.035x) for 70.12 against 68.97. Both sizes and scores are logged.
+    // Squirrel stages spend those bytes as libjxl's do. That is so at bike d1 and d4, calliphora d1, d2 and
+    // d4, and bike_alpha d1. At bike d4, calliphora d4 and bike_alpha d1 both encoders gain 1.15 to 2.3
+    // points (bike d4: ours 18,473 against 17,859 bytes, 1.034x where cjxl's is 1.035x, for 70.12 against
+    // 68.97); at bike d1 and calliphora d1 and d2 both spend 0.1 to 0.5 % more for 0.01 to 0.17 points
+    // less. Both sizes and scores are logged.
     [Theory]
     [InlineData("bike", 1.0)]
     [InlineData("bike", 2.0)]
