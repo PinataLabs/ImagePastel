@@ -27,7 +27,7 @@ internal static class JxlExif
     {
         if (exif.Length < 12)
         {
-            return; // not enough bytes for a valid exif blob
+            return; // Not enough bytes for a valid Exif blob.
         }
 
         bool bigEndian;
@@ -42,7 +42,7 @@ internal static class JxlExif
         }
         else
         {
-            return; // not a valid tiff header
+            return; // Not a valid TIFF header.
         }
 
         long t = 4;
@@ -102,22 +102,20 @@ internal static class JxlExif
         bigEndian = false;
         if (exif.Length < 12)
         {
-            return false; // not enough bytes for a valid exif blob
+            return false; // Not enough bytes for a valid Exif blob.
         }
 
         uint header = BinaryPrimitives.ReadUInt32LittleEndian(exif);
         if (header == 0x2A004D4D)
         {
             bigEndian = true;
-            return true;
         }
-        else if (header == 0x002A4949)
+        else if (header != 0x002A4949)
         {
-            bigEndian = false;
-            return true;
+            return false; // Not a valid TIFF header.
         }
 
-        return false; // not a valid tiff header
+        return true;
     }
 
     /// <summary>
