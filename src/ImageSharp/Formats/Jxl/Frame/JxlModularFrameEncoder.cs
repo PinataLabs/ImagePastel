@@ -67,9 +67,6 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         (1 * 7) + 2, (2 * 7) + 1, (2 * 7) + 2, (2 * 7) + 3, (4 * 7) + 4, (4 * 7) + 5, (0 * 7) + 2, (0 * 7) + 1, (0 * 7) + 3,
     };
 
-    // The VarDCT DC channels in the order libjxl quantises them: Y first, which X and B are predicted from.
-    private static readonly int[] YxbOrder = { 1, 0, 2 };
-
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlSpeedTier speedTier;
@@ -160,6 +157,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // stream 0's options here. Only a stream compressed on its own (streaming mode, raw quant tables)
         // reads them, which this port never does; EncodeGlobalInfo makes its own.
     }
+
+    /// <summary>
+    /// Gets the VarDCT channels (0 X, 1 Y, 2 B) in the order libjxl's encoder quantises them, for the DC and
+    /// for <c>AdjustQuantBlockAC</c>: Y first, which X and B are predicted from.
+    /// </summary>
+    internal static int[] YxbOrder { get; } = { 1, 0, 2 };
 
     /// <summary>Gets the number of AC metadata entries (varblocks) of each LF group of a VarDCT frame.</summary>
     public int[] AcMetadataSize { get; } = Array.Empty<int>();

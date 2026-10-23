@@ -130,6 +130,14 @@ internal sealed class JxlPassesEncoderState : IDisposable
     /// <summary>Gets the AC histograms.</summary>
     public JxlEntropyEncodingData Codes { get; } = new();
 
+    /// <summary>
+    /// Returns the multiplier of channel <paramref name="c"/>'s quantisation weights: <see cref="XQmMultiplier"/>
+    /// for X, 1 for Y and <see cref="BQmMultiplier"/> for B.
+    /// </summary>
+    /// <param name="c">The channel: 0 X, 1 Y, 2 B.</param>
+    /// <returns>The multiplier.</returns>
+    public float QmMultiplier(int c) => c == 0 ? this.XQmMultiplier : c == 1 ? 1.0f : this.BQmMultiplier;
+
     /// <summary>Returns the index of block (<paramref name="bx"/>, <paramref name="by"/>) in the block images.</summary>
     /// <param name="bx">The block column.</param>
     /// <param name="by">The block row.</param>

@@ -145,7 +145,7 @@ internal static class JxlEncGroup
                         thres[1] = 0.62f;
                         thres[2] = 0.62f;
                         thres[3] = 0.62f;
-                        QuantizeBlockAc(quantizer, c, c == 0 ? encState.XQmMultiplier : encState.BQmMultiplier, acs.Strategy, xblocks, yblocks, thres, coeffsIn.AsSpan(c * size, size), quantAc, quantized.AsSpan(c * size, size));
+                        QuantizeBlockAc(quantizer, c, encState.QmMultiplier(c), acs.Strategy, xblocks, yblocks, thres, coeffsIn.AsSpan(c * size, size), quantAc, quantized.AsSpan(c * size, size));
                         JxlDct.DcFromLowestFrequencies(acs.Strategy, coeffsIn.AsSpan(c * size, size), dc[c].AsSpan(blockIndex), dcStride, scratch);
                     }
 
@@ -447,11 +447,9 @@ internal static class JxlEncGroup
             int maxQuant = 0;
             int quantOrig = quant;
             Span<float> thres = stackalloc float[4];
-            for (int i = 0; i < 3; i++)
+            foreach (int c in JxlModularFrameEncoder.YxbOrder)
             {
-                // libjxl's order: Y, then X, then B.
-                int c = i == 0 ? 1 : i == 1 ? 0 : 2;
-                float qmMultiplier = c == 0 ? encState.XQmMultiplier : c == 1 ? 1.0f : encState.BQmMultiplier;
+                float qmMultiplier = encState.QmMultiplier(c);
                 thres[0] = 0.58f;
                 thres[1] = 0.64f;
                 thres[2] = 0.64f;
