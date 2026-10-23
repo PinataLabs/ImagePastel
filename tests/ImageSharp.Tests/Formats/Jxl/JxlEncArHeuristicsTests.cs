@@ -98,7 +98,7 @@ public class JxlEncArHeuristicsTests
     [InlineData(4.51f, new byte[] { 0, 4 })]
     [InlineData(25.0f, new byte[] { 0, 4 })]
     public void EpfSteps_ByDistance_AreLibjxls(float distance, byte[] expected)
-        => Assert.Equal(expected, JxlEncHeuristics.EpfSteps(distance));
+        => Assert.Equal(expected, JxlEncHeuristics.EpfSteps(distance).Values);
 
     // Fine errors (U() * 100) seldom tie; coarse ones (eighths from 0 to 7/8) tie often, so they exercise
     // the kFavorNoSmoothing scale, the strict < of the step loop (ties keep the first step) and the
@@ -126,22 +126,22 @@ public class JxlEncArHeuristicsTests
             }
         }
 
-        byte[] steps = JxlEncHeuristics.EpfSteps(distance);
+        JxlEncHeuristics.EpfStepSet steps = JxlEncHeuristics.EpfSteps(distance);
         byte[] sharpness = new byte[xs * ys];
-        Array.Fill(sharpness, steps[^1]);
+        Array.Fill(sharpness, steps.Values[^1]);
 
         JxlEncHeuristics.EpfContextHistogram histogram = JxlEncHeuristics.ChooseEpfSharpnessFirstPass(steps, errorImages, sharpness, xs, ys);
         Assert.Equal(expectedFirstPass, Digits(sharpness));
 
         float[] mul = JxlEncHeuristics.EpfMultipliers(steps, MathF.Min(5.0f, distance), histogram);
-        Assert.Equal(ExpectedMultipliers(steps, expectedC3), mul);
+        Assert.Equal(ExpectedMultipliers(steps.Values, expectedC3), mul);
 
         JxlEncHeuristics.ChooseEpfSharpnessSecondPass(steps, errorImages, mul, sharpness, xs, ys);
         Assert.Equal(expectedFinal, Digits(sharpness));
 
         // The whole search from the same errors, as ComputeArHeuristics runs it.
         byte[] again = new byte[xs * ys];
-        JxlEncHeuristics.ChooseEpfSharpness(distance, errorImages, again, xs, ys);
+        JxlEncHeuristics.ChooseEpfSharpness(distance, steps, errorImages, again, xs, ys);
         Assert.True(expectedFinal == Digits(again), name);
     }
 

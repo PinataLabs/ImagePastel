@@ -6,8 +6,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -30,22 +28,13 @@ internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
     public JxlEffort Effort { get; set; } = JxlEffort.Default;
 
     /// <summary>
-    /// Gets or sets a value indicating whether a lossy frame keeps every coefficient order natural. For
-    /// tests only; see <see cref="IJxlEncoderOptions.NaturalCoeffOrders"/>.
+    /// Gets or sets the encoder's hooks for tests, or <see langword="null"/> for none. For tests only; see
+    /// <see cref="JxlEncoderTestHooks"/>.
     /// </summary>
-    internal bool NaturalCoeffOrders { get; set; }
+    internal JxlEncoderTestHooks TestHooks { get; set; }
 
     /// <inheritdoc/>
-    bool IJxlEncoderOptions.NaturalCoeffOrders => this.NaturalCoeffOrders;
-
-    /// <summary>
-    /// Gets or sets a callback for tests that a lossy frame runs once its EPF sharpness is set; see
-    /// <see cref="IJxlEncoderOptions.ArHeuristicsProbe"/>.
-    /// </summary>
-    internal Action<JxlFrameHeader, JxlPassesEncoderState> ArHeuristicsProbe { get; set; }
-
-    /// <inheritdoc/>
-    Action<JxlFrameHeader, JxlPassesEncoderState> IJxlEncoderOptions.ArHeuristicsProbe => this.ArHeuristicsProbe;
+    JxlEncoderTestHooks IJxlEncoderOptions.TestHooks => this.TestHooks;
 
     /// <inheritdoc/>
     public void Encode<TPixel>(Image<TPixel> image, Stream stream)

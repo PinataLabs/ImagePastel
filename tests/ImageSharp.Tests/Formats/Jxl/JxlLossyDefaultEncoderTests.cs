@@ -448,7 +448,7 @@ public class JxlLossyDefaultEncoderTests
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
 
         byte[] custom = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
-        byte[] natural = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = 1.0f, Effort = JxlEffort.Default, NaturalCoeffOrders = true });
+        byte[] natural = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = 1.0f, Effort = JxlEffort.Default, TestHooks = new() { NaturalCoeffOrders = true } });
 
         Assert.NotEqual(natural, custom);
         JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);

@@ -46,9 +46,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // Whether the image is CMYK: it has a Black extra channel and its embedded ICC profile is CMYK.
     private bool isCmyk;
 
-    // Whether the frames skip their colour-transform stages (DecodeToPlanes, for tests).
-    private bool skipColorTransform;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlDecoderCore"/> class with the default options.
     /// </summary>
@@ -172,7 +169,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M, this.isCmyk);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
-            List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+            List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, skipColorTransform: false, cancellationToken);
 
             // JxlDecoderGetFrameHeader and JxlDecoderGetFrameName: the duration is 0 unless the image is
             // animated, as the frame header only stores it then. libjxl hands the name over as raw
@@ -212,8 +209,8 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <summary>
     /// Decodes the image into float planes, without clamping, for the conformance tests. With
     /// <paramref name="skipColorTransform"/>, the frames skip their colour-transform stages
-    /// (<see cref="JxlFrameDecoder.SkipColorTransform"/>), so an XYB image comes out as its opsin planes, for
-    /// the tests of the encoder's reconstruction of its frame.
+    /// (<see cref="JxlFrameDecoder.SkipColorTransform"/>), so an XYB-encoded image comes out as its opsin
+    /// planes, for the tests of the encoder's reconstruction of its frame.
     /// </summary>
     /// <param name="stream">The stream.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -221,7 +218,6 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <returns>The decoded planes. The caller disposes them.</returns>
     public JxlDecodedImage DecodeToPlanes(Stream stream, CancellationToken cancellationToken, bool skipColorTransform = false)
     {
-        this.skipColorTransform = skipColorTransform;
         using BufferedReadStream bufferedStream = new(this.Configuration, stream);
         byte[] data = this.ReadCodestream(bufferedStream, cancellationToken);
         int frameOffset = this.ReadHeaders(data, cancellationToken);
@@ -233,7 +229,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
-            this.DecodeFrames(data, frameOffset, sink, cancellationToken);
+            this.DecodeFrames(data, frameOffset, sink, skipColorTransform, cancellationToken);
             return planesSink.Image;
         }
         catch
@@ -251,10 +247,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // MaxFrames has no libjxl counterpart. As in the GIF decoder, the loop stops once that many frames
     // are displayed, so a value of 0 never matches and every frame is decoded. The frames after the
     // last one decoded are not read at all.
-    private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, CancellationToken cancellationToken)
+    private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, bool skipColorTransform, CancellationToken cancellationToken)
     {
         using JxlReferenceFrames references = new();
-        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references) { SkipColorTransform = this.skipColorTransform };
+        JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references) { SkipColorTransform = skipColorTransform };
         List<JxlFrameHeader> displayed = new();
 
         // The preview frame comes first. libjxl skips it when the preview is not wanted, as here: this

@@ -34,7 +34,6 @@ internal sealed class JxlPassesEncoderState : IDisposable
         this.FrameDim = frameDim;
         this.SpeedTier = speedTier;
         this.Distance = distance;
-        this.Allocator = allocator;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
         this.YSizeBlocks = (int)frameDim.YSizeBlocks;
         this.Quantizer = new JxlQuantizer(this.Matrices);
@@ -62,9 +61,6 @@ internal sealed class JxlPassesEncoderState : IDisposable
 
     /// <summary>Gets the frame dimensions.</summary>
     public JxlFrameDimensions FrameDim { get; }
-
-    /// <summary>Gets the allocator of the frame's images.</summary>
-    public MemoryAllocator Allocator { get; }
 
     /// <summary>Gets the speed tier, libjxl's <c>cparams.speed_tier</c>.</summary>
     public JxlSpeedTier SpeedTier { get; }
@@ -151,7 +147,7 @@ internal sealed class JxlPassesEncoderState : IDisposable
 
     /// <summary>
     /// Gets or sets a value indicating whether every coefficient order stays natural rather than customised (for
-    /// tests; see <see cref="IJxlEncoderOptions.NaturalCoeffOrders"/>).
+    /// tests; see <see cref="JxlEncoderTestHooks.NaturalCoeffOrders"/>).
     /// </summary>
     public bool NaturalCoeffOrders { get; set; }
 

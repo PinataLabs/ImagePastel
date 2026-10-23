@@ -139,13 +139,16 @@ public class JxlEncReconstructTests
         {
             Distance = distance,
             Effort = effort,
-            ArHeuristicsProbe = (frameHeader, encState) =>
+            TestHooks = new()
             {
-                setSharpness?.Invoke(encState);
-                result.FrameHeader = frameHeader;
-                result.XSize = (int)encState.FrameDim.XSize;
-                result.YSize = (int)encState.FrameDim.YSize;
-                result.Planes = JxlEncReconstruct.ReconstructImage(frameHeader, encState, Configuration.Default.MemoryAllocator);
+                ArHeuristicsProbe = (frameHeader, encState) =>
+                {
+                    setSharpness?.Invoke(encState);
+                    result.FrameHeader = frameHeader;
+                    result.XSize = (int)encState.FrameDim.XSize;
+                    result.YSize = (int)encState.FrameDim.YSize;
+                    result.Planes = JxlEncReconstruct.ReconstructImage(frameHeader, encState, Configuration.Default.MemoryAllocator);
+                },
             },
         };
 

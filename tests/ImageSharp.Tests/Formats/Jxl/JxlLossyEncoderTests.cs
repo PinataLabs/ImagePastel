@@ -308,7 +308,7 @@ public class JxlLossyEncoderTests
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest };
 
     // The same encode with every coefficient order natural, as E3a wrote it.
-    private static JxlEncoder LossyNaturalOrder(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest, NaturalCoeffOrders = true };
+    private static JxlEncoder LossyNaturalOrder(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest, TestHooks = new() { NaturalCoeffOrders = true } };
 
     // A size case: "flower-WxH" (a crop of the flower photo), "bike-582x453" (the Bike photo, odd in both
     // sides), "calliphora-378x349" (the partial Calliphora photo), "dot-1x1" or "gradient-WxH" (the

@@ -86,10 +86,10 @@ internal static class JxlEncHeuristics
         // every tier and nothing runs here.
 
         // Departure (ADR 0001): from Squirrel down libjxl also finds patches and dots
-        // (FindBestPatchDictionary) and subtracts them from the opsin; the PRD leaves them out. Measured
-        // with cjxl v0.12.0 -e 7, --patches=0 against --patches=1 on the calibration images: only text
-        // changes, 1.18x the size and 0.34 (d1), 1.49 (d2) and 1.18 (d4) lower in SSIMULACRA2, within the
-        // comparer's slack; line_art and the photos are byte-identical.
+        // (FindBestPatchDictionary) and subtracts them from the opsin; docs/jxl/spec.md ("Out of scope")
+        // leaves them out. Measured with cjxl v0.12.0 -e 7, --patches=0 against --patches=1 on the
+        // calibration images: only text changes, 1.18x the size and 0.34 (d1), 1.49 (d2) and 1.18 (d4)
+        // lower in SSIMULACRA2, within the comparer's slack; line_art and the photos are byte-identical.
         float quantDc = InitialQuantDc(encState.Distance);
 
         // Compute an initial estimate of the quantization field. Call InitialQuantField only in Hare mode or
@@ -223,9 +223,9 @@ internal static class JxlEncHeuristics
 
         int xsizeBlocks = encState.XSizeBlocks;
         int ysizeBlocks = encState.YSizeBlocks;
-        byte[] epfSteps = EpfSteps(encState.Distance);
+        EpfStepSet epfSteps = EpfSteps(encState.Distance);
         float[][] errorImages = new float[NumEpfVals][];
-        foreach (byte val in epfSteps)
+        foreach (byte val in epfSteps.Values)
         {
             Array.Fill(encState.EpfSharpness, val);
             Buffer2D<float>[] decoded = JxlEncReconstruct.ReconstructImage(frameHeader, encState, allocator);
@@ -248,7 +248,7 @@ internal static class JxlEncHeuristics
             }
         }
 
-        ChooseEpfSharpness(encState.Distance, errorImages, encState.EpfSharpness, xsizeBlocks, ysizeBlocks);
+        ChooseEpfSharpness(encState.Distance, epfSteps, errorImages, encState.EpfSharpness, xsizeBlocks, ysizeBlocks);
     }
 
     /// <summary>
@@ -301,9 +301,9 @@ internal static class JxlEncHeuristics
 
     /// <summary>Returns the EPF sharpness values the search tries at a distance: {0, 4} above 4.5, else {0, 2, 7}.</summary>
     /// <param name="distance">The distance.</param>
-    /// <returns>The steps, in the order they are tried.</returns>
-    public static byte[] EpfSteps(float distance)
-        => distance > 4.5f ? new byte[] { 0, 4 } : new byte[] { 0, 2, 7 };
+    /// <returns>The steps, in the order they are tried, with their lookup table.</returns>
+    public static EpfStepSet EpfSteps(float distance)
+        => new(distance > 4.5f ? new byte[] { 0, 4 } : new byte[] { 0, 2, 7 });
 
     /// <summary>
     /// Chooses each block's EPF sharpness from the error of each step, as the end of libjxl's
@@ -311,14 +311,14 @@ internal static class JxlEncHeuristics
     /// second pass.
     /// </summary>
     /// <param name="distance">The distance.</param>
+    /// <param name="epfSteps">The steps of the distance (<see cref="EpfSteps"/>).</param>
     /// <param name="errorImages">The error of each block, row-major, indexed by step value; only the steps' entries are read.</param>
     /// <param name="sharpness">The sharpness of each block, row-major, which receives the choice.</param>
     /// <param name="xsizeBlocks">The width in blocks.</param>
     /// <param name="ysizeBlocks">The height in blocks.</param>
-    public static void ChooseEpfSharpness(float distance, float[][] errorImages, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
+    public static void ChooseEpfSharpness(float distance, EpfStepSet epfSteps, float[][] errorImages, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
     {
         float clampedButteraugli = MathF.Min(5.0f, distance);
-        byte[] epfSteps = EpfSteps(distance);
         EpfContextHistogram histogram = ChooseEpfSharpnessFirstPass(epfSteps, errorImages, sharpness, xsizeBlocks, ysizeBlocks);
         float[] mul = EpfMultipliers(epfSteps, clampedButteraugli, histogram);
         ChooseEpfSharpnessSecondPass(epfSteps, errorImages, mul, sharpness, xsizeBlocks, ysizeBlocks);
@@ -335,9 +335,9 @@ internal static class JxlEncHeuristics
     /// <param name="xsizeBlocks">The width in blocks.</param>
     /// <param name="ysizeBlocks">The height in blocks.</param>
     /// <returns>The context histogram.</returns>
-    public static EpfContextHistogram ChooseEpfSharpnessFirstPass(byte[] epfSteps, float[][] errorImages, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
+    public static EpfContextHistogram ChooseEpfSharpnessFirstPass(EpfStepSet epfSteps, float[][] errorImages, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
     {
-        int[] epfStepsLut = EpfStepsLut(epfSteps);
+        int[] epfStepsLut = epfSteps.Lut;
         EpfContextHistogram histogram = new();
         for (int by = 0; by < ysizeBlocks; by++)
         {
@@ -352,7 +352,7 @@ internal static class JxlEncHeuristics
                 byte leftVal = bx > 0 ? sharpness[i - 1] : (byte)0;
                 float topError = errorImages[topVal][i];
                 float leftError = errorImages[leftVal][i];
-                foreach (byte val in epfSteps)
+                foreach (byte val in epfSteps.Values)
                 {
                     float error = errorImages[val][i];
                     if (val == 0)
@@ -397,18 +397,18 @@ internal static class JxlEncHeuristics
     /// <param name="clampedButteraugli">The distance, at most 5.</param>
     /// <param name="histogram">The first pass's context histogram.</param>
     /// <returns>The 27 multipliers; those of contexts the steps do not reach are 0.</returns>
-    public static float[] EpfMultipliers(byte[] epfSteps, float clampedButteraugli, EpfContextHistogram histogram)
+    public static float[] EpfMultipliers(EpfStepSet epfSteps, float clampedButteraugli, EpfContextHistogram histogram)
     {
-        int[] epfStepsLut = EpfStepsLut(epfSteps);
+        int[] epfStepsLut = epfSteps.Lut;
 
         // std::pow of two floats is the float pow.
         float c3 = MathF.Max(C3Clamp, MathF.Pow(C3Base, clampedButteraugli));
         float[] mul = new float[3 * 3 * 3];
-        foreach (byte topVal in epfSteps)
+        foreach (byte topVal in epfSteps.Values)
         {
-            foreach (byte leftVal in epfSteps)
+            foreach (byte leftVal in epfSteps.Values)
             {
-                foreach (byte val in epfSteps)
+                foreach (byte val in epfSteps.Values)
                 {
                     int context = (epfStepsLut[topVal] * 3) + epfStepsLut[leftVal];
                     int mulix = epfStepsLut[val] + (3 * context);
@@ -439,9 +439,9 @@ internal static class JxlEncHeuristics
     /// <param name="sharpness">The first pass's sharpness of each block, which receives the choice.</param>
     /// <param name="xsizeBlocks">The width in blocks.</param>
     /// <param name="ysizeBlocks">The height in blocks.</param>
-    public static void ChooseEpfSharpnessSecondPass(byte[] epfSteps, float[][] errorImages, float[] mul, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
+    public static void ChooseEpfSharpnessSecondPass(EpfStepSet epfSteps, float[][] errorImages, float[] mul, byte[] sharpness, int xsizeBlocks, int ysizeBlocks)
     {
-        int[] epfStepsLut = EpfStepsLut(epfSteps);
+        int[] epfStepsLut = epfSteps.Lut;
         for (int by = 0; by < ysizeBlocks; by++)
         {
             int row = by * xsizeBlocks;
@@ -454,7 +454,7 @@ internal static class JxlEncHeuristics
                 byte topVal = by > 0 ? sharpness[prevRow + bx] : (byte)0;
                 byte leftVal = bx > 0 ? sharpness[i - 1] : (byte)0;
                 int context = (epfStepsLut[topVal] * 3) + epfStepsLut[leftVal];
-                foreach (byte val in epfSteps)
+                foreach (byte val in epfSteps.Values)
                 {
                     int mulix = epfStepsLut[val] + (3 * context);
                     float error = errorImages[val][i] * mul[mulix];
@@ -470,16 +470,29 @@ internal static class JxlEncHeuristics
         }
     }
 
-    // libjxl's epf_steps_lut: the index of each step value, 0 for the others.
-    private static int[] EpfStepsLut(byte[] epfSteps)
+    /// <summary>
+    /// The EPF sharpness values the search tries (libjxl's <c>epf_steps</c>), in the order they are tried,
+    /// and libjxl's <c>epf_steps_lut</c> for them, built once per frame.
+    /// </summary>
+    internal sealed class EpfStepSet
     {
-        int[] lut = new int[NumEpfVals];
-        for (int i = 0; i < epfSteps.Length; i++)
+        /// <summary>Initializes a new instance of the <see cref="EpfStepSet"/> class.</summary>
+        /// <param name="values">The steps, in the order they are tried.</param>
+        public EpfStepSet(byte[] values)
         {
-            lut[epfSteps[i]] = i;
+            this.Values = values;
+            this.Lut = new int[NumEpfVals];
+            for (int i = 0; i < values.Length; i++)
+            {
+                this.Lut[values[i]] = i;
+            }
         }
 
-        return lut;
+        /// <summary>Gets the steps, in the order they are tried.</summary>
+        public byte[] Values { get; }
+
+        /// <summary>Gets the index of each step value in <see cref="Values"/>, 0 for the other values.</summary>
+        public int[] Lut { get; }
     }
 
     /// <summary>

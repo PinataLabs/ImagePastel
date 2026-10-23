@@ -403,19 +403,23 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// quantised-DC buckets (<see cref="JxlPassesEncoderState.QuantDc"/>), as the decoder will.
     /// </summary>
     /// <param name="frameHeader">The frame header.</param>
-    /// <param name="dc">The X, Y and B DC of each block of the frame, rows <paramref name="stride"/> apart.</param>
-    /// <param name="stride">The width of the frame in blocks.</param>
+    /// <param name="dc">The X, Y and B DC of each block of the frame, row by row.</param>
     /// <param name="r">The LF group's rectangle, in blocks.</param>
     /// <param name="groupIndex">The LF group.</param>
-    /// <param name="nlDc">Whether to quantise the DC near-losslessly, which libjxl does below Falcon.</param>
     /// <param name="encState">
-    /// The encoder state: its quantiser sets the DC steps, its chroma-from-luma DC factors predict X and B,
+    /// The encoder state: its width in blocks is the stride of <paramref name="dc"/>, its speed tier sets
+    /// near-lossless DC, its quantiser sets the DC steps, its chroma-from-luma DC factors predict X and B,
     /// and its block context map gives the DC buckets.
     /// </param>
-    public void AddVarDctDc(JxlFrameHeader frameHeader, float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, JxlPassesEncoderState encState)
+    public void AddVarDctDc(JxlFrameHeader frameHeader, float[][] dc, JxlRect r, long groupIndex, JxlPassesEncoderState encState)
     {
         JxlQuantizer quantizer = encState.Quantizer;
         JxlColorCorrelation colorCorrelation = encState.Cmap;
+        int stride = encState.XSizeBlocks;
+
+        // libjxl's caller passes nl_dc as speed_tier < kFalcon: the DC is quantised near-losslessly below
+        // Falcon.
+        bool nlDc = encState.SpeedTier < JxlSpeedTier.Falcon;
         this.ExtraDcPrecision[groupIndex] = nlDc ? 1 : 0;
         float mul = 1 << this.ExtraDcPrecision[groupIndex];
 
@@ -492,8 +496,8 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         }
 
         // The encoder's own reconstruction of the DC and the quantised-DC buckets. The buckets are not read
-        // at effort 7 and faster (the block context map has no DC thresholds there), and the DC only by the
-        // reconstruction of the frame (JxlEncReconstruct).
+        // at effort 7 and faster (the block context map has no DC thresholds there).
+        // As libjxl, this runs at every effort, but only the reconstruction (JxlEncReconstruct) reads the DC copy.
         JxlCompressedDc.DequantDc(r, encState.Dc, encState.QuantDc, image, quantizer.MulDc, 1.0f / mul, colorCorrelation.DcFactors, frameHeader.ChromaSubsampling, encState.BlockCtxMap);
     }
 

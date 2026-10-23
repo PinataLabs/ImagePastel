@@ -51,7 +51,7 @@ internal sealed class JxlFrameDecoder
     }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the frames skip their colour-transform stages, so that an XYB frame
+    /// Gets or sets a value indicating whether the frames skip their colour-transform stages, so that an XYB-encoded frame
     /// reaches the sink as its opsin planes after the loop filters. No libjxl output does this: it is for the
     /// tests that compare the encoder's reconstruction of its frame (<see cref="JxlEncReconstruct"/>) with the
     /// decoded file.
