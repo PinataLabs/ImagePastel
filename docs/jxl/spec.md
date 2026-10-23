@@ -344,6 +344,104 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   - **`MagickImage`:** the Exif values, with the orientation 6; the XMP bytes; the ICC profile for lossless; and `Orientation.RightTop`.
   - **`jxl-oracle`:** `djxl`'s oriented pixels, `jxlinfo`'s boxes and orientation, and cjxl's box layout.
 - **Magick results per leg.** Locally on Windows x64, net10.0, every Magick row of E6 passes: 4 in the round trip, 2 in `JxlEncoderMetadataTests`, 8 in `JxlEncoderOrientationTests` and the level-10 decodes. The round-trip rows skip only where Magick.NET has no JPEG XL delegate, so they run under coverage too. The other legs (Linux, macOS, net11.0) are recorded from the PR's CI run.
+- **netstandard2.1.** No test project targets netstandard2.1, so the Exif and XMP round trip ([#332](https://github.com/PinataLabs/ImageSharp/issues/332)) on that target is checked by a console harness. The harness is a net10.0 program that references the netstandard2.1 Release DLL by `HintPath`. It does these steps:
+  - It stops unless the loaded assembly's `TargetFrameworkAttribute` is `.NETStandard,Version=v2.1`.
+  - It saves a 37 x 23 `Rgba32` image with `SaveAsJxl` at `Distance` 0 and 1. The image has Exif (Software, orientation 6) and XMP.
+  - It checks that the output is a container with `Exif` and `xml ` boxes.
+  - It loads the output with `Image.Load` and checks the Exif Software value, the Exif orientation (reset to 1), the XMP bytes and the oriented size (23 x 37). For `Distance` 0, it also checks that the pixels equal the `AutoOrient` pixels exactly.
+
+  The E6 review fixes ran it on 2026-10-24 and it printed `d0: 351 bytes, OK`, `d1: 439 bytes, OK` and `OK on .NETStandard,Version=v2.1`. To run it again, put the two files below in a folder outside the repository, so that the repository's `Directory.Build.props` does not apply, then run these commands in PowerShell from the repository root:
+
+  ```powershell
+  dotnet build src/ImageSharp -c Release -f netstandard2.1
+  dotnet run --project $env:TEMP\jxl-ns21\jxl-ns21.csproj -c Release "-p:ImagePastelDll=$PWD\artifacts\bin\src\ImageSharp\Release\netstandard2.1\PinataLabs.ImagePastel.dll"
+  ```
+
+  <details><summary><code>jxl-ns21.csproj</code> and <code>Program.cs</code></summary>
+
+  ```xml
+  <Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+      <OutputType>Exe</OutputType>
+      <TargetFramework>net10.0</TargetFramework>
+    </PropertyGroup>
+    <ItemGroup>
+      <Reference Include="PinataLabs.ImagePastel" HintPath="$(ImagePastelDll)" />
+    </ItemGroup>
+  </Project>
+  ```
+
+  ```csharp
+  using System;
+  using System.IO;
+  using System.Linq;
+  using System.Reflection;
+  using System.Runtime.Versioning;
+  using System.Text;
+  using SixLabors.ImageSharp;
+  using SixLabors.ImageSharp.Formats.Jxl;
+  using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+  using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
+  using SixLabors.ImageSharp.PixelFormats;
+  using SixLabors.ImageSharp.Processing;
+
+  string tfm = typeof(Image).Assembly.GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName;
+  Check(tfm == ".NETStandard,Version=v2.1", $"loaded {tfm}");
+  byte[] xmp = Encoding.UTF8.GetBytes("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"/></x:xmpmeta>");
+  foreach (float distance in new[] { 0f, 1f })
+  {
+      using Image<Rgba32> image = new(37, 23);
+      for (int y = 0; y < image.Height; y++)
+      {
+          for (int x = 0; x < image.Width; x++)
+          {
+              image[x, y] = new Rgba32((byte)(x * 7), (byte)(y * 11), (byte)(x + y), 200);
+          }
+      }
+
+      image.Metadata.ExifProfile = new ExifProfile();
+      image.Metadata.ExifProfile.SetValue(ExifTag.Software, "ns21");
+      image.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+      image.Metadata.XmpProfile = new XmpProfile(xmp);
+
+      using MemoryStream stream = new();
+      image.SaveAsJxl(stream, new JxlEncoder { Distance = distance });
+      byte[] encoded = stream.ToArray();
+      string ascii = Encoding.ASCII.GetString(encoded);
+      Check(ascii.Substring(4, 4) == "JXL " && ascii.Contains("Exif") && ascii.Contains("xml "), "container with Exif and xml boxes");
+
+      using Image<Rgba32> decoded = Image.Load<Rgba32>(encoded);
+      Check(decoded.Metadata.ExifProfile.GetValue(ExifTag.Software).Value == "ns21", "Exif Software");
+      Check(decoded.Metadata.ExifProfile.GetValue(ExifTag.Orientation).Value == 1, "Exif orientation reset to 1");
+      Check(decoded.Metadata.XmpProfile.ToByteArray().SequenceEqual(xmp), "XMP bytes");
+      Check(decoded.Width == 23 && decoded.Height == 37, "oriented size");
+      if (distance == 0)
+      {
+          using Image<Rgba32> oriented = image.Clone(c => c.AutoOrient());
+          for (int y = 0; y < oriented.Height; y++)
+          {
+              for (int x = 0; x < oriented.Width; x++)
+              {
+                  Check(oriented[x, y] == decoded[x, y], $"pixel ({x}, {y})");
+              }
+          }
+      }
+
+      Console.WriteLine($"d{distance}: {encoded.Length} bytes, OK");
+  }
+
+  Console.WriteLine($"OK on {tfm}");
+
+  static void Check(bool condition, string what)
+  {
+      if (!condition)
+      {
+          throw new InvalidOperationException($"FAILED: {what}");
+      }
+  }
+  ```
+
+  </details>
 - **Left recorded:**
   - **No cancellation inside the encode.** The token is checked once, at the start, as in the other encoders here. A follow-up issue can add per-group checks, like D14e.
   - **No IPTC, JUMBF or gain-map boxes.** No JPEG XL box carries IPTC-IIM, and ImageSharp 2.x has no profile for JUMBF or gain maps.
