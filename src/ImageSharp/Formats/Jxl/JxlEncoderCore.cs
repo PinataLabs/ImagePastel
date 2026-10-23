@@ -261,16 +261,23 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     {
         JxlEffort.Fastest => JxlSpeedTier.Falcon,
         JxlEffort.Default => JxlSpeedTier.Hare,
-        _ => JxlSpeedTier.Squirrel,
+        JxlEffort.Thorough => JxlSpeedTier.Squirrel,
+        _ => throw new ArgumentOutOfRangeException(nameof(effort), effort, "The effort is not one that JxlEffort defines."),
     };
 
     // Lossless and lossy are ported at every effort. The distance must be in libjxl's range
-    // (JxlEncoderSetFrameDistance).
+    // (JxlEncoderSetFrameDistance), and the effort one that JxlEffort defines: libjxl's
+    // JXL_ENC_FRAME_SETTING_EFFORT rejects an effort outside its range too.
     private void CheckOptions()
     {
         if (!(this.distance >= 0 && this.distance <= MaxDistance))
         {
             JxlThrowHelper.ThrowImageFormatException($"JPEG XL distance {this.distance} is out of range: it has to be in [0.0..25.0].");
+        }
+
+        if (this.effort is < JxlEffort.Fastest or > JxlEffort.Thorough)
+        {
+            JxlThrowHelper.ThrowImageFormatException($"JPEG XL effort {(int)this.effort} is not defined: it has to be Fastest, Default or Thorough.");
         }
     }
 }

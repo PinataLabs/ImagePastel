@@ -149,6 +149,23 @@ public class ImageExtensionsTests
         AssertJxl(file);
     }
 
+    // Distance in [0, 25], as libjxl's JxlEncoderSetFrameDistance, and an Effort that JxlEffort defines.
+    // The options are checked before anything is written.
+    [Theory]
+    [InlineData(-0.01f, JxlEffort.Default)]
+    [InlineData(25.01f, JxlEffort.Default)]
+    [InlineData(float.NaN, JxlEffort.Default)]
+    [InlineData(1.0f, (JxlEffort)3)]
+    [InlineData(0.0f, (JxlEffort)(-1))]
+    public void SaveAsJxl_OptionOutOfRange_ThrowsAndWritesNothing(float distance, JxlEffort effort)
+    {
+        using MemoryStream memoryStream = new();
+        using Image<Rgba32> image = CreateImage();
+
+        Assert.Throws<ImageFormatException>(() => image.SaveAsJxl(memoryStream, new JxlEncoder { Distance = distance, Effort = effort }));
+        Assert.Equal(0, memoryStream.Length);
+    }
+
     private static string OutputPath(string fileName)
         => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(ImageExtensionsTests)), fileName);
 
