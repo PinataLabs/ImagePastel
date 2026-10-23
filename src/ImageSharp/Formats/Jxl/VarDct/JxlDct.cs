@@ -357,16 +357,15 @@ internal static partial class JxlDct
         ComputeScaledIdct(rows, cols, lowest, dc, dcStride, scratch);
     }
 
-    // DCTTotalResampleScale<8 * N, N>.
+    // DCTTotalResampleScale<8 * N, N>, for the block counts of the strategies the encoder chooses (up to
+    // 64x64).
     private static ReadOnlySpan<float> InverseResampleScales(int n) => n switch
     {
         1 => ResampleScales8To1,
         2 => ResampleScales16To2,
         4 => ResampleScales32To4,
         8 => ResampleScales64To8,
-        16 => ResampleScales128To16,
-        32 => ResampleScales256To32,
-        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a block count of a strategy"),
+        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a block count of a strategy the encoder chooses"),
     };
 
     // DCTTotalResampleScale<N, 8 * N>.
