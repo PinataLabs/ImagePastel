@@ -141,6 +141,30 @@ public class JxlEncoderOrientationTests
         Assert.Equal(Height, info.Height);
     }
 
+    // A signed tag whose value fits is re-written as a SHORT when SyncProfiles parses the profile, so the
+    // box holds a valid orientation and the codestream follows it: the two stay in sync, as encode.h asks.
+    // cjxl, which copies the Exif blob unchanged, would leave this file at orientation 1.
+    [Theory]
+    [InlineData("SSHORT", "0800" + "01000000" + "06000000")]
+    [InlineData("SLONG", "0900" + "01000000" + "06000000")]
+    public void SaveAsJxl_SignedExifOrientation_IsWrittenAsAShortAndFollowed(string label, string orientationEntry)
+    {
+        _ = label;
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Width, Height);
+        image.Metadata.ExifProfile = new ExifProfile(CreateExif(orientationEntry));
+
+        byte[] encoded = Save(image, Lossless);
+
+        JxlBox exifBox = JxlBoxList.Read(encoded).Single(b => b.Type == "Exif");
+        uint orientation = 1;
+        JxlExif.InterpretExif(exifBox.Contents[4..], ref orientation);
+        Assert.Equal(6u, orientation);
+
+        IImageInfo info = Image.Identify(encoded);
+        Assert.Equal(Height, info.Width);
+        Assert.Equal(Width, info.Height);
+    }
+
     [Fact]
     public void SaveAsJxl_ExifWithoutOrientation_LeavesOrientation1()
     {
