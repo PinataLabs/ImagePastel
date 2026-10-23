@@ -177,6 +177,38 @@ public class JxlLossyDefaultEncoderTests
         Assert.Equal(1, map.NumDcCtxs);
     }
 
+    // E4e's standing check: a frame of fewer than 1024·d blocks whose quant field is constant keeps the
+    // default block context map (its one bit), so its AC tokens take the contexts of the default map, as
+    // they did before E4e. Through the decoder's parse the quant field is constant and the map is the
+    // default; the frame decodes within the interim bound, which it could not if the tokens' contexts did
+    // not follow the map the file names; and the file is pinned, so a change to those tokens shows. The
+    // image repeats one 8x8 tile of detail that is symmetric about its centre, so the mirrored borders of
+    // the AQ filters see the same pattern and every block gets the same quant (5 at d1 and d2, in 64x64
+    // blocks). A change to Default output on purpose may move these pins as it moves the table's; the
+    // parse checks above must still hold when they are regenerated.
+    [Theory]
+    [InlineData(1.0f, "34882804DEE321C27CBECC8EF0C835FA9FDB5EF58A680D5791E991EFD9CFB661")]
+    [InlineData(2.0f, "B88F6BBF932CFD7639BBCA4311B7CDD3F5232B8E812E18D37170076C6F3B815D")]
+    public void Encode_ConstantQuantField_KeepsTheDefaultBlockContextMapAndItsTokens(float distance, string expectedSha256)
+    {
+        using Image<Rgb24> image = CreateBlockPeriodicImage(128, 128);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(encoded);
+        (int min, int max) = frame.QuantFieldRange();
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: {frame.State.XSizeBlocks}x{frame.State.YSizeBlocks} blocks, quant field {min}..{max}, strategies [{JxlEncAcStrategyTests.CoverageOf(JxlEncAcStrategyTests.StrategiesOf(frame))}]");
+        Assert.Equal(min, max);
+        Assert.True(frame.State.BlockCtxMap.IsDefault);
+
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
+        JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"block-periodic d{distance}, {encoded.Length} bytes");
+
+        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData({distance:0.0#}f, \"{actual}\")]");
+        Assert.Equal(expectedSha256, actual);
+    }
+
     // At Hare libjxl fits the AC chroma-from-luma map of each 64x64 tile by least squares (the fast
     // FindBestMultiplier), read back through the decoder's parse. The flower crop is saturated, so its tiles
     // predict B from Y with non-zero multipliers; its X multipliers all shrink to 0, as cjxl -e 5 -d 1 gives
@@ -473,6 +505,24 @@ public class JxlLossyDefaultEncoderTests
     }
 
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Default };
+
+    // One 8x8 tile of coloured detail, symmetric about its centre, repeated: every 8x8 block of the image is
+    // the same, and so is its mirror image across a block edge.
+    private static Image<Rgb24> CreateBlockPeriodicImage(int width, int height)
+    {
+        Image<Rgb24> image = new(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int u = Math.Min(x & 7, 7 - (x & 7));
+                int v = Math.Min(y & 7, 7 - (y & 7));
+                image[x, y] = new Rgb24((byte)(96 + (u * 24)), (byte)(80 + (v * 28)), (byte)(120 + (((u * v) % 5) * 20)));
+            }
+        }
+
+        return image;
+    }
 
     // The order buckets of the strategies the frame uses, in increasing order.
     private static int[] UsedOrders(JxlDecodedDcGroups frame)
