@@ -19,8 +19,8 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// Lossy encoding at Thorough (libjxl effort 7, <c>kSquirrel</c>), slice E5. E5a is the tracer: each
-/// Squirrel stage that a later ticket ports still runs as at Hare.
+/// Lossy encoding at Thorough (libjxl effort 7, <c>kSquirrel</c>), slice E5: every Squirrel stage but patches
+/// and dots (ADR 0001). The calibration rows are checked in <c>JxlLossyCalibrationTests</c>.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyThoroughEncoderTests
@@ -181,9 +181,8 @@ public class JxlLossyThoroughEncoderTests
     // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
     // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
     // once. With AFV (E5c) and the CfL pre-pass (E5e), and before DCT4X8 and DCT8X4 (E5b), Bike had 5, 17
-    // and 23 such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 5). The harness
-    // has no pre-pass, so this map is no longer its map; ProcessRect_BikeTileAtSquirrel checks the search
-    // itself.
+    // and 23 such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 5).
+    // Encode_Bike_ChoosesLibjxlsSquirrelStrategyForEachBlock checks the whole map against libjxl's.
     [Theory]
     [InlineData(1.0f)]
     [InlineData(2.0f)]
@@ -214,6 +213,74 @@ public class JxlLossyThoroughEncoderTests
 
         TestContext.Current.TestOutputHelper?.WriteLine($"bike d{distance}: {off16} DCT16X16 and {off32} DCT32X32 off their grid; map {Convert.ToHexString(SHA256.HashData(strategies))} [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
         Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
+    }
+
+    // E5's whole search, through the decoder's parse: the strategy of every block of Bike (73x57 blocks) is
+    // the one libjxl gives at kSquirrel, tile by tile in process_tile's order on the same opsin, quant field
+    // and masking image: the CfL pre-pass on DCT8 blocks with the Newton fit, then ProcessRectACS (every 8x8
+    // candidate, the aligned merges, then the off-grid 16x16 and 32x32 merges with libjxl's step of 2). The
+    // harness is e5-notes/e5i-scratch's acs_avx2 "squirrel" mode, libjxl's files unchanged, with no FMA.
+    // SHA-256 of the map, one byte per block (raw strategy << 1 | first block), row by row, and how many
+    // blocks each raw strategy covers. The harness's scalar build gives the same maps at d0.5, d1 and d2;
+    // at d4 one block is AFV3 rather than AFV2 there (its 1-lane sums round otherwise), and the port, whose
+    // sums are AVX2's 8 lanes (ADR 0004), gives the AVX2 map. The default map with no pre-pass is Default's,
+    // in JxlEncAcStrategyTests.Encode_Bike_ChoosesLibjxlsStrategyForEachBlock.
+    [Theory]
+    [InlineData(0.5f, "F55313EE7FBDB58FEA43097C1A53EA1D1DB814E294D10D7627B6251BF53AF19D", "0:1731 1:100 2:385 4:88 5:496 6:62 7:42 10:128 11:136 12:142 13:49 14:20 15:5 16:6 17:3 18:576 19:96 20:96")]
+    [InlineData(1.0f, "B17A872902D56F5ECD9C399230B30043C6268F7922286AD95ADCCE493DD31187", "0:1390 1:35 2:208 4:140 5:320 6:144 7:172 10:128 11:240 12:161 13:75 14:25 15:24 16:21 17:22 18:768 19:128 20:160")]
+    [InlineData(2.0f, "182338F78B4BAC6A2492491BC0FEE9BF6ABB42FDE609F554D47736ADDDCE26EA", "0:994 1:4 2:25 4:232 5:448 6:190 7:250 10:192 11:336 12:133 13:124 14:53 15:46 16:54 17:56 18:768 19:128 20:128")]
+    [InlineData(4.0f, "4AC641961121FACB30708D6687328749B28C7ED7591330AFC82C23070D53C982", "0:404 2:9 4:340 5:608 6:234 7:310 10:312 11:528 12:67 13:74 14:51 15:41 16:67 17:60 18:768 19:128 20:160")]
+    public void Encode_Bike_ChoosesLibjxlsSquirrelStrategyForEachBlock(float distance, string expectedSha256, string expectedCoverage)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        byte[] map = JxlEncAcStrategyTests.StrategiesOf(frame);
+        string coverage = JxlEncAcStrategyTests.CoverageOf(map);
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: {coverage}");
+        Assert.Equal(expectedCoverage, coverage);
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(map)));
+    }
+
+    // Informative, so it logs and does not fail: how often our strategy map is cjxl -e 7's (JXL_TOOLS_DIR)
+    // on the calibration photos, block by block (raw strategy and first block). cjxl dispatches to AVX2 with
+    // FMA (or AVX-512) at run time, so its estimates differ from ours in the last bits, and a block close to
+    // a tie can go the other way; at Squirrel the CfL pre-pass's Newton fit feeds the search too, so a
+    // multiplier that rounds the other way moves a whole tile's choices. Another cjxl version can choose
+    // differently, so the jxl-oracle leg must not depend on it. The photos have no patches at -e 7 (#318: the
+    // files are byte-identical with --patches=0), so cjxl's only frame is the VarDCT image. The harness map
+    // (Encode_Bike_ChoosesLibjxlsSquirrelStrategyForEachBlock) is the check that fails.
+    [Theory]
+    [InlineData("bike-582x453", 1.0f)]
+    [InlineData("bike-582x453", 2.0f)]
+    [InlineData("bike-582x453", 4.0f)]
+    [InlineData("calliphora-378x349", 1.0f)]
+    [InlineData("calliphora-378x349", 2.0f)]
+    [InlineData("calliphora-378x349", 4.0f)]
+    public async Task Encode_Photo_LogsItsAgreementWithCjxlEffort7BlockByBlock(string sizeCase, float distance)
+    {
+        JxlTools.GetToolPath("cjxl");
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyThoroughEncoder");
+        string name = string.Create(CultureInfo.InvariantCulture, $"{sizeCase}_e7_d{distance}");
+        string pngPath = Path.Combine(directory, name + ".png");
+        string cjxlPath = Path.Combine(directory, name + ".jxl");
+        image.SaveAsPng(pngPath);
+        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, pngPath, cjxlPath, "-e", "7", "-d", distance.ToString(CultureInfo.InvariantCulture), "--container=0");
+
+        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+        using JxlDecodedDcGroups theirs = JxlDecodedDcGroups.Decode(await File.ReadAllBytesAsync(cjxlPath, TestContext.Current.CancellationToken));
+
+        byte[] ourMap = JxlEncAcStrategyTests.StrategiesOf(ours);
+        byte[] theirMap = JxlEncAcStrategyTests.StrategiesOf(theirs);
+        int agree = 0;
+        for (int i = 0; i < ourMap.Length; i++)
+        {
+            agree += ourMap[i] == theirMap[i] ? 1 : 0;
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} cjxl -e 7 -d {distance}: ours agree on {agree} of {ourMap.Length} blocks ({100.0 * agree / ourMap.Length:F2}%); cjxl's coverage [{JxlEncAcStrategyTests.CoverageOf(theirMap)}], ours [{JxlEncAcStrategyTests.CoverageOf(ourMap)}]");
     }
 
     // The X and B quantisation scales of each calibration image at Thorough, through the decoder's parse.
