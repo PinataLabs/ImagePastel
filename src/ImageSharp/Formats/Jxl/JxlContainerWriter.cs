@@ -22,14 +22,17 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// </remarks>
 internal static class JxlContainerWriter
 {
+    /// <summary>
+    /// The size of the TIFF-header offset that the <c>Exif</c> box holds in front of the Exif data
+    /// (lib/extras/enc/jxl.cc).
+    /// </summary>
+    public const int ExifOffsetSize = 4;
+
     // kSmallBoxHeaderSize: a 4-byte size, then the type.
     private const int BoxHeaderSize = 8;
 
     // The jxlp box index (WriteJxlpBoxCounter).
     private const int JxlpIndexSize = 4;
-
-    // The 4-byte TIFF-header offset in front of the Exif data (lib/extras/enc/jxl.cc).
-    private const int ExifOffsetSize = 4;
 
     // ftyp_version 0: the standard delivery order (output mode 2, which needs version 1, is not ported).
     private const byte FtypVersion = 0;

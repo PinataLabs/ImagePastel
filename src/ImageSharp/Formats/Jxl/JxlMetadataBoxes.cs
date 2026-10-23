@@ -73,7 +73,7 @@ internal sealed class JxlMetadataBoxes
         // a profile over 2^22 bytes: what this encoder writes, this library's decoder reads.
         if (exif is not null)
         {
-            CheckBoxSize(4L + exif.Length, "Exif");
+            CheckBoxSize((long)JxlContainerWriter.ExifOffsetSize + exif.Length, "Exif");
         }
 
         if (xmp is not null)
