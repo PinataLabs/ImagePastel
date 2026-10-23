@@ -7,12 +7,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
+using Reader = SixLabors.ImageSharp.Tests.Formats.Jxl.JxlEncoderRoundTrip.Reader;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
@@ -126,6 +129,32 @@ public class JxlEncoderLevelTests
         Assert.Equal(0, stream.Length);
     }
 
+    // Every level-10 output decodes. Our decoder gives the pixels of the codestream alone, which is the
+    // output before E6c (no codestream pin moved), and a lossless save gives the source back through every
+    // reader. A lossy save is checked for size through Magick.NET and djxl; the lossy suites check its pixels.
+    [Theory]
+    [InlineData(nameof(Reader.Ours), nameof(L16), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Ours), nameof(Rgba64), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Ours), nameof(Rgba64), 1f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Ours), nameof(L16), 0f, Level10Case.WithExif)]
+    [InlineData(nameof(Reader.Ours), nameof(L8), 0f, Level10Case.Wide)]
+    [InlineData(nameof(Reader.Magick), nameof(L16), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Magick), nameof(Rgba64), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Magick), nameof(Rgba64), 1f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Magick), nameof(L16), 0f, Level10Case.WithExif)]
+    [InlineData(nameof(Reader.Magick), nameof(L8), 0f, Level10Case.Wide)]
+    [InlineData(nameof(Reader.Djxl), nameof(L16), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Djxl), nameof(Rgba64), 0f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Djxl), nameof(Rgba64), 1f, Level10Case.Plain)]
+    [InlineData(nameof(Reader.Djxl), nameof(L16), 0f, Level10Case.WithExif)]
+    [InlineData(nameof(Reader.Djxl), nameof(L8), 0f, Level10Case.Wide)]
+    public Task SaveAsJxl_Level10_Decodes(string reader, string pixelType, float distance, Level10Case level10Case)
+    {
+        Reader parsed = Enum.Parse<Reader>(reader);
+        JxlEncoderRoundTrip.SkipUnlessReaderRuns(parsed);
+        return JxlPixelTypes.Verify(pixelType, new DecodeCase(parsed, distance, level10Case));
+    }
+
     // libjxl's level-10 layout without boxes: the signature, ftyp, jxll holding the level, then the whole
     // codestream in one jxlc box.
     private static void AssertLevel10Container(byte[] encoded)
@@ -167,6 +196,69 @@ public class JxlEncoderLevelTests
 
             public void Dispose()
             {
+            }
+        }
+    }
+
+    /// <summary>What makes a level-10 output in <see cref="SaveAsJxl_Level10_Decodes"/>.</summary>
+    public enum Level10Case
+    {
+        /// <summary>The depth, at 17 × 23, with no metadata.</summary>
+        Plain,
+
+        /// <summary>The depth, at 17 × 23, with an Exif profile.</summary>
+        WithExif,
+
+        /// <summary>A side of 2^18 + 1.</summary>
+        Wide,
+    }
+
+    private sealed record DecodeCase(Reader Reader, float Distance, Level10Case Case) : IJxlPixelTypeCall<Task>
+    {
+        public async Task Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            (int width, int height) = this.Case == Level10Case.Wide ? ((1 << 18) + 1, 1) : (17, 23);
+            using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>("gradient", width, height);
+            if (this.Case == Level10Case.WithExif)
+            {
+                ExifProfile exif = new();
+                exif.SetValue(ExifTag.Software, "E6c");
+                image.Metadata.ExifProfile = exif;
+            }
+
+            byte[] encoded = Save(image, new JxlEncoder { Distance = this.Distance });
+            Assert.Equal(new byte[] { 10 }, JxlBoxList.Read(encoded)[2].Contents);
+            bool lossless = this.Distance == 0;
+            string name = $"{typeof(TPixel).Name}_d{this.Distance}_{this.Case}";
+
+            switch (this.Reader)
+            {
+                case Reader.Ours:
+                {
+                    using Image<TPixel> decoded = Image.Load<TPixel>(encoded);
+                    using Image<TPixel> codestreamOnly = Image.Load<TPixel>(JxlBoxList.Codestream(encoded));
+                    ImageComparer.Exact.VerifySimilarity(codestreamOnly, decoded);
+                    if (lossless)
+                    {
+                        ImageComparer.Exact.VerifySimilarity(image, decoded);
+                    }
+
+                    break;
+                }
+
+                case Reader.Magick when lossless:
+                    JxlEncoderRoundTrip.AssertMagickExact(image, encoded);
+                    break;
+                case Reader.Djxl when lossless:
+                    await JxlEncoderRoundTrip.AssertDjxlExactAsync(image, encoded, name, TestContext.Current.CancellationToken);
+                    break;
+                default:
+                {
+                    using Image<TPixel> decoded = await JxlEncoderRoundTrip.DecodeAsync<TPixel>(this.Reader, encoded, nameof(JxlEncoderLevelTests), name, highBitDepth: true);
+                    Assert.Equal(image.Size(), decoded.Size());
+                    break;
+                }
             }
         }
     }
