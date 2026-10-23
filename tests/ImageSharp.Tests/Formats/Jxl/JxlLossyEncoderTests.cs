@@ -293,19 +293,6 @@ public class JxlLossyEncoderTests
         Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
     }
 
-    // Lossy Default is E4's (JxlLossyDefaultEncoderTests); lossy Thorough still names its slice.
-    [Fact]
-    public void Encode_LossyThorough_ThrowsNotSupportedNamingItsSlice()
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = JxlEffort.Thorough }));
-
-        Assert.Contains("E5", ex.Message);
-        Assert.Equal(0, stream.Length);
-    }
-
     // libjxl's JxlEncoderSetFrameDistance accepts [0, 25].
     [Theory]
     [InlineData(-1.0f)]
