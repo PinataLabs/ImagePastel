@@ -24,7 +24,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// </summary>
 /// <remarks>
 /// The colour is checked against E3a's interim bound (<see cref="JxlLossyEncoderTests"/>): each channel's
-/// RMSE against the source is at most 20 8-bit steps.
+/// RMSE against the source is at most 20 8-bit steps. The bound stays only where the calibration table has
+/// no row: the flower crops, the 1x1 dot, the gradient strip and the synthetic alpha masks. The table's
+/// images, Bike among them, are checked at Default against cjxl's SSIMULACRA2 by
+/// <see cref="Quality.JxlLossyCalibrationTests"/> (E4i).
 /// </remarks>
 [Trait("Format", "Jxl")]
 public class JxlLossyDefaultEncoderTests
@@ -74,8 +77,8 @@ public class JxlLossyDefaultEncoderTests
         JxlLossyAlphaEncoderTests.AssertVisibleColourWithinInterimBound(image, decoded, label);
     }
 
-    // Odd sizes, one block, and frames of several groups and LF groups (Bike: six groups; the gradient:
-    // nine groups over two LF groups), through each reader.
+    // Odd sizes, one block, and a frame of several groups and LF groups (the gradient: nine groups over two
+    // LF groups), through each reader.
     [Theory]
     [MemberData(nameof(SizeReaderCases))]
     public async Task Encode_Size_RoundTripsWithinTheInterimBound(string reader, string sizeCase)
@@ -549,7 +552,10 @@ public class JxlLossyDefaultEncoderTests
         TheoryData<string, string> cases = new();
         foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
         {
-            foreach (string sizeCase in new[] { "flower-17x23", "dot-1x1", "bike-582x453", "gradient-2049x9" })
+            // Bike (six groups, odd in both sides) is a calibration image: JxlLossyCalibrationTests checks it
+            // at Default through each reader at d1, d2 and d4 against cjxl's SSIMULACRA2, in place of the
+            // interim bound.
+            foreach (string sizeCase in new[] { "flower-17x23", "dot-1x1", "gradient-2049x9" })
             {
                 cases.Add(reader.ToString(), sizeCase);
             }
