@@ -58,6 +58,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         this.CheckOptions();
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Taken before the encode, so that a box over the decoder's cap throws before any work is done.
+        JxlMetadataBoxes boxes = JxlMetadataBoxes.Create(image.Metadata);
+
         bool lossy = this.distance != 0;
         JxlCodecMetadata metadata = CreateMetadata<TPixel>(image, lossy);
 
@@ -82,6 +85,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         writer.ZeroPadToByte();
 
+        // In a container, the codestream splits here into the header's jxlp box and the frame's.
+        int headerSize = (int)(writer.BitsWritten / 8);
+
         if (lossy)
         {
             JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.testHooks, this.memoryAllocator, writer);
@@ -91,7 +97,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
             JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
         }
 
-        stream.Write(writer.GetSpan());
+        JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes);
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding: the image's own colour space,
