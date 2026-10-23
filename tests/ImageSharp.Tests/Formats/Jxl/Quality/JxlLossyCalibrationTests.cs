@@ -39,8 +39,14 @@ public class JxlLossyCalibrationTests
     /// everywhere, plus Gaborish: it scores above cjxl on the photos, at 1.2x to 1.9x cjxl's size
     /// (calliphora d4 1.88x). It fails gradient d4 (margin -0.35) and text d4 (-2.29), where cjxl's
     /// effort 5 gains from its strategy search (E4g, E4h).
+    /// E4c (net10.0, x64): 17 of 18. AdjustQuantBlockAC raises the quant of most blocks (flat X and B
+    /// channels, lone high frequencies), so scores rise and files grow: gradient d4 (margin +1.29) and
+    /// text d4 (+0.41) now pass, and calliphora d4 fails on size alone (2.04x cjxl, margin +36.12). E4b's
+    /// global scale from 0.39 / d should bring the sizes down.
     /// E4d (net10.0, x64): 17 of 18. The fitted chroma-from-luma map lifts text d4 to a margin of +2.85;
     /// gradient d4 still fails (-0.29). The photos keep their margins (bike d1 +7.54, calliphora d4 +34.25).
+    /// E4c + E4d + E4e merged: 17 of 18. Gradient d4 (+1.52) and text d4 (+3.86) pass; calliphora d4 fails
+    /// on size alone (2.04x cjxl, margin +37.25), until E4b's global scale from 0.39 / d.
     /// </remarks>
     private const int DefaultRowsPassing = 17;
 
