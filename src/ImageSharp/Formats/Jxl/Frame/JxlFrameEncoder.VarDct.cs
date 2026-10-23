@@ -50,14 +50,14 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
 /// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
 /// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
-/// <c>FindBestQuantizer</c> still does nothing. The other Squirrel stages are still in their Default form,
-/// each a temporary departure named in its code with the slice that ports it, so an image without alpha
-/// is the same file as at Default: the 8x8 level tries only Default's four strategies (DCT4X8 and DCT8X4
-/// come with E5b, AFV with E5c); the merges are the aligned ones (the non-aligned 16x16 and 32x32 merges
-/// come with E5d); there is no chroma-from-luma pre-pass, and the fit after the search is the fast least
-/// squares (the DCT8 pre-pass and the Newton fit come with E5e); the X and B quantisation scales come from
-/// the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
-/// search, which decodes the frame in the encoder, comes with E5h).
+/// <c>FindBestQuantizer</c> still does nothing. The X and B quantisation scales are raised from the pixel
+/// statistics of the XYB image (<see cref="JxlPixelStatsForChromacityAdjustment"/>), which leaves most photos
+/// at Default's scales. The other Squirrel stages are still in their Default form, each a temporary
+/// departure named in its code with the slice that ports it: the 8x8 level tries only Default's four
+/// strategies (DCT4X8 and DCT8X4 come with E5b, AFV with E5c); the merges are the aligned ones (the
+/// non-aligned 16x16 and 32x32 merges come with E5d); there is no chroma-from-luma pre-pass, and the fit
+/// after the search is the fast least squares (the DCT8 pre-pass and the Newton fit come with E5e); and the
+/// EPF sharpness is 4 in every block (the search, which decodes the frame in the encoder, comes with E5h).
 /// </para>
 /// </content>
 /// <remarks>
@@ -195,7 +195,7 @@ internal static partial class JxlFrameEncoder
             }
 
             PadImageToBlockMultipleInPlace(color, image.Width, image.Height, paddedX, paddedY);
-            ComputeChromacityAdjustments(frameHeader, encState);
+            ComputeChromacityAdjustments(frameHeader, encState, color, new JxlRect(0, 0, paddedX, paddedY));
 
             // ComputeVarDCTEncodingData.
             JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
@@ -371,13 +371,17 @@ internal static partial class JxlFrameEncoder
         }
     }
 
-    // The distance-based chromacity adjustment of libjxl's ComputeChromacityAdjustments. The pixel-based
-    // one runs from Squirrel down; without it, its adjustments are 0, so the B scale is 2.
-    private static void ComputeChromacityAdjustments(JxlFrameHeader frameHeader, JxlPassesEncoderState encState)
+    // libjxl's ComputeChromacityAdjustments for a VarDCT frame (max_error_mode is never set here): the X
+    // scale from the distance, then, from Squirrel down, both scales from the pixel statistics of the
+    // opsin. Above Squirrel the statistics stay 0, so the B scale is 2.
+    //
+    // libjxl passes the colour image after ToXYB, SimplifyInvisible and PadImageToBlockMultipleInPlace,
+    // before Gaborish (which ComputeVarDCTEncodingData applies later), with the rect of the whole padded
+    // image: group_rect is (0, 0, RoundUpToBlockDim(xsize), RoundUpToBlockDim(ysize)) without streaming,
+    // so the replicated padding columns and rows are measured too. That is the opsin and rect here.
+    private static void ComputeChromacityAdjustments(JxlFrameHeader frameHeader, JxlPassesEncoderState encState, Buffer2D<float>[] opsin, JxlRect rect)
     {
-        // Temporary departure (E5a): from Squirrel down libjxl measures how pixelized the X and B channels
-        // are (PixelStatsForChromacityAdjustment, speed_tier <= kSquirrel) and may raise both scales. E5f
-        // ports it; until then its adjustments are 0 at every tier, as above Squirrel.
+        // 1) Distance based approach for chromacity adjustment:
         float[] xQmScaleSteps = { 2.5f, 5.5f, 9.5f };
         frameHeader.XQmScale = 3;
         foreach (float step in xQmScaleSteps)
@@ -389,8 +393,19 @@ internal static partial class JxlFrameEncoder
             }
         }
 
-        // For X take the most severe adjustment: max(x_qm_scale, 2 + 0).
-        frameHeader.BQmScale = 2;
+        // 2) Pixel-based approach for chromacity adjustment: look at the individual pixels and make a guess
+        // how difficult the image would be based on the worst case pixel.
+        JxlPixelStatsForChromacityAdjustment pixelStats = default;
+        if (encState.SpeedTier <= JxlSpeedTier.Squirrel)
+        {
+            pixelStats.Calc(opsin, rect);
+        }
+
+        // For X take the most severe adjustment.
+        frameHeader.XQmScale = Math.Max(frameHeader.XQmScale, (uint)(2 + pixelStats.HowMuchIsXChannelPixelized()));
+
+        // B only adjusted by pixel-based approach.
+        frameHeader.BQmScale = (uint)(2 + pixelStats.HowMuchIsBChannelPixelized());
     }
 
     // libjxl's InitializePassesEncoder for one pass and no DC frame: the X and B multipliers, the

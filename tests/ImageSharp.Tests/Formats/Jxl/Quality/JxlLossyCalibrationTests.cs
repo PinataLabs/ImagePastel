@@ -52,8 +52,15 @@ public class JxlLossyCalibrationTests
     /// 1.11x to 1.17x cjxl's size, which has patches). text d2 fails (-0.99), and line_art fails at every
     /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
+    /// <para>
+    /// E5f (net10.0, x64): 16 of 18. The pixel-statistics scales (cjxl -e 7's on every row) raise B to 5 on
+    /// line_art, X to 4 and B to 3 on text, and X to 5 and B to 4 on bike_alpha; the other rows are
+    /// unchanged. text d2 now passes (+0.81; d1 +2.71, d4 +1.25) and line_art d1 passes (+2.30); line_art
+    /// d2 (-1.52) and d4 (-4.10) still fail, at 1.00x to 1.03x cjxl's size. bike_alpha d1 +3.42, d2 +4.09,
+    /// d4 +4.49.
+    /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 14;
+    private const int ThoroughRowsPassing = 16;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
