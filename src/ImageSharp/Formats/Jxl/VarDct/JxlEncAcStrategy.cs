@@ -58,7 +58,7 @@ internal static class JxlEncAcStrategy
     private static readonly float[] ChannelMul = { (float)Math.Pow(8.2, 8.0), 1.0f, (float)Math.Pow(1.03, 8.0) };
 
     // libjxl's kTransforms8x8: each 8x8 strategy, the slowest speed tier that skips it, and its entropy
-    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat (AFV is a departure; see FindBest8x8Transform).
+    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat.
     private static readonly (JxlAcStrategyType Type, int EncodingSpeedTierMaxLimit, double EntropyMul)[] Transforms8x8 =
     {
         (JxlAcStrategyType.Dct, 9, 0.8),
@@ -370,13 +370,6 @@ internal static class JxlEncAcStrategy
         foreach ((JxlAcStrategyType type, int limit, double txEntropyMul) in Transforms8x8)
         {
             if (limit < (int)encodingSpeedTier)
-            {
-                continue;
-            }
-
-            // Temporary departure (E5a): from Wombat down libjxl also tries AFV0 to AFV3, which E5c adds.
-            // Their forward transform is not ported yet, so no tier tries them.
-            if (type is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3)
             {
                 continue;
             }

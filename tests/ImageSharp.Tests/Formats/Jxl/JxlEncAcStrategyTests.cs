@@ -122,6 +122,42 @@ public class JxlEncAcStrategyTests
     [InlineData(12, 24, 8, 1.07414544f, true, 0x4423CC8Bu, 0x4423CC8Bu)]
     [InlineData(13, 24, 8, 1.07414544f, true, 0x4410278Fu, 0x4410278Fu)]
     public void EstimateEntropy_OnFixedBlocks_MatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
+        => AssertEstimateMatchesLibjxl(rawStrategy, x, y, entropyMul, otherCmap, scalarBits, avx2Bits);
+
+    // AFV0 to AFV3, which the 8x8 level tries from Wombat down (Thorough, slice E5c), on the same six
+    // blocks, and AFV2 with the other multiplier and chroma-from-luma pair. From E4g's harness with these
+    // rows added (e5-notes/e5c-scratch/acs_afv.cc), built with TDM-GCC on Windows; its other rows are
+    // E4g's, bit for bit, in both builds.
+    [Theory]
+    [InlineData(14, 0, 0, 1f, false, 0x43EB9D87u, 0x43EB9D87u)]
+    [InlineData(15, 0, 0, 1f, false, 0x43E380F9u, 0x43E380F9u)]
+    [InlineData(16, 0, 0, 1f, false, 0x43E3E88Du, 0x43E3E88Du)]
+    [InlineData(17, 0, 0, 1f, false, 0x43ED6AA5u, 0x43ED6AA5u)]
+    [InlineData(14, 8, 0, 1f, false, 0x4378C1F0u, 0x4378C1F0u)]
+    [InlineData(15, 8, 0, 1f, false, 0x4386732Du, 0x4386732Du)]
+    [InlineData(16, 8, 0, 1f, false, 0x439B33BBu, 0x439B33BBu)]
+    [InlineData(17, 8, 0, 1f, false, 0x439B33DAu, 0x439B33DAu)]
+    [InlineData(14, 16, 0, 1f, false, 0x4551AE33u, 0x4551AE31u)]
+    [InlineData(15, 16, 0, 1f, false, 0x4551330Du, 0x4551330Cu)]
+    [InlineData(16, 16, 0, 1f, false, 0x454F7E93u, 0x454F7E90u)]
+    [InlineData(17, 16, 0, 1f, false, 0x45535735u, 0x45535733u)]
+    [InlineData(14, 24, 0, 1f, false, 0x443A82B0u, 0x443A82B0u)]
+    [InlineData(15, 24, 0, 1f, false, 0x443A82B0u, 0x443A82B0u)]
+    [InlineData(16, 24, 0, 1f, false, 0x443BC703u, 0x443BC703u)]
+    [InlineData(17, 24, 0, 1f, false, 0x443BC703u, 0x443BC703u)]
+    [InlineData(14, 32, 0, 1f, false, 0x449AA35Cu, 0x449AA35Cu)]
+    [InlineData(15, 32, 0, 1f, false, 0x449A2A07u, 0x449A2A07u)]
+    [InlineData(16, 32, 0, 1f, false, 0x44935B03u, 0x44935B03u)]
+    [InlineData(17, 32, 0, 1f, false, 0x4494FE7Cu, 0x4494FE7Cu)]
+    [InlineData(14, 40, 0, 1f, false, 0x4478BD7Fu, 0x4478BD7Fu)]
+    [InlineData(15, 40, 0, 1f, false, 0x44730F3Fu, 0x44730F3Fu)]
+    [InlineData(16, 40, 0, 1f, false, 0x44744B51u, 0x44744B51u)]
+    [InlineData(17, 40, 0, 1f, false, 0x446EDB6Fu, 0x446EDB6Fu)]
+    [InlineData(16, 16, 8, 1.35f, true, 0x447D0BA8u, 0x447D0BA8u)]
+    public void EstimateEntropy_OfAfvOnFixedBlocks_MatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
+        => AssertEstimateMatchesLibjxl(rawStrategy, x, y, entropyMul, otherCmap, scalarBits, avx2Bits);
+
+    private static void AssertEstimateMatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
     {
         using FixedConfig fixedConfig = CreateFixedConfig(1.0f);
         float[] cmapFactors = otherCmap ? new[] { 0.1f, 0.0f, 0.9f } : new[] { 0.0f, 0.0f, 1.0f };

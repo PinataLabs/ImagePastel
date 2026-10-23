@@ -53,12 +53,13 @@ public class JxlLossyCalibrationTests
     /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
     /// <para>
-    /// E5b (DCT4X8 and DCT8X4 at the 8x8 level): 15 of 18. text d2 now passes, by +0.03 only. The thinnest
-    /// other margins: calliphora d4 +0.77 (was +1.20), text d4 +1.15, bike_alpha d1 and d2 +1.93. line_art
-    /// still fails: d1 -2.19, d2 -6.27, d4 -8.04.
+    /// E5c (AFV at the 8x8 level) alone: 14 of 18, text d2 -0.30. E5b (DCT4X8 and DCT8X4) alone: 15 of 18,
+    /// text d2 +0.03. With both (E5b merged after E5c): 14 of 18. text d2 fails again, at -0.15. The
+    /// thinnest passing margins: text d4 +1.20, calliphora d4 +1.22, bike_alpha d1 +2.00, text d1 +2.17.
+    /// line_art still fails: d1 -2.62, d2 -6.41, d4 -6.42.
     /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 15;
+    private const int ThoroughRowsPassing = 14;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

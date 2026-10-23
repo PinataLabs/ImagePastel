@@ -6,7 +6,7 @@
 // (the generic transpose) and lib/jxl/dec_transforms-inl.h (ReinterpretingDCT, IDCT2TopBlock, and the
 // cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs), and
 // lib/jxl/enc_transforms-inl.h (ReinterpretingIDCT, DCT2TopBlock, and the cases of TransformFromPixels
-// and DCFromLowestFrequencies but AFV).
+// and DCFromLowestFrequencies; the AFV transform is in JxlDct.Afv.cs).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -192,15 +192,13 @@ internal static partial class JxlDct
 
     /// <summary>
     /// Transforms the pixels of a block into its coefficients, as the encoder's <c>TransformFromPixels</c>
-    /// does: the inverse of <see cref="TransformToPixels"/>. Every strategy but AFV, which comes with lossy
-    /// Thorough (E5c).
+    /// does: the inverse of <see cref="TransformToPixels"/>, for every strategy.
     /// </summary>
     /// <param name="strategy">The strategy.</param>
     /// <param name="pixels">The first pixel of the block.</param>
     /// <param name="pixelsStride">The distance between pixel rows.</param>
     /// <param name="coefficients">The coefficients, 64 per 8x8 block the strategy covers, in its layout.</param>
     /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
-    /// <exception cref="NotSupportedException">The strategy is AFV.</exception>
     public static void TransformFromPixels(JxlAcStrategyType strategy, ReadOnlySpan<float> pixels, int pixelsStride, Span<float> coefficients, Span<float> scratch)
     {
         switch (strategy)
@@ -283,7 +281,7 @@ internal static partial class JxlDct
             case JxlAcStrategyType.Afv1:
             case JxlAcStrategyType.Afv2:
             case JxlAcStrategyType.Afv3:
-                JxlThrowHelper.ThrowNotSupportedException($"The encoder's {strategy} transform (libjxl effort 6 and up; slice E5)");
+                AfvTransformFromPixels(strategy - JxlAcStrategyType.Afv0, pixels, pixelsStride, coefficients, scratch);
                 break;
 
             default:

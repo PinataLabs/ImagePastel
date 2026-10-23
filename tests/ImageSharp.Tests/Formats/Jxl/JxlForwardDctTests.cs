@@ -162,17 +162,74 @@ public class JxlForwardDctTests
         Assert.Equal(sha256, Sha256(dc));
     }
 
-    // AFV, which libjxl's search tries only below Hare, comes with E5c.
+    // AFV0 to AFV3, which libjxl's search tries from Wombat down (Thorough, slice E5c): the decoder's
+    // inverse gives the block back. Each puts the AFV corner in another quadrant.
     [Theory]
     [InlineData((int)JxlAcStrategyType.Afv0)]
+    [InlineData((int)JxlAcStrategyType.Afv1)]
+    [InlineData((int)JxlAcStrategyType.Afv2)]
     [InlineData((int)JxlAcStrategyType.Afv3)]
-    public void TransformFromPixels_OfAThoroughOnlyStrategy_ThrowsNamingE5(int rawStrategy)
+    public void TransformToPixels_OfAfvTransformFromPixels_GivesTheBlockBack(int rawStrategy)
     {
-        float[] pixels = new float[64];
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(
-            () => JxlDct.TransformFromPixels((JxlAcStrategyType)rawStrategy, pixels, 8, new float[64], new float[JxlDct.ScratchSize]));
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy(rawStrategy);
+        float[] pixels = LcgBlock(64, (uint)rawStrategy + 1);
+        float[] coefficients = new float[64];
+        float[] scratch = new float[JxlDct.ScratchSize];
 
-        Assert.Contains("E5", ex.Message, StringComparison.Ordinal);
+        JxlDct.TransformFromPixels(acs.Strategy, pixels, 8, coefficients, scratch);
+        float[] back = new float[64];
+        JxlDct.TransformToPixels(acs, coefficients, back, 8, scratch);
+
+        Assert.True(MaxAbsDifference(pixels, back) <= 1e-5, $"max abs error {MaxAbsDifference(pixels, back)}");
+    }
+
+    // libjxl's AFVTransformFromPixels of the LCG block, bit for bit, as the test above it. From a harness of
+    // lib/jxl/enc_transforms-inl.h at ef67fde2 (e5-notes/e5c-scratch/fwd_afv.cc) on Highway's scalar target
+    // with -ffp-contract=off: the AFV corner's 16 sums are mul then add, in the order of the pixels.
+    [Theory]
+    [InlineData((int)JxlAcStrategyType.Afv0, "015EA69E341A5DDFD54A80570782FC19FE6067692FDA78F246FD2A0C0F5DCD0F", -0.02538013458251953f)]
+    [InlineData((int)JxlAcStrategyType.Afv1, "CADCDD8FDC5757E45421733322F5A7CED69FDF1FE6CD5A0659389498B7C14DDF", 0.02108287811279297f)]
+    [InlineData((int)JxlAcStrategyType.Afv2, "2AE95F1F3BC84B9A5E2C60CB03342B7D59C1834AE436B9A71BCF598678126CDC", -0.010546207427978516f)]
+    [InlineData((int)JxlAcStrategyType.Afv3, "DB2F854CA38D36DAACD2998AE47F751089E805DAAA91C5E747005A435C16E95E", 0.06282997131347656f)]
+    public void AfvTransformFromPixels_MatchesLibjxlBitForBit(int rawStrategy, string sha256, float coefficient1)
+    {
+        float[] pixels = LcgBlock(64, (uint)rawStrategy + 1);
+        float[] coefficients = new float[64];
+
+        JxlDct.TransformFromPixels((JxlAcStrategyType)rawStrategy, pixels, 8, coefficients, new float[JxlDct.ScratchSize]);
+
+        Assert.Equal(coefficient1, coefficients[1]);
+        Assert.Equal(sha256, Sha256(coefficients));
+    }
+
+    // The committed k4x4AFVBasisTranspose is libjxl's, value for value: the SHA-256 of its 256 floats, row
+    // by row, little-endian. The harness reads libjxl's table back through AFVDCT4x4 of each unit pixel.
+    [Fact]
+    public void Afv4X4BasisTranspose_IsLibjxlsTable()
+        => Assert.Equal("CF20660F8B563DD6A427D565961B8DD598C55394A8C19F05BC561099E577A43E", Sha256(JxlDct.Afv4X4BasisTranspose.ToArray()));
+
+    // The basis is orthonormal: the forward table is the inverse of the decoder's.
+    [Fact]
+    public void Afv4X4BasisTranspose_IsOrthonormal()
+    {
+        ReadOnlySpan<float> basis = JxlDct.Afv4X4BasisTranspose;
+        double worst = 0;
+        for (int a = 0; a < 16; a++)
+        {
+            for (int b = 0; b < 16; b++)
+            {
+                // Columns a and b of the transpose are patterns a and b.
+                double dot = 0;
+                for (int j = 0; j < 16; j++)
+                {
+                    dot += (double)basis[(j * 16) + a] * basis[(j * 16) + b];
+                }
+
+                worst = Math.Max(worst, Math.Abs(dot - (a == b ? 1.0 : 0.0)));
+            }
+        }
+
+        Assert.True(worst <= 1e-6, $"max deviation {worst}");
     }
 
     // The block of the libjxl harness: an LCG's values with 16 fraction bits, exact in float.
