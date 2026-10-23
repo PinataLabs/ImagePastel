@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
@@ -40,6 +41,16 @@ internal sealed class JxlAcStrategyImage
 
     /// <summary>Sets every block to DCT8, as the encoder's <c>FillDCT8</c> does for the whole image.</summary>
     public void FillDct8() => Array.Fill(this.layers, (byte)(((int)JxlAcStrategyType.Dct << 1) | 1));
+
+    /// <summary>Sets every block of <paramref name="rect"/> to DCT8, as the encoder's <c>FillDCT8(rect)</c> does.</summary>
+    /// <param name="rect">The blocks.</param>
+    public void FillDct8(JxlRect rect)
+    {
+        for (long y = rect.Y0; y < rect.Y0 + rect.YSize; y++)
+        {
+            Array.Fill(this.layers, (byte)(((int)JxlAcStrategyType.Dct << 1) | 1), (int)((y * this.XSize) + rect.X0), (int)rect.XSize);
+        }
+    }
 
     /// <summary>
     /// Sets the strategy whose first block is (<paramref name="x"/>, <paramref name="y"/>) on every
