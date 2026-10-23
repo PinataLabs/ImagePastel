@@ -24,8 +24,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// libjxl sums the entropy, the non-zero count and the loss of <c>EstimateEntropy</c> in vector lanes and
 /// adds the lanes with Highway's <c>SumOfLanes</c>. This port uses AVX2's 8 lanes, as cjxl does on x64:
 /// coefficient <c>i</c> goes to lane <c>i % 8</c>, pixel <c>dx</c> of a block row to lane <c>dx</c>, and
-/// the lanes add up as <see cref="JxlAvx2Lanes.SumOfLanes"/> does. On another CPU libjxl's sums may differ by a few
-/// units in the last place.
+/// the lanes add up as <see cref="JxlAvx2Lanes.SumOfLanes"/> does. On another CPU libjxl's sums may
+/// differ by a few units in the last place.
 /// </para>
 /// <para>
 /// No fused multiply-add (ADR 0004). The unqualified <c>pow(float, float)</c> of the loss and of the
