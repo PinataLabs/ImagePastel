@@ -50,11 +50,23 @@ public class JxlLossyThoroughEncoderTests
         JxlLossyAlphaEncoderTests.AssertVisibleColourWithinInterimBound(image, decoded, label);
     }
 
+    // The strategies Squirrel's search chooses so far: Hare's, and AFV0 to AFV3 at the 8x8 level (E5c).
+    // E5b adds DCT4X8 and DCT8X4, and E5d the non-aligned merges' DCT16X16 and DCT32X32 (already in it).
+    // Default's tracer test keeps Hare's set.
+    internal static readonly JxlAcStrategyType[] SquirrelStrategies =
+    {
+        JxlAcStrategyType.Dct, JxlAcStrategyType.Identity, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Dct4X4,
+        JxlAcStrategyType.Afv0, JxlAcStrategyType.Afv1, JxlAcStrategyType.Afv2, JxlAcStrategyType.Afv3,
+        JxlAcStrategyType.Dct16X8, JxlAcStrategyType.Dct8X16, JxlAcStrategyType.Dct16X16,
+        JxlAcStrategyType.Dct32X16, JxlAcStrategyType.Dct16X32, JxlAcStrategyType.Dct32X32,
+        JxlAcStrategyType.Dct64X32, JxlAcStrategyType.Dct32X64, JxlAcStrategyType.Dct64X64,
+    };
+
     // libjxl's choices at Squirrel, read back through the decoder's parse: XYB VarDCT, Gaborish above d0.5,
-    // near-lossless DC in every LF group, and every block covered once by a strategy of Hare's set. The
-    // remaining checks are the temporary departures, each of which a later ticket flips: the X
+    // near-lossless DC in every LF group, and every block covered once by a strategy of Squirrel's set so
+    // far. The remaining checks are the temporary departures, each of which a later ticket flips: the X
     // quantisation scale from the distance alone and a B scale of 2 (E5f), and an EPF sharpness of 4 in
-    // every block (E5h). The Hare set itself grows with E5b (DCT4X8, DCT8X4) and E5c (AFV).
+    // every block (E5h).
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -78,14 +90,14 @@ public class JxlLossyThoroughEncoderTests
         Assert.Equal(JxlFrameFlags.None, header.Flags);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // Every block is covered once by one of Hare's strategies (no DCT4X8, DCT8X4 or AFV until E5b and
-        // E5c), and the tracer still merges into larger blocks.
+        // Every block is covered once by one of Squirrel's strategies so far (no DCT4X8 or DCT8X4 until
+        // E5b), and the search still merges into larger blocks.
         byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
         TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} d{distance}: [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
         foreach (byte b in strategies)
         {
             JxlAcStrategyType strategy = (JxlAcStrategyType)(b >> 1);
-            Assert.True(Array.IndexOf(JxlLossyDefaultEncoderTests.HareStrategies, strategy) >= 0, $"{strategy} is not in Hare's search");
+            Assert.True(Array.IndexOf(SquirrelStrategies, strategy) >= 0, $"{strategy} is not in Squirrel's search so far");
         }
 
         Assert.Contains(strategies, b => JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksX * JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksY > 1);
@@ -104,9 +116,9 @@ public class JxlLossyThoroughEncoderTests
 
     // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
     // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
-    // once. At E5d (Hare's 8x8 candidates, default CfL map in the search), Bike has 5, 17 and 25 such first
-    // blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 7), and its whole map is libjxl's
-    // kSquirrel map from the e5d harness.
+    // once. With E5c's AFV and E5d (no DCT4X8 or DCT8X4 yet, default CfL map in the search), Bike has 5, 17
+    // and 24 such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 19 + 5), and its whole
+    // map is libjxl's kSquirrel map from the e5d harness restricted the same way (acs_afv).
     [Theory]
     [InlineData(1.0f)]
     [InlineData(2.0f)]
@@ -139,12 +151,30 @@ public class JxlLossyThoroughEncoderTests
         Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
     }
 
+    // E5c: from Wombat down the 8x8 level tries AFV0 to AFV3, and Bike at d1 keeps some of them through the
+    // merges. Read back through the decoder's parse; the histogram (raw strategy: blocks covered) is logged.
+    // At E5c, before DCT4X8 and DCT8X4 (E5b) compete for the same blocks, it was 0:1578 1:37 2:255 4:152
+    // 5:304 6:138 7:130 10:128 11:224 14:44 15:40 16:37 17:38 18:768 19:128 20:160 (Default's is the same
+    // without the AFV kinds 14 to 17, and with 100 more DCT8, 10 more IDENTITY, 47 more DCT2X2 and 2 more
+    // DCT8X16 blocks).
+    [Fact]
+    public void Encode_BikeAtD1_ChoosesAfvBlocks()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+
+        byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"bike d1: [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
+        Assert.Contains(strategies, b => (JxlAcStrategyType)(b >> 1) is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3);
+    }
+
     // E5a's record: while every temporary departure was in place, Squirrel ran Hare's VarDCT choices, so an
     // image with no alpha was the same file at Thorough as at Default. With alpha it is not: the alpha tree
-    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). E5d's
-    // non-aligned merges change the photos' strategies, so flower and Bike now differ too; the gradient, two
-    // blocks tall, finds no merge off the grid that wins and stays Default's file. Each later E5 ticket
-    // changes this test when it breaks an equality.
+    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). E5c (AFV at
+    // the 8x8 level) and E5d (merges off the aligned grid) change the photos' strategies, so flower and Bike
+    // now differ too; the gradient, 9 pixels high, chooses no AFV block and no off-grid merge that wins, and
+    // stays Default's file. Each later E5 ticket changes this test when it breaks an equality.
     [Theory]
     [InlineData("flower-384x244", "", 1.0f, false)]
     [InlineData("bike-582x453", "", 1.0f, false)]
@@ -164,19 +194,19 @@ public class JxlLossyThoroughEncoderTests
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). At E5a the rows without alpha equalled the Default pins; since E5d's
-    // non-aligned merges only the gradient, flower-17x23 and dot-1x1 rows still do.
+    // (e5a-handoff.md says how). Since E5c (AFV) and E5d (off-grid merges) only the three small rows without alpha (the 17x23 flower,
+    // the dot and the gradient) still equal their Default pins.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "BAA8CC51D5CE86C77840CF09C1F401F4CFA28B93B213C89405C91C96C9811B76")]
-    [InlineData("flower-384x244", "", 1.0f, "BD8B0F7B0F611D4DD66EAE0340493866499C7651DF3C8E07E0CA42D3027F762A")]
-    [InlineData("flower-384x244", "", 2.0f, "4DABEECDA6A0A5D81486E6B92794D33D3DFA682787A63143DFD57CB0F3BF729B")]
-    [InlineData("flower-384x244", "", 4.0f, "93DC5A62765F9BFEF9D74E0630FCD6BD9A4D7B5719904B2CEBFDD33A8FD25EEF")]
+    [InlineData("flower-384x244", "", 0.5f, "D65A8BEEC3A39F6338DD6009E08F0D3E92868EBDA7129AA901887B2D879BEE61")]
+    [InlineData("flower-384x244", "", 1.0f, "197DCA57A9095DE8F7056F3E6E68802AB99711D64FC8F43C31D478B038710E80")]
+    [InlineData("flower-384x244", "", 2.0f, "730E953D0C822A7F35DB4DF9585C01F995A7A60E85A0CE01A9F7361E112E11C7")]
+    [InlineData("flower-384x244", "", 4.0f, "C3B888E24E3AB7235A49DAFDB32250E4C43C285651E7B4613A9F2CA9DA3645AD")]
     [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
     [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "A61C004D157263BCF44A2459F9A0BE9792226F8106221D03B7B40723F7BCA763")]
+    [InlineData("bike-582x453", "", 1.0f, "4B5BC5D9196502E1DFCB25B4AAC734E54922135EE47DC0876857C0E48CE32E2C")]
     [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
-    [InlineData("flower-256x244", "soft", 1.0f, "07D3C3B8999B3E2ABBD28B960A985B897C4FCF15B0F40B5CC5917769084A1CB8")]
-    [InlineData("bike-582x453", "hard", 1.0f, "1DF9A28D7A2627689ECAEAF83D0126006A6277F0893222475F559027031BF5EF")]
+    [InlineData("flower-256x244", "soft", 1.0f, "D148241BF6F430E0A041C603523AA4DD2DCF2A4EACD4227DDDD6C05F2BEF5A62")]
+    [InlineData("bike-582x453", "hard", 1.0f, "DD3867D7DC26AE1BD51A86678D98D224B7FF507C259B9C5C730B4AF75AC5EB7E")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));
