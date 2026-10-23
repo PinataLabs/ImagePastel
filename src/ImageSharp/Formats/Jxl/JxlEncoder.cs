@@ -11,20 +11,42 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Image encoder for writing an image to a stream as a JPEG XL codestream. Lossless encoding
-/// (<see cref="Distance"/> 0) and lossy encoding are supported at every <see cref="JxlEffort"/>, for any
-/// pixel type, with or without alpha. The lossy colour space is sRGB, or the one an ICC profile describes
-/// when the encoder recognises the profile as a JPEG XL colour encoding; the file then carries that
-/// encoding instead of the profile. <see cref="Frame.JxlFrameEncoder"/> lists what each effort does,
-/// <see cref="JxlEffort.Thorough"/> among them. Lossy encoding with a profile that is not recognised throws
-/// <see cref="System.NotSupportedException"/>.
+/// Image encoder for writing an image to a stream in the JPEG XL format. The defaults write a lossy image
+/// that is visually lossless (<see cref="Distance"/> 1); set <see cref="Distance"/> to 0 for a lossless image.
 /// </summary>
-internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
+/// <remarks>
+/// <para>
+/// Lossless and lossy encoding work for any pixel type, with or without alpha, at every
+/// <see cref="JxlEffort"/>. The options are checked when the encode starts: a value out of range throws
+/// <see cref="ImageFormatException"/>, and nothing is written to the stream.
+/// </para>
+/// <para>
+/// Lossless encoding embeds the image's ICC profile when it describes the pixels. Lossy encoding codes the
+/// colour as sRGB, or as the colour space that the ICC profile describes when the encoder recognises it as
+/// a JPEG XL colour encoding; the file then carries that encoding instead of the profile. Lossy encoding
+/// with an ICC profile that the encoder cannot describe throws <see cref="NotSupportedException"/>: save
+/// it lossless, or convert the image to sRGB first.
+/// </para>
+/// <para>
+/// Only the root frame is written. From <see cref="JxlMetadata"/> the encoder reads only
+/// <see cref="JxlMetadata.BitsPerSample"/>, <see cref="JxlMetadata.ExponentBitsPerSample"/> and
+/// <see cref="JxlMetadata.IntensityTarget"/>; it ignores the other members.
+/// </para>
+/// </remarks>
+public sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {
-    /// <inheritdoc/>
+    /// <summary>
+    /// Gets or sets the target for lossy error, in butteraugli units. It has to be in [0, 25]. 0 means
+    /// lossless, about 1 is visually lossless, and larger values give smaller files with more visible loss.
+    /// Values above 0 and below 0.05 are encoded as 0.05, as libjxl does. Defaults to 1.
+    /// </summary>
     public float Distance { get; set; } = 1.0f;
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Gets or sets how much search the encoder spends to reach <see cref="Distance"/>: more effort gives
+    /// smaller files and takes longer. It does not change the target error. Defaults to
+    /// <see cref="JxlEffort.Default"/>.
+    /// </summary>
     public JxlEffort Effort { get; set; } = JxlEffort.Default;
 
     /// <summary>

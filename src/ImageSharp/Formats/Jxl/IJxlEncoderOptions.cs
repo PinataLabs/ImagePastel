@@ -8,13 +8,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// </summary>
 internal interface IJxlEncoderOptions
 {
-    /// <summary>
-    /// Gets the target for lossy error, in butteraugli units: 0 means lossless, about 1 is visually
-    /// lossless, and larger values allow more visible loss.
-    /// </summary>
+    /// <inheritdoc cref="JxlEncoder.Distance"/>
     float Distance { get; }
 
-    /// <summary>Gets how much search the encoder spends to reach <see cref="Distance"/>.</summary>
+    /// <inheritdoc cref="JxlEncoder.Effort"/>
     JxlEffort Effort { get; }
 
     /// <summary>

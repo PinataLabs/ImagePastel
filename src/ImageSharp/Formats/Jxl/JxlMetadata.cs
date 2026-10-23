@@ -51,25 +51,23 @@ public sealed class JxlMetadata : IDeepCloneable
 
     /// <summary>
     /// Gets or sets the bits per colour sample, including the sign and exponent bits of float samples.
-    /// The decoder sets it from the image header.
+    /// The decoder sets it from the image header. When it is not 0, the encoder checks that it is a valid
+    /// depth, and writes it if it holds every sample of the pixel type losslessly; otherwise the encoder
+    /// takes the depth of the pixel type.
     /// </summary>
-    // For the encoder (internal until E6): when it is not 0, the encoder checks that it is a valid depth,
-    // and writes it if it holds every sample of the pixel type losslessly; otherwise the encoder takes the
-    // depth of the pixel type.
     public int BitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the exponent bits per colour sample: 0 for integer samples, 8 for float32. The decoder
-    /// sets it with <see cref="BitsPerSample"/>.
+    /// sets it with <see cref="BitsPerSample"/>, and the encoder reads it with <see cref="BitsPerSample"/>.
     /// </summary>
     public int ExponentBitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the intensity target: the luminance, in nits, that the largest sample stands for. The
-    /// decoder sets it from the image header.
+    /// decoder sets it from the image header. When it is not 0, the encoder writes it; otherwise it writes
+    /// libjxl's default for the transfer function: 10,000 nits for PQ, 1,000 for HLG and 255 for anything else.
     /// </summary>
-    // For the encoder (internal until E6): when it is not 0, the encoder writes it; otherwise it writes
-    // libjxl's default for the transfer function: 10,000 nits for PQ, 1,000 for HLG and 255 for anything else.
     public float IntensityTarget { get; set; }
 
     /// <summary>

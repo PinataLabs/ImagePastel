@@ -264,4 +264,13 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.MetadataExtensions.GetJxlMetadata(SixLabors.ImageSharp.Metadata.ImageMetadata)</Target>
   </Suppression>
+  <!-- Additions: JPEG XL encoder and SaveAsJxl, #331 (E6a). -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlEffort</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlEncoder</Target>
+  </Suppression>
 </Suppressions>
