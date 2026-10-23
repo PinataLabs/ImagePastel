@@ -430,6 +430,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.streamImages[streamId].Dispose();
         this.streamImages[streamId] = image;
 
+        // Departure (ADR 0001): libjxl (enc_modular.cc:1615-1726) has four loops here: near-lossless DC with
+        // kGradientFixedDC, near-lossless DC with the weighted predictor, plain 4:4:4, and chroma subsampled.
+        // The first needs a decoding speed tier of 1 or more, and the last a subsampled frame; this encoder
+        // has neither option, so it never takes them. The two loops left differ only in how one value is
+        // quantised, so this runs them as one loop that branches on nlDc for each value. Each value goes
+        // through the same arithmetic, in the same channel order, as libjxl's, so the output is the same.
         // The decoder's 4:4:4 order: Y, X, B.
         ReadOnlySpan<float> dcFactors = colorCorrelation.DcFactors;
         bool hasOutliers = false;
