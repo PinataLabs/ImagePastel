@@ -6,7 +6,7 @@
 // EncodeGlobalACInfo, the VarDCT parts of EncodeGroups and ComputeEncodingData), lib/jxl/enc_cache.cc
 // (InitializePassesEncoder, ComputeACMetadata), lib/jxl/enc_group.cc (EncodeGroupTokenizedCoefficients),
 // lib/jxl/image_ops.cc (PadImageToBlockMultipleInPlace), lib/jxl/enc_quant_weights.cc
-// (DequantMatricesEncode), lib/jxl/enc_context_map.cc (EncodeBlockCtxMap) and
+// (DequantMatricesEncode) and
 // lib/jxl/enc_chroma_from_luma.cc (ColorCorrelationEncodeDC), for the default values each writes.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -482,13 +482,12 @@ internal static partial class JxlFrameEncoder
         return groupCodes;
     }
 
-    // The quantiser, then the block context map and the chroma-from-luma DC, each its default bit.
+    // The quantiser, the block context map, then the chroma-from-luma DC as its default bit.
     private static void EncodeGlobalDcInfo(JxlPassesEncoderState encState, JxlBitWriter writer)
     {
         encState.Quantizer.Encode(writer);
 
-        // EncodeBlockCtxMap: the encoder keeps the default map, written as one bit.
-        writer.Write(1, 1);
+        JxlEncBlockCtxMap.EncodeBlockCtxMap(encState.BlockCtxMap, writer);
 
         // ColorCorrelationEncodeDC: the default factors and DC, written as one bit.
         writer.Write(1, 1);

@@ -59,10 +59,10 @@ internal static class JxlEncHeuristics
     /// context map. The dequantization matrices keep their defaults.
     /// </summary>
     /// <remarks>
-    /// Temporary departures (E4a, the Default tracer): from Hare down libjxl searches the AC strategies,
-    /// fits a chroma-from-luma map per tile and chooses a block context map. Until the tickets that port them land, each runs its Falcon form here, at every tier: DCT8
-    /// everywhere (E4g), the default chroma-from-luma map (E4d) and the default block context map (E4e).
-    /// Each is marked where it runs.
+    /// Temporary departure (E4a, the Default tracer): from Hare down libjxl searches the AC strategies.
+    /// Until E4g ports the search, DCT8 fills every block here, at every tier, as marked where it runs. The
+    /// adaptive quant field, the chroma-from-luma map of each tile and the block context map are computed
+    /// from Hare down, as libjxl does.
     /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>
@@ -146,16 +146,24 @@ internal static class JxlEncHeuristics
             encState.Quantizer.SetQuantFieldRect(encState.InitialQuantField, r, encState.RawQuantField, encState.XSizeBlocks);
         }
 
-        // Compute a non-default CfL map if we are at Hare speed, or slower.
-        // Temporary departure (E4a): Hare keeps the default map until E4d ports the fast CfL search.
+        // Compute a non-default CfL map if we are at Hare speed, or slower. libjxl fits each tile right after
+        // its strategies and quant field; the fit reads only its own tile, so it runs here for all of them.
+        if (speedTier <= JxlSpeedTier.Hare)
+        {
+            JxlEncChromaFromLuma.ComputeMap(encState, opsin, fast: speedTier >= JxlSpeedTier.Wombat);
+        }
 
         // Refine quantization levels: libjxl fills the EPF sharpness with 4 for FindBestQuantizer, which only
         // searches from Kitten down. ComputeArHeuristics sets the sharpness before anything reads it, so
         // this skips the fill.
 
-        // Choose a context model that depends on the amount of quantization for AC: libjxl does it below
-        // Falcon (FindBestBlockEntropyModel).
-        // Temporary departure (E4a): the map keeps its default until E4e ports the search.
+        // Choose a context model that depends on the amount of quantization for AC, on the raw quant field
+        // before AdjustQuantBlockAC changes it. The frame is never streamed, so it initializes the global
+        // state.
+        if (speedTier < JxlSpeedTier.Falcon)
+        {
+            JxlEncBlockCtxMap.FindBestBlockEntropyModel(speedTier, encState.Distance, encState.RawQuantField, encState.AcStrategy, encState.BlockCtxMap);
+        }
     }
 
     /// <summary>

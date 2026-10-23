@@ -130,6 +130,40 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         return (min, max);
     }
 
+    // How many first blocks have a raw quant field value above and below `value`, and how many first
+    // blocks there are.
+    public (int Above, int Below, int Blocks) QuantFieldAround(int value)
+    {
+        int[] values = new int[this.State.XSizeBlocks * this.State.YSizeBlocks];
+        Array.Fill(values, value);
+        return this.QuantFieldAround(values);
+    }
+
+    // The first blocks whose raw quant field is above and below the value of the same block in values, row
+    // by row.
+    public (int Above, int Below, int Blocks) QuantFieldAround(int[] values)
+    {
+        int above = 0;
+        int below = 0;
+        int blocks = 0;
+        for (int by = 0; by < this.State.YSizeBlocks; by++)
+        {
+            Span<int> row = this.State.RawQuantField.DangerousGetRowSpan(by);
+            for (int bx = 0; bx < this.State.XSizeBlocks; bx++)
+            {
+                if (this.State.AcStrategy.Get(bx, by).IsFirstBlock)
+                {
+                    blocks++;
+                    int value = values[(by * this.State.XSizeBlocks) + bx];
+                    above += row[bx] > value ? 1 : 0;
+                    below += row[bx] < value ? 1 : 0;
+                }
+            }
+        }
+
+        return (above, below, blocks);
+    }
+
     public void Dispose()
     {
         this.State.Dispose();
