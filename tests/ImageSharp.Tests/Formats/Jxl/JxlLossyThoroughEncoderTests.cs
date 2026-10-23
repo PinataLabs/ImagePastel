@@ -2,12 +2,17 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -20,6 +25,10 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 public class JxlLossyThoroughEncoderTests
 {
     public static TheoryData<string, float> PhotoReaderCases { get; } = CreateReaderCases();
+
+    public static TheoryData<string, double> CalibrationCases => CreateCalibrationCases();
+
+    public static TheoryData<string, string, double> RaisedScaleReaderCases { get; } = CreateRaisedScaleReaderCases();
 
     [Theory]
     [MemberData(nameof(PhotoReaderCases))]
@@ -63,10 +72,10 @@ public class JxlLossyThoroughEncoderTests
     };
 
     // libjxl's choices at Squirrel, read back through the decoder's parse: XYB VarDCT, Gaborish above d0.5,
-    // near-lossless DC in every LF group, and every block covered once by a strategy of Squirrel's set so
-    // far. The remaining checks are the temporary departures, each of which a later ticket flips: the X
-    // quantisation scale from the distance alone and a B scale of 2 (E5f), and an EPF sharpness of 4 in
-    // every block (E5h).
+    // near-lossless DC in every LF group, every block covered once by a strategy of Squirrel's set so far,
+    // and the pixel statistics leaving these photos at the distance's X scale and a B scale of 2. The
+    // remaining check is a temporary departure, which a later ticket flips: an EPF sharpness of 4 in every
+    // block (E5h).
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -102,7 +111,8 @@ public class JxlLossyThoroughEncoderTests
 
         Assert.Contains(strategies, b => JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksX * JxlAcStrategy.FromRawStrategy(b >> 1).CoveredBlocksY > 1);
 
-        // Temporary departure (E5f): the scales of the distance alone.
+        // No pixel of these photos steps far enough to raise a scale (Encode_CalibrationImage_HasLibjxlsQmScales
+        // has images that do).
         Assert.Equal(expectedXQmScale, header.XQmScale);
         Assert.Equal(2u, header.BQmScale);
 
@@ -149,6 +159,84 @@ public class JxlLossyThoroughEncoderTests
 
         TestContext.Current.TestOutputHelper?.WriteLine($"bike d{distance}: {off16} DCT16X16 and {off32} DCT32X32 off their grid; map {Convert.ToHexString(SHA256.HashData(strategies))} [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
         Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
+    }
+
+    // The X and B quantisation scales of each calibration image at Thorough, through the decoder's parse.
+    // Default (Hare) writes the distance's X scale (3, or 4 above d2.5) and a B scale of 2; from Squirrel
+    // down libjxl raises them from the pixel statistics of the XYB image. The photos stay at Default's
+    // scales; bike_alpha (the simplified invisible pixels), text and line_art are raised. Each value is
+    // cjxl v0.12.0 -e 7's (Encode_CalibrationImage_QmScalesAreCjxlEffort7s checks it with the tool).
+    [Theory]
+    [InlineData("bike", 1.0, 3u, 2u)]
+    [InlineData("bike", 2.0, 3u, 2u)]
+    [InlineData("bike", 4.0, 4u, 2u)]
+    [InlineData("calliphora", 1.0, 3u, 2u)]
+    [InlineData("calliphora", 2.0, 3u, 2u)]
+    [InlineData("calliphora", 4.0, 4u, 2u)]
+    [InlineData("bike_alpha", 1.0, 5u, 4u)]
+    [InlineData("bike_alpha", 2.0, 5u, 4u)]
+    [InlineData("bike_alpha", 4.0, 5u, 4u)]
+    [InlineData("gradient", 1.0, 3u, 2u)]
+    [InlineData("gradient", 2.0, 3u, 2u)]
+    [InlineData("gradient", 4.0, 4u, 2u)]
+    [InlineData("text", 1.0, 4u, 3u)]
+    [InlineData("text", 2.0, 4u, 3u)]
+    [InlineData("text", 4.0, 4u, 3u)]
+    [InlineData("line_art", 1.0, 3u, 5u)]
+    [InlineData("line_art", 2.0, 3u, 5u)]
+    [InlineData("line_art", 4.0, 4u, 5u)]
+    public void Encode_CalibrationImage_HasLibjxlsQmScales(string image, double distance, uint expectedXQmScale, uint expectedBQmScale)
+    {
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Thorough, distance);
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(EncodeCalibrationImage(row));
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"{image} d{distance}: x {frame.FrameHeader.XQmScale} b {frame.FrameHeader.BQmScale}");
+        Assert.Equal(expectedXQmScale, frame.FrameHeader.XQmScale);
+        Assert.Equal(expectedBQmScale, frame.FrameHeader.BQmScale);
+    }
+
+    // The images whose scales Squirrel raises (B 5 for line_art, X 4 and B 3 for text) decode through each
+    // reader within the interim bound: the decoders apply the raised scales' dequantisation. bike_alpha's
+    // raised scales go through the readers in Encode_RgbaPhoto_AlphaIsExactAndColourWithinTheInterimBound
+    // (hard-masked Bike's scales are raised too: of the pins, E5f moved only its row).
+    [Theory]
+    [MemberData(nameof(RaisedScaleReaderCases))]
+    public async Task Encode_ImageWithRaisedQmScales_DecodesThroughEachReaderWithinTheInterimBound(string reader, string image, double distance)
+    {
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Thorough, distance);
+        using Image<Rgb24> original = Image.Load<Rgb24>(row.Image.FullPath);
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(original, Lossy((float)distance));
+
+        using Image<Rgb24> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), encoded, "LossyThoroughEncoder", string.Create(CultureInfo.InvariantCulture, $"{image}_d{distance}"));
+        JxlLossyEncoderTests.AssertWithinInterimBound(original, decoded, $"{image} d{distance}, {encoded.Length} bytes");
+    }
+
+    // With JXL_TOOLS_DIR: the X and B quantisation scales of each calibration image at Thorough are those
+    // of cjxl v0.12.0 -e 7 (the table's arguments), both read back through the decoder's parse. From
+    // Squirrel down libjxl raises them from the pixel statistics of the padded XYB image; the statistics
+    // are maxima of float differences with no lane sums, so cjxl's SIMD target does not change them.
+    [Theory]
+    [MemberData(nameof(CalibrationCases))]
+    public async Task Encode_CalibrationImage_QmScalesAreCjxlEffort7s(string image, double distance)
+    {
+        JxlTools.GetToolPath("cjxl");
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Thorough, distance);
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyThoroughEncoder");
+        string cjxlPath = Path.Combine(directory, string.Create(CultureInfo.InvariantCulture, $"{image}_e7_d{distance}.jxl"));
+        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, [row.Image.FullPath, cjxlPath, .. JxlCalibrationTable.Instance.CjxlArguments(row), "--container=0"]);
+
+        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(EncodeCalibrationImage(row));
+
+        // cjxl's patches (text, bike_alpha d4) come first as a Modular reference frame; its scales are
+        // those of the last frame, the VarDCT image. libjxl computes them before it looks for patches.
+        JxlFrameHeader theirs = JxlCodestreamFrames.Read(await File.ReadAllBytesAsync(cjxlPath, TestContext.Current.CancellationToken))[^1];
+        Assert.Equal(JxlFrameEncoding.VarDct, theirs.Encoding);
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"{image} d{distance}: ours x {ours.FrameHeader.XQmScale} b {ours.FrameHeader.BQmScale}, cjxl -e 7 x {theirs.XQmScale} b {theirs.BQmScale}");
+        Assert.Equal(theirs.XQmScale, ours.FrameHeader.XQmScale);
+        Assert.Equal(theirs.BQmScale, ours.FrameHeader.BQmScale);
     }
 
     // E5c: from Wombat down the 8x8 level tries AFV0 to AFV3, and Bike at d1 keeps some of them through the
@@ -233,8 +321,8 @@ public class JxlLossyThoroughEncoderTests
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). Since E5c (AFV), E5d (off-grid merges) and E5e (the CfL pre-pass and Newton fit), only
-    // the two smallest rows (the 17x23 flower and the dot) still equal their Default pins.
+    // (e5a-handoff.md says how). Since E5c (AFV), E5d (off-grid merges) and E5e (the CfL pre-pass and Newton
+    // fit), only the two smallest rows (the 17x23 flower and the dot) still equal their Default pins.
     [Theory]
     [InlineData("flower-384x244", "", 0.5f, "115A19CEF679492A93AFA42A8F6A3058684A46D95D1B4AC005C348AEEB131A30")]
     [InlineData("flower-384x244", "", 1.0f, "2AC61E75D3523A3FDF09ADA12E1ADBB1360E2689764EB36738C5846954513315")]
@@ -245,7 +333,7 @@ public class JxlLossyThoroughEncoderTests
     [InlineData("bike-582x453", "", 1.0f, "BD7D04FA71B7CB8DD24E69FCC6F8ECCB98B452508ACF7E5DB9825F5BFDA90795")]
     [InlineData("gradient-2049x9", "", 2.0f, "77B37ED07A5E9D7E0DDAE4CCDA66DE6B79EA1690DFEB1ECB0EDC451C06592C96")]
     [InlineData("flower-256x244", "soft", 1.0f, "5EA5E2A8B93FA5D279530E15B4E68777C1C6CF7A0B761E27DAE79AD45C891495")]
-    [InlineData("bike-582x453", "hard", 1.0f, "9E6EE452909AADD79F636B231BAFF44CF512F3F2C0283DDB56066DE10A6CC984")]
+    [InlineData("bike-582x453", "hard", 1.0f, "5C871864E0A404B89323FA09594A8DCC77CD4C8525EE03EE76D69C912B86D0D3")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));
@@ -269,6 +357,48 @@ public class JxlLossyThoroughEncoderTests
 
         using Image<Rgba32> rgba = JxlLossyAlphaEncoderTests.CreateMaskedImage(sizeCase, mask);
         return JxlEncoderRoundTrip.Encode(rgba, encoder);
+    }
+
+    // A calibration image as its PNG stores it, as cjxl reads it: RGB, or RGBA for bike_alpha.
+    private static byte[] EncodeCalibrationImage(JxlCalibrationRow row)
+    {
+        JxlEncoder encoder = Lossy((float)row.Distance);
+        if (Image.Identify(row.Image.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
+        {
+            using Image<Rgba32> rgba = Image.Load<Rgba32>(row.Image.FullPath);
+            return JxlEncoderRoundTrip.Encode(rgba, encoder);
+        }
+
+        using Image<Rgb24> rgb = Image.Load<Rgb24>(row.Image.FullPath);
+        return JxlEncoderRoundTrip.Encode(rgb, encoder);
+    }
+
+    private static TheoryData<string, double> CreateCalibrationCases()
+    {
+        TheoryData<string, double> cases = new();
+        foreach (JxlCalibrationImage image in JxlCalibrationTable.Instance.Images)
+        {
+            foreach (double distance in new[] { 1.0, 2.0, 4.0 })
+            {
+                cases.Add(image.Name, distance);
+            }
+        }
+
+        return cases;
+    }
+
+    private static TheoryData<string, string, double> CreateRaisedScaleReaderCases()
+    {
+        TheoryData<string, string, double> cases = new();
+        foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
+        {
+            foreach ((string image, double distance) in new[] { ("line_art", 1.0), ("line_art", 2.0), ("line_art", 4.0), ("text", 2.0) })
+            {
+                cases.Add(reader.ToString(), image, distance);
+            }
+        }
+
+        return cases;
     }
 
     private static TheoryData<string, float> CreateReaderCases()
