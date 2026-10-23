@@ -102,18 +102,57 @@ public class JxlLossyThoroughEncoderTests
         }
     }
 
-    // E5a's record: while every temporary departure is in place, Squirrel runs Hare's VarDCT choices, so an
-    // image with no alpha is the same file at Thorough as at Default. With alpha it is not: the alpha tree
-    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). Each later
-    // E5 ticket breaks the equality on purpose, and changes this test when it does.
+    // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
+    // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
+    // once. At E5d (Hare's 8x8 candidates, default CfL map in the search), Bike has 5, 17 and 25 such first
+    // blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 7), and its whole map is libjxl's
+    // kSquirrel map from the e5d harness.
     [Theory]
-    [InlineData("flower-384x244", "", 1.0f, true)]
-    [InlineData("bike-582x453", "", 1.0f, true)]
-    [InlineData("bike-582x453", "", 4.0f, true)]
+    [InlineData(1.0f)]
+    [InlineData(2.0f)]
+    [InlineData(4.0f)]
+    public void Encode_Bike_MergesSquaresOffTheirAlignedGrid(float distance)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        byte[] strategies = JxlEncAcStrategyTests.StrategiesOf(frame);
+        int xsize = frame.State.XSizeBlocks;
+        int off16 = 0;
+        int off32 = 0;
+        for (int i = 0; i < strategies.Length; i++)
+        {
+            if ((strategies[i] & 1) == 0)
+            {
+                continue;
+            }
+
+            int x = i % xsize;
+            int y = i / xsize;
+            JxlAcStrategyType strategy = (JxlAcStrategyType)(strategies[i] >> 1);
+            off16 += strategy == JxlAcStrategyType.Dct16X16 && ((x | y) % 2) != 0 ? 1 : 0;
+            off32 += strategy == JxlAcStrategyType.Dct32X32 && ((x | y) % 4) != 0 ? 1 : 0;
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"bike d{distance}: {off16} DCT16X16 and {off32} DCT32X32 off their grid; map {Convert.ToHexString(SHA256.HashData(strategies))} [{JxlEncAcStrategyTests.CoverageOf(strategies)}]");
+        Assert.True(off16 + off32 > 0, "No 16x16 or 32x32 block starts off its aligned grid");
+    }
+
+    // E5a's record: while every temporary departure was in place, Squirrel ran Hare's VarDCT choices, so an
+    // image with no alpha was the same file at Thorough as at Default. With alpha it is not: the alpha tree
+    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). E5d's
+    // non-aligned merges change the photos' strategies, so flower and Bike now differ too; the gradient, two
+    // blocks tall, finds no merge off the grid that wins and stays Default's file. Each later E5 ticket
+    // changes this test when it breaks an equality.
+    [Theory]
+    [InlineData("flower-384x244", "", 1.0f, false)]
+    [InlineData("bike-582x453", "", 1.0f, false)]
+    [InlineData("bike-582x453", "", 4.0f, false)]
     [InlineData("gradient-2049x9", "", 2.0f, true)]
     [InlineData("bike-582x453", "hard", 1.0f, false)]
     [InlineData("flower-256x244", "soft", 1.0f, false)]
-    public void Encode_WithEveryTemporaryDeparture_IsDefaultsFileOnlyWithoutAlpha(string sizeCase, string mask, float distance, bool expectedEqual)
+    public void Encode_LossyThorough_IsDefaultsFileOnlyWhereNoSquirrelStageChangesIt(string sizeCase, string mask, float distance, bool expectedEqual)
     {
         byte[] thorough = EncodeCase(sizeCase, mask, Lossy(distance));
         byte[] @default = EncodeCase(sizeCase, mask, JxlLossyDefaultEncoderTests.Lossy(distance));
@@ -125,18 +164,19 @@ public class JxlLossyThoroughEncoderTests
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). At E5a the rows without alpha equal the Default pins.
+    // (e5a-handoff.md says how). At E5a the rows without alpha equalled the Default pins; since E5d's
+    // non-aligned merges only the gradient, flower-17x23 and dot-1x1 rows still do.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "88E6145ED0606797E70C0BEC85B59FF73562B4A68A4171AC5BA6F731082CDEB5")]
-    [InlineData("flower-384x244", "", 1.0f, "3D7638836E201CFA238E5B2D07DCD3F42013A1BB0B4A3B500CAF6973F8F71582")]
-    [InlineData("flower-384x244", "", 2.0f, "727DABB0E010B53556C3982039F43A1B48DE68C88DCE5A866ABA599C5D59B096")]
-    [InlineData("flower-384x244", "", 4.0f, "75EDE6EBEAB4F214CDAAB2B297E9313AB82893E02DDE285162D35FBA773ECDAA")]
+    [InlineData("flower-384x244", "", 0.5f, "BAA8CC51D5CE86C77840CF09C1F401F4CFA28B93B213C89405C91C96C9811B76")]
+    [InlineData("flower-384x244", "", 1.0f, "BD8B0F7B0F611D4DD66EAE0340493866499C7651DF3C8E07E0CA42D3027F762A")]
+    [InlineData("flower-384x244", "", 2.0f, "4DABEECDA6A0A5D81486E6B92794D33D3DFA682787A63143DFD57CB0F3BF729B")]
+    [InlineData("flower-384x244", "", 4.0f, "93DC5A62765F9BFEF9D74E0630FCD6BD9A4D7B5719904B2CEBFDD33A8FD25EEF")]
     [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
     [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "E3F5FCE8AECAB4FDC32618FC17ADFE3E0645E58460E6C5BE2B060877EEDD420B")]
+    [InlineData("bike-582x453", "", 1.0f, "A61C004D157263BCF44A2459F9A0BE9792226F8106221D03B7B40723F7BCA763")]
     [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
-    [InlineData("flower-256x244", "soft", 1.0f, "77B1B50DD3E168D000B442B1DFA3A10D15051AA4322FF64F13C30663AA81770E")]
-    [InlineData("bike-582x453", "hard", 1.0f, "5E1B9398936B7DD67BFBAB8F0468C76866CA58D128E219D364BBF28F1A171473")]
+    [InlineData("flower-256x244", "soft", 1.0f, "07D3C3B8999B3E2ABBD28B960A985B897C4FCF15B0F40B5CC5917769084A1CB8")]
+    [InlineData("bike-582x453", "hard", 1.0f, "1DF9A28D7A2627689ECAEAF83D0126006A6277F0893222475F559027031BF5EF")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));
