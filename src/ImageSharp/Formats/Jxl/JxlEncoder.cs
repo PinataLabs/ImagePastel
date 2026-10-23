@@ -1,10 +1,13 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Advanced;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -35,6 +38,15 @@ internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 
     /// <inheritdoc/>
     bool IJxlEncoderOptions.NaturalCoeffOrders => this.NaturalCoeffOrders;
+
+    /// <summary>
+    /// Gets or sets a callback for tests that a lossy frame runs once its EPF sharpness is set; see
+    /// <see cref="IJxlEncoderOptions.ArHeuristicsProbe"/>.
+    /// </summary>
+    internal Action<JxlFrameHeader, JxlPassesEncoderState> ArHeuristicsProbe { get; set; }
+
+    /// <inheritdoc/>
+    Action<JxlFrameHeader, JxlPassesEncoderState> IJxlEncoderOptions.ArHeuristicsProbe => this.ArHeuristicsProbe;
 
     /// <inheritdoc/>
     public void Encode<TPixel>(Image<TPixel> image, Stream stream)

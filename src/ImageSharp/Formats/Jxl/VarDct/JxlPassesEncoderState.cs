@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
@@ -27,11 +28,13 @@ internal sealed class JxlPassesEncoderState : IDisposable
     /// <param name="frameDim">The frame dimensions.</param>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="distance">The butteraugli distance, after libjxl's clamps.</param>
-    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance)
+    /// <param name="allocator">The allocator of the encoder's copy of the DC.</param>
+    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance, MemoryAllocator allocator)
     {
         this.FrameDim = frameDim;
         this.SpeedTier = speedTier;
         this.Distance = distance;
+        this.Allocator = allocator;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
         this.YSizeBlocks = (int)frameDim.YSizeBlocks;
         this.Quantizer = new JxlQuantizer(this.Matrices);
@@ -41,10 +44,27 @@ internal sealed class JxlPassesEncoderState : IDisposable
         this.EpfSharpness = new byte[this.XSizeBlocks * this.YSizeBlocks];
         this.Coeffs = new int[frameDim.NumGroups][][];
         this.AcTokens = new List<JxlToken>[frameDim.NumGroups];
+        try
+        {
+            this.QuantDc = allocator.Allocate2D<byte>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            for (int c = 0; c < 3; c++)
+            {
+                this.Dc[c] = allocator.Allocate2D<float>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
+            }
+        }
+        catch
+        {
+            // The constructor throws, so no caller can dispose what is already allocated.
+            this.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Gets the frame dimensions.</summary>
     public JxlFrameDimensions FrameDim { get; }
+
+    /// <summary>Gets the allocator of the frame's images.</summary>
+    public MemoryAllocator Allocator { get; }
 
     /// <summary>Gets the speed tier, libjxl's <c>cparams.speed_tier</c>.</summary>
     public JxlSpeedTier SpeedTier { get; }
@@ -93,6 +113,20 @@ internal sealed class JxlPassesEncoderState : IDisposable
 
     /// <summary>Gets the EPF sharpness of each block.</summary>
     public byte[] EpfSharpness { get; }
+
+    /// <summary>
+    /// Gets the X, Y and B DC of each block as the decoder will see it: libjxl's <c>shared.dc_storage</c>,
+    /// dequantised from the quantised DC the file codes (<see cref="JxlModularFrameEncoder.AddVarDctDc"/>),
+    /// then smoothed. Smoothing replaces the planes. Only the reconstruction of the frame reads it
+    /// (<see cref="JxlEncReconstruct"/>).
+    /// </summary>
+    public Buffer2D<float>[] Dc { get; } = new Buffer2D<float>[3];
+
+    /// <summary>
+    /// Gets the bucket of the quantised DC of each block (libjxl's <c>shared.quant_dc</c>), which the block
+    /// context map's DC thresholds read; the encoder has none at effort 7 and faster.
+    /// </summary>
+    public Buffer2D<byte> QuantDc { get; private set; }
 
     /// <summary>Gets or sets the multiplier of the X channel's quantisation weights.</summary>
     public float XQmMultiplier { get; set; }
@@ -151,5 +185,8 @@ internal sealed class JxlPassesEncoderState : IDisposable
         this.InitialQuantField = null;
         this.InitialQuantMasking1x1?.Dispose();
         this.InitialQuantMasking1x1 = null;
+        this.QuantDc?.Dispose();
+        this.QuantDc = null;
+        JxlPlanes.DisposeAll(this.Dc);
     }
 }

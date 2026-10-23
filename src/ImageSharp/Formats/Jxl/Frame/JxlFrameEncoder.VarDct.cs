@@ -74,9 +74,13 @@ internal static partial class JxlFrameEncoder
     /// <param name="speedTier">The speed tier, which the effort sets.</param>
     /// <param name="distance">The butteraugli distance, above 0.</param>
     /// <param name="naturalCoeffOrders">Whether to keep every coefficient order natural (for tests).</param>
+    /// <param name="arHeuristicsProbe">
+    /// A callback for tests, run once the EPF sharpness is set (<see cref="IJxlEncoderOptions.ArHeuristicsProbe"/>),
+    /// or <see langword="null"/>.
+    /// </param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, bool naturalCoeffOrders, MemoryAllocator allocator, JxlBitWriter writer)
+    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, bool naturalCoeffOrders, Action<JxlFrameHeader, JxlPassesEncoderState> arHeuristicsProbe, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances. libjxl then keeps a copy as
@@ -90,9 +94,9 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator) { NaturalCoeffOrders = naturalCoeffOrders };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
-        List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
+        List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, arHeuristicsProbe, allocator);
 
         WriteFrameHeader(frameHeader, writer);
         WriteSections(groupCodes, writer);
@@ -149,7 +153,7 @@ internal static partial class JxlFrameEncoder
     }
 
     // libjxl's frame-level ComputeEncodingData for a VarDCT frame that is not a JPEG transcode.
-    private static List<JxlBitWriter> ComputeVarDctEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
+    private static List<JxlBitWriter> ComputeVarDctEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, Action<JxlFrameHeader, JxlPassesEncoderState> arHeuristicsProbe, MemoryAllocator allocator)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // Allocating a large enough image avoids a copy when padding.
@@ -188,6 +192,7 @@ internal static partial class JxlFrameEncoder
             JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
             InitializePassesEncoder(frameHeader, color, encState, encModular);
             JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
+            arHeuristicsProbe?.Invoke(frameHeader, encState);
             ComputeAcMetadata(encState, encModular);
         }
         finally
@@ -408,10 +413,15 @@ internal static partial class JxlFrameEncoder
         for (long groupIndex = 0; groupIndex < frameDim.NumDcGroups; groupIndex++)
         {
             JxlRect r = frameDim.DcGroupRect(groupIndex);
-            encModular.AddVarDctDc(dc, encState.XSizeBlocks, r, groupIndex, encState.SpeedTier < JxlSpeedTier.Falcon, encState.Quantizer, encState.Cmap);
+            encModular.AddVarDctDc(frameHeader, dc, encState.XSizeBlocks, r, groupIndex, encState.SpeedTier < JxlSpeedTier.Falcon, encState);
         }
 
-        // libjxl smooths its own copy of the DC here (AdaptiveDCSmoothing), which only tests read.
+        // The encoder's own copy of the DC, dequantised by AddVarDctDc, is smoothed as the decoder's is
+        // (FinalizeDC). Only the reconstruction of the frame reads it (JxlEncReconstruct).
+        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0)
+        {
+            JxlCompressedDc.AdaptiveDcSmoothing(encState.Allocator, encState.Quantizer.MulDc, encState.Dc, encState.XSizeBlocks, encState.YSizeBlocks);
+        }
     }
 
     private static void ComputeAcMetadata(JxlPassesEncoderState encState, JxlModularFrameEncoder encModular)

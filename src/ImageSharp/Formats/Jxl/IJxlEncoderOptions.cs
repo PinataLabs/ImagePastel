@@ -1,6 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
@@ -23,4 +27,13 @@ internal interface IJxlEncoderOptions
     /// compare an encode with the natural-order encode of the same image.
     /// </summary>
     bool NaturalCoeffOrders { get; }
+
+    /// <summary>
+    /// Gets a callback that a lossy frame runs right after <c>ComputeARHeuristics</c> sets its EPF
+    /// sharpness, before the AC metadata is written, or <see langword="null"/>. Not one of the options of
+    /// ADR 0003: tests use it to change the sharpness the file carries and to reconstruct the frame from the
+    /// encoder's state there (<see cref="JxlEncReconstruct.ReconstructImage"/>), where libjxl's dynamic EPF
+    /// does.
+    /// </summary>
+    Action<JxlFrameHeader, JxlPassesEncoderState> ArHeuristicsProbe { get; }
 }
