@@ -52,19 +52,20 @@ public class JxlLossyCalibrationTests
     /// 1.11x to 1.17x cjxl's size, which has patches). text d2 fails (-0.99), and line_art fails at every
     /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
+    /// E5e (the CfL pre-pass and Newton fit): 16 of 18. text d2 passes (+0.46) and line_art d1 passes
+    /// (+2.68); line_art still fails at d2 (-1.13) and d4 (-3.63). Smallest passing margins: text d2 +0.46,
+    /// calliphora d4 +1.10, text d4 +1.78. E5e merged with E5c (AFV): 18 of 18. Smallest margins:
+    /// line_art d2 +0.31, text d2 +0.34, line_art d4 +0.48, calliphora d4 +1.46.
     /// <para>
-    /// E5f (net10.0, x64): 16 of 18. The pixel-statistics scales (cjxl -e 7's on every row) raise B to 5 on
-    /// line_art, X to 4 and B to 3 on text, and X to 5 and B to 4 on bike_alpha; the other rows are
-    /// unchanged. text d2 now passes (+0.81; d1 +2.71, d4 +1.25) and line_art d1 passes (+2.30); line_art
-    /// d2 (-1.52) and d4 (-4.10) still fail, at 1.00x to 1.03x cjxl's size. bike_alpha d1 +3.42, d2 +4.09,
-    /// d4 +4.49.
-    /// </para>
-    /// <para>
-    /// E5f merged with E5c (AFV) and E5g: 17 of 18. line_art d2 passes by +0.07 and d4 fails (-2.53),
-    /// line_art d1 +1.58; text d1 +3.08, d2 +1.22, d4 +0.94; calliphora d4 +1.45.
+    /// E5f (the pixel-statistics X and B scales, cjxl -e 7's on every row: B 5 on line_art, X 4 and B 3 on
+    /// text, X 5 and B 4 on bike_alpha; the other rows keep Default's) alone: 16 of 18. text d2 passes
+    /// (+0.81) and line_art d1 passes (+2.30); line_art d2 (-1.52) and d4 (-4.10) fail. E5f merged with E5c
+    /// and E5g: 17 of 18 (line_art d2 +0.07, d4 -2.53). E5f merged with E5c, E5e and E5g: 18 of 18.
+    /// Smallest margins: line_art d4 +0.23 (E5e's tip had +0.48), text d2 +1.28, calliphora d4 +1.46,
+    /// text d4 +2.02; line_art d2 +2.83 and d1 +3.48.
     /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 17;
+    private const int ThoroughRowsPassing = 18;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

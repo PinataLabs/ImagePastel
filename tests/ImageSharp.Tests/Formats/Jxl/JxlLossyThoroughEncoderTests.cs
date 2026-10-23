@@ -220,45 +220,83 @@ public class JxlLossyThoroughEncoderTests
         Assert.Contains(strategies, b => (JxlAcStrategyType)(b >> 1) is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3);
     }
 
-    // E5a's record: while every temporary departure is in place, Squirrel runs Hare's VarDCT choices, so an
-    // image with no alpha is the same file at Thorough as at Default. With alpha it is not: the alpha tree
-    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). Each later
-    // E5 ticket breaks the equality on purpose, and changes this test when it does. E5c (AFV at the 8x8
-    // level) broke it for the flower and Bike; the gradient, 9 pixels high, chooses no AFV block.
-    // E5f's pixel-statistics scales leave these RGB photos at Hare's scales; they change text and line_art
-    // (Encode_CalibrationImage_HasLibjxlsQmScales).
-    [Theory]
-    [InlineData("flower-384x244", "", 1.0f, false)]
-    [InlineData("bike-582x453", "", 1.0f, false)]
-    [InlineData("bike-582x453", "", 4.0f, false)]
-    [InlineData("gradient-2049x9", "", 2.0f, true)]
-    [InlineData("bike-582x453", "hard", 1.0f, false)]
-    [InlineData("flower-256x244", "soft", 1.0f, false)]
-    public void Encode_WithEveryTemporaryDeparture_IsDefaultsFileOnlyWithoutAlpha(string sizeCase, string mask, float distance, bool expectedEqual)
+    // E5e: from Squirrel down libjxl fits a first chroma-from-luma map of each tile on DCT8 blocks before
+    // the strategy search, which reads it, and fits the final map by Newton's method rather than least
+    // squares. Read back through the decoder's parse, the flower crop's map differs from Default's.
+    [Fact]
+    public void Encode_SaturatedPhoto_FitsAChromaFromLumaMapOtherThanDefaults()
     {
-        byte[] thorough = EncodeCase(sizeCase, mask, Lossy(distance));
-        byte[] @default = EncodeCase(sizeCase, mask, JxlLossyDefaultEncoderTests.Lossy(distance));
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
 
-        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} {mask} d{distance}: Thorough {thorough.Length} B, Default {@default.Length} B");
-        Assert.Equal(expectedEqual, thorough.AsSpan().SequenceEqual(@default));
+        using JxlDecodedDcGroups thorough = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+        using JxlDecodedDcGroups @default = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(1.0f)));
+
+        JxlColorCorrelation t = thorough.State.Cmap;
+        JxlColorCorrelation d = @default.State.Cmap;
+        TestContext.Current.TestOutputHelper?.WriteLine($"Thorough YtoX [{string.Join(", ", t.YtoXMap)}], YtoB [{string.Join(", ", t.YtoBMap)}]");
+        TestContext.Current.TestOutputHelper?.WriteLine($"Default  YtoX [{string.Join(", ", d.YtoXMap)}], YtoB [{string.Join(", ", d.YtoBMap)}]");
+        Assert.Equal(d.YtoBMap.Length, t.YtoBMap.Length);
+        Assert.Contains(t.YtoBMap, f => f != 0);
+        Assert.False(t.YtoXMap.AsSpan().SequenceEqual(d.YtoXMap) && t.YtoBMap.AsSpan().SequenceEqual(d.YtoBMap), "Thorough's CfL map is Default's");
+    }
+
+    // A grey image has no X (red-green) signal in XYB, so neither the pre-pass nor the Newton fit predicts
+    // X from Y in any tile.
+    [Fact]
+    public void Encode_GreyImage_KeepsTheYtoXMapZero()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                foreach (ref Rgb24 p in accessor.GetRowSpan(y))
+                {
+                    byte grey = (byte)(((p.R * 77) + (p.G * 150) + (p.B * 29)) >> 8);
+                    p = new Rgb24(grey, grey, grey);
+                }
+            }
+        });
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"YtoX [{string.Join(", ", frame.State.Cmap.YtoXMap)}], YtoB [{string.Join(", ", frame.State.Cmap.YtoBMap)}]");
+        Assert.All(frame.State.Cmap.YtoXMap, f => Assert.Equal(0, f));
+    }
+
+    // The CfL pre-pass and the Newton fit leave the blue channel of the flower crop at d1 no worse than
+    // E5a's tracer, which wrote Default's file here: 24,935 bytes and a blue RMSE of 9.81 8-bit steps (our
+    // decoder). E5e's value is in the E5e handoff.
+    [Fact]
+    public async Task Encode_SaturatedPhoto_BlueErrorDoesNotGrowAgainstTheTracer()
+    {
+        const double tracerBlueRmse = 9.8110135790738;
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
+
+        using Image<Rgb24> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(JxlEncoderRoundTrip.Reader.Ours, encoded, "LossyThoroughEncoder", "flower_cfl_d1");
+        JxlLossyEncoderTests.ChannelErrors errors = JxlLossyEncoderTests.ChannelErrors.Measure(image, decoded);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{encoded.Length} bytes: {errors}; blue RMSE {errors.Rmse[2]:R}");
+        Assert.True(errors.Rmse[2] <= tracerBlueRmse, $"blue RMSE {errors.Rmse[2]:R} > the tracer's {tracerBlueRmse:R}");
     }
 
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). Since E5c (AFV) only the three small rows without alpha (the 17x23 flower,
-    // the dot and the gradient) still equal their Default pins.
+    // (e5a-handoff.md says how). Since E5c (AFV) and E5e (the CfL pre-pass and Newton fit), only
+    // the two smallest rows (the 17x23 flower and the dot) still equal their Default pins.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "25948546CC332E02E03CC592ABD42DC86D46DBBDDB42D49307E895C17B8FAE5B")]
-    [InlineData("flower-384x244", "", 1.0f, "5A0127CDC6E36DF41BFE9B1D338B326F05B6AD2BAB0F0A914139A3F095C99055")]
-    [InlineData("flower-384x244", "", 2.0f, "59BFFE0FAA00A94512F711C3F8982A95BDFD87E5074A29E01CF37D97FDA05CB6")]
-    [InlineData("flower-384x244", "", 4.0f, "4518705E39DA2580EE2F1362320107B7AAB908E843834EE96D4A3D7F3D33ED48")]
+    [InlineData("flower-384x244", "", 0.5f, "5935C26B6DA263D6B80EDE7C0FF1F20F76D6162E1BA2B4B22447195FCF04B00F")]
+    [InlineData("flower-384x244", "", 1.0f, "2E2A27BA2C7EBDF6A2A1B008F9CEE7A88584977A211F49901791ED7C54419C3E")]
+    [InlineData("flower-384x244", "", 2.0f, "DE4316DF4D64840834AAD9ECE3656B4C4918BA93A6C20467262161368E6F9051")]
+    [InlineData("flower-384x244", "", 4.0f, "8D7674B35177BD7F0568D1282B47E4C5B4A1F06CD8EFECFC25F70B06C89D509D")]
     [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
     [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "96EDAAAD1D1AACD095ED688498624F2F28DCC94F44D5884C31B9A60E0FE6040C")]
-    [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
-    [InlineData("flower-256x244", "soft", 1.0f, "31F2FE28924D952B8EEACF40D0C98F8FBAC551731A566FE2DBA06BDB07D8C3E5")]
-    [InlineData("bike-582x453", "hard", 1.0f, "DDEF0C10375EE234AECE81C35EF0B49A8916A0A920499B8819B4B601CE373FA9")]
+    [InlineData("bike-582x453", "", 1.0f, "3FB8F5CD7CDF65B804D3541F6A7143F3013D852478BC8C11E82A04B6E765B1E5")]
+    [InlineData("gradient-2049x9", "", 2.0f, "77B37ED07A5E9D7E0DDAE4CCDA66DE6B79EA1690DFEB1ECB0EDC451C06592C96")]
+    [InlineData("flower-256x244", "soft", 1.0f, "4C25836DBA0FE19ACFC8406027CEA58381943C28219E3EFFF4FFAFBBE5F82139")]
+    [InlineData("bike-582x453", "hard", 1.0f, "F332187CA50E31E35C41539226FB56D3F84A1C88EE60E641B7ADC7874AFF1F58")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));

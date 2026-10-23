@@ -119,11 +119,15 @@ internal static class JxlEncHeuristics
         JxlAcsConfig acsConfig = JxlEncAcStrategy.Init(speedTier, encState.Distance, opsin, encState.InitialQuantField, encState.InitialQuantMasking1x1, encState.Matrices);
         JxlAcsScratch acsScratch = speedTier < JxlSpeedTier.Cheetah ? new JxlAcsScratch() : null;
 
-        // Per 64x64 tile, in tile order (libjxl's process_tile): choose block sizes, then always set the
-        // initial quant field, so we can compute the CfL map with more accuracy. The search reads the float
-        // field of its own tile before AdjustQuantField changes it. The initial quant field might change in
-        // slower modes, but adjusting the quant field with butteraugli when all the other encoding
-        // parameters are fixed is likely a more reliable choice anyway.
+        // Per 64x64 tile, in tile order (libjxl's process_tile): a first CfL map from Squirrel down, then
+        // choose block sizes, then always set the initial quant field, so we can compute the CfL map with
+        // more accuracy, then that map from Hare down. The search reads the float field of its own tile
+        // before AdjustQuantField changes it. The initial quant field might change in slower modes, but
+        // adjusting the quant field with butteraugli when all the other encoding parameters are fixed is
+        // likely a more reliable choice anyway. Each CfL fit writes the map entry of its tile, which is the
+        // entry that tile's search reads, so the order within a tile is libjxl's.
+        DebugGuard.IsTrue(EncTileDimInBlocks == JxlColorCorrelation.ColorTileDimInBlocks, "An encoder tile is a colour tile, so each CfL fit covers one map entry");
+        JxlEncChromaFromLuma.Scratch cflScratch = speedTier <= JxlSpeedTier.Hare ? new JxlEncChromaFromLuma.Scratch() : null;
         int numTilesX = (int)JxlBits.DivCeil(encState.XSizeBlocks, EncTileDimInBlocks);
         int numTiles = numTilesX * (int)JxlBits.DivCeil(encState.YSizeBlocks, EncTileDimInBlocks);
         for (int tid = 0; tid < numTiles; tid++)
@@ -136,23 +140,24 @@ internal static class JxlEncHeuristics
             int bx1 = Math.Min((tx + 1) * EncTileDimInBlocks, encState.XSizeBlocks);
             JxlRect r = new(bx0, by0, bx1 - bx0, by1 - by0);
 
-            // For speeds up to Wombat, libjxl computes a first color correlation map of the tile here
-            // (speed_tier <= kSquirrel: CfLHeuristics::ComputeTile on DCT8 blocks with no quant field, and
-            // fast = false), and the search below reads it. Temporary departure (E5a): that pre-pass is not
-            // ported until E5e, so at every tier the search reads the default map, as at Hare.
+            // For speeds up to Wombat, we only compute the color correlation map once we know the transform
+            // type and the quantization map. Slower than that, a first map on DCT8 blocks with no quant
+            // field steers the search.
+            if (speedTier <= JxlSpeedTier.Squirrel)
+            {
+                JxlEncChromaFromLuma.ComputeTile(encState, opsin, r, useDct8: true, fast: false, cflScratch);
+            }
+
+            // Choose block sizes.
             JxlEncAcStrategy.ProcessRect(acsConfig, speedTier, encState.Distance, r, encState.Cmap, encState.AcStrategy, acsScratch);
             JxlEncAdaptiveQuantization.AdjustQuantField(encState.AcStrategy, r, encState.Distance, encState.InitialQuantField);
             encState.Quantizer.SetQuantFieldRect(encState.InitialQuantField, r, encState.RawQuantField, encState.XSizeBlocks);
-        }
 
-        // Compute a non-default CfL map if we are at Hare speed, or slower. libjxl fits each tile right after
-        // its strategies and quant field; the fit reads only its own tile, and the search of a later tile
-        // reads only that tile's map entry, so it runs here for all of them. That holds only while an encoder
-        // tile and a colour tile are the same 8x8 blocks.
-        if (speedTier <= JxlSpeedTier.Hare)
-        {
-            DebugGuard.IsTrue(EncTileDimInBlocks == JxlColorCorrelation.ColorTileDimInBlocks, "The CfL map can run after the tile loop only while an encoder tile is a colour tile");
-            JxlEncChromaFromLuma.ComputeMap(encState, opsin, fast: speedTier >= JxlSpeedTier.Wombat);
+            // Compute a non-default CfL map if we are at Hare speed, or slower.
+            if (speedTier <= JxlSpeedTier.Hare)
+            {
+                JxlEncChromaFromLuma.ComputeTile(encState, opsin, r, useDct8: false, fast: speedTier >= JxlSpeedTier.Wombat, cflScratch);
+            }
         }
 
         // Refine quantization levels: libjxl fills the EPF sharpness with 4 for FindBestQuantizer, which only
