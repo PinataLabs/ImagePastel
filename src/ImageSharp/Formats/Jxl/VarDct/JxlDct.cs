@@ -4,8 +4,9 @@
 // lib/jxl/dct-inl.h (CoeffBundle, DCT1DImpl, IDCT1DImpl, DCT1D, IDCT1D, ComputeScaledDCT,
 // ComputeScaledIDCT), lib/jxl/dct_scales.h (kSqrt2, DCTTotalResampleScale), lib/jxl/transpose-inl.h
 // (the generic transpose) and lib/jxl/dec_transforms-inl.h (ReinterpretingDCT, IDCT2TopBlock, and the
-// cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs), and the
-// DCT8 cases of TransformFromPixels and DCFromLowestFrequencies in lib/jxl/enc_transforms-inl.h.
+// cases of TransformToPixels and LowestFrequenciesFromDC; the AFV transform is in JxlDct.Afv.cs), and
+// lib/jxl/enc_transforms-inl.h (ReinterpretingIDCT, DCT2TopBlock, and the cases of TransformFromPixels
+// and DCFromLowestFrequencies but DCT4X8, DCT8X4 and AFV).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -190,20 +191,69 @@ internal static partial class JxlDct
     }
 
     /// <summary>
-    /// Transforms the pixels of an 8x8 block into its DCT coefficients, as the encoder's
-    /// <c>TransformFromPixels</c> does for <see cref="JxlAcStrategyType.Dct"/>, the only strategy the
-    /// encoder chooses so far. The block's DC is the first coefficient (<c>DCFromLowestFrequencies</c>).
+    /// Transforms the pixels of a block into its coefficients, as the encoder's <c>TransformFromPixels</c>
+    /// does: the inverse of <see cref="TransformToPixels"/>. Every strategy but DCT4X8, DCT8X4 and AFV,
+    /// which come with lossy Thorough (E5).
     /// </summary>
-    /// <param name="strategy">The strategy, <see cref="JxlAcStrategyType.Dct"/>.</param>
+    /// <param name="strategy">The strategy.</param>
     /// <param name="pixels">The first pixel of the block.</param>
     /// <param name="pixelsStride">The distance between pixel rows.</param>
-    /// <param name="coefficients">The 64 coefficients.</param>
+    /// <param name="coefficients">The coefficients, 64 per 8x8 block the strategy covers, in its layout.</param>
     /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
+    /// <exception cref="NotSupportedException">The strategy is DCT4X8, DCT8X4 or AFV.</exception>
     public static void TransformFromPixels(JxlAcStrategyType strategy, ReadOnlySpan<float> pixels, int pixelsStride, Span<float> coefficients, Span<float> scratch)
     {
-        // The other strategies come with the AC strategy search (E4).
-        DebugGuard.IsTrue(strategy == JxlAcStrategyType.Dct, "The encoder only chooses DCT8");
-        ComputeScaledDct(BlockDim, BlockDim, pixels, pixelsStride, coefficients, scratch);
+        switch (strategy)
+        {
+            case JxlAcStrategyType.Identity:
+                IdentityFromPixels(pixels, pixelsStride, coefficients);
+                break;
+
+            case JxlAcStrategyType.Dct4X4:
+            {
+                Span<float> block = stackalloc float[4 * 4];
+                for (int y = 0; y < 2; y++)
+                {
+                    for (int x = 0; x < 2; x++)
+                    {
+                        ComputeScaledDct(4, 4, pixels.Slice((y * 4 * pixelsStride) + (x * 4)), pixelsStride, block, scratch);
+                        for (int iy = 0; iy < 4; iy++)
+                        {
+                            for (int ix = 0; ix < 4; ix++)
+                            {
+                                coefficients[((y + (iy * 2)) * 8) + x + (ix * 2)] = block[(iy * 4) + ix];
+                            }
+                        }
+                    }
+                }
+
+                SubBlockDcsFromPixels(coefficients);
+                break;
+            }
+
+            case JxlAcStrategyType.Dct2X2:
+                Dct2TopBlock(8, pixels, pixelsStride, coefficients);
+                Dct2TopBlock(4, coefficients, BlockDim, coefficients);
+                Dct2TopBlock(2, coefficients, BlockDim, coefficients);
+                break;
+
+            case JxlAcStrategyType.Dct4X8:
+            case JxlAcStrategyType.Dct8X4:
+            case JxlAcStrategyType.Afv0:
+            case JxlAcStrategyType.Afv1:
+            case JxlAcStrategyType.Afv2:
+            case JxlAcStrategyType.Afv3:
+                JxlThrowHelper.ThrowNotSupportedException($"The encoder's {strategy} transform (libjxl effort 6 and up; slice E5)");
+                break;
+
+            default:
+            {
+                // Every other strategy is a DCT of its size: ComputeScaledDCT<ROWS, COLS>.
+                JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)strategy);
+                ComputeScaledDct(acs.CoveredBlocksY * BlockDim, acs.CoveredBlocksX * BlockDim, pixels, pixelsStride, coefficients, scratch);
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -254,6 +304,71 @@ internal static partial class JxlDct
         }
     }
 
+    /// <summary>
+    /// Gives the DC values of the 8x8 blocks a block covers from its coefficients (libjxl's encoder
+    /// <c>DCFromLowestFrequencies</c>): the first coefficient for a block of one 8x8 block, else an inverse
+    /// DCT of the lowest frequencies, rescaled to the DC image's size. The inverse of
+    /// <see cref="LowestFrequenciesFromDc"/>.
+    /// </summary>
+    /// <param name="strategy">The strategy.</param>
+    /// <param name="block">The coefficients of the block, in its layout.</param>
+    /// <param name="dc">The DC value of the first 8x8 block of the block.</param>
+    /// <param name="dcStride">The distance between rows of DC values.</param>
+    /// <param name="scratch">Scratch space, <see cref="ScratchSize"/> floats.</param>
+    public static void DcFromLowestFrequencies(JxlAcStrategyType strategy, ReadOnlySpan<float> block, Span<float> dc, int dcStride, Span<float> scratch)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)strategy);
+        int rows = acs.CoveredBlocksY;
+        int cols = acs.CoveredBlocksX;
+        if (rows * cols == 1)
+        {
+            dc[0] = block[0];
+            return;
+        }
+
+        // ReinterpretingIDCT<DCT_ROWS = 8 * ROWS, DCT_COLS = 8 * COLS, LF_ROWS = ROWS, LF_COLS = COLS,
+        // ROWS, COLS>, from block with a stride of the block's larger side. libjxl puts the scaled lowest
+        // frequencies first in its scratch space and ComputeScaledIDCT's own space after them; here they go
+        // after the rows * cols floats that ComputeScaledIdct takes for its block.
+        int inputStride = Math.Max(rows, cols) * BlockDim;
+        Span<float> lowest = scratch.Slice(MaxCoveredBlocks * MaxCoveredBlocks, rows * cols);
+        ReadOnlySpan<float> rowScales = InverseResampleScales(rows);
+        ReadOnlySpan<float> colScales = InverseResampleScales(cols);
+        if (rows < cols)
+        {
+            for (int y = 0; y < rows; y++)
+            {
+                for (int x = 0; x < cols; x++)
+                {
+                    lowest[(y * cols) + x] = block[(y * inputStride) + x] * rowScales[y] * colScales[x];
+                }
+            }
+        }
+        else
+        {
+            for (int y = 0; y < cols; y++)
+            {
+                for (int x = 0; x < rows; x++)
+                {
+                    lowest[(y * rows) + x] = block[(y * inputStride) + x] * colScales[y] * rowScales[x];
+                }
+            }
+        }
+
+        ComputeScaledIdct(rows, cols, lowest, dc, dcStride, scratch);
+    }
+
+    // DCTTotalResampleScale<8 * N, N>, for the block counts of the strategies the encoder chooses (up to
+    // 64x64).
+    private static ReadOnlySpan<float> InverseResampleScales(int n) => n switch
+    {
+        1 => ResampleScales8To1,
+        2 => ResampleScales16To2,
+        4 => ResampleScales32To4,
+        8 => ResampleScales64To8,
+        _ => throw new ArgumentOutOfRangeException(nameof(n), n, "Not a block count of a strategy the encoder chooses"),
+    };
+
     // DCTTotalResampleScale<N, 8 * N>.
     private static ReadOnlySpan<float> ResampleScales(int n) => n switch
     {
@@ -290,6 +405,96 @@ internal static partial class JxlDct
         dcs[1] = block00 + block01 - block10 - block11;
         dcs[2] = block00 - block01 + block10 - block11;
         dcs[3] = block00 - block01 - block10 + block11;
+    }
+
+    // The encoder's mirror of SubBlockDcs: coefficients 0, 1, 8 and 9 hold the four sub-blocks' DCs, and
+    // become their 2x2 Hadamard, scaled by 1 / 4.
+    private static void SubBlockDcsFromPixels(Span<float> coefficients)
+    {
+        float block00 = coefficients[0];
+        float block01 = coefficients[1];
+        float block10 = coefficients[8];
+        float block11 = coefficients[9];
+        coefficients[0] = (block00 + block01 + block10 + block11) * 0.25f;
+        coefficients[1] = (block00 + block01 - block10 - block11) * 0.25f;
+        coefficients[8] = (block00 - block01 + block10 - block11) * 0.25f;
+        coefficients[9] = (block00 - block01 - block10 + block11) * 0.25f;
+    }
+
+    // The IDENTITY case of the encoder's TransformFromPixels: four 4x4 squares, each as its mean and the
+    // residuals about its pixel at (1, 1).
+    private static void IdentityFromPixels(ReadOnlySpan<float> pixels, int pixelsStride, Span<float> coefficients)
+    {
+        for (int y = 0; y < 2; y++)
+        {
+            for (int x = 0; x < 2; x++)
+            {
+                float blockDc = 0;
+                for (int iy = 0; iy < 4; iy++)
+                {
+                    for (int ix = 0; ix < 4; ix++)
+                    {
+                        blockDc += pixels[(((y * 4) + iy) * pixelsStride) + (x * 4) + ix];
+                    }
+                }
+
+                blockDc *= 1.0f / 16;
+                float centre = pixels[(((y * 4) + 1) * pixelsStride) + (x * 4) + 1];
+                for (int iy = 0; iy < 4; iy++)
+                {
+                    for (int ix = 0; ix < 4; ix++)
+                    {
+                        if (ix == 1 && iy == 1)
+                        {
+                            continue;
+                        }
+
+                        coefficients[((y + (iy * 2)) * 8) + x + (ix * 2)] =
+                            pixels[(((y * 4) + iy) * pixelsStride) + (x * 4) + ix] - centre;
+                    }
+                }
+
+                coefficients[((y + 2) * 8) + x + 2] = coefficients[(y * 8) + x];
+                coefficients[(y * 8) + x] = blockDc;
+            }
+        }
+
+        SubBlockDcsFromPixels(coefficients);
+    }
+
+    // DCT2TopBlock<S>: the S x S top-left corner of "from" (rows fromStride apart) as a pyramid level of
+    // 2x2 Haar sums into "to", an 8x8 block. "from" and "to" may be the same.
+    private static void Dct2TopBlock(int s, ReadOnlySpan<float> from, int fromStride, Span<float> to)
+    {
+        Span<float> temp = stackalloc float[DctBlockSize];
+        int num2X2 = s / 2;
+        for (int y = 0; y < num2X2; y++)
+        {
+            for (int x = 0; x < num2X2; x++)
+            {
+                float c00 = from[(y * 2 * fromStride) + (x * 2)];
+                float c01 = from[(y * 2 * fromStride) + (x * 2) + 1];
+                float c10 = from[(((y * 2) + 1) * fromStride) + (x * 2)];
+                float c11 = from[(((y * 2) + 1) * fromStride) + (x * 2) + 1];
+                float r00 = c00 + c01 + c10 + c11;
+                float r01 = c00 + c01 - c10 - c11;
+                float r10 = c00 - c01 + c10 - c11;
+                float r11 = c00 - c01 - c10 + c11;
+                r00 *= 0.25f;
+                r01 *= 0.25f;
+                r10 *= 0.25f;
+                r11 *= 0.25f;
+                temp[(y * BlockDim) + x] = r00;
+                temp[(y * BlockDim) + num2X2 + x] = r01;
+                temp[((y + num2X2) * BlockDim) + x] = r10;
+                temp[((y + num2X2) * BlockDim) + num2X2 + x] = r11;
+            }
+        }
+
+        for (int y = 0; y < s; y++)
+        {
+            temp.Slice(y * BlockDim, s).CopyTo(to.Slice(y * BlockDim));
+        }
     }
 
     // The loop that starts each sub-block transform in libjxl: the rows x cols block takes coefficient

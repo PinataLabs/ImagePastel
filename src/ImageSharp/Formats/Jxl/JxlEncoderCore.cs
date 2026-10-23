@@ -263,8 +263,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         _ => JxlSpeedTier.Squirrel,
     };
 
-    // Lossless is ported at every effort, and lossy at Fastest. Lossy at the other efforts names the
-    // slice of the spec that adds it. The distance must be in libjxl's range (JxlEncoderSetFrameDistance).
+    // Lossless is ported at every effort, and lossy at Fastest and Default (libjxl effort 5, Hare). Lossy at
+    // Squirrel and slower (Thorough) names the slice of the spec that adds it. The distance must be in
+    // libjxl's range (JxlEncoderSetFrameDistance).
     private void CheckOptions()
     {
         if (!(this.distance >= 0 && this.distance <= MaxDistance))
@@ -272,10 +273,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
             JxlThrowHelper.ThrowImageFormatException($"JPEG XL distance {this.distance} is out of range: it has to be in [0.0..25.0].");
         }
 
-        if (this.distance != 0 && this.effort != JxlEffort.Fastest)
+        if (this.distance != 0 && ToSpeedTier(this.effort) <= JxlSpeedTier.Squirrel)
         {
-            string slice = this.effort == JxlEffort.Default ? "E4" : "E5";
-            throw new NotSupportedException($"JPEG XL lossy encoding at effort {this.effort} is not supported yet; slice {slice} adds it.");
+            throw new NotSupportedException($"JPEG XL lossy encoding at effort {this.effort} is not supported yet; slice E5 adds it.");
         }
     }
 }

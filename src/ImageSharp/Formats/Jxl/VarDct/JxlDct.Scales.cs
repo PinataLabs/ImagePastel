@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/dct_scales.h (WcMultipliers, and the DCTResampleScales that LowestFrequenciesFromDC uses).
+// lib/jxl/dct_scales.h (WcMultipliers, and the DCTResampleScales that LowestFrequenciesFromDC and DCFromLowestFrequencies use).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -52,6 +52,31 @@ internal static partial class JxlDct
         1.1984966740820495f, 1.2207956782315876f, 1.244777922949508f, 1.2705593687654873f, 1.2982690107339132f,
         1.3280505578213306f, 1.3600643892400104f, 1.3944898413647777f, 1.4315278911623237f, 1.4714043176061107f,
         1.5143734423314616f,
+    };
+
+    // DCTResampleScales<N, N / 8>, which the encoder's DCFromLowestFrequencies uses: the inverses of the
+    // tables above, cos(i pi / 2N) cos(i pi / N) cos(i pi / (N / 2)). Only up to N = 64: the encoder never
+    // chooses a block above 64x64 (libjxl's kTransformsForMerge stops there), so the 128 and 256 tables
+    // are left out.
+    private static ReadOnlySpan<float> ResampleScales8To1 => new[]
+    {
+        1.000000000000000000f,
+    };
+
+    private static ReadOnlySpan<float> ResampleScales16To2 => new[]
+    {
+        1.000000000000000000f, 0.901764195028874394f,
+    };
+
+    private static ReadOnlySpan<float> ResampleScales32To4 => new[]
+    {
+        1.000000000000000000f, 0.974886821136879522f, 0.901764195028874394f, 0.787054918159101335f,
+    };
+
+    private static ReadOnlySpan<float> ResampleScales64To8 => new[]
+    {
+        1.0000000000000000f, 0.9936866130906366f, 0.9748868211368796f, 0.9440180941651672f, 0.9017641950288744f,
+        0.8490574973847023f, 0.7870549181591013f, 0.7171081282466044f,
     };
 
     // WcMultipliers<N>: 1 / (2 cos((i + 0.5) pi / N)) for i < N / 2.

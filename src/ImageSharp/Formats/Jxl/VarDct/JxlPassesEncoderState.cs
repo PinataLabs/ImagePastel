@@ -5,9 +5,11 @@
 // (PassesSharedState), for one pass and no streaming.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
+using System;
 using System.Collections.Generic;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
@@ -19,7 +21,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// libjxl keeps the coefficients and tokens of each pass; the encoder writes one pass (no progressive
 /// mode), so this keeps one. The per-block images are plain arrays, one entry per 8x8 block.
 /// </remarks>
-internal sealed class JxlPassesEncoderState
+internal sealed class JxlPassesEncoderState : IDisposable
 {
     /// <summary>Initializes a new instance of the <see cref="JxlPassesEncoderState"/> class.</summary>
     /// <param name="frameDim">The frame dimensions.</param>
@@ -77,6 +79,18 @@ internal sealed class JxlPassesEncoderState
     /// <summary>Gets the raw quant field of each block.</summary>
     public int[] RawQuantField { get; }
 
+    /// <summary>
+    /// Gets or sets the float quant field of each block before <see cref="RawQuantField"/> is set from it:
+    /// libjxl's <c>initial_quant_field</c>, which the AC strategy search reads. The state owns it.
+    /// </summary>
+    public Buffer2D<float> InitialQuantField { get; set; }
+
+    /// <summary>
+    /// Gets or sets the masking image at full resolution (libjxl's <c>initial_quant_masking1x1</c>), which
+    /// the AC strategy search reads; from Hare down only. The state owns it.
+    /// </summary>
+    public Buffer2D<float> InitialQuantMasking1x1 { get; set; }
+
     /// <summary>Gets the EPF sharpness of each block.</summary>
     public byte[] EpfSharpness { get; }
 
@@ -116,9 +130,26 @@ internal sealed class JxlPassesEncoderState
     /// <summary>Gets the AC histograms.</summary>
     public JxlEntropyEncodingData Codes { get; } = new();
 
+    /// <summary>
+    /// Returns the multiplier of channel <paramref name="c"/>'s quantisation weights: <see cref="XQmMultiplier"/>
+    /// for X, 1 for Y and <see cref="BQmMultiplier"/> for B.
+    /// </summary>
+    /// <param name="c">The channel: 0 X, 1 Y, 2 B.</param>
+    /// <returns>The multiplier.</returns>
+    public float QmMultiplier(int c) => c == 0 ? this.XQmMultiplier : c == 1 ? 1.0f : this.BQmMultiplier;
+
     /// <summary>Returns the index of block (<paramref name="bx"/>, <paramref name="by"/>) in the block images.</summary>
     /// <param name="bx">The block column.</param>
     /// <param name="by">The block row.</param>
     /// <returns>The index.</returns>
     public int BlockIndex(long bx, long by) => (int)((by * this.XSizeBlocks) + bx);
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        this.InitialQuantField?.Dispose();
+        this.InitialQuantField = null;
+        this.InitialQuantMasking1x1?.Dispose();
+        this.InitialQuantMasking1x1 = null;
+    }
 }

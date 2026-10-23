@@ -20,6 +20,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// a grey plane into all three colour planes, and computes XYB from them (<c>ToXYB</c>, where the grey
 /// sRGB encoding counts as sRGB). The bit depth in the header is only metadata when the image is
 /// XYB-encoded; the encoder writes the one E1's rules choose, so the decoder gives back the same pixel type.
+/// The grey round trips and the grey-as-RGB frame check also run at Default (slice E4, #297 story 6).
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyDepthEncoderTests
@@ -31,6 +32,8 @@ public class JxlLossyDepthEncoderTests
 
     public static TheoryData<string, string, float> ReaderCases { get; } = CreateReaderCases();
 
+    public static TheoryData<string, string, float> DefaultGreyReaderCases { get; } = CreateDefaultGreyReaderCases();
+
     public static TheoryData<string> AllPixelTypes { get; } = CreateAllPixelTypes();
 
     // Each pixel type decodes through each reader to its own type, within the interim bound where it is
@@ -38,7 +41,15 @@ public class JxlLossyDepthEncoderTests
     [Theory]
     [MemberData(nameof(ReaderCases))]
     public Task Encode_PixelType_DecodesThroughEachReaderWithinTheScaledBoundWithAlphaExact(string reader, string pixelType, float distance)
-        => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance));
+        => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance, JxlEffort.Fastest));
+
+    // #297 story 6: grey input, 8-bit and 16-bit, works at Default as at Fastest. Each decodes through each
+    // reader to its own type within the scaled bound. (Default's 16-bit and float colour input is checked
+    // against cjxl's scores by JxlLossyCalibrationTests, and its alpha by JxlLossyDefaultEncoderTests.)
+    [Theory]
+    [MemberData(nameof(DefaultGreyReaderCases))]
+    public Task Encode_GreyAtDefault_DecodesThroughEachReaderWithinTheScaledBound(string reader, string pixelType, float distance)
+        => JxlPixelTypes.Verify(pixelType, new ReaderCase(Enum.Parse<JxlEncoderRoundTrip.Reader>(reader), distance, JxlEffort.Default));
 
     // Every pixel type that the lossless encoder takes encodes lossily: the 8-bit orders, the packed
     // types (16-bit integers), halves and the signed types (floats of their scaled values), with and
@@ -114,15 +125,18 @@ public class JxlLossyDepthEncoderTests
     // a grey image is the frame of the RGB image with that grey in every channel; only the colour
     // encoding in the image header differs.
     [Theory]
-    [InlineData(1.0f)]
-    [InlineData(4.0f)]
-    public void Encode_Grey_GivesTheFrameOfTheSameGreyAsRgb(float distance)
+    [InlineData(1.0f, nameof(JxlEffort.Fastest))]
+    [InlineData(4.0f, nameof(JxlEffort.Fastest))]
+    [InlineData(1.0f, nameof(JxlEffort.Default))]
+    [InlineData(4.0f, nameof(JxlEffort.Default))]
+    public void Encode_Grey_GivesTheFrameOfTheSameGreyAsRgb(float distance, string effort)
     {
         using Image<L8> grey = CreateImage<L8>();
         using Image<Rgb24> rgb = grey.CloneAs<Rgb24>();
+        JxlEncoder encoder = new() { Distance = distance, Effort = Enum.Parse<JxlEffort>(effort) };
 
-        byte[] greyFile = JxlEncoderRoundTrip.Encode(grey, JxlLossyEncoderTests.Lossy(distance));
-        byte[] rgbFile = JxlEncoderRoundTrip.Encode(rgb, JxlLossyEncoderTests.Lossy(distance));
+        byte[] greyFile = JxlEncoderRoundTrip.Encode(grey, encoder);
+        byte[] rgbFile = JxlEncoderRoundTrip.Encode(rgb, encoder);
 
         Assert.Equal(JxlColorSpace.Gray, JxlCodestreamFrames.ReadImageHeader(greyFile, out int greyFrame).M.ColorEncoding.ColorSpace);
         Assert.Equal(JxlColorSpace.Rgb, JxlCodestreamFrames.ReadImageHeader(rgbFile, out int rgbFrame).M.ColorEncoding.ColorSpace);
@@ -269,16 +283,33 @@ public class JxlLossyDepthEncoderTests
         return data;
     }
 
-    private sealed record ReaderCase(JxlEncoderRoundTrip.Reader Reader, float Distance) : IJxlPixelTypeCall<Task>
+    private static TheoryData<string, string, float> CreateDefaultGreyReaderCases()
+    {
+        TheoryData<string, string, float> data = new();
+        foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
+        {
+            foreach (string pixelType in new[] { nameof(L8), nameof(L16) })
+            {
+                foreach (float distance in new[] { 1.0f, 4.0f })
+                {
+                    data.Add(reader.ToString(), pixelType, distance);
+                }
+            }
+        }
+
+        return data;
+    }
+
+    private sealed record ReaderCase(JxlEncoderRoundTrip.Reader Reader, float Distance, JxlEffort Effort) : IJxlPixelTypeCall<Task>
     {
         public async Task Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>
         {
             using Image<TPixel> image = CreateImage<TPixel>();
 
-            byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(this.Distance));
+            byte[] encoded = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = this.Effort });
 
-            string name = $"{typeof(TPixel).Name}-d{this.Distance.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            string name = $"{typeof(TPixel).Name}-{this.Effort}-d{this.Distance.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
             using Image<TPixel> decoded = await JxlEncoderRoundTrip.DecodeAsync<TPixel>(this.Reader, encoded, "LossyDepthEncoder", name, highBitDepth: true);
             AssertAlphaExactAndColourWithinBound(image, decoded, $"{name} {this.Reader}, {encoded.Length} bytes");
         }

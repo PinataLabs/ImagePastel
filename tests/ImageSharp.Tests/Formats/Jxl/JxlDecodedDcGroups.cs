@@ -41,6 +41,9 @@ internal sealed class JxlDecodedDcGroups : IDisposable
     /// <summary>Gets the VarDCT state, with every DC group decoded.</summary>
     public JxlVarDctFrameState State { get; }
 
+    /// <summary>Gets the extra DC precision of each DC group, as its section codes it.</summary>
+    public int[] ExtraDcPrecision { get; private init; }
+
     /// <summary>Gets the transforms of the global Modular stream, which codes the extra channels.</summary>
     public IReadOnlyList<JxlTransform> GlobalTransforms => this.modularFrameDecoder.GlobalTransforms;
 
@@ -75,14 +78,19 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         JxlModularFrameDecoder modularFrameDecoder = new(Configuration.Default.MemoryAllocator, frameDim, matrices, CancellationToken.None);
         JxlVarDctFrameState state = new(Configuration.Default.MemoryAllocator, frameHeader, frameDim, matrices);
         JxlFrameDecoder.ProcessDcGlobal(sections[0], frameHeader, frameDim, JxlImageFeatures.None, state.Cmap, matrices, modularFrameDecoder, state, CancellationToken.None);
+        int[] extraDcPrecision = new int[frameDim.NumDcGroups];
         for (long i = 0; i < frameDim.NumDcGroups; i++)
         {
-            JxlFrameDecoder.ProcessDcGroup(i, singleSection ? sections[0] : sections[1 + i], frameHeader, frameDim, modularFrameDecoder, state);
+            // Each DC group starts with its 2-bit extra DC precision, which the decoder reads first.
+            JxlBitReader dcGroup = singleSection ? sections[0] : sections[1 + i];
+            dcGroup.Refill();
+            extraDcPrecision[i] = (int)dcGroup.PeekBits(2);
+            JxlFrameDecoder.ProcessDcGroup(i, dcGroup, frameHeader, frameDim, modularFrameDecoder, state);
         }
 
         // The AC global section follows the DC groups; in a frame of one section it is the rest of it.
         JxlBitReader acGlobal = singleSection ? sections[0] : sections[1 + frameDim.NumDcGroups];
-        return new JxlDecodedDcGroups(frameHeader, state, modularFrameDecoder, acGlobal);
+        return new JxlDecodedDcGroups(frameHeader, state, modularFrameDecoder, acGlobal) { ExtraDcPrecision = extraDcPrecision };
     }
 
     /// <summary>
@@ -120,6 +128,40 @@ internal sealed class JxlDecodedDcGroups : IDisposable
         }
 
         return (min, max);
+    }
+
+    // How many first blocks have a raw quant field value above and below `value`, and how many first
+    // blocks there are.
+    public (int Above, int Below, int Blocks) QuantFieldAround(int value)
+    {
+        int[] values = new int[this.State.XSizeBlocks * this.State.YSizeBlocks];
+        Array.Fill(values, value);
+        return this.QuantFieldAround(values);
+    }
+
+    // The first blocks whose raw quant field is above and below the value of the same block in values, row
+    // by row.
+    public (int Above, int Below, int Blocks) QuantFieldAround(int[] values)
+    {
+        int above = 0;
+        int below = 0;
+        int blocks = 0;
+        for (int by = 0; by < this.State.YSizeBlocks; by++)
+        {
+            Span<int> row = this.State.RawQuantField.DangerousGetRowSpan(by);
+            for (int bx = 0; bx < this.State.XSizeBlocks; bx++)
+            {
+                if (this.State.AcStrategy.Get(bx, by).IsFirstBlock)
+                {
+                    blocks++;
+                    int value = values[(by * this.State.XSizeBlocks) + bx];
+                    above += row[bx] > value ? 1 : 0;
+                    below += row[bx] < value ? 1 : 0;
+                }
+            }
+        }
+
+        return (above, below, blocks);
     }
 
     public void Dispose()

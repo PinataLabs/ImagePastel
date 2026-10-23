@@ -40,6 +40,7 @@ internal static class JxlModularEncoder
     {
         // All the data is 0 except the quant field. TODO(veluca): make that 0 too.
         JxlModularOptions.TreeKind.FalconACMeta => new List<JxlPropertyDecisionNode> { Leaf(JxlPredictor.Left) },
+        JxlModularOptions.TreeKind.ACMeta => PredefinedTreeAcMeta(totalPixels),
         JxlModularOptions.TreeKind.WPFixedDC => PredefinedTreeWpFixedDc(totalPixels, bitdepth),
         _ => throw new ArgumentOutOfRangeException(nameof(treeKind), treeKind, "A learned tree is not predefined."),
     };
@@ -47,14 +48,85 @@ internal static class JxlModularEncoder
     /// <summary>
     /// Returns libjxl's predefined <c>kWPFixedDC</c> tree, the one effort 3 uses: the Weighted
     /// predictor, split on its error property, with fewer levels for small images. libjxl's
-    /// <c>PredefinedTree</c> also builds the trees of the VarDCT metadata and of effort 2; they come
-    /// with the slices that use them.
+    /// <c>PredefinedTree</c> also builds the trees of effort 2; they come with the slice that uses them.
     /// </summary>
     /// <param name="totalPixels">The number of pixels in all channels of all streams.</param>
     /// <param name="bitdepth">The largest bit depth of the streams.</param>
     /// <returns>The tree.</returns>
     public static List<JxlPropertyDecisionNode> PredefinedTreeWpFixedDc(long totalPixels, int bitdepth)
         => MakeFixedTree(JxlModularPredict.WPProp, WpFixedDcCutoffs, JxlPredictor.Weighted, totalPixels, bitdepth);
+
+    /// <summary>
+    /// Returns libjxl's predefined <c>kACMeta</c> tree, which codes the VarDCT AC metadata from effort 4
+    /// to 7: one Left leaf for a small image, else a fixed tree over the channel (0 and 1 the
+    /// chroma-from-luma maps, 2 the strategies and quant field, 3 the EPF sharpness), the row, and the
+    /// top (property 6) and left (property 7) values.
+    /// </summary>
+    /// <param name="totalPixels">The number of pixels in all channels of the AC metadata streams.</param>
+    /// <returns>The tree.</returns>
+    public static List<JxlPropertyDecisionNode> PredefinedTreeAcMeta(long totalPixels)
+    {
+        // Small image.
+        if (totalPixels < 1024)
+        {
+            return new List<JxlPropertyDecisionNode> { Leaf(JxlPredictor.Left) };
+        }
+
+        return new List<JxlPropertyDecisionNode>
+        {
+            // 0: c > 1
+            Split(0, 1, 1),
+
+            // 1: c > 2
+            Split(0, 2, 3),
+
+            // 2: c > 0
+            Split(0, 0, 5),
+
+            // 3: EPF control field (all 0 or 4), top > 3
+            Split(6, 3, 21),
+
+            // 4: ACS+QF, y > 0
+            Split(2, 0, 7),
+
+            // 5: CfL x
+            Leaf(JxlPredictor.Gradient),
+
+            // 6: CfL b
+            Leaf(JxlPredictor.Gradient),
+
+            // 7: QF: split according to the left quant value.
+            Split(7, 5, 9),
+
+            // 8: ACS: split in 4 segments (8x8 from 0 to 3, large square 4-5, large rectangular 6-11, 8x8
+            // 12+), according to previous ACS value.
+            Split(7, 5, 15),
+
+            // QF
+            Split(7, 11, 11),
+            Split(7, 3, 13),
+            Leaf(JxlPredictor.Left),
+            Leaf(JxlPredictor.Left),
+            Leaf(JxlPredictor.Left),
+            Leaf(JxlPredictor.Left),
+
+            // ACS
+            Split(7, 11, 17),
+            Split(7, 3, 19),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+
+            // EPF, left > 3
+            Split(7, 3, 23),
+            Split(7, 3, 25),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+            Leaf(JxlPredictor.Zero),
+        };
+    }
 
     /// <summary>
     /// Learns one tree for the streams <paramref name="start"/> to <paramref name="stop"/> (exclusive):
@@ -416,6 +488,9 @@ internal static class JxlModularEncoder
     }
 
     private static JxlPropertyDecisionNode Leaf(JxlPredictor predictor) => new(-1, 0, 0, 0, predictor, 0, 1);
+
+    // libjxl's PropertyDecisionNode::Split with the right child after the left one.
+    private static JxlPropertyDecisionNode Split(int property, int splitVal, uint lchild) => new(property, splitVal, lchild, lchild + 1, JxlPredictor.Zero, 0, 1);
 
     // libjxl takes a fast path here when the tree only uses the weighted predictor and its property
     // within a small range, which kWPFixedDC does. The port always takes the general path: it gives

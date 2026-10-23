@@ -10,6 +10,7 @@ using System;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Memory;
 using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
@@ -135,6 +136,28 @@ internal sealed class JxlQuantizer
     /// <param name="qf">The float quant field value.</param>
     /// <returns>The raw quant field value.</returns>
     public int RawQuantField(float qf) => ClampVal((qf * this.invGlobalScale) + 0.5f);
+
+    /// <summary>
+    /// Sets the raw quant field of each block in <paramref name="rect"/> from the float quant field, as
+    /// libjxl's <c>SetQuantFieldRect</c>.
+    /// </summary>
+    /// <param name="qf">The float quant field, one value per block.</param>
+    /// <param name="rect">The blocks to set.</param>
+    /// <param name="rawQuantField">The raw quant field, row by row.</param>
+    /// <param name="stride">The number of blocks in a row of <paramref name="rawQuantField"/>.</param>
+    public void SetQuantFieldRect(Buffer2D<float> qf, JxlRect rect, int[] rawQuantField, int stride)
+    {
+        for (int y = 0; y < rect.YSize; y++)
+        {
+            int by = (int)rect.Y0 + y;
+            ReadOnlySpan<float> rowQf = qf.DangerousGetRowSpan(by).Slice((int)rect.X0, (int)rect.XSize);
+            Span<int> rowQi = rawQuantField.AsSpan((by * stride) + (int)rect.X0, (int)rect.XSize);
+            for (int x = 0; x < rowQf.Length; x++)
+            {
+                rowQi[x] = this.RawQuantField(rowQf[x]);
+            }
+        }
+    }
 
     /// <summary>Returns the dequantization weights of channel <paramref name="c"/> for a strategy.</summary>
     /// <param name="quantKind">The strategy.</param>

@@ -14,9 +14,10 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 
 /// <summary>
-/// E3's done-check (#270): every Fastest (libjxl effort 3) row of the calibration table, encoded by our
-/// encoder at the row's distance, meets the quality bar of #107 against cjxl's row. Our decoder checks it
-/// on every leg, Magick.NET on every leg but coverage, and djxl in <c>jxl-oracle</c>.
+/// E3's done-check (#270) and E4's (#306): every Fastest (libjxl effort 3) and Default (effort 5) row of the
+/// calibration table, encoded by our encoder at the row's distance and effort, meets the quality bar of #107
+/// against cjxl's row. Our decoder checks it on every leg, Magick.NET on every leg but coverage, and djxl in
+/// <c>jxl-oracle</c>.
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlLossyCalibrationTests
@@ -27,6 +28,13 @@ public class JxlLossyCalibrationTests
     /// a few tenths would still pass: the SHA-256 pins catch any change to the bytes.
     /// </summary>
     private const double FastestSlack = 3;
+
+    /// <summary>
+    /// The slack below cjxl's score at Default, on top of the comparer's 0.5: #107's starting value, kept
+    /// for every row (#297). No row needs a larger one: each passes with about 3.4 points to spare
+    /// (<see cref="DefaultRows"/>), calliphora d4 among them, where cjxl itself scores only 38.14.
+    /// </summary>
+    private const double DefaultSlack = 3;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
@@ -64,66 +72,78 @@ public class JxlLossyCalibrationTests
         new("line_art", 4, 51.2793, 13233),       // cjxl 51.2692,  13255: margin 3.5101, size x0.9983
     };
 
-    // Each row is encoded once, whichever readers check it.
-    private static readonly ConcurrentDictionary<(string Image, double Distance), Lazy<byte[]>> Encodes = new();
-
-    public static TheoryData<string, string, double> ReaderRows
+    /// <summary>
+    /// Each Default row of the table, and our encode of it as measured through our decoder (net10.0, x64,
+    /// e4/e4i): the managed SSIMULACRA2 and the size in bytes. The margin is the score less the floor
+    /// (cjxl's score - 0.5 - <see cref="DefaultSlack"/>), and the size is against a ceiling of 2x cjxl's.
+    /// The values are logged, not asserted: the comparer is the check.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Through our decoder every score is within 0.09 of cjxl's and every size within 0.98x to 1.02x: E4h's
+    /// strategy map is cjxl's block for block on Bike and Calliphora. The smallest margin is line_art d4's
+    /// 3.4123 (0.088 below cjxl), and the largest size the same row's 1.0198x. Through djxl's 16-bit PNG the
+    /// smallest margin is 3.4038 (line_art d4); through Magick.NET it is 3.2337 (gradient d1).
+    /// </para>
+    /// <para>
+    /// How the rows passed as E4 was built (slack 3, our decoder): E4a's tracer (Fastest's field and DCT8
+    /// everywhere) 16 of 18; E4c 17; E4b's global scale of 0.39 / d on E4c, E4d and E4e 13, as the tracer
+    /// no longer over-spent on text, line art and the gradient; E4g's 8x8 search 17; E4h's merges 18.
+    /// </para>
+    /// </remarks>
+    private static readonly MeasuredRow[] DefaultRows =
     {
-        get
-        {
-            TheoryData<string, string, double> data = new();
-            foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
-            {
-                foreach (MeasuredRow row in FastestRows)
-                {
-                    data.Add(reader.ToString(), row.Image, row.Distance);
-                }
-            }
+        // image, distance, our score, our size; then cjxl's score and size, our score margin, our size over cjxl's
+        new("bike", 1, 86.6131, 44687),           // cjxl 86.5820,  44661: margin 3.5311, size x1.0006
+        new("bike", 2, 79.7840, 29296),           // cjxl 79.7795,  29272: margin 3.5044, size x1.0008
+        new("bike", 4, 68.9696, 17859),           // cjxl 68.9480,  17833: margin 3.5216, size x1.0015
+        new("calliphora", 1, 80.1160, 56238),     // cjxl 80.1204,  56305: margin 3.4956, size x0.9988
+        new("calliphora", 2, 65.3133, 36445),     // cjxl 65.3027,  36415: margin 3.5106, size x1.0008
+        new("calliphora", 4, 38.1381, 22307),     // cjxl 38.1394,  22130: margin 3.4987, size x1.0080
+        new("bike_alpha", 1, 86.2216, 26529),     // cjxl 86.1951,  26390: margin 3.5265, size x1.0053
+        new("bike_alpha", 2, 78.0109, 20961),     // cjxl 78.0106,  20809: margin 3.5003, size x1.0073
+        new("bike_alpha", 4, 63.5843, 16824),     // cjxl 63.5816,  16730: margin 3.5027, size x1.0056
+        new("gradient", 1, 94.0487, 2187),        // cjxl 94.0537,   2187: margin 3.4950, size x1.0000
+        new("gradient", 2, 92.1156, 1683),        // cjxl 92.0942,   1706: margin 3.5215, size x0.9865
+        new("gradient", 4, 90.0266, 1258),        // cjxl 89.9831,   1278: margin 3.5435, size x0.9844
+        new("text", 1, 91.3358, 14375),           // cjxl 91.2677,  14388: margin 3.5681, size x0.9991
+        new("text", 2, 85.4831, 10779),           // cjxl 85.4606,  10797: margin 3.5225, size x0.9983
+        new("text", 4, 80.5499, 8533),            // cjxl 80.5571,   8549: margin 3.4928, size x0.9981
+        new("line_art", 1, 78.0567, 24273),       // cjxl 78.0722,  24227: margin 3.4845, size x1.0019
+        new("line_art", 2, 61.1895, 18538),       // cjxl 61.1594,  18295: margin 3.5301, size x1.0133
+        new("line_art", 4, 51.6336, 13285),       // cjxl 51.7213,  13027: margin 3.4123, size x1.0198
+    };
 
-            return data;
-        }
-    }
+    // Each row is encoded once, whichever readers check it.
+    private static readonly ConcurrentDictionary<(string Image, int Effort, double Distance), Lazy<byte[]>> Encodes = new();
+
+    public static TheoryData<string, string, double> ReaderRows => CreateReaderRows(FastestRows);
+
+    public static TheoryData<string, string, double> DefaultReaderRows => CreateReaderRows(DefaultRows);
 
     // The theory covers the whole table at Fastest: a row added to the table must be added here too.
     [Fact]
     public void FastestRows_AreEveryFastestRowOfTheTable()
-    {
-        string[] expected = JxlCalibrationTable.Instance.Rows
-            .Where(r => r.Effort == JxlCalibrationTable.LibjxlEffort(JxlEffort.Fastest))
-            .Select(r => $"{r.Image.Name} d{r.Distance.ToString(CultureInfo.InvariantCulture)}")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        => Assert.Equal(RowNames(JxlEffort.Fastest), FastestRows.Select(Name).Order(StringComparer.Ordinal).ToArray());
 
-        string[] actual = FastestRows
-            .Select(r => $"{r.Image} d{r.Distance.ToString(CultureInfo.InvariantCulture)}")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Equal(expected, actual);
-    }
+    // The Default theory covers the whole table at Default: a row added to the table must be added here too.
+    [Fact]
+    public void DefaultRows_AreEveryDefaultRowOfTheTable()
+        => Assert.Equal(RowNames(JxlEffort.Default), DefaultRows.Select(Name).Order(StringComparer.Ordinal).ToArray());
 
     // #107's rule: SSIMULACRA2 >= cjxl's - 0.5 - the slack, size <= 2x cjxl's, and alpha exact (the
     // comparer checks alpha on every row; bike_alpha is the row with alpha). Each reader's decode is
     // scored: djxl's is the 16-bit PNG the table itself scores.
     [Theory]
     [MemberData(nameof(ReaderRows))]
-    public async Task Encode_FastestCalibrationRow_MeetsTheQualityBar(string reader, string image, double distance)
-    {
-        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
-        MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
-        JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);
-        JxlEncoderRoundTrip.SkipUnlessReaderRuns(readerKind);
-        using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+    public Task Encode_FastestCalibrationRow_MeetsTheQualityBar(string reader, string image, double distance)
+        => AssertRowMeetsTheQualityBarAsync(JxlEffort.Fastest, FastestRows, FastestSlack, reader, image, distance);
 
-        byte[] encoded = Encode(row);
-
-        using Image<Rgba64> decoded = await DecodeAsync(readerKind, row, encoded);
-        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, FastestSlack);
-        TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
-            CultureInfo.InvariantCulture,
-            $"{reader}: {result}; score margin {result.Score - result.MinimumScore:F4} (recorded {measured.Score - result.MinimumScore:F4}), size ratio {(double)result.Size / row.Size:F4} (recorded {(double)measured.Size / row.Size:F4})"));
-        Assert.True(result.Passed, result.ToString());
-    }
+    // E4's done-check: the same rule at Default against cjxl -e 5, with the Default slack for every row.
+    [Theory]
+    [MemberData(nameof(DefaultReaderRows))]
+    public Task Encode_DefaultCalibrationRow_MeetsTheQualityBar(string reader, string image, double distance)
+        => AssertRowMeetsTheQualityBarAsync(JxlEffort.Default, DefaultRows, DefaultSlack, reader, image, distance);
 
     // E3d's 16-bit and float input against the 8-bit rows: the table has no such rows, but the image widened
     // to 16 bits (x 257) or to floats is the same colour, so its XYB is the same and it meets the same bar.
@@ -137,28 +157,82 @@ public class JxlLossyCalibrationTests
     [InlineData(nameof(RgbaVector), "bike", 1.0)]
     [InlineData(nameof(RgbaVector), "bike", 4.0)]
     public void Encode_FastestCalibrationRowAtAHigherDepth_MeetsTheQualityBar(string pixelType, string image, double distance)
+        => AssertWidenedRowMeetsTheQualityBar(JxlEffort.Fastest, FastestRows, FastestSlack, pixelType, image, distance);
+
+    // The same widened inputs at Default, against the 8-bit Default rows.
+    [Theory]
+    [InlineData(nameof(Rgb48), "bike", 1.0)]
+    [InlineData(nameof(Rgb48), "bike", 4.0)]
+    [InlineData(nameof(Rgba64), "bike_alpha", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 1.0)]
+    [InlineData(nameof(RgbaVector), "bike", 4.0)]
+    public void Encode_DefaultCalibrationRowAtAHigherDepth_MeetsTheQualityBar(string pixelType, string image, double distance)
+        => AssertWidenedRowMeetsTheQualityBar(JxlEffort.Default, DefaultRows, DefaultSlack, pixelType, image, distance);
+
+    private static async Task AssertRowMeetsTheQualityBarAsync(JxlEffort effort, MeasuredRow[] measuredRows, double slack, string reader, string image, double distance)
     {
-        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the 8-bit rows run the same encoder code.");
-        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, JxlEffort.Fastest, distance);
-        MeasuredRow measured = FastestRows.Single(r => r.Image == image && r.Distance == distance);
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, effort, distance);
+        MeasuredRow measured = measuredRows.Single(r => r.Image == image && r.Distance == distance);
+        JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);
+        JxlEncoderRoundTrip.SkipUnlessReaderRuns(readerKind);
         using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
 
-        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeWidened(original, (float)distance));
+        byte[] encoded = Encode(row, effort);
+
+        using Image<Rgba64> decoded = await DecodeAsync(readerKind, row, encoded);
+        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, slack);
+        TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{reader}: {result}; score margin {result.Score - result.MinimumScore:F4} (recorded {measured.Score - result.MinimumScore:F4}), size ratio {(double)result.Size / row.Size:F4} (recorded {(double)measured.Size / row.Size:F4})"));
+        Assert.True(result.Passed, result.ToString());
+    }
+
+    private static void AssertWidenedRowMeetsTheQualityBar(JxlEffort effort, MeasuredRow[] measuredRows, double slack, string pixelType, string image, double distance)
+    {
+        Assert.SkipWhen(TestEnvironment.RunsWithCodeCoverage, "Adds no coverage: the 8-bit rows run the same encoder code.");
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(image, effort, distance);
+        MeasuredRow measured = measuredRows.Single(r => r.Image == image && r.Distance == distance);
+        using Image<Rgba32> original = Image.Load<Rgba32>(row.Image.FullPath);
+
+        byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeWidened(original, (float)distance, effort));
 
         using Image<Rgba64> decoded = Image.Load<Rgba64>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
-        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, FastestSlack);
+        JxlQualityResult result = JxlQualityComparer.Compare(row, original, decoded, encoded.Length, slack);
         TestContext.Current.TestOutputHelper?.WriteLine(string.Create(
             CultureInfo.InvariantCulture,
             $"{pixelType}: {result}; score {result.Score:F4} (8-bit {measured.Score:F4}), size {result.Size} (8-bit {measured.Size})"));
         Assert.True(result.Passed, result.ToString());
     }
 
+    private static TheoryData<string, string, double> CreateReaderRows(MeasuredRow[] rows)
+    {
+        TheoryData<string, string, double> data = new();
+        foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
+        {
+            foreach (MeasuredRow row in rows)
+            {
+                data.Add(reader.ToString(), row.Image, row.Distance);
+            }
+        }
+
+        return data;
+    }
+
+    private static string[] RowNames(JxlEffort effort)
+        => JxlCalibrationTable.Instance.Rows
+            .Where(r => r.Effort == JxlCalibrationTable.LibjxlEffort(effort))
+            .Select(r => $"{r.Image.Name} d{r.Distance.ToString(CultureInfo.InvariantCulture)}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static string Name(MeasuredRow row) => $"{row.Image} d{row.Distance.ToString(CultureInfo.InvariantCulture)}";
+
     // The table's images are 8-bit sRGB with no colour chunks; only bike_alpha has alpha. Each is encoded
     // as the pixel type it is stored in, as cjxl reads it: RGB without an alpha channel, or RGBA.
-    private static byte[] Encode(JxlCalibrationRow row)
-        => Encodes.GetOrAdd((row.Image.Name, row.Distance), _ => new Lazy<byte[]>(() =>
+    private static byte[] Encode(JxlCalibrationRow row, JxlEffort effort)
+        => Encodes.GetOrAdd((row.Image.Name, row.Effort, row.Distance), _ => new Lazy<byte[]>(() =>
         {
-            JxlEncoder encoder = new() { Distance = (float)row.Distance, Effort = JxlEffort.Fastest };
+            JxlEncoder encoder = new() { Distance = (float)row.Distance, Effort = effort };
             if (Image.Identify(row.Image.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
             {
                 using Image<Rgba32> rgba = Image.Load<Rgba32>(row.Image.FullPath);
@@ -176,18 +250,18 @@ public class JxlLossyCalibrationTests
         return JxlEncoderRoundTrip.DecodeAsync<Rgba64>(reader, encoded, "LossyCalibration", name, highBitDepth: true, [.. JxlCalibrationTable.Instance.DjxlArguments]);
     }
 
-    // Encodes the 8-bit original converted to the pixel type at Fastest.
-    private sealed record EncodeWidened(Image<Rgba32> Original, float Distance) : IJxlPixelTypeCall<byte[]>
+    // Encodes the 8-bit original converted to the pixel type at the effort.
+    private sealed record EncodeWidened(Image<Rgba32> Original, float Distance, JxlEffort Effort) : IJxlPixelTypeCall<byte[]>
     {
         public byte[] Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>
         {
             using Image<TPixel> image = this.Original.CloneAs<TPixel>();
-            return JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = JxlEffort.Fastest });
+            return JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = this.Distance, Effort = this.Effort });
         }
     }
 
-    /// <summary>One Fastest row of the table and our encode of it, as measured.</summary>
+    /// <summary>One row of the table and our encode of it, as measured.</summary>
     /// <param name="Image">The calibration image.</param>
     /// <param name="Distance">The distance.</param>
     /// <param name="Score">The managed SSIMULACRA2 of our encode through our decoder.</param>

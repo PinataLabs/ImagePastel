@@ -160,7 +160,7 @@ internal static class JxlTreeLearner
     /// libjxl pads the histogram to a multiple of the SIMD width and sums per lane; padding adds
     /// symbols with no count, which add no bits. This port sums in the order of the 8 float lanes of
     /// AVX2, which cjxl runs on x64: symbol i goes to lane i % 8, and the lanes are added as Highway's
-    /// <c>SumOfLanes</c> adds them. The integer total does not depend on the order. The estimate can
+    /// <c>SumOfLanes</c> adds them (see <see cref="JxlAvx2Lanes"/>). The integer total does not depend on the order. The estimate can
     /// still differ from cjxl's in the last bits, because <see cref="JxlFastMath.FastLog2f"/> does not
     /// fuse its multiply-adds as libjxl's does on AVX2 (ADR 0004).
     /// </remarks>
@@ -178,7 +178,7 @@ internal static class JxlTreeLearner
 
         const float minprob = 1.0f / JxlAnsParams.AnsTabSize;
         float invTotal = 1.0f / total;
-        Span<float> bitsLanes = stackalloc float[8];
+        Span<float> bitsLanes = stackalloc float[JxlAvx2Lanes.Count];
         bitsLanes.Clear();
         for (int i = 0; i < numSymbols; i++)
         {
@@ -187,16 +187,10 @@ internal static class JxlTreeLearner
             float probs = countF * invTotal;
             float mprobs = Math.Max(probs, minprob);
             float nbps = count == total ? 0 : JxlFastMath.FastLog2f(mprobs);
-            bitsLanes[i & 7] -= countF * nbps;
+            bitsLanes[i & (JxlAvx2Lanes.Count - 1)] -= countF * nbps;
         }
 
-        // SumOfLanes: each lane of the lower block plus its partner in the upper block, then lanes 0
-        // and 3 and lanes 1 and 2, then those two sums.
-        float l0 = bitsLanes[0] + bitsLanes[4];
-        float l1 = bitsLanes[1] + bitsLanes[5];
-        float l2 = bitsLanes[2] + bitsLanes[6];
-        float l3 = bitsLanes[3] + bitsLanes[7];
-        return (l0 + l3) + (l1 + l2);
+        return JxlAvx2Lanes.SumOfLanes(bitsLanes);
     }
 
     private static JxlPropertyDecisionNode Leaf(JxlPredictor predictor) => new(-1, 0, 0, 0, predictor, 0, 1);

@@ -12,10 +12,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// <summary>
 /// Image encoder for writing an image to a stream as a JPEG XL codestream. Lossless encoding
 /// (<see cref="Distance"/> 0) is supported at every <see cref="JxlEffort"/>. Lossy encoding is supported
-/// at <see cref="JxlEffort.Fastest"/> only, for any pixel type, with or without alpha. Its colour space is
-/// sRGB, or the one an ICC profile describes when the encoder recognises the profile as a JPEG XL colour
-/// encoding; the file then carries that encoding instead of the profile. Lossy encoding at the other
-/// efforts, or with a profile that is not recognised, throws <see cref="System.NotSupportedException"/>.
+/// at <see cref="JxlEffort.Fastest"/> and <see cref="JxlEffort.Default"/>, for any pixel type, with or
+/// without alpha. Its colour space is sRGB, or the one an ICC profile describes when the encoder
+/// recognises the profile as a JPEG XL colour encoding; the file then carries that encoding instead of the
+/// profile. <see cref="Frame.JxlFrameEncoder"/> lists what each effort does. Lossy encoding at
+/// <see cref="JxlEffort.Thorough"/>, or with a profile that is not recognised, throws
+/// <see cref="System.NotSupportedException"/>.
 /// </summary>
 internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {

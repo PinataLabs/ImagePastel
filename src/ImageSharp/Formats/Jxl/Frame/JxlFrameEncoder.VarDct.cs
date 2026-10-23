@@ -6,7 +6,7 @@
 // EncodeGlobalACInfo, the VarDCT parts of EncodeGroups and ComputeEncodingData), lib/jxl/enc_cache.cc
 // (InitializePassesEncoder, ComputeACMetadata), lib/jxl/enc_group.cc (EncodeGroupTokenizedCoefficients),
 // lib/jxl/image_ops.cc (PadImageToBlockMultipleInPlace), lib/jxl/enc_quant_weights.cc
-// (DequantMatricesEncode), lib/jxl/enc_context_map.cc (EncodeBlockCtxMap) and
+// (DequantMatricesEncode) and
 // lib/jxl/enc_chroma_from_luma.cc (ColorCorrelationEncodeDC), for the default values each writes.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -24,8 +24,28 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <content>
-/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest): XYB,
-/// DCT8 blocks with a constant quant field, the DC and AC metadata in Modular streams, and the AC tokens.
+/// <para>
+/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest, libjxl's
+/// <c>kFalcon</c>) and effort 5 (Default, <c>kHare</c>): XYB, the DC and AC metadata in Modular streams,
+/// and the AC tokens. This is the one place that lists what each effort does; other comments point here.
+/// </para>
+/// <para>
+/// Fastest codes every block as DCT8 with a constant quant field of 0.79 / distance, the default
+/// chroma-from-luma map and the default block context map, with no Gaborish. Only the DCT8 order is
+/// customised, and the AC metadata uses libjxl's fixed Falcon tree.
+/// </para>
+/// <para>
+/// Default searches, as <see cref="JxlEncHeuristics.LossyFrameHeuristics"/> does per 64x64 tile:
+/// the adaptive quant field (<see cref="JxlEncAdaptiveQuantization"/>: <c>InitialQuantField</c>, the global
+/// scale from 0.39 / distance, and <c>AdjustQuantField</c>); the strategy of each block
+/// (<see cref="JxlEncAcStrategy"/>: DCT8, DCT4X4, DCT2X2 and IDENTITY at the 8x8 level, then the aligned
+/// merges up to 64x64); the fast least-squares chroma-from-luma map of each tile
+/// (<see cref="JxlEncChromaFromLuma"/>); and the block context map (<see cref="JxlEncBlockCtxMap"/>).
+/// The frame then adds Gaborish above distance 0.5, near-lossless DC, <c>AdjustQuantBlockAC</c>, the
+/// <c>kACMeta</c> tree for the AC metadata, a learned tree for alpha, and custom coefficient orders for every
+/// order the blocks use. <c>FindBestQuantizer</c> does nothing at Default, so there is no butteraugli loop.
+/// The searches of effort 7 and up (Thorough; slice E5) throw <see cref="NotSupportedException"/>.
+/// </para>
 /// </content>
 /// <remarks>
 /// <para>
@@ -70,7 +90,7 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
 
@@ -104,12 +124,9 @@ internal static partial class JxlFrameEncoder
 
         frameHeader.Passes.NumPasses = 1;
 
-        // Gaborish defaults to enabled in Hare or slower, above distance 0.5.
+        // Gaborish defaults to enabled in Hare or slower, above distance 0.5, with the default weights
+        // (gab_custom off).
         frameHeader.LoopFilter.Gab = speedTier <= JxlSpeedTier.Hare && distance > 0.5f;
-        if (frameHeader.LoopFilter.Gab)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Gaborish in the encoder (libjxl effort 5 and up; slice E4)");
-        }
 
         // EPF iterations by distance, at decoding speed tier 0.
         float[] thresholds = { 0.7f, 1.5f, 4.0f };
@@ -168,7 +185,7 @@ internal static partial class JxlFrameEncoder
             ComputeChromacityAdjustments(frameHeader, encState);
 
             // ComputeVarDCTEncodingData.
-            JxlEncHeuristics.LossyFrameHeuristics(encState);
+            JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
             InitializePassesEncoder(frameHeader, color, encState, encModular);
             JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
             ComputeAcMetadata(encState, encModular);
@@ -483,13 +500,12 @@ internal static partial class JxlFrameEncoder
         return groupCodes;
     }
 
-    // The quantiser, then the block context map and the chroma-from-luma DC, each its default bit.
+    // The quantiser, the block context map, then the chroma-from-luma DC as its default bit.
     private static void EncodeGlobalDcInfo(JxlPassesEncoderState encState, JxlBitWriter writer)
     {
         encState.Quantizer.Encode(writer);
 
-        // EncodeBlockCtxMap: the encoder keeps the default map, written as one bit.
-        writer.Write(1, 1);
+        JxlEncBlockCtxMap.EncodeBlockCtxMap(encState.BlockCtxMap, writer);
 
         // ColorCorrelationEncodeDC: the default factors and DC, written as one bit.
         writer.Write(1, 1);

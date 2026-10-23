@@ -3,8 +3,8 @@
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_modular.h and lib/jxl/enc_modular.cc (MergeTrees, do_transform, maybe_do_transform,
 // try_palettes, and ModularFrameEncoder: Init, ComputeEncodingData, PrepareStreamParams, ComputeTree,
-// ComputeTokens, EncodeGlobalInfo, EncodeStream, and the 4:4:4 effort-3 paths of AddVarDCTDC and
-// AddACMetadata).
+// ComputeTokens, EncodeGlobalInfo, EncodeStream, and the 4:4:4 paths of AddVarDCTDC, with QuantizeWP for
+// near-lossless DC, and AddACMetadata from effort 3 to 7).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -30,8 +30,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// palettes. Effort 7 learns the tree over more properties, tries more RCTs and caps the global
 /// palette by the estimated cost. Squeeze and quantisation are not ported.
 /// For a lossy VarDCT frame it codes the quantised DC and the AC metadata of each LF group, and the extra
-/// channels losslessly, with libjxl's predefined trees of effort 3 merged into one by stream id. It is the
-/// mirror of <see cref="JxlModularFrameDecoder"/>.
+/// channels losslessly, with one tree per kind of stream merged into one by stream id: libjxl's predefined
+/// trees for the DC and the AC metadata, and for the extra channels <c>kWPFixedDC</c> at effort 3 and a
+/// learned tree at effort 5. It is the mirror of <see cref="JxlModularFrameDecoder"/>.
 /// </summary>
 internal sealed class JxlModularFrameEncoder : IDisposable
 {
@@ -49,6 +50,9 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     // libjxl's CompressParams default decoding_speed_tier, which the encoder has no option for.
     private const int DecodingSpeedTier = 0;
 
+    // The dead zone of near-lossless DC (libjxl's q_deadzone).
+    private const float QDeadzone = 0.62f;
+
     // Properties in order of their likelihood of being useful, for the non-Squeeze case.
     private static readonly uint[] PropOrder = { 0, 1, 15, 9, 10, 11, 12, 13, 14, 2, 3, 4, 5, 6, 7, 8 };
 
@@ -63,16 +67,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         (1 * 7) + 2, (2 * 7) + 1, (2 * 7) + 2, (2 * 7) + 3, (4 * 7) + 4, (4 * 7) + 5, (0 * 7) + 2, (0 * 7) + 1, (0 * 7) + 3,
     };
 
-    // The VarDCT DC channels in the order libjxl quantises them: Y first, which X and B are predicted from.
-    private static readonly int[] YxbOrder = { 1, 0, 2 };
-
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlSpeedTier speedTier;
     private readonly JxlModularImage[] streamImages;
     private readonly JxlModularOptions[] streamOptions;
     private readonly JxlModularOptions baseOptions;
-    private readonly JxlHistogramParams histogramParams;
     private readonly bool modularMode;
     private readonly List<long> treeSplits = new();
     private readonly List<StreamParams> streamParams = new();
@@ -153,8 +153,16 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             this.streamOptions[0].Kind = JxlModularOptions.TreeKind.WPFixedDC;
         }
 
-        this.histogramParams = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, options.Predictor);
+        // libjxl keeps the Modular histogram parameters (without the extra DC precision, not known yet) in
+        // stream 0's options here. Only a stream compressed on its own (streaming mode, raw quant tables)
+        // reads them, which this port never does; EncodeGlobalInfo makes its own.
     }
+
+    /// <summary>
+    /// Gets the VarDCT channels (0 X, 1 Y, 2 B) in the order libjxl's encoder quantises them, for the DC and
+    /// for <c>AdjustQuantBlockAC</c>: Y first, which X and B are predicted from.
+    /// </summary>
+    internal static int[] YxbOrder { get; } = { 1, 0, 2 };
 
     /// <summary>Gets the number of AC metadata entries (varblocks) of each LF group of a VarDCT frame.</summary>
     public int[] AcMetadataSize { get; } = Array.Empty<int>();
@@ -386,9 +394,11 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
     /// <summary>
     /// Fills the VarDCT DC stream of LF group <paramref name="groupIndex"/> with the quantised DC of its
-    /// blocks, as libjxl's <c>AddVarDCTDC</c> does for a 4:4:4 frame without near-lossless DC (effort 3
-    /// and faster): the channels in Y, X, B order, X and B after the chroma-from-luma prediction from the
-    /// quantised Y, each rounded half away from zero.
+    /// blocks, as libjxl's <c>AddVarDCTDC</c> does for a 4:4:4 frame: the channels in Y, X, B order, X and
+    /// B after the chroma-from-luma prediction from the quantised Y. Without near-lossless DC (effort 3 and
+    /// faster) each value is rounded half away from zero. With it (effort 4 to 7), the DC has one bit of
+    /// extra precision, and each value is the weighted predictor's guess plus a residual quantised with a
+    /// dead zone (libjxl's <c>QuantizeWP</c>).
     /// </summary>
     /// <param name="dc">The X, Y and B DC of each block of the frame, rows <paramref name="stride"/> apart.</param>
     /// <param name="stride">The width of the frame in blocks.</param>
@@ -399,12 +409,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// <param name="colorCorrelation">The chroma-from-luma parameters, whose DC factors predict X and B.</param>
     public void AddVarDctDc(float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, JxlQuantizer quantizer, JxlColorCorrelation colorCorrelation)
     {
-        if (nlDc)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("Near-lossless DC (libjxl effort 4 and up; slice E4)");
-        }
-
-        this.ExtraDcPrecision[groupIndex] = 0;
+        this.ExtraDcPrecision[groupIndex] = nlDc ? 1 : 0;
         float mul = 1 << this.ExtraDcPrecision[groupIndex];
 
         long streamId = JxlModularStreamId.VarDctDc(this.frameDim, groupIndex);
@@ -428,37 +433,59 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.streamImages[streamId].Dispose();
         this.streamImages[streamId] = image;
 
+        // Departure (ADR 0001): libjxl (enc_modular.cc:1615-1726) has four loops here: near-lossless DC with
+        // kGradientFixedDC, near-lossless DC with the weighted predictor, plain 4:4:4, and chroma subsampled.
+        // The first needs a decoding speed tier of 1 or more, and the last a subsampled frame; this encoder
+        // has neither option, so it never takes them. The two loops left differ only in how one value is
+        // quantised, so this runs them as one loop that branches on nlDc for each value. Each value goes
+        // through the same arithmetic, in the same channel order, as libjxl's, so the output is the same.
         // The decoder's 4:4:4 order: Y, X, B.
         ReadOnlySpan<float> dcFactors = colorCorrelation.DcFactors;
+        bool hasOutliers = false;
         foreach (int c in YxbOrder)
         {
             float invFactor = quantizer.GetInvDcStep(c) * mul;
             float yFactor = quantizer.GetDcStep(1) / mul;
             float cflFactor = dcFactors[c];
+            JxlModularChannel channel = image.Channel[c < 2 ? c ^ 1 : c];
+
+            // Near-lossless DC predicts each value with the weighted predictor, whose state is new for
+            // each channel, and quantises the residual with a dead zone.
+            JxlWeightedState wpState = nlDc ? new JxlWeightedState(new JxlWeightedHeader(), xs) : null;
             for (int y = 0; y < ys; y++)
             {
-                Span<int> quantRow = image.Channel[c < 2 ? c ^ 1 : c].Row(y);
+                Span<int> quantRow = channel.Row(y);
+                ReadOnlySpan<int> top = y > 0 ? channel.Row(y - 1) : Span<int>.Empty;
+                ReadOnlySpan<int> topTop = y > 1 ? channel.Row(y - 2) : Span<int>.Empty;
                 ReadOnlySpan<float> row = dc[c].AsSpan((int)(((r.Y0 + y) * stride) + r.X0), xs);
-                if (c == 1)
+                ReadOnlySpan<int> quantRowY = image.Channel[0].Row(y);
+                for (int x = 0; x < xs; x++)
                 {
-                    for (int x = 0; x < xs; x++)
+                    float value = c == 1 ? row[x] : row[x] - (quantRowY[x] * (yFactor * cflFactor));
+                    if (nlDc)
+                    {
+                        quantRow[x] = QuantizeWp(quantRow, top, topTop, x, y, xs, wpState, value, invFactor, ref hasOutliers);
+                        wpState.UpdateErrors(quantRow[x], x, y, xs);
+                    }
+                    else if (c == 1)
                     {
                         quantRow[x] = (int)MathF.Round(row[x] * invFactor, MidpointRounding.AwayFromZero);
                     }
-                }
-                else
-                {
-                    ReadOnlySpan<int> quantRowY = image.Channel[0].Row(y);
-                    for (int x = 0; x < xs; x++)
+                    else
                     {
-                        quantRow[x] = (int)MathF.Round((row[x] - (quantRowY[x] * (yFactor * cflFactor))) * invFactor, MidpointRounding.AwayFromZero);
+                        quantRow[x] = (int)MathF.Round(value * invFactor, MidpointRounding.AwayFromZero);
                     }
                 }
             }
         }
 
+        if (hasOutliers)
+        {
+            JxlThrowHelper.ThrowImageFormatException("Unsupported range of DC values");
+        }
+
         // libjxl's DequantDC here fills the encoder's own reconstruction of the DC and the quantised-DC
-        // buckets. Neither is read at effort 3: the default block context map has no DC thresholds.
+        // buckets. Neither is read at effort 5 and faster: the block context map has no DC thresholds.
     }
 
     /// <summary>
@@ -484,10 +511,14 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         {
             options.Kind = JxlModularOptions.TreeKind.FalconACMeta;
         }
+        else if (this.speedTier > JxlSpeedTier.Kitten)
+        {
+            options.Kind = JxlModularOptions.TreeKind.ACMeta;
+        }
         else
         {
-            // libjxl's kACMeta tree above Kitten, and a learned one below.
-            JxlThrowHelper.ThrowNotSupportedException("The AC metadata tree of libjxl effort 4 and up (slice E4)");
+            // From Kitten down libjxl learns the tree of the AC metadata.
+            JxlThrowHelper.ThrowNotSupportedException("A learned tree for the AC metadata (libjxl effort 8 and up)");
         }
 
         // YToX, YToB, ACS + QF, EPF
@@ -532,6 +563,9 @@ internal sealed class JxlModularFrameEncoder : IDisposable
                 }
 
                 outAcs[num] = acs.RawStrategy;
+
+                // AdjustQuantBlockAC can raise a multi-block strategy's 256 to 257, which libjxl writes as
+                // it is (256 here); decoders clamp it to 256.
                 outQf[num] = encState.RawQuantField[blockIndex] - 1;
                 num++;
             }
@@ -578,15 +612,16 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         writer.Write(1, 1);
 
-        // Write tree
-        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, this.baseOptions.Predictor);
+        // Write tree. The parameters take the extra DC precision of the LF groups: near-lossless DC makes
+        // both the tree's and the streams' histograms choose the hybrid uint configuration (kFast).
+        JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, this.baseOptions.Predictor, this.ExtraDcPrecision);
         JxlEntropyEncodingData treeCode = new();
         JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlMaTree.NumTreeContexts, this.treeTokens, treeCode, writer);
         JxlEntropyEncoder.WriteTokens(this.treeTokens[0], treeCode, 0, writer);
 
         // Write histograms.
-        this.histogramParams.ImageWidths = this.imageWidths;
-        JxlEntropyEncoder.BuildAndEncodeHistograms(this.histogramParams, (this.tree.Count + 1) / 2, this.tokens, this.code, writer);
+        parameters.ImageWidths = this.imageWidths;
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, (this.tree.Count + 1) / 2, this.tokens, this.code, writer);
     }
 
     /// <summary>Writes the Modular stream <paramref name="streamId"/>: nothing if it has no channels.</summary>
@@ -613,6 +648,37 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         {
             image.Dispose();
         }
+    }
+
+    // libjxl's QuantizeWP: the residual of the scaled value from the weighted predictor's guess, 0 inside
+    // the dead zone, rounded half away from zero, and to an even step when it is larger than 2. A value
+    // that is NaN or out of the int range sets hasOutliers.
+    private static int QuantizeWp(ReadOnlySpan<int> row, ReadOnlySpan<int> top, ReadOnlySpan<int> topTop, int x, int y, int w, JxlWeightedState wpState, float value, float invFactor, ref bool hasOutliers)
+    {
+        float svalue = value * invFactor;
+        JxlPredictionResult pred = JxlModularPredict.PredictNoTree(w, row, top, topTop, x, y, JxlPredictor.Weighted, wpState);
+        svalue -= pred.Guess;
+        if (svalue > -QDeadzone && svalue < QDeadzone)
+        {
+            svalue = 0;
+        }
+
+        int residual = 0;
+        if (float.IsNaN(svalue) || svalue > int.MaxValue || svalue < int.MinValue)
+        {
+            hasOutliers = true;
+        }
+        else
+        {
+            residual = (int)MathF.Round(svalue, MidpointRounding.AwayFromZero);
+        }
+
+        if (residual > 2 || residual < -2)
+        {
+            residual = (int)(MathF.Round(svalue * 0.5f, MidpointRounding.AwayFromZero) * 2);
+        }
+
+        return (int)(residual + pred.Guess);
     }
 
     // The tail of libjxl's ComputeEncodingData: the stream of each LF group and each group, then the
