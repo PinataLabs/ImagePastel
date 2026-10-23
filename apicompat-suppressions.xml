@@ -198,4 +198,70 @@
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SixLabors.ImageSharp.Formats.Tiff.TiffFrameMetadata.set_EmbeddedIccProfile(SixLabors.ImageSharp.Metadata.Profiles.Icc.IccProfile)</Target>
   </Suppression>
+  <!-- Additions: JPEG XL colour description and its enums, #308 (D15a). -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlColorEncoding</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlPrimaries</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlRenderingIntent</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlTransferFunction</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint</Target>
+  </Suppression>
+  <!-- Additions: JPEG XL decoder, its format metadata and JxlConfigurationModule, #311 (D15b). -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlDecoder</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlFormat</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlFrameMetadata</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlImageFormatDetector</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlMetadata</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.MetadataExtensions.GetJxlFrameMetadata(SixLabors.ImageSharp.Metadata.ImageFrameMetadata)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.MetadataExtensions.GetJxlMetadata(SixLabors.ImageSharp.Metadata.ImageMetadata)</Target>
+  </Suppression>
 </Suppressions>

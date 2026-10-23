@@ -114,7 +114,7 @@ internal sealed class JxlOutputEncoding
     public static JxlOutputEncoding Create(JxlCodecMetadata metadata, bool displayEncoded)
     {
         JxlImageMetadata m = metadata.M;
-        JxlColorEncoding orig = m.ColorEncoding;
+        JxlColorEncodingHeader orig = m.ColorEncoding;
         float intensityTarget = m.ToneMapping.IntensityTarget;
         if (!m.XybEncoded)
         {
@@ -202,7 +202,7 @@ internal sealed class JxlOutputEncoding
     /// </summary>
     /// <param name="c">The colour encoding.</param>
     /// <returns><see langword="true"/> if the XYB stage can output to it.</returns>
-    public static bool CanOutputToColorEncoding(JxlColorEncoding c)
+    public static bool CanOutputToColorEncoding(JxlColorEncodingHeader c)
     {
         if (c.WantIcc)
         {

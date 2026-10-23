@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
@@ -78,6 +77,16 @@ internal sealed class JxlTestLayers
 
     /// <summary>Gets the animation's loop count; 0 is forever.</summary>
     public uint NumLoops { get; init; }
+
+    /// <summary>Gets a value indicating whether the animation header sets have_timecodes, which gives each frame a <see cref="JxlTestFrame.Timecode"/>.</summary>
+    public bool Timecodes { get; init; }
+
+    /// <summary>
+    /// Gets the extra channels after the alpha, if any. Every frame gives them the blending of
+    /// <see cref="JxlTestFrame.ExtraChannel"/>, so they need sections whose tree covers every channel
+    /// after the third, as <see cref="ColourA"/>, <see cref="ColourB"/> and <see cref="Ramp"/> have.
+    /// </summary>
+    public JxlTestExtraChannel[] ExtraChannels { get; init; }
 
     /// <summary>Gets a value indicating whether the image is XYB-encoded, which gives every frame the XYB colour transform.</summary>
     public bool Xyb { get; init; }
@@ -172,21 +181,41 @@ internal sealed class JxlTestLayers
                 w.Write(2, 3).Write(30, this.TpsNumerator - 1).Write(2, 3).Write(10, this.TpsDenominator - 1).Write(2, 3).Write(32, this.NumLoops);
             }
 
-            w.Bit(false); // no timecodes
+            w.Bit(this.Timecodes);
         }
 
-        w.Bit(false).Write(2, 0).Bit(true); // 8-bit integer samples, 16-bit buffers suffice
-        if (!this.Alpha)
+        // 8-bit integer samples; 16-bit buffers suffice unless an extra channel has more than 12 bits,
+        // as libjxl's encoder sets it.
+        JxlTestExtraChannel[] extraChannels = this.ExtraChannels ?? Array.Empty<JxlTestExtraChannel>();
+        w.Bit(false).Write(2, 0).Bit(Array.TrueForAll(extraChannels, c => c.Bits <= 12));
+
+        // num_extra_channels: U32(Val(0), Val(1), BitsOffset(4, 2), BitsOffset(12, 1)).
+        this.numExtraChannels = (this.Alpha ? 1 : 0) + extraChannels.Length;
+        if (this.numExtraChannels < 2)
         {
-            w.Write(2, 0);
+            w.Write(2, (ulong)this.numExtraChannels);
         }
-        else if (!this.Premultiplied)
+        else if (this.numExtraChannels < 18)
         {
-            w.Write(2, 1).Bit(true); // one extra channel, all default: 8-bit straight alpha
+            w.Write(2, 2).Write(4, (ulong)this.numExtraChannels - 2);
         }
         else
         {
-            w.Write(2, 1).Bit(false).Write(2, 0).Bit(false).Write(2, 0).Write(2, 0).Write(2, 0).Bit(true); // 8-bit premultiplied alpha
+            w.Write(2, 3).Write(12, (ulong)this.numExtraChannels - 1);
+        }
+
+        if (this.Alpha && !this.Premultiplied)
+        {
+            w.Bit(true); // all default: 8-bit straight alpha
+        }
+        else if (this.Alpha)
+        {
+            w.Bit(false).Write(2, 0).Bit(false).Write(2, 0).Write(2, 0).Write(2, 0).Bit(true); // 8-bit premultiplied alpha
+        }
+
+        foreach (JxlTestExtraChannel extraChannel in extraChannels)
+        {
+            extraChannel.Write(w);
         }
 
         w.Bit(this.Xyb);
@@ -199,9 +228,9 @@ internal sealed class JxlTestLayers
             // ColorEncoding: not all default, no ICC, RGB, D65, sRGB primaries, then the transfer
             // function and the relative intent.
             w.Bit(false).Bit(false);
-            WriteEnum(w, (uint)JxlColorSpace.Rgb);
-            WriteEnum(w, (uint)JxlWhitePoint.D65);
-            WriteEnum(w, (uint)JxlPrimaries.Srgb);
+            w.WriteEnum((uint)JxlColorSpace.Rgb);
+            w.WriteEnum((uint)JxlWhitePoint.D65);
+            w.WriteEnum((uint)JxlPrimaries.Srgb);
             w.Bit(this.Gamma != 0);
             if (this.Gamma != 0)
             {
@@ -209,10 +238,10 @@ internal sealed class JxlTestLayers
             }
             else
             {
-                WriteEnum(w, (uint)this.TransferFunction.Value);
+                w.WriteEnum((uint)this.TransferFunction.Value);
             }
 
-            WriteEnum(w, (uint)JxlRenderingIntent.Relative);
+            w.WriteEnum((uint)JxlRenderingIntent.Relative);
         }
 
         if (this.Animation)
@@ -229,23 +258,6 @@ internal sealed class JxlTestLayers
         }
 
         return w.ToArray();
-    }
-
-    // An enum field: U32(Val(0), Val(1), BitsOffset(4, 2), BitsOffset(6, 18)).
-    private static void WriteEnum(JxlTestBitWriter w, uint value)
-    {
-        if (value < 2)
-        {
-            w.Write(2, value);
-        }
-        else if (value < 18)
-        {
-            w.Write(2, 2).Write(4, value - 2);
-        }
-        else
-        {
-            w.Write(2, 3).Write(6, value - 18);
-        }
     }
 
     private static void WriteSide(JxlTestBitWriter w, int size)
@@ -325,29 +337,6 @@ internal sealed class JxlTestLayers
         else
         {
             w.Write(2, 3).Write(32, duration);
-        }
-    }
-
-    // VisitNameString: the length as U32(Val(0), Bits(4), BitsOffset(5, 16), BitsOffset(10, 48)), then the bytes.
-    private static void WriteName(JxlTestBitWriter w, string name)
-    {
-        byte[] bytes = Encoding.UTF8.GetBytes(name ?? string.Empty);
-        if (bytes.Length == 0)
-        {
-            w.Write(2, 0);
-        }
-        else if (bytes.Length < 16)
-        {
-            w.Write(2, 1).Write(4, (ulong)bytes.Length);
-        }
-        else
-        {
-            w.Write(2, 2).Write(5, (ulong)bytes.Length - 16);
-        }
-
-        foreach (byte b in bytes)
-        {
-            w.Write(8, b);
         }
     }
 
@@ -476,6 +465,10 @@ internal sealed class JxlTestLayers
             if (this.Animation)
             {
                 WriteDuration(w, frame.Duration);
+                if (this.Timecodes)
+                {
+                    w.Write(32, frame.Timecode);
+                }
             }
 
             isLast = frame.IsLast;
@@ -493,7 +486,7 @@ internal sealed class JxlTestLayers
             w.Bit(frame.SaveBeforeColorTransform);
         }
 
-        WriteName(w, frame.Name);
+        w.WriteName(frame.Name);
         w.Bit(false).Bit(false).Write(2, 0).Write(2, 0); // loop filter: no Gaborish, no EPF, no extensions
         w.Write(2, 0); // no extensions
 
@@ -564,6 +557,73 @@ internal sealed class JxlTestLayers
 internal readonly record struct JxlTestBlending(JxlBlendMode Mode, uint Source = 0, uint AlphaChannel = 0, bool Clamp = false);
 
 /// <summary>
+/// The header of one extra channel (libjxl's <c>ExtraChannelInfo</c>), written field by field and never
+/// as all default. An alpha is straight, a spot colour is opaque red and a CFA channel has index 1.
+/// </summary>
+/// <param name="Type">The type; any value of libjxl's ExtraChannel enum, valid or not, can be written.</param>
+/// <param name="Name">The name, up to 47 UTF-8 bytes.</param>
+/// <param name="Bits">The bits per sample, including the exponent and sign of a float.</param>
+/// <param name="Float">Whether the samples are floating point.</param>
+/// <param name="ExponentBits">The exponent bits of a float, 2 to 8; 0 for integers.</param>
+/// <param name="DimShift">The dim_shift, 0 to 3.</param>
+internal readonly record struct JxlTestExtraChannel(JxlExtraChannelType Type, string Name = "", uint Bits = 8, bool Float = false, uint ExponentBits = 0, uint DimShift = 0)
+{
+    public void Write(JxlTestBitWriter w)
+    {
+        w.Bit(false); // not all default
+        w.WriteEnum((uint)this.Type);
+
+        // BitDepth: the float flag, bits_per_sample as U32(Val(8), Val(10), Val(12), BitsOffset(6, 1)) for
+        // integers or U32(Val(32), Val(16), Val(24), BitsOffset(6, 1)) for floats, then a float's
+        // exponent_bits_per_sample - 1 in 4 bits.
+        w.Bit(this.Float);
+        uint[] direct = this.Float ? new uint[] { 32, 16, 24 } : new uint[] { 8, 10, 12 };
+        int selector = Array.IndexOf(direct, this.Bits);
+        if (selector >= 0)
+        {
+            w.Write(2, (ulong)selector);
+        }
+        else
+        {
+            w.Write(2, 3).Write(6, this.Bits - 1);
+        }
+
+        if (this.Float)
+        {
+            w.Write(4, this.ExponentBits - 1);
+        }
+
+        // dim_shift: U32(Val(0), Val(3), Val(4), BitsOffset(3, 1)).
+        switch (this.DimShift)
+        {
+            case 0:
+                w.Write(2, 0);
+                break;
+            case 3:
+                w.Write(2, 1);
+                break;
+            default:
+                w.Write(2, 3).Write(3, this.DimShift - 1);
+                break;
+        }
+
+        w.WriteName(this.Name);
+        switch (this.Type)
+        {
+            case JxlExtraChannelType.Alpha:
+                w.Bit(false); // straight alpha
+                break;
+            case JxlExtraChannelType.SpotColor:
+                w.Write(16, 0x3C00).Write(16, 0).Write(16, 0).Write(16, 0x3C00); // red, solidity 1, as F16
+                break;
+            case JxlExtraChannelType.Cfa:
+                w.Write(2, 0); // cfa_channel: Val(1)
+                break;
+        }
+    }
+}
+
+/// <summary>
 /// One frame of a <see cref="JxlTestLayers"/> codestream. A zero <see cref="XSize"/> means a full-size
 /// frame, unless <see cref="Crop"/> forces the crop fields to be written.
 /// </summary>
@@ -610,6 +670,9 @@ internal sealed record JxlTestFrame(byte[] Section)
     public JxlTestBlending[] ExtraChannels { get; init; }
 
     public uint Duration { get; init; }
+
+    /// <summary>Gets the timecode, 0xHHMMSSFF, written only when the layers set <see cref="JxlTestLayers.Timecodes"/>.</summary>
+    public uint Timecode { get; init; }
 
     /// <summary>Gets the DC level of a <see cref="JxlFrameType.Dc"/> frame, 1 to 4.</summary>
     public uint DcLevel { get; init; } = 1;

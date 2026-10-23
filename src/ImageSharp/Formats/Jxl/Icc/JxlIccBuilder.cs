@@ -42,7 +42,7 @@ internal static class JxlIccBuilder
     /// <returns>
     /// The profile, or null for the XYB colour space, for which none is built.
     /// </returns>
-    public static IccProfile Create(JxlColorEncoding c)
+    public static IccProfile Create(JxlColorEncodingHeader c)
     {
         if (c.ColorSpace == JxlColorSpace.Xyb && c.RenderingIntent != JxlRenderingIntent.Perceptual)
         {
@@ -71,7 +71,7 @@ internal static class JxlIccBuilder
     /// <param name="input">The encoded red, green and blue samples, from 0 to 1.</param>
     /// <param name="pcsLabOut">Receives L*, a* and b* as PCS Lab bytes: 255 L* / 100, and a* and b* plus 128.</param>
     /// <exception cref="ArgumentException">The white point or the primaries cannot describe a colour space.</exception>
-    internal static void ToneMapPixel(JxlColorEncoding c, ReadOnlySpan<float> input, Span<byte> pcsLabOut)
+    internal static void ToneMapPixel(JxlColorEncodingHeader c, ReadOnlySpan<float> input, Span<byte> pcsLabOut)
     {
         (float[,] primariesXyz, float[] luminances) = c.PrimariesToXyz();
         Span<float> linear = stackalloc float[3];
@@ -131,7 +131,7 @@ internal static class JxlIccBuilder
         }
     }
 
-    private static IccProfile Build(JxlColorEncoding c)
+    private static IccProfile Build(JxlColorEncodingHeader c)
     {
         IccColorSpaceType dataColorSpace = c.ColorSpace == JxlColorSpace.Gray ? IccColorSpaceType.Gray : IccColorSpaceType.Rgb;
         (double X, double Y)[] primaries = null;
@@ -179,7 +179,7 @@ internal static class JxlIccBuilder
 
     // CreateICCLutAtoBTagForHDR: the grid of the mft1 tag, k3DLutDim nodes per input, each the PCS Lab bytes
     // ToneMapPixel gives for the node's encoded samples. ix (red) varies slowest and ib (blue) fastest.
-    private static byte[] CreateLutAtoBGridForHdr(JxlColorEncoding c)
+    private static byte[] CreateLutAtoBGridForHdr(JxlColorEncodingHeader c)
     {
         const int k3DLutDim = LutGridPoints;
         byte[] grid = new byte[k3DLutDim * k3DLutDim * k3DLutDim * 3];
@@ -206,7 +206,7 @@ internal static class JxlIccBuilder
     // CanToneMap: if the color space cannot be represented by a CICP tag in the ICC profile then the rest
     // of the profile must unambiguously identify it; we have less freedom to do use it for tone mapping.
     // libjxl's default build (JXL_ENABLE_3D_ICC_TONEMAPPING) gives these encodings a 3D-LUT profile.
-    private static bool CanToneMap(JxlColorEncoding c)
+    private static bool CanToneMap(JxlColorEncodingHeader c)
         => c.ColorSpace == JxlColorSpace.Rgb
         && (c.Tf.IsPq || c.Tf.IsHlg)
         && ((c.Primaries == JxlPrimaries.P3 && c.WhitePoint is (JxlWhitePoint.D65 or JxlWhitePoint.Dci))
@@ -245,7 +245,7 @@ internal static class JxlIccBuilder
     // MaybeCreateICCCICPTag: the H.273 code points of an RGB encoding with enumerated primaries and white
     // point and an enumerated transfer function. The JPEG XL enums use the H.273 values, except that P3
     // primaries are 12 with a D65 white and 11 with the DCI white.
-    private static (byte ColorPrimaries, byte TransferCharacteristics)? Cicp(JxlColorEncoding c)
+    private static (byte ColorPrimaries, byte TransferCharacteristics)? Cicp(JxlColorEncodingHeader c)
     {
         if (c.ColorSpace != JxlColorSpace.Rgb)
         {
@@ -331,7 +331,7 @@ internal static class JxlIccBuilder
     // ColorEncodingDescriptionImpl(c, uniquename: false): a short name for the common spaces, otherwise
     // the fields, as in "RGB_D65_SRG_Rel_Lin". libjxl formats the custom values with its own ToString;
     // this uses the shortest round-trip form.
-    private static string Description(JxlColorEncoding c)
+    private static string Description(JxlColorEncodingHeader c)
     {
         // Return short names for the most common color spaces. These names are returned regardless of
         // rendering intent, and also there is some tolerance regarding primaries and transfer function,

@@ -158,7 +158,7 @@ internal sealed class JxlImageFrameSink<TPixel> : IJxlRenderSink
 
     // The naive conversion of issue #111, as the JPEG decoder's FromCmykScalar converts Adobe CMYK:
     // R = C K, G = M K, B = Y K. JPEG XL stores ink as 1 - amount, so 0 is full ink and the product is
-    // the colour left. There is no ICC transform; the CMYK profile stays in JxlMetadata.OriginalIccProfile.
+    // the colour left. There is no ICC transform; the CMYK profile stays in JxlMetadata.EmbeddedIccProfile.
     private static void ConvertCmyk(Span<float> k, Span<Vector4> row)
     {
         for (int x = 0; x < row.Length; x++)

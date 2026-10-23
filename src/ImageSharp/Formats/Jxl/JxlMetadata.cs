@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace SixLabors.ImageSharp.Formats.Jxl;
@@ -12,7 +11,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// <summary>
 /// Provides JPEG XL specific metadata information for the image.
 /// </summary>
-internal sealed class JxlMetadata : IDeepCloneable
+public sealed class JxlMetadata : IDeepCloneable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlMetadata"/> class.
@@ -23,12 +22,12 @@ internal sealed class JxlMetadata : IDeepCloneable
 
     private JxlMetadata(JxlMetadata other)
     {
-        this.ColorEncoding = other.ColorEncoding?.Clone();
+        this.ColorEncoding = other.ColorEncoding;
         this.IsXybEncoded = other.IsXybEncoded;
         this.BitsPerSample = other.BitsPerSample;
         this.ExponentBitsPerSample = other.ExponentBitsPerSample;
         this.IntensityTarget = other.IntensityTarget;
-        this.OriginalIccProfile = other.OriginalIccProfile?.DeepClone();
+        this.EmbeddedIccProfile = other.EmbeddedIccProfile?.DeepClone();
         this.LoopCount = other.LoopCount;
         this.TicksPerSecondNumerator = other.TicksPerSecondNumerator;
         this.TicksPerSecondDenominator = other.TicksPerSecondDenominator;
@@ -38,10 +37,11 @@ internal sealed class JxlMetadata : IDeepCloneable
     }
 
     /// <summary>
-    /// Gets or sets the enumerated colour encoding of the image, or null when the stream signals an ICC
-    /// profile instead.
+    /// Gets the enumerated colour encoding of the image, or null when the stream signals an ICC profile
+    /// instead (see <see cref="EmbeddedIccProfile"/>).
     /// </summary>
-    public JxlColorEncoding ColorEncoding { get; set; }
+    // The setter is internal because JxlColorEncoding has no public constructor: only the decoder makes one.
+    public JxlColorEncoding ColorEncoding { get; internal set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the image is coded in the XYB colour space. Such images
@@ -51,24 +51,25 @@ internal sealed class JxlMetadata : IDeepCloneable
 
     /// <summary>
     /// Gets or sets the bits per colour sample, including the sign and exponent bits of float samples.
-    /// The decoder sets it from the image header. When it is not 0, the encoder checks that it is a
-    /// valid depth, and writes it if it holds every sample of the pixel type losslessly; otherwise the
-    /// encoder takes the depth of the pixel type.
+    /// The decoder sets it from the image header.
     /// </summary>
-    public uint BitsPerSample { get; set; }
+    // For the encoder (internal until E6): when it is not 0, the encoder checks that it is a valid depth,
+    // and writes it if it holds every sample of the pixel type losslessly; otherwise the encoder takes the
+    // depth of the pixel type.
+    public int BitsPerSample { get; set; }
 
     /// <summary>
-    /// Gets or sets the exponent bits per colour sample: 0 for integer samples, 8 for float32. It is
-    /// read and written with <see cref="BitsPerSample"/>.
+    /// Gets or sets the exponent bits per colour sample: 0 for integer samples, 8 for float32. The decoder
+    /// sets it with <see cref="BitsPerSample"/>.
     /// </summary>
-    public uint ExponentBitsPerSample { get; set; }
+    public int ExponentBitsPerSample { get; set; }
 
     /// <summary>
     /// Gets or sets the intensity target: the luminance, in nits, that the largest sample stands for. The
-    /// decoder sets it from the image header. When it is not 0, the encoder writes it; otherwise the encoder
-    /// writes libjxl's default for the transfer function: 10,000 nits for PQ, 1,000 for HLG and 255 for
-    /// anything else.
+    /// decoder sets it from the image header.
     /// </summary>
+    // For the encoder (internal until E6): when it is not 0, the encoder writes it; otherwise it writes
+    // libjxl's default for the transfer function: 10,000 nits for PQ, 1,000 for HLG and 255 for anything else.
     public float IntensityTarget { get; set; }
 
     /// <summary>
@@ -76,7 +77,7 @@ internal sealed class JxlMetadata : IDeepCloneable
     /// colour with a colour encoding. It is set even where it does not describe the decoded pixels
     /// (XYB and CMYK images), so it is not always the pixel profile.
     /// </summary>
-    public IccProfile OriginalIccProfile { get; set; }
+    public IccProfile EmbeddedIccProfile { get; set; }
 
     /// <summary>
     /// Gets or sets how many times an animation plays; 0 means forever. It is 0 for a still image.
@@ -96,7 +97,7 @@ internal sealed class JxlMetadata : IDeepCloneable
     public uint TicksPerSecondDenominator { get; set; }
 
     /// <summary>
-    /// Gets or sets the extra channels of the image, in stream order: every one the header describes, including
+    /// Gets the extra channels of the image, in stream order: every one the header describes, including
     /// those the decoder leaves out of the pixels. It is empty, not null, for an image with none.
     /// </summary>
     public IReadOnlyList<JxlExtraChannel> ExtraChannels { get; internal set; } = Array.Empty<JxlExtraChannel>();

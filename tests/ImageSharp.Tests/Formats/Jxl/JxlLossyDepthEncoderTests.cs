@@ -69,16 +69,16 @@ public class JxlLossyDepthEncoderTests
     // reads) when that holds every sample. So the decoder gives back the same pixel type, and 16-bit input
     // keeps 16 bits.
     [Theory]
-    [InlineData(nameof(L8), 0u, true, 8u, 0u, 8)]
-    [InlineData(nameof(L16), 0u, true, 16u, 0u, 16)]
-    [InlineData(nameof(La16), 0u, true, 8u, 0u, 16)]
-    [InlineData(nameof(La32), 0u, true, 16u, 0u, 32)]
-    [InlineData(nameof(Rgb48), 0u, false, 16u, 0u, 48)]
-    [InlineData(nameof(Rgba64), 0u, false, 16u, 0u, 64)]
-    [InlineData(nameof(RgbaVector), 0u, false, 32u, 8u, 128)]
-    [InlineData(nameof(L16), 8u, true, 8u, 0u, 8)]
-    [InlineData(nameof(Rgb48), 8u, false, 8u, 0u, 24)]
-    public void Identify_LossyPixelType_GivesItsColourSpaceAndTheDepthOfE1sRules(string pixelType, uint requestedBits, bool expectedGrey, uint expectedBits, uint expectedExponentBits, int expectedBitsPerPixel)
+    [InlineData(nameof(L8), 0, true, 8, 0, 8)]
+    [InlineData(nameof(L16), 0, true, 16, 0, 16)]
+    [InlineData(nameof(La16), 0, true, 8, 0, 16)]
+    [InlineData(nameof(La32), 0, true, 16, 0, 32)]
+    [InlineData(nameof(Rgb48), 0, false, 16, 0, 48)]
+    [InlineData(nameof(Rgba64), 0, false, 16, 0, 64)]
+    [InlineData(nameof(RgbaVector), 0, false, 32, 8, 128)]
+    [InlineData(nameof(L16), 8, true, 8, 0, 8)]
+    [InlineData(nameof(Rgb48), 8, false, 8, 0, 24)]
+    public void Identify_LossyPixelType_GivesItsColourSpaceAndTheDepthOfE1sRules(string pixelType, int requestedBits, bool expectedGrey, int expectedBits, int expectedExponentBits, int expectedBitsPerPixel)
     {
         // Grey ramps for a grey type and eight colours with eight alphas otherwise: 8-bit samples.
         string pattern = expectedGrey ? "ramp-stripes" : "translucent-icon";
@@ -88,9 +88,9 @@ public class JxlLossyDepthEncoderTests
 
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
+        Assert.NotNull(metadata.ColorEncoding);
         Assert.Equal(expectedGrey ? JxlColorSpace.Gray : JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.False(metadata.ColorEncoding.WantIcc);
-        Assert.Equal(JxlTransferFunction.Srgb, metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Srgb, metadata.ColorEncoding.TransferFunction);
         Assert.Equal(expectedBits, metadata.BitsPerSample);
         Assert.Equal(expectedExponentBits, metadata.ExponentBitsPerSample);
         Assert.Equal(expectedBitsPerPixel, info.PixelType.BitsPerPixel);
@@ -106,7 +106,7 @@ public class JxlLossyDepthEncoderTests
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
 
         IImageInfo info = Image.Identify(JxlEncoderRoundTrip.CreateConfiguration(), new MemoryStream(encoded));
-        Assert.Equal(16u, info.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample);
+        Assert.Equal(16, info.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample);
         Assert.Equal(16, info.PixelType.BitsPerPixel);
     }
 
@@ -332,7 +332,7 @@ public class JxlLossyDepthEncoderTests
     }
 
     // Encodes a pattern of JxlEncoderRoundTrip as the pixel type, with a requested depth (0 for none).
-    private sealed record EncodeEightBitSamples(string Pattern, uint RequestedBits) : IJxlPixelTypeCall<byte[]>
+    private sealed record EncodeEightBitSamples(string Pattern, int RequestedBits) : IJxlPixelTypeCall<byte[]>
     {
         public byte[] Invoke<TPixel>()
             where TPixel : unmanaged, IPixel<TPixel>

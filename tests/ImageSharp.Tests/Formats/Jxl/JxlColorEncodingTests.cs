@@ -56,7 +56,7 @@ public class JxlColorEncodingTests
         Assert.Equal(JxlColorSpace.Rgb, jxl.ColorEncoding.ColorSpace);
         Assert.Equal(JxlWhitePoint.D65, jxl.ColorEncoding.WhitePoint);
         Assert.Equal(JxlPrimaries.Srgb, jxl.ColorEncoding.Primaries);
-        Assert.Equal(JxlTransferFunction.Srgb, jxl.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Srgb, jxl.ColorEncoding.TransferFunction);
         Assert.False(jxl.IsXybEncoded);
         Assert.Null(metadata.IccProfile);
     }
@@ -68,7 +68,7 @@ public class JxlColorEncodingTests
         JxlMetadata jxl = metadata.GetFormatMetadata(JxlFormat.Instance);
 
         Assert.True(jxl.IsXybEncoded);
-        Assert.Equal(JxlTransferFunction.Srgb, jxl.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Srgb, jxl.ColorEncoding.TransferFunction);
         Assert.Null(metadata.IccProfile);
     }
 
@@ -164,20 +164,19 @@ public class JxlColorEncodingTests
     }
 
     // An RGB PQ or HLG encoding that a cicp tag can name gets libjxl's 3D-LUT profile: a Lab PCS, an mft1
-    // A2B0 that tone-maps to PCS Lab, and a no-op mBA B2A0. The values are JxlTransferFunction's Hlg (18) and
-    // Pq (16), which is internal.
+    // A2B0 that tone-maps to PCS Lab, and a no-op mBA B2A0.
     // Measured: every LUT entry equal to djxl's (largest difference 0 of one 8-bit step).
     [Theory]
-    [InlineData("hlg", 18)]
-    [InlineData("pq", 16)]
-    [InlineData("p3_hlg", 18)]
-    public void Load_RgbPqOrHlgThatACicpTagNames_GivesA3DLutProfileLikeDjxls(string name, int transferFunction)
+    [InlineData("hlg", JxlTransferFunction.Hlg)]
+    [InlineData("pq", JxlTransferFunction.Pq)]
+    [InlineData("p3_hlg", JxlTransferFunction.Hlg)]
+    public void Load_RgbPqOrHlgThatACicpTagNames_GivesA3DLutProfileLikeDjxls(string name, JxlTransferFunction transferFunction)
     {
         using Image<Rgba32> image = Image.Load<Rgba32>(CreateConfiguration(), Path.Combine(GeneratedDirectory, "colour_" + name + ".jxl"));
         using Image<Rgba32> reference = Image.Load<Rgba32>(ReferencePath(name));
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
-        Assert.Equal((JxlTransferFunction)transferFunction, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(transferFunction, image.Metadata.GetFormatMetadata(JxlFormat.Instance).ColorEncoding.TransferFunction);
         AssertLutProfileLikeDjxls(DjxlProfile(name), image.Metadata.IccProfile);
     }
 
@@ -247,7 +246,7 @@ public class JxlColorEncodingTests
         JxlMetadata jxl = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.False(jxl.IsXybEncoded);
         Assert.Equal(JxlColorSpace.Gray, jxl.ColorEncoding.ColorSpace);
-        Assert.Equal(JxlTransferFunction.Pq, jxl.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Pq, jxl.ColorEncoding.TransferFunction);
         Assert.Equal(image.Metadata.IccProfile.ToByteArray(), info.Metadata.IccProfile.ToByteArray());
     }
 
@@ -282,11 +281,11 @@ public class JxlColorEncodingTests
 
         JxlMetadata clone = (JxlMetadata)jxl.DeepClone();
 
-        Assert.NotSame(jxl.ColorEncoding, clone.ColorEncoding);
+        // The description is immutable, so the clone may share it.
         Assert.Equal(jxl.IsXybEncoded, clone.IsXybEncoded);
         Assert.Equal(JxlPrimaries.Custom, clone.ColorEncoding.Primaries);
-        Assert.Equal(jxl.ColorEncoding.Red.X, clone.ColorEncoding.Red.X);
-        Assert.Equal(jxl.ColorEncoding.White.Y, clone.ColorEncoding.White.Y);
+        Assert.Equal(jxl.ColorEncoding.CustomRedPrimary, clone.ColorEncoding.CustomRedPrimary);
+        Assert.Equal(jxl.ColorEncoding.CustomWhitePoint, clone.ColorEncoding.CustomWhitePoint);
         Assert.Equal(JxlRenderingIntent.Absolute, clone.ColorEncoding.RenderingIntent);
     }
 

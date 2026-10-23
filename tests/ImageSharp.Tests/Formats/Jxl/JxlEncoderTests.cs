@@ -167,9 +167,10 @@ public class JxlEncoderTests
 
     private static void AssertSrgb(JxlColorEncoding colorEncoding)
     {
-        Assert.False(colorEncoding.WantIcc);
+        // A null description would mean the stream signals an ICC profile.
+        Assert.NotNull(colorEncoding);
         Assert.Equal(JxlWhitePoint.D65, colorEncoding.WhitePoint);
-        Assert.False(colorEncoding.Tf.HaveGamma);
-        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.Tf.TransferFunction);
+        Assert.Null(colorEncoding.Gamma);
+        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.TransferFunction);
     }
 }

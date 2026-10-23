@@ -161,12 +161,12 @@ public class JxlMetadataTests
 
         if (EmbedsIcc(vector.CommittedInputPath))
         {
-            Assert.NotNull(jxl.OriginalIccProfile);
-            Assert.Equal(vector.Sha256Sums["original.icc"], Sha256(jxl.OriginalIccProfile.ToByteArray()));
+            Assert.NotNull(jxl.EmbeddedIccProfile);
+            Assert.Equal(vector.Sha256Sums["original.icc"], Sha256(jxl.EmbeddedIccProfile.ToByteArray()));
         }
         else
         {
-            Assert.Null(jxl.OriginalIccProfile);
+            Assert.Null(jxl.EmbeddedIccProfile);
         }
     }
 
@@ -184,10 +184,10 @@ public class JxlMetadataTests
         ImageMetadata metadata = Identify(JxlConformanceVector.Load(id).CommittedInputPath);
         JxlMetadata jxl = metadata.GetFormatMetadata(JxlFormat.Instance);
 
-        Assert.NotNull(jxl.OriginalIccProfile);
+        Assert.NotNull(jxl.EmbeddedIccProfile);
         if (isPixelProfile)
         {
-            Assert.Equal(jxl.OriginalIccProfile.ToByteArray(), metadata.IccProfile.ToByteArray());
+            Assert.Equal(jxl.EmbeddedIccProfile.ToByteArray(), metadata.IccProfile.ToByteArray());
         }
         else
         {
@@ -203,7 +203,7 @@ public class JxlMetadataTests
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
         Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.IccProfile.ToByteArray());
-        Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.ToByteArray());
+        Assert.Equal(reference.Metadata.IccProfile.ToByteArray(), image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile.ToByteArray());
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class JxlMetadataTests
 
         ImageComparer.Exact.VerifySimilarity(reference, image);
         Assert.Null(image.Metadata.IccProfile);
-        Assert.Null(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+        Assert.Null(image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile);
     }
 
     [Theory]
@@ -230,14 +230,14 @@ public class JxlMetadataTests
     }
 
     [Fact]
-    public void DeepClone_CopiesTheOriginalIccProfile()
+    public void DeepClone_CopiesTheEmbeddedIccProfile()
     {
         JxlMetadata jxl = Identify(Path.Combine(GeneratedDirectory, "custom_icc.jxl")).GetFormatMetadata(JxlFormat.Instance);
 
         JxlMetadata clone = (JxlMetadata)jxl.DeepClone();
 
-        Assert.NotSame(jxl.OriginalIccProfile, clone.OriginalIccProfile);
-        Assert.Equal(jxl.OriginalIccProfile.ToByteArray(), clone.OriginalIccProfile.ToByteArray());
+        Assert.NotSame(jxl.EmbeddedIccProfile, clone.EmbeddedIccProfile);
+        Assert.Equal(jxl.EmbeddedIccProfile.ToByteArray(), clone.EmbeddedIccProfile.ToByteArray());
     }
 
     [Theory]
@@ -250,8 +250,8 @@ public class JxlMetadataTests
         Assert.Equal(types, jxl.ExtraChannels.Select(c => c.Type.ToString()));
         Assert.All(jxl.ExtraChannels, c =>
         {
-            Assert.Equal((uint)bits, c.BitsPerSample);
-            Assert.Equal(0u, c.ExponentBitsPerSample);
+            Assert.Equal(bits, c.BitsPerSample);
+            Assert.Equal(0, c.ExponentBitsPerSample);
             Assert.False(c.IsFloatingPoint);
         });
     }
@@ -274,7 +274,7 @@ public class JxlMetadataTests
         JxlExtraChannel channel = Assert.Single(jxl.ExtraChannels);
         Assert.Equal(JxlExtraChannelType.Depth, channel.Type);
         Assert.Equal(name, channel.Name);
-        Assert.Equal(9u, channel.BitsPerSample);
+        Assert.Equal(9, channel.BitsPerSample);
     }
 
     [Fact]

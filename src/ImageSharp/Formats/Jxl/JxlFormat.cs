@@ -6,9 +6,9 @@ using System.Collections.Generic;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Registers the image encoders, decoders and mime type detectors for the JPEG XL format.
+/// Describes the JPEG XL format (ISO/IEC 18181): its name, mime types and file extensions.
 /// </summary>
-internal sealed class JxlFormat : IImageFormat<JxlMetadata, JxlFrameMetadata>
+public sealed class JxlFormat : IImageFormat<JxlMetadata, JxlFrameMetadata>
 {
     private JxlFormat()
     {

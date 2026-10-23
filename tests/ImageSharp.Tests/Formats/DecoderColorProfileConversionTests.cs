@@ -351,7 +351,8 @@ public class DecoderColorProfileConversionTests
 
     private static string JxlReferencePath(string name) => Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".png");
 
-    // The JPEG XL decoder is internal, so it is called directly rather than through Image.Load.
+    // The JPEG XL decoder is called directly rather than through Image.Load, so each test chooses the generic or the
+    // non-generic Decode.
     private static Image<Rgb24> DecodeJxl(string name, JxlDecoder decoder, bool generic)
     {
         using FileStream stream = File.OpenRead(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", name + ".jxl"));

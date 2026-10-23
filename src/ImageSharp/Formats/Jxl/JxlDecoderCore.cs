@@ -344,21 +344,21 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         return data;
     }
 
-    // The pixel-profile rules of issue #105, with #111's CMYK exception: the embedded ICC is always the
-    // original profile, and it is the pixel profile only where the pixels are the coded samples. XYB
-    // images decode to sRGB, and CMYK images are converted naively to RGB.
-    private void SetIccProfile(IccProfile original)
+    // The pixel-profile rules of issue #105, with #111's CMYK exception: the embedded ICC profile is
+    // always kept, and it is the pixel profile only where the pixels are the coded samples. XYB images
+    // decode to sRGB, and CMYK images are converted naively to RGB.
+    private void SetIccProfile(IccProfile embedded)
     {
         if (this.ignoreMetadata)
         {
             return;
         }
 
-        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile = original;
-        if (!this.metadata.M.XybEncoded && original.CheckIsValid() && !IsCmykProfile(original))
+        this.imageMetadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile = embedded;
+        if (!this.metadata.M.XybEncoded && embedded.CheckIsValid() && !IsCmykProfile(embedded))
         {
             // Its own copy, so the two profiles share no bytes.
-            this.imageMetadata.IccProfile = original.DeepClone();
+            this.imageMetadata.IccProfile = embedded.DeepClone();
         }
     }
 
@@ -380,7 +380,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // An XYB image whose encoding the XYB stage cannot output renders to linear sRGB, which the image
     // sink encodes as sRGB, so its pixels get no profile either: as for an ICC profile, the pixel profile
     // only ever describes the pixels (ADR 0002).
-    private void SetColorEncodingProfile(JxlColorEncoding c)
+    private void SetColorEncodingProfile(JxlColorEncodingHeader c)
     {
         IccProfile profile = JxlIccBuilder.Create(c);
         bool srgbCurve = !c.Tf.HaveGamma && c.Tf.TransferFunction == JxlTransferFunction.Srgb && c.WhitePoint == JxlWhitePoint.D65;
@@ -401,7 +401,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         {
             JxlExtraChannelInfo eci = extraChannelInfo[i];
             JxlBitDepth bitDepth = eci.BitDepth;
-            extraChannels[i] = new JxlExtraChannel(eci.Type, Encoding.UTF8.GetString(eci.Name), bitDepth.BitsPerSample, bitDepth.ExponentBitsPerSample, bitDepth.FloatingPointSample);
+            extraChannels[i] = new JxlExtraChannel(eci.Type, Encoding.UTF8.GetString(eci.Name), (int)bitDepth.BitsPerSample, (int)bitDepth.ExponentBitsPerSample, bitDepth.FloatingPointSample);
         }
 
         return extraChannels;
@@ -443,8 +443,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         JxlMetadata jxlMetadata = this.imageMetadata.GetFormatMetadata(JxlFormat.Instance);
         jxlMetadata.IsXybEncoded = codecMetadata.M.XybEncoded;
-        jxlMetadata.BitsPerSample = codecMetadata.M.BitDepth.BitsPerSample;
-        jxlMetadata.ExponentBitsPerSample = codecMetadata.M.BitDepth.ExponentBitsPerSample;
+
+        // JxlBitDepth has checked the depth (at most 32 bits), so it fits the public int (issue #108).
+        jxlMetadata.BitsPerSample = (int)codecMetadata.M.BitDepth.BitsPerSample;
+        jxlMetadata.ExponentBitsPerSample = (int)codecMetadata.M.BitDepth.ExponentBitsPerSample;
         jxlMetadata.IntensityTarget = codecMetadata.M.ToneMapping.IntensityTarget;
         jxlMetadata.ExtraChannels = DescribeExtraChannels(codecMetadata.M.ExtraChannelInfo);
         if (codecMetadata.M.HaveAnimation)
@@ -460,14 +462,14 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         if (codecMetadata.M.ColorEncoding.WantIcc)
         {
-            IccProfile original = new(JxlIccReader.Read(reader, cancellationToken));
-            this.isCmyk = IsCmyk(codecMetadata.M, original);
-            this.SetIccProfile(original);
+            IccProfile embedded = new(JxlIccReader.Read(reader, cancellationToken));
+            this.isCmyk = IsCmyk(codecMetadata.M, embedded);
+            this.SetIccProfile(embedded);
         }
         else
         {
             this.isCmyk = false;
-            jxlMetadata.ColorEncoding = codecMetadata.M.ColorEncoding.Clone();
+            jxlMetadata.ColorEncoding = new JxlColorEncoding(codecMetadata.M.ColorEncoding);
             this.SetColorEncodingProfile(codecMetadata.M.ColorEncoding);
         }
 

@@ -157,7 +157,7 @@ public class JxlXybVarDctTests
 
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
-        Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.Tf.TransferFunction);
+        Assert.Equal(JxlTransferFunction.Hlg, metadata.ColorEncoding.TransferFunction);
     }
 
     // An XYB image renders to its own PQ or HLG encoding, so its pixels get that encoding's profile: the one
@@ -252,7 +252,7 @@ public class JxlXybVarDctTests
 
         AssertWithinOneStep(expected, JxlConformanceImages.ToNpy(image, 3), 3, (i, c) => (float)LinearToSrgb(Math.Clamp(expected.Data[(i * 3) + c], 0F, 1F)));
         Assert.Null(image.Metadata.IccProfile);
-        Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile);
+        Assert.NotNull(image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile);
     }
 
     // A grey image with a D50 white point is one the XYB stage cannot output, so it renders to linear
@@ -269,7 +269,7 @@ public class JxlXybVarDctTests
         Assert.Null(image.Metadata.IccProfile);
         JxlMetadata metadata = image.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.Equal(JxlWhitePoint.Custom, metadata.ColorEncoding.WhitePoint);
-        Assert.Null(metadata.OriginalIccProfile);
+        Assert.Null(metadata.EmbeddedIccProfile);
     }
 
     [Fact]
@@ -325,8 +325,8 @@ public class JxlXybVarDctTests
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Equal(grey ? JxlColorSpace.Gray : JxlColorSpace.Rgb, metadata.ColorEncoding.ColorSpace);
-        Assert.Equal(Enum.Parse<JxlTransferFunction>(transferFunction), metadata.ColorEncoding.Tf.TransferFunction);
-        Assert.Null(metadata.OriginalIccProfile);
+        Assert.Equal(Enum.Parse<JxlTransferFunction>(transferFunction), metadata.ColorEncoding.TransferFunction);
+        Assert.Null(metadata.EmbeddedIccProfile);
     }
 
     [Fact]
@@ -340,7 +340,7 @@ public class JxlXybVarDctTests
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.True(metadata.IsXybEncoded);
         Assert.Null(metadata.ColorEncoding);
-        Assert.NotNull(metadata.OriginalIccProfile);
+        Assert.NotNull(metadata.EmbeddedIccProfile);
         Assert.Null(info.Metadata.IccProfile);
     }
 

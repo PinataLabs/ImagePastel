@@ -1,15 +1,13 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
 /// Describes one extra channel of a JPEG XL image, as its header gives it. The decoder keeps only the
-/// first alpha channel in the pixels, so this is how a caller learns about the others (issue #111).
+/// first alpha channel in the pixels, so this is how a caller learns about the others.
 /// </summary>
-internal sealed class JxlExtraChannel
+public sealed class JxlExtraChannel
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlExtraChannel"/> class.
@@ -19,7 +17,7 @@ internal sealed class JxlExtraChannel
     /// <param name="bitsPerSample">The bits per sample.</param>
     /// <param name="exponentBitsPerSample">The exponent bits per sample; 0 for integer samples.</param>
     /// <param name="isFloatingPoint">Whether the samples are floating point.</param>
-    public JxlExtraChannel(JxlExtraChannelType type, string name, uint bitsPerSample, uint exponentBitsPerSample, bool isFloatingPoint)
+    internal JxlExtraChannel(JxlExtraChannelType type, string name, int bitsPerSample, int exponentBitsPerSample, bool isFloatingPoint)
     {
         this.Type = type;
         this.Name = name;
@@ -35,10 +33,10 @@ internal sealed class JxlExtraChannel
     public string Name { get; }
 
     /// <summary>Gets the bits per sample.</summary>
-    public uint BitsPerSample { get; }
+    public int BitsPerSample { get; }
 
     /// <summary>Gets the exponent bits per sample; 0 for integer samples.</summary>
-    public uint ExponentBitsPerSample { get; }
+    public int ExponentBitsPerSample { get; }
 
     /// <summary>Gets a value indicating whether the samples are floating point.</summary>
     public bool IsFloatingPoint { get; }

@@ -16,7 +16,7 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
 /// E3e: the colour rules of #115 for lossy encodes. The pixel profile is the only colour input: a profile
-/// that <see cref="JxlColorEncoding.TryFromIccProfile"/> recognises is written as its colour encoding (not
+/// that <see cref="JxlColorEncodingHeader.TryFromIccProfile"/> recognises is written as its colour encoding (not
 /// the ICC), and the pixels reach XYB through its transfer function and primaries; a profile it does not
 /// recognise throws; a profile whose colour space does not match the pixels is ignored. The intensity
 /// target follows the transfer function, unless <see cref="JxlMetadata.IntensityTarget"/> sets it.
@@ -47,8 +47,8 @@ public class JxlLossyColorEncoderTests
 
         JxlMetadata metadata = Identify(encoded);
         Assert.True(metadata.IsXybEncoded);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_DCI_Per_SRG"), metadata.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_DCI_Per_SRG"), JxlCodestreamFrames.ReadColorEncoding(encoded));
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public class JxlLossyColorEncoderTests
         Assert.Equal(0, stream.Length);
         JxlMetadata lossless = Identify(JxlEncoderRoundTrip.Encode(image));
         Assert.Null(lossless.ColorEncoding);
-        Assert.Equal(profile, lossless.OriginalIccProfile.ToByteArray());
+        Assert.Equal(profile, lossless.EmbeddedIccProfile.ToByteArray());
     }
 
     // The CMYK profile the JPEG decoder leaves on its RGB output, and a grey profile on RGB pixels, do not
@@ -98,8 +98,8 @@ public class JxlLossyColorEncoderTests
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
 
         JxlMetadata metadata = Identify(encoded);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_SRG_Rel_SRG"), metadata.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(JxlColorEncodingFromIccTests.Parse("RGB_D65_SRG_Rel_SRG"), JxlCodestreamFrames.ReadColorEncoding(encoded));
     }
 
     // libjxl's SetIntensityTarget: 10,000 nits for PQ, 1,000 for HLG and 255 otherwise, unless the caller
@@ -152,7 +152,7 @@ public class JxlLossyColorEncoderTests
     [InlineData("Gra_D65_Rel_709")]
     public void Encode_DecodedImage_KeepsItsColourEncodingAndIntensityTarget(string description)
     {
-        JxlColorEncoding expected = JxlColorEncodingFromIccTests.Parse(description);
+        JxlColorEncodingHeader expected = JxlColorEncodingFromIccTests.Parse(description);
         using Image<Rgb24> patches = CreatePatches(expected.IsGray);
         using Image source = expected.IsGray ? patches.CloneAs<L8>() : patches.Clone();
         source.Metadata.IccProfile = JxlIccBuilder.Create(expected);
@@ -163,8 +163,8 @@ public class JxlLossyColorEncoderTests
         byte[] second = Encode(decoded);
 
         JxlMetadata metadata = Identify(second);
-        Assert.Null(metadata.OriginalIccProfile);
-        JxlColorEncodingFromIccTests.AssertSameEncoding(expected, metadata.ColorEncoding);
+        Assert.Null(metadata.EmbeddedIccProfile);
+        JxlColorEncodingFromIccTests.AssertSameEncoding(expected, JxlCodestreamFrames.ReadColorEncoding(second));
         Assert.Equal(Identify(first).IntensityTarget, metadata.IntensityTarget);
 
         static byte[] Encode(Image image)

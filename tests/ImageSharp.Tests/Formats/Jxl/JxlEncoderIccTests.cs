@@ -183,8 +183,8 @@ public class JxlEncoderIccTests
         using Image<TPixel> decoded = Image.Load<TPixel>(JxlEncoderRoundTrip.CreateConfiguration(), JxlEncoderRoundTrip.Encode(image));
 
         JxlMetadata jxlMetadata = decoded.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        Assert.NotNull(jxlMetadata.OriginalIccProfile);
-        Assert.Equal(icc, jxlMetadata.OriginalIccProfile.ToByteArray());
+        Assert.NotNull(jxlMetadata.EmbeddedIccProfile);
+        Assert.Equal(icc, jxlMetadata.EmbeddedIccProfile.ToByteArray());
         Assert.Equal(icc, decoded.Metadata.IccProfile?.ToByteArray());
         ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
@@ -216,15 +216,15 @@ public class JxlEncoderIccTests
         using Image<TPixel> decoded = Image.Load<TPixel>(JxlEncoderRoundTrip.CreateConfiguration(), JxlEncoderRoundTrip.Encode(image));
 
         JxlMetadata jxlMetadata = decoded.Metadata.GetFormatMetadata(JxlFormat.Instance);
-        Assert.Null(jxlMetadata.OriginalIccProfile);
+        Assert.Null(jxlMetadata.EmbeddedIccProfile);
         Assert.Null(decoded.Metadata.IccProfile);
         JxlColorEncoding colorEncoding = jxlMetadata.ColorEncoding;
-        Assert.False(colorEncoding.WantIcc);
+        Assert.NotNull(colorEncoding);
         Assert.Equal(typeof(TPixel) == typeof(L8) ? JxlColorSpace.Gray : JxlColorSpace.Rgb, colorEncoding.ColorSpace);
         Assert.Equal(JxlWhitePoint.D65, colorEncoding.WhitePoint);
         Assert.Equal(JxlPrimaries.Srgb, colorEncoding.Primaries);
-        Assert.False(colorEncoding.Tf.HaveGamma);
-        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.Tf.TransferFunction);
+        Assert.Null(colorEncoding.Gamma);
+        Assert.Equal(JxlTransferFunction.Srgb, colorEncoding.TransferFunction);
         ImageComparer.Exact.VerifySimilarity(image, decoded);
     }
 

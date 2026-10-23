@@ -9,6 +9,7 @@ using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Pbm;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tga;
@@ -51,6 +52,16 @@ public class ImageFormatManagerTests
         Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<TgaDecoder>().Count());
         Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<TiffDecoder>().Count());
         Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<WebpDecoder>().Count());
+        Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<JxlDecoder>().Count());
+    }
+
+    [Fact]
+    public void DefaultFormatsManager_RegistersNoJxlEncoder()
+    {
+        // JPEG XL is decode only until the encoder is released (E6).
+        Assert.Same(JxlFormat.Instance, this.DefaultFormatsManager.FindFormatByFileExtension("jxl"));
+        Assert.Null(this.DefaultFormatsManager.FindEncoder(JxlFormat.Instance));
+        Assert.Empty(this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<JxlEncoder>());
     }
 
     [Fact]

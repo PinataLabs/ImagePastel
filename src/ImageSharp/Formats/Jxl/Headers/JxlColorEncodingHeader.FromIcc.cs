@@ -23,7 +23,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
 /// Recognition of an ICC profile as a colour encoding, which the lossy encoder writes in place of the
 /// profile (#115).
 /// </content>
-internal sealed partial class JxlColorEncoding
+internal sealed partial class JxlColorEncodingHeader
 {
     // ApproxEq's default: sufficient for ICC's 15-bit fixed-point numbers.
     private const double SnapTolerance = 1e-3;
@@ -104,7 +104,7 @@ internal sealed partial class JxlColorEncoding
     /// <param name="profile">The profile.</param>
     /// <param name="encoding">The colour encoding, when the method returns <see langword="true"/>; otherwise <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if the profile is recognised.</returns>
-    public static bool TryFromIccProfile(IccProfile profile, out JxlColorEncoding encoding)
+    public static bool TryFromIccProfile(IccProfile profile, out JxlColorEncodingHeader encoding)
     {
         encoding = null;
         if (profile is null || !profile.CheckIsValid())
@@ -113,7 +113,7 @@ internal sealed partial class JxlColorEncoding
         }
 
         // ICC and RenderingIntent have the same values (0..3), which CheckIsValid requires.
-        JxlColorEncoding c = new() { RenderingIntent = (JxlRenderingIntent)(uint)profile.Header.RenderingIntent };
+        JxlColorEncodingHeader c = new() { RenderingIntent = (JxlRenderingIntent)(uint)profile.Header.RenderingIntent };
         IccColorSpaceType dataColorSpace = profile.Header.DataColorSpace;
         if (dataColorSpace == IccColorSpaceType.Rgb
             && profile.TryGetTag(IccProfileTag.Cicp, out IccCicpTagDataEntry cicp)
@@ -485,7 +485,7 @@ internal sealed partial class JxlColorEncoding
 
     // DecideIfWantICC: the encoding is written in place of the profile only if a profile can be built for
     // it (MaybeCreateProfile).
-    private bool TryAccept(out JxlColorEncoding encoding)
+    private bool TryAccept(out JxlColorEncodingHeader encoding)
     {
         encoding = null;
         try

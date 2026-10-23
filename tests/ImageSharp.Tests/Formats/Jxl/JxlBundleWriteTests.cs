@@ -1,6 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
+using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
 using SixLabors.ImageSharp.Formats.Jxl.Entropy;
 using SixLabors.ImageSharp.Formats.Jxl.Fields;
@@ -126,7 +127,7 @@ public class JxlBundleWriteTests
     [Fact]
     public void ColorEncoding_CustomWhiteAndPrimariesWithGamma_RoundTrips()
     {
-        JxlColorEncoding encoding = new()
+        JxlColorEncodingHeader encoding = new()
         {
             WhitePoint = JxlWhitePoint.Custom,
             Primaries = JxlPrimaries.Custom,
@@ -141,7 +142,7 @@ public class JxlBundleWriteTests
         encoding.Tf.HaveGamma = true;
         encoding.Tf.Gamma = 4545455;
 
-        JxlColorEncoding read = RoundTrip(encoding, new JxlColorEncoding());
+        JxlColorEncodingHeader read = RoundTrip(encoding, new JxlColorEncodingHeader());
 
         Assert.Equal(-100000, read.Green.X);
         Assert.Equal(1500000, read.Green.Y);
@@ -152,9 +153,9 @@ public class JxlBundleWriteTests
     [Fact]
     public void ColorEncoding_WantIcc_RoundTrips()
     {
-        JxlColorEncoding encoding = new() { WantIcc = true, ColorSpace = JxlColorSpace.Unknown };
+        JxlColorEncodingHeader encoding = new() { WantIcc = true, ColorSpace = JxlColorSpace.Unknown };
 
-        JxlColorEncoding read = RoundTrip(encoding, new JxlColorEncoding());
+        JxlColorEncodingHeader read = RoundTrip(encoding, new JxlColorEncodingHeader());
 
         Assert.True(read.WantIcc);
         Assert.Equal(JxlColorSpace.Unknown, read.ColorSpace);
@@ -163,9 +164,9 @@ public class JxlBundleWriteTests
     [Fact]
     public void ColorEncoding_Xyb_RoundTrips()
     {
-        JxlColorEncoding encoding = new() { ColorSpace = JxlColorSpace.Xyb, RenderingIntent = JxlRenderingIntent.Perceptual };
+        JxlColorEncodingHeader encoding = new() { ColorSpace = JxlColorSpace.Xyb, RenderingIntent = JxlRenderingIntent.Perceptual };
 
-        JxlColorEncoding read = RoundTrip(encoding, new JxlColorEncoding());
+        JxlColorEncodingHeader read = RoundTrip(encoding, new JxlColorEncodingHeader());
 
         Assert.Equal(JxlColorSpace.Xyb, read.ColorSpace);
         Assert.True(read.Tf.HaveGamma);
@@ -179,10 +180,10 @@ public class JxlBundleWriteTests
     public void ColorEncoding_EnumTransferFunction_RoundTrips(int tfValue)
     {
         JxlTransferFunction tf = (JxlTransferFunction)tfValue;
-        JxlColorEncoding encoding = new() { Primaries = JxlPrimaries.Bt2100 };
+        JxlColorEncodingHeader encoding = new() { Primaries = JxlPrimaries.Bt2100 };
         encoding.Tf.TransferFunction = tf;
 
-        JxlColorEncoding read = RoundTrip(encoding, new JxlColorEncoding());
+        JxlColorEncodingHeader read = RoundTrip(encoding, new JxlColorEncodingHeader());
 
         Assert.Equal(tf, read.Tf.TransferFunction);
         Assert.Equal(JxlPrimaries.Bt2100, read.Primaries);
@@ -455,7 +456,7 @@ public class JxlBundleWriteTests
 
     [Fact]
     public void Enum_UndefinedValue_ThrowsBeforeWriting()
-        => AssertRejected(new JxlColorEncoding { ColorSpace = (JxlColorSpace)7 });
+        => AssertRejected(new JxlColorEncodingHeader { ColorSpace = (JxlColorSpace)7 });
 
     [Fact]
     public void Name_TooLong_ThrowsBeforeWriting()

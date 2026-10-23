@@ -4,7 +4,6 @@
 using System.IO;
 using System.Threading;
 using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
 using SixLabors.ImageSharp.IO;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata.Profiles.Icc;
@@ -13,9 +12,13 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Image decoder for JPEG XL codestreams.
+/// Image decoder for JPEG XL images, as a bare codestream or in the ISO BMFF container.
 /// </summary>
-internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecoderOptions
+/// <remarks>
+/// An animation decodes to one image frame per displayed frame, with the frames already blended. The
+/// format metadata is in <see cref="JxlMetadata"/> and <see cref="JxlFrameMetadata"/>.
+/// </remarks>
+public sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecoderOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether the metadata should be ignored when the image is being decoded.
@@ -24,7 +27,7 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
 
     /// <summary>
     /// Gets or sets the maximum number of displayed frames to decode. Decoding stops once that many
-    /// frames are out; the default decodes them all.
+    /// frames are out. Defaults to <see cref="uint.MaxValue"/>, which decodes them all.
     /// </summary>
     public uint MaxFrames { get; set; } = uint.MaxValue;
 
@@ -34,7 +37,7 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
     /// <see cref="IgnoreMetadata"/> is set, when the image has no embedded profile, or when the
     /// embedded profile is corrupt or not supported; the image then keeps its embedded profile.
     /// The conversion starts from the pixel profile: an XYB image with an embedded ICC profile decodes
-    /// to sRGB with no pixel profile (ADR 0002), so it is not converted.
+    /// to sRGB with no pixel profile, so it is not converted.
     /// </summary>
     public ColorProfileConversion ColorProfileConversion { get; set; }
 
@@ -47,15 +50,16 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A frame over the 2^28-pixel cap, or over the budget of 2^30 samples (pixels times colour and extra
-    /// channels), throws <see cref="InvalidMemoryOperationException"/>. This bypasses
-    /// <see cref="ImageDecoderUtilities"/>, which would turn it into an <see cref="InvalidImageContentException"/>.
+    /// An image larger than 2^28 pixels, or than 2^30 samples (pixels times colour and extra channels),
+    /// throws <see cref="InvalidMemoryOperationException"/>.
     /// </remarks>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         Guard.NotNull(stream, nameof(stream));
 
+        // The limits stay InvalidMemoryOperationException because this bypasses ImageDecoderUtilities, which
+        // would turn it into an InvalidImageContentException.
         JxlDecoderCore decoder = new(configuration, this);
         BufferedReadStream bufferedReadStream = stream as BufferedReadStream ?? new BufferedReadStream(configuration, stream);
         Image<TPixel> image;
@@ -75,7 +79,13 @@ internal sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecode
     }
 
     /// <inheritdoc />
-    /// <remarks>The pixel type follows the bit depth and channels of the image; see <see cref="JxlDecoderCore.ChoosePixelType(JxlImageMetadata)"/>.</remarks>
+    /// <remarks>
+    /// The pixel type follows the channels and the bit depth of the image, the larger of the colour's and
+    /// the alpha's: <see cref="L8"/>, <see cref="La16"/>, <see cref="Rgb24"/> or <see cref="Rgba32"/> up to
+    /// 8 bits; <see cref="L16"/>, <see cref="La32"/>, <see cref="Rgb48"/> or <see cref="Rgba64"/> up to 16
+    /// bits; and <see cref="RgbaVector"/> for floating-point samples or more than 16 bits. A CMYK image
+    /// decodes to RGB.
+    /// </remarks>
     public Image Decode(Configuration configuration, Stream stream, CancellationToken cancellationToken)
     {
         Guard.NotNull(stream, nameof(stream));

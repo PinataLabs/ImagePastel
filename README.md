@@ -6,6 +6,7 @@
 
 PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, PBM, PNG, TGA, TIFF, and WebP images.
+It also decodes JPEG XL images. JPEG XL is decode only until the encoder is released.
 
 > [!IMPORTANT]
 > This fork exists to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.

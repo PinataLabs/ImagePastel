@@ -16,7 +16,6 @@ using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -53,51 +52,7 @@ public class JxlDecoderTests
         Assert.Equal(751, info.Height);
     }
 
-    [Theory]
-    [InlineData("delta_palette")]
-    [InlineData("lz77_flower")]
-    public void Load_Rgb24_MatchesMagickExactly(string id)
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        string path = JxlConformanceVector.Load(id).CommittedInputPath;
-        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgb24> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
-
-        ImageComparer.Exact.VerifySimilarity(reference, image);
-    }
-
-    [Theory]
-    [InlineData("alpha_nonpremultiplied")]
-    [InlineData("alpha_triangles")]
-    public void Load_Rgba64_MatchesMagickExactly(string id)
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        string path = JxlConformanceVector.Load(id).CommittedInputPath;
-        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-
-        ImageComparer.Exact.VerifySimilarity(reference, image);
-    }
-
-    [Fact]
-    public void Load_Float32_MatchesMagickAt16Bits()
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        // Magick returns 16-bit samples, so both sides are clamped to [0, 1] and compared at 16 bits.
-        string path = JxlConformanceVector.Load("lossless_pfm").CommittedInputPath;
-        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-
-        // Samples on a rounding boundary may land one 16-bit step apart, in each colour channel.
-        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 3).VerifySimilarity(reference, image);
-    }
-
+    // The Magick cross-checks of the conformance inputs are in JxlMagickCrossCheckTests.
     [Fact]
     public void Load_PremultipliedAlpha_GivesStraightAlpha()
     {
@@ -381,7 +336,7 @@ public class JxlDecoderTests
 
         Assert.IsType<Image<Rgba32>>(image);
         Assert.Null(image.Metadata.IccProfile);
-        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).OriginalIccProfile.Header.DataColorSpace);
+        Assert.Equal(IccColorSpaceType.Cmyk, image.Metadata.GetFormatMetadata(JxlFormat.Instance).EmbeddedIccProfile.Header.DataColorSpace);
     }
 
     // A dim_shift of 3 makes the extra channel 8x smaller, upsampled 8x on decode, which decodes since
@@ -532,22 +487,35 @@ public class JxlDecoderTests
     }
 
     [Fact]
-    public void NoJxlTypeIsPublic()
+    public void OnlyTheDecoderSurfaceIsPublic()
     {
-        Type[] publicTypes = typeof(Image).Assembly.GetExportedTypes()
+        // D15a (#308) makes the colour description and the enums public, and D15b (#311) the decoder surface.
+        // The encoder, its options and every codec type stay internal until E6.
+        string[] publicTypes = typeof(Image).Assembly.GetExportedTypes()
             .Where(t => t.Namespace?.StartsWith("SixLabors.ImageSharp.Formats.Jxl", StringComparison.Ordinal) == true)
+            .Select(t => t.FullName)
+            .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Empty(publicTypes);
-    }
-
-    [Fact]
-    public void DefaultConfiguration_HasNoJxlFormat()
-    {
-        Configuration configuration = Configuration.CreateDefaultInstance();
-
-        Assert.DoesNotContain(JxlFormat.Instance, configuration.ImageFormats);
-        Assert.Null(configuration.ImageFormatsManager.FindFormatByFileExtension("jxl"));
+        Assert.Equal(
+            new[]
+            {
+                "SixLabors.ImageSharp.Formats.Jxl.JxlColorEncoding",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlDecoder",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlFormat",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlFrameMetadata",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlImageFormatDetector",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlMetadata",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlPrimaries",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlRenderingIntent",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlTransferFunction",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint",
+            },
+            publicTypes);
     }
 
     private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);

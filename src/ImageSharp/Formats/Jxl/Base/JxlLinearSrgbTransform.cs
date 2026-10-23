@@ -65,7 +65,7 @@ internal sealed class JxlLinearSrgbTransform
     /// </summary>
     /// <param name="c">An RGB or grey colour encoding with a known transfer function or a gamma.</param>
     /// <param name="intensityTarget">The intensity target of the image, in nits.</param>
-    public JxlLinearSrgbTransform(JxlColorEncoding c, float intensityTarget)
+    public JxlLinearSrgbTransform(JxlColorEncodingHeader c, float intensityTarget)
     {
         this.tf = c.Tf;
         this.pqScale = JxlTransferFunctions.PqScaleFrom10000Nits(intensityTarget);
@@ -126,7 +126,7 @@ internal sealed class JxlLinearSrgbTransform
 
     // The matrix that the decoder's AdaptToPrimaries puts in front of the inverse opsin matrix, inverted:
     // the encoding's primaries to XYZ, adapted from its white to D50 (Bradford), then to linear sRGB.
-    private static float[,] PrimariesToLinearSrgb(JxlColorEncoding c)
+    private static float[,] PrimariesToLinearSrgb(JxlColorEncodingHeader c)
     {
         float[,] originalToXyzD50 = JxlMatrix3x3.ToXyzD50(c.WhitePointXy, c.PrimariesToXyz().ToXyz);
         return IccProfileBuilder.Mul3x3Matrix(IccProfileBuilder.Inv3x3Matrix(JxlMatrix3x3.SrgbToXyzD50()), originalToXyzD50);
