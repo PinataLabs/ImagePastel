@@ -2,7 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -11,17 +13,20 @@ using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// The AC-strategy search of lossy Default at the 8x8 level (libjxl's <c>AcStrategyHeuristics::Init</c>,
-/// <c>EstimateEntropy</c> and <c>FindBest8x8Transform</c>, slice E4g), against libjxl's own values.
+/// The AC-strategy search of lossy Default (libjxl's <c>AcStrategyHeuristics::Init</c>,
+/// <c>EstimateEntropy</c> and <c>FindBest8x8Transform</c>, slice E4g, and the merges of
+/// <c>ProcessRectACS</c>, slice E4h), against libjxl's own values.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The reference values come from a harness (<c>e4-notes/e4g-scratch/acs.cc</c>) that includes libjxl
+/// The reference values come from a harness (<c>e4-notes/e4g-scratch/acs.cc</c>, and its copy in
+/// <c>e4h-scratch</c> that runs the whole Hare <c>ProcessRectACS</c> per tile) that includes libjxl
 /// <c>ef67fde2</c>'s <c>enc_ac_strategy.cc</c> and builds it twice, both with <c>-ffp-contract=off</c>
 /// (ADR 0004): on Highway's scalar target, and on its AVX2 target with <c>HWY_DISABLE_BMI2_FMA</c>, which
 /// keeps cjxl's 8 lanes but makes each <c>MulAdd</c> a multiply then an add. Its input is the image of
@@ -43,11 +48,6 @@ public class JxlEncAcStrategyTests
     // The largest relative difference of an entropy from libjxl's scalar build, which sums in another
     // order: measured 1.8e-6, on the DCT32X32 case. The 8x8 choices are the same in both builds.
     private const float ScalarLaneSumTolerance = 4e-6f;
-
-    // The share of the 8x8 blocks of cjxl -e 5 -d 1 on Bike whose strategy ours matches (informative):
-    // measured 100% (2,027 of the 2,027 blocks cjxl leaves 8x8; 2,134 of its 4,161 blocks are merged).
-    // The floor leaves room for a CPU whose cjxl build dispatches to another target.
-    private const double AgreementWithCjxlAtD1 = 0.99;
 
     private const int FixedWidth = 64;
     private const int FixedHeight = 32;
@@ -143,87 +143,139 @@ public class JxlEncAcStrategyTests
     }
 
     // Through the decoder's parse: the strategy of every block of Bike (73x57 blocks) is the one libjxl's
-    // FindBest8x8Transform gives, on the same opsin, quant field and masking image (the harness's AVX2 build;
-    // its scalar build chooses the same). SHA-256 of the raw strategies, row by row, and how many blocks
-    // take each. No merges yet (E4h), so every block is one 8x8 strategy; Bike has no DCT4X4 block.
+    // ProcessRectACS gives at Hare, the 8x8 level then the aligned merges up to 64x64, tile by tile on the
+    // same opsin, quant field and masking image (the harness's AVX2 build; its scalar build gives the same
+    // map). SHA-256 of the map, one byte per block (raw strategy << 1 | first block), row by row, and how
+    // many blocks each raw strategy covers. Only the Hare set appears: no DCT4X8, DCT8X4, AFV, DCT32X8,
+    // DCT8X32 or DCT128X128 and up.
     [Theory]
-    [InlineData(0.5f, "027557DD0C98EDCE0A4BE862D440FFFCF7DFF5C5BB4B2AC2085C479655E72049", 2168, 242, 1751, 0)]
-    [InlineData(1.0f, "43F98BBB2A053FACD8BECD7D6288712FDC70F45F2DA4206E590F7C4CC3F6F20C", 2081, 68, 2012, 0)]
-    [InlineData(2.0f, "D2D62FFC1F91E9363FCFDBDE17C8703B62CA3C8256D6A3562EEDA341D9FF8446", 3975, 26, 160, 0)]
-    [InlineData(4.0f, "1FB1E6621117C3D3E13D6833962479823D1C794C5D60C4DC0FDA22FB5E1EFE8D", 4027, 24, 110, 0)]
-    public void Encode_Bike_ChoosesLibjxlsStrategyForEachBlock(float distance, string expectedSha256, int dct8, int identity, int dct2x2, int dct4x4)
+    [InlineData(0.5f, "1F2DCEB6E61639D3F844E44AED77166CD081BED981182E546E5E5D57A945E183", "0:1932 1:109 2:432 4:88 5:480 6:60 7:20 10:128 11:144 18:576 19:96 20:96")]
+    [InlineData(1.0f, "563807FB9B501472FC53AF58365F67071B45100566FF383C055A8D94FAB76041", "0:1678 1:47 2:302 4:152 5:304 6:138 7:132 10:128 11:224 18:768 19:128 20:160")]
+    [InlineData(2.0f, "75244909F7AE46B78798802FA2ED87146ED59DC74E3A85C7D5ABF3FB32112CAA", "0:1398 1:20 2:121 4:224 5:416 6:210 7:244 10:176 11:328 18:768 19:128 20:128")]
+    [InlineData(4.0f, "2FBE500568CE743CC65128DE7C000C8E3D9506029216F4A63E372968C53D75AD", "0:609 1:13 2:57 4:352 5:608 6:246 7:372 10:304 11:544 18:768 19:128 20:160")]
+    public void Encode_Bike_ChoosesLibjxlsStrategyForEachBlock(float distance, string expectedSha256, string expectedCoverage)
     {
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
 
         using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(distance)));
 
-        byte[] raw = StrategiesOf(frame);
-        int[] counts = new int[JxlAcStrategy.NumValidStrategies];
-        foreach (byte r in raw)
-        {
-            counts[r]++;
-        }
-
-        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: DCT8 {counts[0]}, IDENTITY {counts[1]}, DCT2X2 {counts[2]}, DCT4X4 {counts[3]}");
-        Assert.Equal(new[] { dct8, identity, dct2x2, dct4x4 }, counts.AsSpan(0, 4).ToArray());
-        Assert.Equal(raw.Length, dct8 + identity + dct2x2 + dct4x4);
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(raw)));
+        byte[] map = StrategiesOf(frame);
+        string coverage = CoverageOf(map);
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: {coverage}");
+        Assert.Equal(expectedCoverage, coverage);
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(map)));
     }
 
-    // Informative: how often our 8x8 choice is cjxl -e 5's (v0.12.0, JXL_TOOLS_DIR) on the blocks of Bike
-    // that cjxl leaves as an 8x8 strategy after its merges. cjxl dispatches to AVX2 with FMA (or AVX-512)
-    // at run time, so its estimates differ from ours in the last bits, and a block close to a tie can go
-    // the other way. Measured at d1: see AgreementWithCjxlAtD1.
-    [Fact]
-    public async Task Encode_Bike_AgreesWithCjxlOnMostOfItsEightByEightBlocks()
+    // Informative: how often our strategy map is cjxl -e 5's (v0.12.0, JXL_TOOLS_DIR) on the calibration
+    // photos, block by block (raw strategy and first block). cjxl dispatches to AVX2 with FMA (or AVX-512)
+    // at run time, so its estimates differ from ours in the last bits, and a block close to a tie can go the
+    // other way; a merge that flips moves every block it covers. Each floor is the measured share less some
+    // room for a CPU whose cjxl build dispatches to another target (measured on an AVX2 x64 machine).
+    [Theory]
+    [InlineData("bike-582x453", 1.0f, 0.99)]
+    [InlineData("bike-582x453", 2.0f, 0.95)]
+    [InlineData("bike-582x453", 4.0f, 0.95)]
+    [InlineData("calliphora-378x349", 1.0f, 0.95)]
+    [InlineData("calliphora-378x349", 2.0f, 0.95)]
+    [InlineData("calliphora-378x349", 4.0f, 0.95)]
+    public async Task Encode_Photo_AgreesWithCjxlOnMostOfItsBlocks(string sizeCase, float distance, double minShare)
     {
         JxlTools.GetToolPath("cjxl");
-        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase(sizeCase);
         string directory = TestEnvironment.CreateOutputDirectory("Jxl", "EncAcStrategy");
-        string pngPath = Path.Combine(directory, "bike.png");
-        string cjxlPath = Path.Combine(directory, "bike_e5_d1.jxl");
+        string name = string.Create(CultureInfo.InvariantCulture, $"{sizeCase}_e5_d{distance}");
+        string pngPath = Path.Combine(directory, name + ".png");
+        string cjxlPath = Path.Combine(directory, name + ".jxl");
         image.SaveAsPng(pngPath);
-        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, pngPath, cjxlPath, "-e", "5", "-d", "1", "--container=0");
+        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, pngPath, cjxlPath, "-e", "5", "-d", distance.ToString(CultureInfo.InvariantCulture), "--container=0");
 
-        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(1.0f)));
+        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(distance)));
         using JxlDecodedDcGroups theirs = JxlDecodedDcGroups.Decode(await File.ReadAllBytesAsync(cjxlPath, TestContext.Current.CancellationToken));
 
-        byte[] ourStrategies = StrategiesOf(ours);
-        int xsize = theirs.State.XSizeBlocks;
-        int eightByEight = 0;
+        byte[] ourMap = StrategiesOf(ours);
+        byte[] theirMap = StrategiesOf(theirs);
         int agree = 0;
-        int[] cjxlCounts = new int[JxlAcStrategy.NumValidStrategies];
-        for (int i = 0; i < ourStrategies.Length; i++)
+        for (int i = 0; i < ourMap.Length; i++)
         {
-            JxlAcStrategy acs = theirs.State.AcStrategy.Get(i % xsize, i / xsize);
-            cjxlCounts[acs.RawStrategy]++;
-            if (acs.CoveredBlocksX * acs.CoveredBlocksY != 1)
+            agree += ourMap[i] == theirMap[i] ? 1 : 0;
+        }
+
+        double share = (double)agree / ourMap.Length;
+        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} cjxl -e 5 -d {distance}: ours agree on {agree} of {ourMap.Length} blocks ({100 * share:F2}%); cjxl's coverage [{CoverageOf(theirMap)}], ours [{CoverageOf(ourMap)}]");
+        Assert.True(share >= minShare, $"{100 * share:F2}% agree");
+    }
+
+    // Through the decoder's parse: Bike and the calibration gradient merge blocks at d1, d2 and d4 (cjxl
+    // -e 5 merges the gradient's smooth blocks into large DCTs). Logs how many blocks each strategy covers.
+    [Theory]
+    [InlineData("bike", 1.0)]
+    [InlineData("bike", 2.0)]
+    [InlineData("bike", 4.0)]
+    [InlineData("gradient", 1.0)]
+    [InlineData("gradient", 2.0)]
+    [InlineData("gradient", 4.0)]
+    public void Encode_CalibrationImage_MergesBlocks(string name, double distance)
+    {
+        JxlCalibrationRow row = JxlCalibrationTable.Instance.Find(name, JxlEffort.Default, distance);
+        using Image<Rgb24> image = Image.Load<Rgb24>(row.Image.FullPath);
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy((float)distance)));
+
+        byte[] map = StrategiesOf(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{name} d{distance}: {CoverageOf(map)}");
+        Assert.Contains(map, b => JxlAcStrategy.FromRawStrategy(b >> 1) is { CoveredBlocksX: > 1 } or { CoveredBlocksY: > 1 });
+    }
+
+    // The strategy map, one byte per block, row by row: the raw strategy << 1, | 1 on the first block of
+    // each strategy. Each block is covered by exactly one strategy: the map is checked to tile the frame,
+    // every first block's strategy covering blocks that name it and are not first.
+    internal static byte[] StrategiesOf(JxlDecodedDcGroups frame)
+    {
+        int xsize = frame.State.XSizeBlocks;
+        int ysize = frame.State.YSizeBlocks;
+        byte[] map = new byte[xsize * ysize];
+        int[] coveredBy = new int[map.Length];
+        Array.Fill(coveredBy, -1);
+        for (int i = 0; i < map.Length; i++)
+        {
+            JxlAcStrategy acs = frame.State.AcStrategy.Get(i % xsize, i / xsize);
+            map[i] = (byte)((acs.RawStrategy << 1) | (acs.IsFirstBlock ? 1 : 0));
+            if (!acs.IsFirstBlock)
             {
                 continue;
             }
 
-            eightByEight++;
-            agree += acs.RawStrategy == ourStrategies[i] ? 1 : 0;
+            for (int iy = 0; iy < acs.CoveredBlocksY; iy++)
+            {
+                for (int ix = 0; ix < acs.CoveredBlocksX; ix++)
+                {
+                    int pos = i + (iy * xsize) + ix;
+                    Assert.True((i % xsize) + ix < xsize && (i / xsize) + iy < ysize, $"The {acs.Strategy} at block {i} leaves the frame");
+                    Assert.Equal(-1, coveredBy[pos]);
+                    coveredBy[pos] = i;
+                }
+            }
         }
 
-        double share = (double)agree / eightByEight;
-        TestContext.Current.TestOutputHelper?.WriteLine($"cjxl -e 5 -d 1: {eightByEight} of {ourStrategies.Length} blocks 8x8, ours agree on {agree} ({100 * share:F2}%); cjxl's counts by raw strategy [{string.Join(", ", cjxlCounts)}]");
-        Assert.True(share >= AgreementWithCjxlAtD1, $"{100 * share:F2}% agree");
+        for (int i = 0; i < map.Length; i++)
+        {
+            Assert.True(coveredBy[i] >= 0, $"Block {i} is not covered");
+            Assert.Equal(map[coveredBy[i]] >> 1, map[i] >> 1);
+        }
+
+        return map;
     }
 
-    // The raw strategy of every block, row by row; each block is the first of its strategy (8x8 kinds).
-    internal static byte[] StrategiesOf(JxlDecodedDcGroups frame)
+    // How many blocks each raw strategy covers, as "raw:count" in raw order.
+    internal static string CoverageOf(byte[] map)
     {
-        int xsize = frame.State.XSizeBlocks;
-        byte[] raw = new byte[xsize * frame.State.YSizeBlocks];
-        for (int i = 0; i < raw.Length; i++)
+        int[] counts = new int[JxlAcStrategy.NumValidStrategies];
+        foreach (byte b in map)
         {
-            JxlAcStrategy acs = frame.State.AcStrategy.Get(i % xsize, i / xsize);
-            Assert.True(acs.IsFirstBlock, $"Block {i} is not the first of its {acs.Strategy}");
-            raw[i] = (byte)acs.RawStrategy;
+            counts[b >> 1]++;
         }
 
-        return raw;
+        return string.Join(" ", counts.Select((n, raw) => (n, raw)).Where(p => p.n > 0).Select(p => $"{p.raw}:{p.n}"));
     }
 
     private static uint Bits(float value) => BitConverter.SingleToUInt32Bits(value);

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -17,7 +19,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// Lossy encoding at Default (libjxl effort 5, <c>kHare</c>), slice E4. E4a is the tracer: Gaborish,
 /// near-lossless DC, the <c>kACMeta</c> tree for the AC metadata and a learned tree for alpha are libjxl's
 /// Hare stages. The later tickets add the adaptive quant field (E4b), the per-block AC quant (E4c), the
-/// chroma-from-luma map (E4d), the block context map (E4e) and the 8x8 level of the strategy search (E4g).
+/// chroma-from-luma map (E4d), the block context map (E4e), the 8x8 level of the strategy search (E4g) and
+/// its merges into blocks of up to 64x64 (E4h).
 /// </summary>
 /// <remarks>
 /// The colour is checked against E3a's interim bound (<see cref="JxlLossyEncoderTests"/>): each channel's
@@ -26,6 +29,16 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 [Trait("Format", "Jxl")]
 public class JxlLossyDefaultEncoderTests
 {
+    // The strategies Hare's search chooses from: DCT8, IDENTITY, DCT2X2 and DCT4X4 at the 8x8 level, and the
+    // aligned merges.
+    private static readonly JxlAcStrategyType[] HareStrategies =
+    {
+        JxlAcStrategyType.Dct, JxlAcStrategyType.Identity, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Dct4X4,
+        JxlAcStrategyType.Dct16X8, JxlAcStrategyType.Dct8X16, JxlAcStrategyType.Dct16X16,
+        JxlAcStrategyType.Dct32X16, JxlAcStrategyType.Dct16X32, JxlAcStrategyType.Dct32X32,
+        JxlAcStrategyType.Dct64X32, JxlAcStrategyType.Dct32X64, JxlAcStrategyType.Dct64X64,
+    };
+
     public static TheoryData<string, float> PhotoReaderCases { get; } = CreatePhotoReaderCases();
 
     public static TheoryData<string, string, float> AlphaReaderCases { get; } = CreateAlphaReaderCases();
@@ -78,8 +91,7 @@ public class JxlLossyDefaultEncoderTests
     // libjxl's choices at Hare, read back through the decoder's parse: XYB VarDCT; Gaborish above d0.5
     // (LoopFilterFromParams); the EPF iterations and X quantisation scale as at Fastest; near-lossless DC,
     // so one bit of extra DC precision in every LF group (the gradient has two). The quant field adapts to
-    // the image (E4b), and every block is one of the four 8x8 strategies of the search (E4g; no merges until
-    // E4h).
+    // the image (E4b), and every block is covered by one strategy of the search (E4g, E4h).
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -104,16 +116,13 @@ public class JxlLossyDefaultEncoderTests
         Assert.Equal(header.ToFrameDimensions().NumDcGroups, frame.ExtraDcPrecision.Length);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // E4g: each block takes one of the 8x8 strategies of the search; the merges into larger blocks are
-        // a temporary departure until E4h.
-        JxlAcStrategyType[] eightByEight = { JxlAcStrategyType.Dct, JxlAcStrategyType.Dct4X4, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Identity };
-        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        // E4g, E4h: each block is covered once, by one of the strategies of Hare's search: the four 8x8
+        // strategies and the aligned merges up to 64x64 (no DCT4X8, DCT8X4, AFV, DCT32X8, DCT8X32 or
+        // DCT128X128 and up).
+        foreach (byte b in JxlEncAcStrategyTests.StrategiesOf(frame))
         {
-            for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
-            {
-                JxlAcStrategy acs = frame.State.AcStrategy.Get(bx, by);
-                Assert.True(Array.IndexOf(eightByEight, acs.Strategy) >= 0 && acs.IsFirstBlock, $"Block ({bx}, {by}) is {acs.Strategy}");
-            }
+            JxlAcStrategyType strategy = (JxlAcStrategyType)(b >> 1);
+            Assert.True(Array.IndexOf(HareStrategies, strategy) >= 0, $"{strategy} is not in Hare's search");
         }
 
         // E4b: the adaptive quant field varies from block to block.
@@ -233,10 +242,12 @@ public class JxlLossyDefaultEncoderTests
     // AdjustQuantBlockAC (E4c), read back through the decoder's parse of the raw quant field. Each block
     // takes the largest of the quants its Y, X and B coefficients ask for: flat blocks and lone high
     // frequencies raise it, and busy blocks lower it when all three channels are busy. Each block starts
-    // from its raw value of E4b's adaptive field (SetQuantFieldRect over InitialQuantField), which this
-    // recomputes from the image. Shares on the flower crop (E4b on E4c): d0.5 64.4% raised and 1.9%
-    // lowered; d1 96.4% and 0%; d2 100% and 0%. Against E4a's constant field the lowered share was larger
-    // (d1 4.8%): the adaptive field already gives busy blocks a low quant, near the floor max(4, quant / 2).
+    // from its raw value of E4b's adaptive field (SetQuantFieldRect over InitialQuantField, after
+    // AdjustQuantField over the frame's strategies), which this recomputes from the image. Shares of the
+    // first blocks on the flower crop (E4h): d0.5 48.9% raised and 1.9% lowered; d1 68.9% and 0%; d2 69.0%
+    // and 0% (E4b on E4c, all 8x8: d0.5 64.4% and 1.9%, d1 96.4% and 0%, d2 100% and 0%). Against E4a's
+    // constant field the lowered share was larger (d1 4.8%): the adaptive field already gives busy blocks a
+    // low quant, near the floor max(4, quant / 2).
     [Theory]
     [InlineData(0.5f, true)]
     [InlineData(1.0f, false)]
@@ -247,7 +258,7 @@ public class JxlLossyDefaultEncoderTests
 
         using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
 
-        int[] adaptiveQuant = JxlEncAdaptiveQuantizationTests.RawQuantFieldOf(image, distance);
+        int[] adaptiveQuant = JxlEncAdaptiveQuantizationTests.RawQuantFieldOf(image, distance, frame.State.AcStrategy);
         (int raised, int lowered, int blocks) = frame.QuantFieldAround(adaptiveQuant);
         TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: raised {raised} ({100.0 * raised / blocks:F1}%), lowered {lowered} ({100.0 * lowered / blocks:F1}%) of {blocks} blocks; range {frame.QuantFieldRange()}");
         Assert.True(raised > 0, "AdjustQuantBlockAC raises no block's quant");
@@ -276,6 +287,115 @@ public class JxlLossyDefaultEncoderTests
                 Assert.Equal(0u, order[0]);
                 Assert.Equal(natural.OrderBy(k => k), order.OrderBy(k => k));
                 Assert.NotEqual(natural, order);
+            }
+        }
+    }
+
+    // With the merges (E4h) Bike uses every order bucket but 5 (DCT32X8 and DCT8X32, which Hare never
+    // chooses). libjxl's ComputeUsedOrders customises the buckets up to 6 (DCT32X16 and DCT16X32) and keeps
+    // the natural order for 7 (DCT64X64) and 8 (DCT64X32 and DCT32X64), as it does for blocks bigger than
+    // 32x32. Each customised order is a permutation of the natural one with the LLF first.
+    [Theory]
+    [InlineData(1.0f)]
+    [InlineData(4.0f)]
+    public void Encode_Bike_CustomisesTheUsedOrdersUpTo32x32(float distance)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+        frame.DecodeAcGlobal();
+
+        int[] usedOrders = UsedOrders(frame);
+        Assert.Equal(new[] { 0, 1, 2, 3, 4, 6, 7, 8 }, usedOrders);
+        foreach (int ord in usedOrders)
+        {
+            JxlAcStrategy acs = StrategyOfOrder(ord);
+            int llf = acs.CoveredBlocksX * acs.CoveredBlocksY;
+            uint[] natural = new uint[64 * llf];
+            acs.ComputeNaturalCoeffOrder(natural);
+            int permuted = 0;
+            for (int c = 0; c < 3; c++)
+            {
+                uint[] order = frame.State.CoeffOrders.AsSpan(JxlCoeffOrder.Offset(ord, c), natural.Length).ToArray();
+                Assert.Equal(natural.OrderBy(k => k), order.OrderBy(k => k));
+                Assert.Equal(natural.AsSpan(0, llf).ToArray(), order.AsSpan(0, llf).ToArray());
+                permuted += order.AsSpan().SequenceEqual(natural) ? 0 : 1;
+            }
+
+            // libjxl codes a bucket's three channels when any of them differs from the natural order. It sorts
+            // by each position's zero count quantised as (long)(count / sqrt(64 n) + 0.1): with fewer than
+            // 0.9 sqrt(64 n) blocks every count is 0 and the order stays natural, so it is not coded (Bike's
+            // 19 DCT32X32 blocks at d1, against 28.8).
+            int blocks = FirstBlocksOfOrder(frame, ord);
+            bool sortable = blocks >= 0.9 * Math.Sqrt(natural.Length);
+            TestContext.Current.TestOutputHelper?.WriteLine($"d{distance} order {ord}: {blocks} blocks, {permuted} of 3 channels permuted");
+            Assert.True(ord > 6 || !sortable ? permuted == 0 : permuted > 0, $"Order {ord}: {blocks} blocks, {permuted} of 3 channels permuted");
+        }
+    }
+
+    // Informative: with JXL_TOOLS_DIR, which of the used orders cjxl -e 5 codes on Bike, and whether its
+    // coded orders are ours. Its strategy map is ours (JxlEncAcStrategyTests), but its quantised
+    // coefficients can differ a little (its FMA builds), so an order may differ in a few places.
+    [Fact]
+    public async Task Encode_Bike_CodesTheOrdersCjxlCodes()
+    {
+        JxlTools.GetToolPath("cjxl");
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", "LossyDefaultEncoder");
+        string pngPath = System.IO.Path.Combine(directory, "bike.png");
+        string cjxlPath = System.IO.Path.Combine(directory, "bike_e5_d1.jxl");
+        image.SaveAsPng(pngPath);
+        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, pngPath, cjxlPath, "-e", "5", "-d", "1", "--container=0");
+
+        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+        using JxlDecodedDcGroups theirs = JxlDecodedDcGroups.Decode(await System.IO.File.ReadAllBytesAsync(cjxlPath, TestContext.Current.CancellationToken));
+        ours.DecodeAcGlobal();
+        theirs.DecodeAcGlobal();
+
+        int[] usedOrders = UsedOrders(ours);
+        Assert.Equal(usedOrders, UsedOrders(theirs));
+        foreach (int ord in usedOrders)
+        {
+            JxlAcStrategy acs = StrategyOfOrder(ord);
+            int size = 64 * acs.CoveredBlocksX * acs.CoveredBlocksY;
+            uint[] natural = new uint[size];
+            acs.ComputeNaturalCoeffOrder(natural);
+            for (int c = 0; c < 3; c++)
+            {
+                ReadOnlySpan<uint> ourOrder = ours.State.CoeffOrders.AsSpan(JxlCoeffOrder.Offset(ord, c), size);
+                ReadOnlySpan<uint> theirOrder = theirs.State.CoeffOrders.AsSpan(JxlCoeffOrder.Offset(ord, c), size);
+                int same = 0;
+                for (int k = 0; k < size; k++)
+                {
+                    same += ourOrder[k] == theirOrder[k] ? 1 : 0;
+                }
+
+                TestContext.Current.TestOutputHelper?.WriteLine($"order {ord} channel {c}: ours {(ourOrder.SequenceEqual(natural) ? "natural" : "custom")}, cjxl's {(theirOrder.SequenceEqual(natural) ? "natural" : "custom")}; {same} of {size} positions agree");
+                Assert.Equal(theirOrder.SequenceEqual(natural), ourOrder.SequenceEqual(natural));
+            }
+        }
+    }
+
+    // libjxl keeps the natural orders for images under 5x5 blocks in both directions, whatever strategies
+    // they use: a 32x32 photo crop (4x4 blocks) that merges into larger blocks.
+    [Fact]
+    public void Encode_SmallImage_KeepsEveryOrderNatural()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-32x32");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(4.0f)));
+        frame.DecodeAcGlobal();
+
+        int[] usedOrders = UsedOrders(frame);
+        Assert.Contains(usedOrders, ord => ord >= 2);
+        foreach (int ord in usedOrders)
+        {
+            JxlAcStrategy acs = StrategyOfOrder(ord);
+            uint[] natural = new uint[64 * acs.CoveredBlocksX * acs.CoveredBlocksY];
+            acs.ComputeNaturalCoeffOrder(natural);
+            for (int c = 0; c < 3; c++)
+            {
+                Assert.Equal(natural, frame.State.CoeffOrders.AsSpan(JxlCoeffOrder.Offset(ord, c), natural.Length).ToArray());
             }
         }
     }
@@ -319,16 +439,16 @@ public class JxlLossyDefaultEncoderTests
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "BF03B3691D82428DD2611E49C22CBB9D5118346B1EB811BBC86414EDD3B0167A")]
-    [InlineData("flower-384x244", "", 1.0f, "0FDA8D81CD8213AA026EDAAB9192A6BA0752794B15C11A45BFA6B15E60802391")]
-    [InlineData("flower-384x244", "", 2.0f, "1D98EC339B74ADF1002E11C5021FA26BBB50BD78156F8288148B71A94F5D3130")]
-    [InlineData("flower-384x244", "", 4.0f, "B9E5445827E8595F43DAF1A593BB09BC21E55ABC30A48E118625A4AB42C144A5")]
-    [InlineData("flower-17x23", "", 1.0f, "B6D5DBB8EC4F8A411E914675B79335D0EB714B4025ED41EF1D431DF7985D95AA")]
+    [InlineData("flower-384x244", "", 0.5f, "88E6145ED0606797E70C0BEC85B59FF73562B4A68A4171AC5BA6F731082CDEB5")]
+    [InlineData("flower-384x244", "", 1.0f, "3D7638836E201CFA238E5B2D07DCD3F42013A1BB0B4A3B500CAF6973F8F71582")]
+    [InlineData("flower-384x244", "", 2.0f, "727DABB0E010B53556C3982039F43A1B48DE68C88DCE5A866ABA599C5D59B096")]
+    [InlineData("flower-384x244", "", 4.0f, "75EDE6EBEAB4F214CDAAB2B297E9313AB82893E02DDE285162D35FBA773ECDAA")]
+    [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
     [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "B05DDBC8EA61020F3C4D39FAD5F8DB93BE88B791EAC432180608117FBDBC46B3")]
-    [InlineData("gradient-2049x9", "", 2.0f, "4141E57E7CA3050CD7B4FAF66EAA873E84146DFD4A0990A8C423481D84A5045C")]
-    [InlineData("flower-256x244", "soft", 1.0f, "FDA4F108ED3B8DEFCB15DB23E5FA1F99B743F4A0E4E1434476D8F86759D450B8")]
-    [InlineData("bike-582x453", "hard", 1.0f, "E51099671BED5B0644BEF2616F0D32F18731569080227A0EB2395AA86C6C97B4")]
+    [InlineData("bike-582x453", "", 1.0f, "E3F5FCE8AECAB4FDC32618FC17ADFE3E0645E58460E6C5BE2B060877EEDD420B")]
+    [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
+    [InlineData("flower-256x244", "soft", 1.0f, "EBE1EF051831070E6260DB52620153114FE555A2B3C295CBC04D14FC1F2B7148")]
+    [InlineData("bike-582x453", "hard", 1.0f, "75A011918D518420BD3960B19DC25EBA58D6A1479AACDEFA4054AB93424F8B01")]
     public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded;
@@ -350,6 +470,49 @@ public class JxlLossyDefaultEncoderTests
     }
 
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Default };
+
+    // The order buckets of the strategies the frame uses, in increasing order.
+    private static int[] UsedOrders(JxlDecodedDcGroups frame)
+    {
+        SortedSet<int> used = new();
+        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        {
+            for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
+            {
+                used.Add(JxlCoeffOrder.StrategyOrder[frame.State.AcStrategy.Get(bx, by).RawStrategy]);
+            }
+        }
+
+        return used.ToArray();
+    }
+
+    // How many first blocks of the frame are in the order bucket.
+    private static int FirstBlocksOfOrder(JxlDecodedDcGroups frame, int ord)
+    {
+        int blocks = 0;
+        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        {
+            for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
+            {
+                JxlAcStrategy acs = frame.State.AcStrategy.Get(bx, by);
+                blocks += acs.IsFirstBlock && JxlCoeffOrder.StrategyOrder[acs.RawStrategy] == ord ? 1 : 0;
+            }
+        }
+
+        return blocks;
+    }
+
+    // The first strategy, in raw order, of an order bucket: the one whose size the bucket's order has.
+    private static JxlAcStrategy StrategyOfOrder(int ord)
+    {
+        int raw = 0;
+        while (JxlCoeffOrder.StrategyOrder[raw] != ord)
+        {
+            raw++;
+        }
+
+        return JxlAcStrategy.FromRawStrategy(raw);
+    }
 
     private static TheoryData<string, float> CreatePhotoReaderCases()
     {

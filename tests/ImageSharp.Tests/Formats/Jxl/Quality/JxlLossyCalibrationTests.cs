@@ -57,8 +57,12 @@ public class JxlLossyCalibrationTests
     /// no merges yet) lifts text d1/d2/d4 to margins of +3.75 / +4.08 / +3.49 and line_art d1 to +5.28
     /// (0.96x cjxl's size); the photos keep theirs (bike d1 +3.61 at 1.02x). Gradient d4 still fails
     /// (-1.83, 1.27x): cjxl merges its smooth blocks into large DCTs (E4h).
+    /// E4h (net10.0, x64): 18 of 18. With the merges up to 64x64 the strategy map of Bike and Calliphora is
+    /// cjxl's block for block, and every row lands within 0.09 of cjxl's score at 0.98x to 1.02x its size;
+    /// margins +3.41 (line_art d4) to +3.57 (text d1). Gradient d4 now passes (+3.54, 0.98x). The photo
+    /// set (bike, calliphora, bike_alpha) is 0.993x, 0.964x and 0.915x E4g's total size at d1, d2 and d4.
     /// </remarks>
-    private const int DefaultRowsPassing = 17;
+    private const int DefaultRowsPassing = 18;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

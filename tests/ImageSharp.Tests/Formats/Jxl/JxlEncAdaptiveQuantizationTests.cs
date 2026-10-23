@@ -122,6 +122,9 @@ public class JxlEncAdaptiveQuantizationTests
     //   0.1248 / 0.1754 (0.499; the modulations are dampened above d2).
     // - E4b with E4c's AdjustQuantBlockAC, which raises most blocks: d1 0.3120 / 0.6121 / 0.8579 (0.612),
     //   d2 0.1559 / 0.3073 / 0.4288 (0.615), d4 0.0779 / 0.1443 / 0.1949 (0.577).
+    // - With E4h's merges, the mean over every block (each strategy's value once per block it covers):
+    //   d1 0.3120 / 0.5780 / 0.8579 (0.578), d2 0.1559 / 0.2881 / 0.4288 (0.576), d4 0.0779 / 0.1287 /
+    //   0.1949 (0.515). AdjustQuantField mixes the values of each merged block.
     [Fact]
     public void Encode_Photo_HasAnAdaptiveQuantFieldWhoseMeanFollowsTheDistance()
     {
@@ -160,8 +163,8 @@ public class JxlEncAdaptiveQuantizationTests
 
         Assert.False(frame.FrameHeader.LoopFilter.Gab);
         double parsed = MeanRaw(frame);
-        double at062 = MeanOf(RawQuantField(bike, distance, distanceForIqf: 0.62f * distance));
-        double atD = MeanOf(RawQuantField(bike, distance, distanceForIqf: distance));
+        double at062 = MeanOf(RawQuantField(bike, distance, distanceForIqf: 0.62f * distance, frame.State.AcStrategy));
+        double atD = MeanOf(RawQuantField(bike, distance, distanceForIqf: distance, frame.State.AcStrategy));
         TestContext.Current.TestOutputHelper?.WriteLine($"parsed {parsed:0.00}, at 0.62 d {at062:0.00}, at d {atD:0.00}");
         Assert.True(Math.Abs(parsed - at062) < Math.Abs(parsed - atD) / 4, $"parsed {parsed}, at 0.62 d {at062}, at d {atD}");
     }
@@ -250,19 +253,32 @@ public class JxlEncAdaptiveQuantizationTests
         }
     }
 
-    // The raw quant field the encoder sets at Default before AdjustQuantBlockAC (all blocks DCT8, so
-    // AdjustQuantField changes nothing): the field at d with Gaborish (d > 0.5), at 0.62 d without.
-    internal static int[] RawQuantFieldOf(Image<Rgb24> image, float distance)
-        => RawQuantField(image, distance, distance > 0.5f ? distance : 0.62f * distance);
+    // The raw quant field the encoder sets at Default before AdjustQuantBlockAC: the field at d with
+    // Gaborish (d > 0.5), at 0.62 d without, then AdjustQuantField over the strategies the frame chose,
+    // tile by tile (with every block DCT8 it changes nothing).
+    internal static int[] RawQuantFieldOf(Image<Rgb24> image, float distance, JxlAcStrategyImage acStrategy = null)
+        => RawQuantField(image, distance, distance > 0.5f ? distance : 0.62f * distance, acStrategy);
 
     // The raw quant field the encoder sets from the field at distanceForIqf, at the global scale of d.
-    private static int[] RawQuantField(Image<Rgb24> image, float distance, float distanceForIqf)
+    private static int[] RawQuantField(Image<Rgb24> image, float distance, float distanceForIqf, JxlAcStrategyImage acStrategy = null)
     {
         Buffer2D<float>[] opsin = CreateOpsin(image);
         try
         {
             using Buffer2D<float> field = JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, out Buffer2D<float> mask1x1);
             mask1x1.Dispose();
+            if (acStrategy != null)
+            {
+                for (int ty = 0; ty < field.Height; ty += 8)
+                {
+                    for (int tx = 0; tx < field.Width; tx += 8)
+                    {
+                        JxlRect tile = new(tx, ty, Math.Min(8, field.Width - tx), Math.Min(8, field.Height - ty));
+                        JxlEncAdaptiveQuantization.AdjustQuantField(acStrategy, tile, distance, field);
+                    }
+                }
+            }
+
             return RawQuantField(field, distance);
         }
         finally
@@ -282,6 +298,8 @@ public class JxlEncAdaptiveQuantizationTests
         return sum / values.Length;
     }
 
+    // The mean of the raw quant field read back over every block: the decoder reads one value per strategy,
+    // at its first block, so each value counts once per block the strategy covers.
     private static double MeanRaw(JxlDecodedDcGroups frame)
     {
         double sum = 0;
@@ -290,7 +308,11 @@ public class JxlEncAdaptiveQuantizationTests
             Span<int> row = frame.State.RawQuantField.DangerousGetRowSpan(by);
             for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
             {
-                sum += row[bx];
+                JxlAcStrategy acs = frame.State.AcStrategy.Get(bx, by);
+                if (acs.IsFirstBlock)
+                {
+                    sum += (double)row[bx] * acs.CoveredBlocksX * acs.CoveredBlocksY;
+                }
             }
         }
 

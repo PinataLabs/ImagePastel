@@ -58,10 +58,9 @@ internal static class JxlEncHeuristics
     /// context map. The dequantization matrices keep their defaults.
     /// </summary>
     /// <remarks>
-    /// From Hare down the strategy of each block is searched (<see cref="JxlEncAcStrategy"/>), and the
-    /// adaptive quant field, the chroma-from-luma map of each tile and the block context map are computed,
-    /// as libjxl does. Temporary departure (E4g): the search keeps each block's 8x8 choice, without libjxl's
-    /// merges into larger blocks, until E4h.
+    /// From Hare down the strategy of each block is searched (<see cref="JxlEncAcStrategy"/>), with the merges
+    /// into blocks of up to 64x64, and the adaptive quant field, the chroma-from-luma map of each tile and the
+    /// block context map are computed, as libjxl does.
     /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>

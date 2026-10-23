@@ -1,7 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_ac_strategy.cc (EstimateEntropy, FindBest8x8Transform, the 8x8 level of ProcessRectACS,
+// lib/jxl/enc_ac_strategy.cc (EstimateEntropy, FindBest8x8Transform, the Hare part of ProcessRectACS with
+// TryMergeAcs, FindBestFirstLevelDivisionForSquare and the MultiBlockTransformCrosses boundary checks,
 // AcStrategyHeuristics::Init and ProcessRect), for 8 lanes.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
@@ -15,7 +16,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// <summary>
 /// The AC-strategy search of the encoder: for each 64x64 tile, the strategy of each block. From Cheetah
 /// up every block is DCT8; from Hare down each 8x8 block takes the 8x8 strategy with the lowest estimate of
-/// its bits plus its information loss.
+/// its bits plus its information loss, and blocks then merge into DCTs of up to 64x64 where the estimate of
+/// the merged block is lower than the sum of its parts.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -71,6 +73,30 @@ internal static class JxlEncAcStrategy
         (JxlAcStrategyType.Afv3, 4, 0.81779489591359944),
     };
 
+    // These numbers need to be figured out manually and looking at ringing next to sky etc. Optimization
+    // will find smaller numbers and produce more ringing than is ideal. Larger numbers will help stop
+    // ringing.
+    private const float EntropyMul16X8 = 1.21f;
+    private const float EntropyMul16X16 = 1.34f;
+    private const float EntropyMul16X32 = 1.49f;
+    private const float EntropyMul32X32 = 1.48f;
+    private const float EntropyMul64X32 = 2.25f;
+    private const float EntropyMul64X64 = 2.25f;
+
+    // libjxl's kTransformsForMerge: each merge, its priority and its entropy multiplier, in the order they
+    // are tried. FindBestFirstLevelDivisionForSquare looks for DCT16X16, DCT32X32 and DCT64X64 and their
+    // subdivisions. libjxl's decoding and encoding speed tier limits are left out: the decoding tier is
+    // always 0, which every entry allows, and the loop never reads the encoding one.
+    private static readonly (JxlAcStrategyType Type, byte Priority, float EntropyMul)[] TransformsForMerge =
+    {
+        (JxlAcStrategyType.Dct16X8, 2, EntropyMul16X8),
+        (JxlAcStrategyType.Dct8X16, 2, EntropyMul16X8),
+        (JxlAcStrategyType.Dct16X32, 4, EntropyMul16X32),
+        (JxlAcStrategyType.Dct32X16, 4, EntropyMul16X32),
+        (JxlAcStrategyType.Dct64X32, 6, EntropyMul64X32),
+        (JxlAcStrategyType.Dct32X64, 6, EntropyMul64X32),
+    };
+
     /// <summary>
     /// Prepares the search, as libjxl's <c>AcStrategyHeuristics::Init</c>: computes the dequantization
     /// matrices the tier can choose (DCT8 from Cheetah up, every strategy below DCT128X128 otherwise) and
@@ -121,8 +147,8 @@ internal static class JxlEncAcStrategy
     /// <c>AcStrategyHeuristics::ProcessRect</c>: DCT8 everywhere from Cheetah up, otherwise the search.
     /// </summary>
     /// <remarks>
-    /// Temporary departure (E4g): from Hare down libjxl then merges the 8x8 choices into 16x8 up to 64x64
-    /// blocks where that lowers the estimate; until E4h ports the merges, each block keeps its 8x8 choice.
+    /// From Hare down the search then merges the 8x8 choices into 16x8 up to 64x64 blocks, aligned to their
+    /// size, where that lowers the estimate. The non-aligned merges below Hare are slice E5.
     /// </remarks>
     /// <param name="config">The search's configuration.</param>
     /// <param name="speedTier">The speed tier.</param>
@@ -378,7 +404,8 @@ internal static class JxlEncAcStrategy
         return bestTx;
     }
 
-    // libjxl's ProcessRectACS from Hare down, its 8x8 level: the best 8x8 strategy of each block of the tile.
+    // libjxl's ProcessRectACS from Hare down: the best 8x8 strategy of each block of the tile, then the
+    // aligned merges into larger DCTs.
     private static void ProcessRectAcs(JxlAcsConfig config, JxlSpeedTier speedTier, float butteraugliTarget, JxlRect rect, JxlColorCorrelation cmap, JxlAcStrategyImage acStrategy, JxlAcsScratch scratch)
     {
         // Main philosophy here:
@@ -423,8 +450,405 @@ internal static class JxlEncAcStrategy
             }
         }
 
-        // Temporary departure (E4g): libjxl now merges the 8x8 choices into larger transforms where the
-        // entropy estimate says so, comparing against entropyEstimate; E4h ports the merges.
+        // Merge when a larger transform is better than the previously searched best combination of 8x8
+        // transforms. The encoder has no decoding speed tier option, so libjxl's decoding_speed_tier is 0:
+        // every entry of kTransformsForMerge is tried, and 32x32 and the 64x64 level are enabled.
+        // Priority is a tricky kludge to avoid collisions so that transforms don't overlap.
+        Span<byte> priority = stackalloc byte[64];
+        priority.Clear();
+        const bool enable32x32 = true;
+        int ysize = (int)rect.YSize;
+        int xsize = (int)rect.XSize;
+        foreach ((JxlAcStrategyType type, byte candidatePriority, float entropyMul) in TransformsForMerge)
+        {
+            JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)type);
+            for (int cy = 0; cy + acs.CoveredBlocksY - 1 < ysize; cy += acs.CoveredBlocksY)
+            {
+                for (int cx = 0; cx + acs.CoveredBlocksX - 1 < xsize; cx += acs.CoveredBlocksX)
+                {
+                    if (cy + 7 < ysize && cx + 7 < xsize)
+                    {
+                        if (type == JxlAcStrategyType.Dct32X64)
+                        {
+                            // We handle both DCT8X16 and DCT16X8 at the same time.
+                            if ((cy | cx) % 8 == 0)
+                            {
+                                FindBestFirstLevelDivisionForSquare(8, true, bx, by, cx, cy, config, cmapFactors, acStrategy, entropyMul, EntropyMul64X64, entropyEstimate, scratch);
+                            }
+
+                            continue;
+                        }
+                        else if (type == JxlAcStrategyType.Dct32X16)
+                        {
+                            // We handled both DCT8X16 and DCT16X8 at the same time, and that is above. The
+                            // last column and last row, when the last column or last row is odd numbered,
+                            // are still handled by TryMergeAcs.
+                            continue;
+                        }
+                    }
+
+                    if ((type == JxlAcStrategyType.Dct16X32 && cy % 4 != 0) || (type == JxlAcStrategyType.Dct32X16 && cx % 4 != 0))
+                    {
+                        // already covered by FindBest32X32
+                        continue;
+                    }
+
+                    if (cy + 3 < ysize && cx + 3 < xsize)
+                    {
+                        if (type == JxlAcStrategyType.Dct16X32)
+                        {
+                            // We handle both DCT8X16 and DCT16X8 at the same time.
+                            if ((cy | cx) % 4 == 0)
+                            {
+                                FindBestFirstLevelDivisionForSquare(4, enable32x32, bx, by, cx, cy, config, cmapFactors, acStrategy, entropyMul, EntropyMul32X32, entropyEstimate, scratch);
+                            }
+
+                            continue;
+                        }
+                        else if (type == JxlAcStrategyType.Dct32X16)
+                        {
+                            // We handled both DCT8X16 and DCT16X8 at the same time, and that is above. The
+                            // last column and last row, when the last column or last row is odd numbered,
+                            // are still handled by TryMergeAcs.
+                            continue;
+                        }
+                    }
+
+                    if ((type == JxlAcStrategyType.Dct16X32 && cy % 4 != 0) || (type == JxlAcStrategyType.Dct32X16 && cx % 4 != 0))
+                    {
+                        // already covered by FindBest32X32
+                        continue;
+                    }
+
+                    if (cy + 1 < ysize && cx + 1 < xsize)
+                    {
+                        if (type == JxlAcStrategyType.Dct8X16)
+                        {
+                            // We handle both DCT8X16 and DCT16X8 at the same time.
+                            if ((cy | cx) % 2 == 0)
+                            {
+                                FindBestFirstLevelDivisionForSquare(2, true, bx, by, cx, cy, config, cmapFactors, acStrategy, entropyMul, EntropyMul16X16, entropyEstimate, scratch);
+                            }
+
+                            continue;
+                        }
+                        else if (type == JxlAcStrategyType.Dct16X8)
+                        {
+                            // We handled both DCT8X16 and DCT16X8 at the same time, and that is above. The
+                            // last column and last row, when the last column or last row is odd numbered,
+                            // are still handled by TryMergeAcs.
+                            continue;
+                        }
+                    }
+
+                    if ((type == JxlAcStrategyType.Dct8X16 && cy % 2 == 1) || (type == JxlAcStrategyType.Dct16X8 && cx % 2 == 1))
+                    {
+                        // already covered by FindBestFirstLevelDivisionForSquare
+                        continue;
+                    }
+
+                    // All other merge sizes are handled here. Some of the DCT16X8s and DCT8X16s will still leak
+                    // through here when there is an odd number of 8x8 blocks, then the last row and column will
+                    // get their DCT16X8s and DCT8X16s through the normal integral transform merging process.
+                    TryMergeAcs(type, bx, by, cx, cy, config, cmapFactors, acStrategy, entropyMul, candidatePriority, priority, entropyEstimate, scratch);
+                }
+            }
+        }
+
+        // From Hare up libjxl stops here. Below Hare it tries non-aligned 16x8, 8x16, 16x16, 32x16, 16x32
+        // and 32x32 merges, which lossy Thorough (slice E5) adds.
+        if (speedTier >= JxlSpeedTier.Hare)
+        {
+            return;
+        }
+
+        JxlThrowHelper.ThrowNotSupportedException("The non-aligned AC-strategy merges (libjxl effort 6 and up; slice E5)");
+    }
+
+    // Whether a multi-block strategy crosses the horizontal line of blocks from start_x to end_x on row y:
+    // some block there is not the first of its strategy, so a transform above reaches below the line.
+    private static bool MultiBlockTransformCrossesHorizontalBoundary(JxlAcStrategyImage acStrategy, int startX, int y, int endX)
+    {
+        if (startX >= acStrategy.XSize || y >= acStrategy.YSize)
+        {
+            return false;
+        }
+
+        if (y % 8 == 0)
+        {
+            // Nothing crosses 64x64 boundaries, and the memory on the other side of the 64x64 block may still
+            // uninitialized.
+            return false;
+        }
+
+        endX = Math.Min(endX, acStrategy.XSize);
+
+        // The first multiblock might be before the start_x, let's adjust it to point to the first
+        // IsFirstBlock() == true block we find by backward tracing.
+        int startXLimit = startX & ~7;
+        while (startX != startXLimit && !acStrategy.Get(startX, y).IsFirstBlock)
+        {
+            --startX;
+        }
+
+        for (int x = startX; x < endX;)
+        {
+            JxlAcStrategy acs = acStrategy.Get(x, y);
+            if (acs.IsFirstBlock)
+            {
+                x += acs.CoveredBlocksX;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The same for the vertical line of blocks from start_y to end_y on column x.
+    private static bool MultiBlockTransformCrossesVerticalBoundary(JxlAcStrategyImage acStrategy, int x, int startY, int endY)
+    {
+        if (x >= acStrategy.XSize || startY >= acStrategy.YSize)
+        {
+            return false;
+        }
+
+        if (x % 8 == 0)
+        {
+            // Nothing crosses 64x64 boundaries, and the memory on the other side of the 64x64 block may still
+            // uninitialized.
+            return false;
+        }
+
+        endY = Math.Min(endY, acStrategy.YSize);
+
+        // The first multiblock might be before the start_y, let's adjust it to point to the first
+        // IsFirstBlock() == true block we find by backward tracing.
+        int startYLimit = startY & ~7;
+        while (startY != startYLimit && !acStrategy.Get(x, startY).IsFirstBlock)
+        {
+            --startY;
+        }
+
+        for (int y = startY; y < endY;)
+        {
+            JxlAcStrategy acs = acStrategy.Get(x, y);
+            if (acs.IsFirstBlock)
+            {
+                y += acs.CoveredBlocksY;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // cx, cy addresses the left, upper 8x8 block position of the candidate transform. Takes the candidate
+    // when its estimate is below the sum of the blocks it covers and none of them was taken by a merge of
+    // the same or a higher priority.
+    private static void TryMergeAcs(JxlAcStrategyType acsRaw, int bx, int by, int cx, int cy, JxlAcsConfig config, ReadOnlySpan<float> cmapFactors, JxlAcStrategyImage acStrategy, float entropyMul, byte candidatePriority, Span<byte> priority, Span<float> entropyEstimate, JxlAcsScratch scratch)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)acsRaw);
+        float entropyCurrent = 0;
+        for (int iy = 0; iy < acs.CoveredBlocksY; ++iy)
+        {
+            for (int ix = 0; ix < acs.CoveredBlocksX; ++ix)
+            {
+                if (priority[((cy + iy) * 8) + cx + ix] >= candidatePriority)
+                {
+                    // Transform would reuse already allocated blocks and lead to invalid overlaps, for example
+                    // DCT64X32 vs. DCT32X64.
+                    return;
+                }
+
+                entropyCurrent += entropyEstimate[((cy + iy) * 8) + cx + ix];
+            }
+        }
+
+        float entropyCandidate = EstimateEntropy(acsRaw, entropyMul, (bx + cx) * 8, (by + cy) * 8, config, cmapFactors, scratch);
+        if (entropyCandidate >= entropyCurrent)
+        {
+            return;
+        }
+
+        // Accept the candidate.
+        for (int iy = 0; iy < acs.CoveredBlocksY; iy++)
+        {
+            for (int ix = 0; ix < acs.CoveredBlocksX; ix++)
+            {
+                entropyEstimate[((cy + iy) * 8) + cx + ix] = 0;
+                priority[((cy + iy) * 8) + cx + ix] = candidatePriority;
+            }
+        }
+
+        acStrategy.Set(bx + cx, by + cy, acsRaw);
+        entropyEstimate[(cy * 8) + cx] = entropyCandidate;
+    }
+
+    // The estimate of a strategy goes to its first block, and its other blocks count 0.
+    private static void SetEntropyForTransform(int cx, int cy, JxlAcStrategyType acsRaw, float entropy, Span<float> entropyEstimate)
+    {
+        JxlAcStrategy acs = JxlAcStrategy.FromRawStrategy((int)acsRaw);
+        for (int dy = 0; dy < acs.CoveredBlocksY; ++dy)
+        {
+            for (int dx = 0; dx < acs.CoveredBlocksX; ++dx)
+            {
+                entropyEstimate[((cy + dy) * 8) + cx + dx] = 0.0f;
+            }
+        }
+
+        entropyEstimate[(cy * 8) + cx] = entropy;
+    }
+
+    private static JxlAcStrategyType AcsSquare(int blocks)
+        => blocks == 2 ? JxlAcStrategyType.Dct16X16 : blocks == 4 ? JxlAcStrategyType.Dct32X32 : JxlAcStrategyType.Dct64X64;
+
+    private static JxlAcStrategyType AcsVerticalSplit(int blocks)
+        => blocks == 2 ? JxlAcStrategyType.Dct16X8 : blocks == 4 ? JxlAcStrategyType.Dct32X16 : JxlAcStrategyType.Dct64X32;
+
+    private static JxlAcStrategyType AcsHorizontalSplit(int blocks)
+        => blocks == 2 ? JxlAcStrategyType.Dct8X16 : blocks == 4 ? JxlAcStrategyType.Dct16X32 : JxlAcStrategyType.Dct32X64;
+
+    // The following function tries to merge smaller transforms into squares and the rectangles originating
+    // from a single middle division (horizontal or vertical) fairly.
+    // This is now generalized to concern about squares of blocks X blocks size, where a block is 8x8 pixels.
+    private static void FindBestFirstLevelDivisionForSquare(int blocks, bool allowSquareTransform, int bx, int by, int cx, int cy, JxlAcsConfig config, ReadOnlySpan<float> cmapFactors, JxlAcStrategyImage acStrategy, float entropyMulJxK, float entropyMulJxJ, Span<float> entropyEstimate, JxlAcsScratch scratch)
+    {
+        // We denote J for the larger dimension here, and K for the smaller. For example, for 32x32 block
+        // splitting, J would be 32, K 16.
+        int blocksHalf = blocks / 2;
+        JxlAcStrategyType acsRawJxK = AcsVerticalSplit(blocks);
+        JxlAcStrategyType acsRawKxJ = AcsHorizontalSplit(blocks);
+        JxlAcStrategyType acsRawJxJ = AcsSquare(blocks);
+
+        // Let's check if we can consider a JXJ block here at all. This is not necessary in the basic use of
+        // hierarchically merging blocks in the simplest possible way, but is needed when we try other
+        // 'floating' options of merging, possibly after a simple hierarchical merge has been explored.
+        if (MultiBlockTransformCrossesHorizontalBoundary(acStrategy, bx + cx, by + cy, bx + cx + blocks) ||
+            MultiBlockTransformCrossesHorizontalBoundary(acStrategy, bx + cx, by + cy + blocks, bx + cx + blocks) ||
+            MultiBlockTransformCrossesVerticalBoundary(acStrategy, bx + cx, by + cy, by + cy + blocks) ||
+            MultiBlockTransformCrossesVerticalBoundary(acStrategy, bx + cx + blocks, by + cy, by + cy + blocks))
+        {
+            // not suitable for JxJ analysis, some transforms leak out.
+            return;
+        }
+
+        // For floating transforms there may be already blocks selected that make either or both JXK and KXJ
+        // not feasible for this location.
+        bool allowJxK = !MultiBlockTransformCrossesVerticalBoundary(acStrategy, bx + cx + blocksHalf, by + cy, by + cy + blocks);
+        bool allowKxJ = !MultiBlockTransformCrossesHorizontalBoundary(acStrategy, bx + cx, by + cy + blocksHalf, bx + cx + blocks);
+
+        // Current entropies aggregated on NxN resolution.
+        float entropy00 = 0;
+        float entropy01 = 0;
+        float entropy10 = 0;
+        float entropy11 = 0;
+        for (int dy = 0; dy < blocks; ++dy)
+        {
+            for (int dx = 0; dx < blocks; ++dx)
+            {
+                float e = entropyEstimate[((cy + dy) * 8) + cx + dx];
+                if (dy < blocksHalf)
+                {
+                    if (dx < blocksHalf)
+                    {
+                        entropy00 += e;
+                    }
+                    else
+                    {
+                        entropy01 += e;
+                    }
+                }
+                else if (dx < blocksHalf)
+                {
+                    entropy10 += e;
+                }
+                else
+                {
+                    entropy11 += e;
+                }
+            }
+        }
+
+        float entropyJxKLeft = float.MaxValue;
+        float entropyJxKRight = float.MaxValue;
+        float entropyKxJTop = float.MaxValue;
+        float entropyKxJBottom = float.MaxValue;
+        float entropyJxJ = float.MaxValue;
+        if (allowJxK)
+        {
+            if (acStrategy.Get(bx + cx, by + cy).Strategy != acsRawJxK)
+            {
+                entropyJxKLeft = EstimateEntropy(acsRawJxK, entropyMulJxK, (bx + cx) * 8, (by + cy) * 8, config, cmapFactors, scratch);
+            }
+
+            if (acStrategy.Get(bx + cx + blocksHalf, by + cy).Strategy != acsRawJxK)
+            {
+                entropyJxKRight = EstimateEntropy(acsRawJxK, entropyMulJxK, (bx + cx + blocksHalf) * 8, (by + cy) * 8, config, cmapFactors, scratch);
+            }
+        }
+
+        if (allowKxJ)
+        {
+            if (acStrategy.Get(bx + cx, by + cy).Strategy != acsRawKxJ)
+            {
+                entropyKxJTop = EstimateEntropy(acsRawKxJ, entropyMulJxK, (bx + cx) * 8, (by + cy) * 8, config, cmapFactors, scratch);
+            }
+
+            if (acStrategy.Get(bx + cx, by + cy + blocksHalf).Strategy != acsRawKxJ)
+            {
+                entropyKxJBottom = EstimateEntropy(acsRawKxJ, entropyMulJxK, (bx + cx) * 8, (by + cy + blocksHalf) * 8, config, cmapFactors, scratch);
+            }
+        }
+
+        if (allowSquareTransform)
+        {
+            // We control the exploration of the square transform separately so that we can turn it off at
+            // high decoding speeds for 32x32, but still allow exploring 16x32 and 32x16.
+            entropyJxJ = EstimateEntropy(acsRawJxJ, entropyMulJxJ, (bx + cx) * 8, (by + cy) * 8, config, cmapFactors, scratch);
+        }
+
+        // Test if this block should have JXK or KXJ transforms, because it can have only one or the other.
+        float costJxN = MathF.Min(entropyJxKLeft, entropy00 + entropy10) + MathF.Min(entropyJxKRight, entropy01 + entropy11);
+        float costNxJ = MathF.Min(entropyKxJTop, entropy00 + entropy01) + MathF.Min(entropyKxJBottom, entropy10 + entropy11);
+        if (entropyJxJ < costJxN && entropyJxJ < costNxJ)
+        {
+            acStrategy.Set(bx + cx, by + cy, acsRawJxJ);
+            SetEntropyForTransform(cx, cy, acsRawJxJ, entropyJxJ, entropyEstimate);
+        }
+        else if (costJxN < costNxJ)
+        {
+            if (entropyJxKLeft < entropy00 + entropy10)
+            {
+                acStrategy.Set(bx + cx, by + cy, acsRawJxK);
+                SetEntropyForTransform(cx, cy, acsRawJxK, entropyJxKLeft, entropyEstimate);
+            }
+
+            if (entropyJxKRight < entropy01 + entropy11)
+            {
+                acStrategy.Set(bx + cx + blocksHalf, by + cy, acsRawJxK);
+                SetEntropyForTransform(cx + blocksHalf, cy, acsRawJxK, entropyJxKRight, entropyEstimate);
+            }
+        }
+        else
+        {
+            if (entropyKxJTop < entropy00 + entropy01)
+            {
+                acStrategy.Set(bx + cx, by + cy, acsRawKxJ);
+                SetEntropyForTransform(cx, cy, acsRawKxJ, entropyKxJTop, entropyEstimate);
+            }
+
+            if (entropyKxJBottom < entropy10 + entropy11)
+            {
+                acStrategy.Set(bx + cx, by + cy + blocksHalf, acsRawKxJ);
+                SetEntropyForTransform(cx, cy + blocksHalf, acsRawKxJ, entropyKxJBottom, entropyEstimate);
+            }
+        }
     }
 
     // Highway's Max on x86.
