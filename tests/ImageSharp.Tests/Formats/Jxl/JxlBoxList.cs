@@ -6,6 +6,8 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using SixLabors.ImageSharp.Formats.Jxl;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -46,6 +48,18 @@ internal static class JxlBoxList
 
         return boxes;
     }
+
+    /// <summary>
+    /// Gives the codestream of <paramref name="file"/>: the file itself when it is a bare codestream, else
+    /// the codestream that <see cref="JxlContainer.Read"/> joins. Codestream pins hash this, so they hold
+    /// when an output gains a container.
+    /// </summary>
+    /// <param name="file">A bare codestream or a container.</param>
+    /// <returns>The codestream.</returns>
+    public static byte[] Codestream(byte[] file)
+        => file.AsSpan().StartsWith(JxlConstants.CodestreamSignature)
+            ? file
+            : JxlContainer.Read(file, readMetadata: false, CancellationToken.None).Codestream;
 
     /// <summary>Gives the types of <paramref name="boxes"/>, in order.</summary>
     /// <param name="boxes">The boxes.</param>

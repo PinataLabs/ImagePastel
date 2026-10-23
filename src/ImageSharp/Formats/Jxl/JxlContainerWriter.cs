@@ -13,8 +13,8 @@ using System.IO;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Writes an encoded codestream to a stream: bare, or in a JPEG XL container with metadata boxes, in the
-/// layout libjxl gives when the boxes are added before the frame (as cjxl adds them).
+/// Writes an encoded codestream to a stream: bare, or in a JPEG XL container with a level box and
+/// metadata boxes, in the layout libjxl gives when the boxes are added before the frame (as cjxl adds them).
 /// </summary>
 /// <remarks>
 /// libjxl streams its output and patches each box header once the box is written. This encoder holds the
@@ -35,8 +35,9 @@ internal static class JxlContainerWriter
     private const byte FtypVersion = 0;
 
     /// <summary>
-    /// Writes <paramref name="codestream"/> to <paramref name="stream"/>: bare when there are no boxes,
-    /// otherwise in a container with the boxes between the header and the frame.
+    /// Writes <paramref name="codestream"/> to <paramref name="stream"/>: bare when there are no boxes and
+    /// the level is 5, otherwise in a container, with a <c>jxll</c> box when the level is 10 and the
+    /// boxes between the header and the frame.
     /// </summary>
     /// <param name="stream">The stream.</param>
     /// <param name="codestream">The whole codestream.</param>
@@ -44,16 +45,33 @@ internal static class JxlContainerWriter
     /// The size of the codestream headers and the ICC profile, which end on a byte boundary before the frame.
     /// </param>
     /// <param name="boxes">The metadata boxes.</param>
-    public static void Write(Stream stream, ReadOnlySpan<byte> codestream, int headerSize, JxlMetadataBoxes boxes)
+    /// <param name="level">The codestream level, 5 or 10 (see <see cref="JxlCodestreamLevel"/>).</param>
+    public static void Write(Stream stream, ReadOnlySpan<byte> codestream, int headerSize, JxlMetadataBoxes boxes, int level)
     {
-        // MustUseContainer: use_boxes. cjxl uses boxes only when there is metadata to store.
-        if (boxes.IsEmpty)
+        // MustUseContainer: use_boxes, or a codestream level other than 5. cjxl uses boxes only when there
+        // is metadata to store.
+        if (boxes.IsEmpty && level == 5)
         {
             stream.Write(codestream);
             return;
         }
 
         WriteContainerHeader(stream);
+
+        // The jxll box, right after ftyp, gives the codestream level.
+        if (level != 5)
+        {
+            WriteBoxHeader(stream, "jxll"u8, 1);
+            stream.WriteByte((byte)level);
+        }
+
+        // The frame is the last, so with no boxes the whole codestream goes in one jxlc box.
+        if (boxes.IsEmpty)
+        {
+            WriteBoxHeader(stream, "jxlc"u8, codestream.Length);
+            stream.Write(codestream);
+            return;
+        }
 
         // partial_header: the boxes are queued before the frame, so the basic info and the colour profile go
         // in an early jxlp box, ahead of the metadata.

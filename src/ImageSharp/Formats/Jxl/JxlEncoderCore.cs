@@ -73,6 +73,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         // lossless, and JxlEncoderSetColorEncoding / JxlEncoderSetICCProfile fall back to SetIntensityTarget.
         SetIntensityTarget(metadata.M, image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget);
 
+        // libjxl verifies the level when the first input arrives, before any pixel is read.
+        int level = JxlCodestreamLevel.Verify(metadata, icc);
+
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
         JxlBitWriter writer = new();
         JxlBundle.WriteCodestreamHeaders(metadata, writer);
@@ -97,7 +100,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
             JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
         }
 
-        JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes);
+        JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes, level);
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding: the image's own colour space,

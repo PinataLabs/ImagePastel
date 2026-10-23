@@ -14,22 +14,23 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// Reads the header of every frame of a bare codestream, displayed or not, without decoding the frames,
+/// Reads the header of every frame of a codestream, displayed or not, without decoding the frames,
 /// so that a test can check that a generated file has the frames it is meant to test.
 /// </summary>
 internal static class JxlCodestreamFrames
 {
     /// <summary>Reads the frame headers.</summary>
-    /// <param name="codestream">A bare codestream with no preview.</param>
+    /// <param name="file">A bare codestream or a container, with no preview.</param>
     /// <returns>The header of each frame, in codestream order.</returns>
-    public static List<JxlFrameHeader> Read(byte[] codestream)
-        => ReadWithToc(codestream).ConvertAll(frame => frame.Header);
+    public static List<JxlFrameHeader> Read(byte[] file)
+        => ReadWithToc(file).ConvertAll(frame => frame.Header);
 
     /// <summary>Reads the frame headers and their TOCs.</summary>
-    /// <param name="codestream">A bare codestream with no preview.</param>
+    /// <param name="file">A bare codestream or a container, with no preview.</param>
     /// <returns>The header and the TOC of each frame, in codestream order.</returns>
-    public static List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> ReadWithToc(byte[] codestream)
+    public static List<(JxlFrameHeader Header, JxlGroupOffsets Toc)> ReadWithToc(byte[] file)
     {
+        byte[] codestream = JxlBoxList.Codestream(file);
         JxlCodecMetadata metadata = ReadImageHeader(codestream, out int offset);
         Assert.False(metadata.M.HavePreview);
 
@@ -82,9 +83,9 @@ internal static class JxlCodestreamFrames
         return metadata;
     }
 
-    /// <summary>Reads the colour encoding from the image header of a bare codestream.</summary>
-    /// <param name="codestream">A bare codestream.</param>
+    /// <summary>Reads the colour encoding from the image header of a file.</summary>
+    /// <param name="file">A bare codestream or a container.</param>
     /// <returns>The colour encoding header bundle.</returns>
-    public static JxlColorEncodingHeader ReadColorEncoding(byte[] codestream)
-        => ReadImageHeader(codestream, out _).M.ColorEncoding;
+    public static JxlColorEncodingHeader ReadColorEncoding(byte[] file)
+        => ReadImageHeader(JxlBoxList.Codestream(file), out _).M.ColorEncoding;
 }

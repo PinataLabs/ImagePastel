@@ -81,7 +81,7 @@ public class JxlLossyDepthEncoderTests
         byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodeTestImage(distance, Enum.Parse<JxlEffort>(effort)));
 
         // Logged in full, so that a change to the output on purpose can regenerate the rows.
-        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        string actual = Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded)));
         TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData(nameof({pixelType}), nameof(JxlEffort.{effort}), {distance:0.0#}f, \"{actual}\")]");
         Assert.Equal(expectedSha256, actual);
     }
