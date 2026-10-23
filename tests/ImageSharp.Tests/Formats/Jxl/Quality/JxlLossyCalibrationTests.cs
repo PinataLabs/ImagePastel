@@ -63,6 +63,15 @@ public class JxlLossyCalibrationTests
     /// (+2.68); line_art still fails at d2 (-1.13) and d4 (-3.63). Smallest passing margins: text d2 +0.46,
     /// calliphora d4 +1.10, text d4 +1.78. E5e merged with E5c (AFV): 18 of 18. Smallest margins:
     /// line_art d2 +0.31, text d2 +0.34, line_art d4 +0.48, calliphora d4 +1.46.
+    /// E5h (dynamic EPF sharpness), on E5a alone: still 14 of 18; line_art rises from 61.19 to 61.79 at d2
+    /// and from 51.64 to 53.75 at d4. Its sharpness histogram is within a few percent of cjxl -e 7's (d2:
+    /// ours 240 / 44 / 740 blocks at 0 / 2 / 7, cjxl's 205 / 43 / 776), but cjxl's B quantisation scale
+    /// there is 5, not 2, which is E5f's. With E5c (AFV) merged: 15 of 18, as text d2 passes by +0.21;
+    /// line_art scores 61.97 at d2 and 55.01 at d4 (margins d1 -2.61, d2 -8.75, d4 -5.96). Smallest
+    /// passing margins: text d2 +0.21, text d4 +1.13, text d1 +2.30, bike_alpha d1 +2.39.
+    /// E5h merged with E5c and E5e: 18 of 18. line_art scores 71.65 at d2 and 63.45 at d4 (margins +0.94 and
+    /// +2.48, against +0.31 and +0.48 without E5h). Smallest margins: text d2 +0.88, line_art d2 +0.94,
+    /// bike_alpha d1 +2.42, line_art d4 +2.48.
     /// </para>
     /// <para>
     /// E5b merged after E5c and E5e: 17 of 18, lowered on purpose. DCT4X8 and DCT8X4 match libjxl bit for
@@ -80,10 +89,18 @@ public class JxlLossyCalibrationTests
     /// text d4 +2.02; line_art d2 +2.83 and d1 +3.48.
     /// </para>
     /// <para>
-    /// E5b merged after E5c, E5e, E5f and E5g: 18 of 18. Smallest margins: line_art d4 +1.00 (was +0.23),
-    /// text d2 +1.20, calliphora d4 +1.22, text d4 +1.58, bike d4 +2.43. After E5d's merge as well: 18 of
-    /// 18. Smallest margins: line_art d4 +0.88 (E5d's tip had +0.14), calliphora d4 +1.06, text d2 +1.20,
-    /// text d4 +1.58, bike d4 +2.44.
+    /// E5h merged with E5c, E5e and E5f: 18 of 18. line_art scores 74.29 at d2 and 63.01 at d4 (margins
+    /// +3.57 and +2.05, against +2.83 and +0.23 without E5h; E5a's were -9.52 and -9.33). Its d2 sharpness
+    /// histogram is 212 / 43 / 769 blocks at 0 / 2 / 7, cjxl -e 7's 205 / 43 / 776. Smallest margins:
+    /// line_art d4 +2.05, text d2 +2.17, text d4 +2.71, bike d4 +3.10. With E5d (off-grid merges) too:
+    /// 18 of 18; line_art d2 +3.57 and d4 +2.00 (E5d's tip without E5h had d4 +0.14). Smallest margins:
+    /// line_art d4 +2.00, text d2 +2.15, text d4 +2.70, bike d4 +3.03.
+    /// </para>
+    /// <para>
+    /// E5b (DCT4X8 and DCT8X4) merged last, after E5c, E5d, E5e, E5f, E5g and E5h: 18 of 18. Every
+    /// Squirrel stage is now ported. Smallest margins: text d2 +2.04, text d4 +2.33, text d1 +2.95, bike_alpha
+    /// d4 +3.22; line_art d4 is +3.51 (it was +2.00 without E5b). The photos, the gradient and line_art are
+    /// 0.99x to 1.02x cjxl's size, and text is 1.17x to 1.18x, as it has no patches.
     /// </para>
     /// </remarks>
     private const int ThoroughRowsPassing = 18;

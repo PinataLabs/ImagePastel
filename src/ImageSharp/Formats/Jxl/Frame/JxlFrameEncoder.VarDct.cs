@@ -55,9 +55,11 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// the fit after the search uses Newton's method. The X and B quantisation scales are raised from the
 /// pixel statistics of the XYB image (<see cref="JxlPixelStatsForChromacityAdjustment"/>), which leaves
 /// most photos at Default's scales. After the aligned merges the strategy search also merges blocks off
-/// their size's grid, as libjxl does below Hare. The other Squirrel stages are still in their Default
-/// form, each a temporary departure named in its code with the slice that ports it: the EPF sharpness is
-/// 4 in every block (the search, which decodes the frame in the encoder, comes with E5h).
+/// their size's grid, as libjxl does below Hare. Where the frame has EPF (from distance 0.7), the EPF
+/// sharpness of each block is searched (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder
+/// reconstructs the frame once per sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and
+/// keeps the step of least masked error against the pre-Gaborish opsin. No Squirrel stage is left in its
+/// Default form.
 /// </para>
 /// </content>
 /// <remarks>
@@ -173,6 +175,7 @@ internal static partial class JxlFrameEncoder
         int paddedX = (int)(frameDim.XSizeBlocks * JxlFrameDimensions.BlockDim);
         int paddedY = (int)(frameDim.YSizeBlocks * JxlFrameDimensions.BlockDim);
         Buffer2D<float>[] color = new Buffer2D<float>[3];
+        Buffer2D<float>[] origOpsin = null;
         try
         {
             for (int c = 0; c < 3; c++)
@@ -201,16 +204,33 @@ internal static partial class JxlFrameEncoder
             PadImageToBlockMultipleInPlace(color, image.Width, image.Height, paddedX, paddedY);
             ComputeChromacityAdjustments(frameHeader, encState, color, new JxlRect(0, 0, paddedX, paddedY));
 
-            // ComputeVarDCTEncodingData.
+            // ComputeVarDCTEncodingData. Save the pre-Gaborish opsin for the AR control field heuristics,
+            // shrunk to the frame size: LossyFrameHeuristics applies the inverse Gaborish filter in place.
+            // libjxl copies it for every frame; only ComputeARHeuristics's search reads it, so the copy is
+            // made only when the search runs.
+            if (JxlEncHeuristics.UsesDynamicAr(encState, frameHeader.LoopFilter.EpfIters))
+            {
+                origOpsin = new Buffer2D<float>[3];
+                for (int c = 0; c < 3; c++)
+                {
+                    origOpsin[c] = allocator.Allocate2D<float>((int)frameDim.XSize, (int)frameDim.YSize);
+                    JxlPlanes.CopyRows(color[c], origOpsin[c], (int)frameDim.XSize, (int)frameDim.YSize);
+                }
+            }
+
             JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
             InitializePassesEncoder(frameHeader, color, encState, encModular);
-            JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
+            JxlEncHeuristics.ComputeArHeuristics(frameHeader, encState, origOpsin, allocator);
             arHeuristicsProbe?.Invoke(frameHeader, encState);
             ComputeAcMetadata(encState, encModular);
         }
         finally
         {
             JxlPlanes.DisposeAll(color);
+            if (origOpsin != null)
+            {
+                JxlPlanes.DisposeAll(origOpsin);
+            }
         }
 
         ComputeAllCoeffOrders(encState);
