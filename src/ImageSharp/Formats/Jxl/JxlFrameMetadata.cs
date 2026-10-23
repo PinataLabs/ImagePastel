@@ -9,7 +9,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// <summary>
 /// Provides JPEG XL specific metadata information for one displayed frame.
 /// </summary>
-internal sealed class JxlFrameMetadata : IDeepCloneable
+public sealed class JxlFrameMetadata : IDeepCloneable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="JxlFrameMetadata"/> class.

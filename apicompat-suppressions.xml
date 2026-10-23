@@ -227,4 +227,41 @@
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint</Target>
   </Suppression>
+  <!-- Additions: JPEG XL decoder, its format metadata and JxlConfigurationModule, #311 (D15b). -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlDecoder</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlFormat</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlFrameMetadata</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlImageFormatDetector</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlMetadata</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.MetadataExtensions.GetJxlFrameMetadata(SixLabors.ImageSharp.Metadata.ImageFrameMetadata)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.MetadataExtensions.GetJxlMetadata(SixLabors.ImageSharp.Metadata.ImageMetadata)</Target>
+  </Suppression>
 </Suppressions>

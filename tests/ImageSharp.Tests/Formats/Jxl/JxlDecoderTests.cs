@@ -532,9 +532,10 @@ public class JxlDecoderTests
     }
 
     [Fact]
-    public void OnlyTheColourDescriptionIsPublic()
+    public void OnlyTheDecoderSurfaceIsPublic()
     {
-        // D15a (#308) makes the colour description and the enums public; the rest stays internal until D15b.
+        // D15a (#308) makes the colour description and the enums public, and D15b (#311) the decoder surface.
+        // The encoder, its options and every codec type stay internal until E6.
         string[] publicTypes = typeof(Image).Assembly.GetExportedTypes()
             .Where(t => t.Namespace?.StartsWith("SixLabors.ImageSharp.Formats.Jxl", StringComparison.Ordinal) == true)
             .Select(t => t.FullName)
@@ -546,22 +547,20 @@ public class JxlDecoderTests
             {
                 "SixLabors.ImageSharp.Formats.Jxl.JxlColorEncoding",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlDecoder",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlFormat",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlFrameMetadata",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlImageFormatDetector",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlMetadata",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlPrimaries",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlRenderingIntent",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlTransferFunction",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint",
             },
             publicTypes);
-    }
-
-    [Fact]
-    public void DefaultConfiguration_HasNoJxlFormat()
-    {
-        Configuration configuration = Configuration.CreateDefaultInstance();
-
-        Assert.DoesNotContain(JxlFormat.Instance, configuration.ImageFormats);
-        Assert.Null(configuration.ImageFormatsManager.FindFormatByFileExtension("jxl"));
     }
 
     private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);

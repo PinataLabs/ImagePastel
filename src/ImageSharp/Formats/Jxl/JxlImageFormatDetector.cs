@@ -9,7 +9,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// Detects JPEG XL images: a bare codestream by its <c>FF 0A</c> signature, and the container by its
 /// 12-byte signature box.
 /// </summary>
-internal sealed class JxlImageFormatDetector : IImageFormatDetector
+public sealed class JxlImageFormatDetector : IImageFormatDetector
 {
     /// <inheritdoc />
     public int HeaderSize => JxlConstants.ContainerSignature.Length;
