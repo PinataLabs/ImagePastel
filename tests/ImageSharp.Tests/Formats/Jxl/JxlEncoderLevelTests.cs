@@ -7,12 +7,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
 using Xunit;
 using Reader = SixLabors.ImageSharp.Tests.Formats.Jxl.JxlEncoderRoundTrip.Reader;
@@ -40,6 +43,17 @@ public class JxlEncoderLevelTests
         using Image<Rgba64> image = JxlEncoderRoundTrip.CreateImage<Rgba64>("gradient", 17, 23);
 
         AssertLevel10Container(Save(image, new JxlEncoder { Distance = 0 }));
+    }
+
+    // cjxl v0.12.0 -d 0 on the same image saved as a 16-bit PNG writes the same boxes: JXL , ftyp, jxll
+    // (9 bytes, holding 10), then jxlc.
+    [Theory]
+    [InlineData(nameof(L16))]
+    [InlineData(nameof(Rgba64))]
+    public Task SaveAsJxl_LosslessSixteenBit_MatchesCjxlsBoxLayout(string pixelType)
+    {
+        JxlTools.GetToolPath("cjxl");
+        return JxlPixelTypes.Verify(pixelType, new CjxlCase());
     }
 
     // A level-5 codestream stays bare: 8-bit lossless, and lossy without alpha, whose XYB samples always
@@ -211,6 +225,35 @@ public class JxlEncoderLevelTests
 
         /// <summary>A side of 2^18 + 1.</summary>
         Wide,
+    }
+
+    // The PNG, cjxl's file and ours go to the test output folder, for jxlinfo -v.
+    private sealed record CjxlCase : IJxlPixelTypeCall<Task>
+    {
+        public async Task Invoke<TPixel>()
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+            string directory = TestEnvironment.CreateOutputDirectory("Jxl", nameof(JxlEncoderLevelTests));
+            string name = typeof(TPixel).Name;
+            string pngPath = Path.Combine(directory, name + ".png");
+            string cjxlPath = Path.Combine(directory, name + ".cjxl.jxl");
+            string oursPath = Path.Combine(directory, name + ".jxl");
+
+            using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>("gradient", 17, 23);
+            await image.SaveAsPngAsync(pngPath, new PngEncoder { BitDepth = PngBitDepth.Bit16 }, cancellationToken);
+            await image.SaveAsJxlAsync(oursPath, new JxlEncoder { Distance = 0 }, cancellationToken);
+            File.Delete(cjxlPath);
+            await JxlTools.RunAsync("cjxl", cancellationToken, pngPath, cjxlPath, "-d", "0", "-e", "1");
+
+            IReadOnlyList<JxlBox> ours = JxlBoxList.Read(await File.ReadAllBytesAsync(oursPath, cancellationToken));
+            IReadOnlyList<JxlBox> cjxl = JxlBoxList.Read(await File.ReadAllBytesAsync(cjxlPath, cancellationToken));
+
+            Assert.Equal(new[] { "JXL ", "ftyp", "jxll", "jxlc" }, JxlBoxList.Types(cjxl));
+            Assert.Equal(JxlBoxList.Types(cjxl), JxlBoxList.Types(ours));
+            Assert.Equal(cjxl[1].Contents, ours[1].Contents);
+            Assert.Equal(cjxl[2].Contents, ours[2].Contents);
+        }
     }
 
     private sealed record DecodeCase(Reader Reader, float Distance, Level10Case Case) : IJxlPixelTypeCall<Task>
