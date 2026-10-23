@@ -37,6 +37,14 @@ namespace SixLabors.ImageSharp.Formats.Jxl;
 /// and gain maps are not written.
 /// </para>
 /// <para>
+/// The Exif orientation is carried into the codestream, as cjxl does: when the Exif profile's
+/// <see cref="Metadata.Profiles.Exif.ExifTag.Orientation"/> is a value from 1 to 8, the file's orientation
+/// is set to it. The pixels and the Exif are written as they are stored, so a JPEG whose Exif says it is
+/// rotated shows upright in readers that apply the JPEG XL orientation. The JPEG XL decoder applies it:
+/// it returns the oriented pixels and sets the Exif orientation to 1. Without a valid Exif orientation,
+/// the file's orientation is 1.
+/// </para>
+/// <para>
 /// Only the root frame is written. From <see cref="JxlMetadata"/> the encoder reads only
 /// <see cref="JxlMetadata.BitsPerSample"/>, <see cref="JxlMetadata.ExponentBitsPerSample"/> and
 /// <see cref="JxlMetadata.IntensityTarget"/>; it ignores the other members.
