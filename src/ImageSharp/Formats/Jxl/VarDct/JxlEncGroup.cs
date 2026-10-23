@@ -103,7 +103,7 @@ internal static class JxlEncGroup
                     int yblocks = acs.CoveredBlocksY;
                     JxlAcStrategy.CoefficientLayout(ref yblocks, ref xblocks);
                     int size = DctBlockSize * xblocks * yblocks;
-                    DebugGuard.IsTrue(size == DctBlockSize, "The encoder only chooses DCT8");
+                    DebugGuard.IsTrue(size == DctBlockSize, "The encoder only chooses 8x8 strategies until E4h");
 
                     // DCT Y channel, roundtrip-quantize it and set DC.
                     int blockIndex = encState.BlockIndex(gbx, gby);
@@ -121,7 +121,7 @@ internal static class JxlEncGroup
                         JxlDct.TransformFromPixels(acs.Strategy, block, BlockDim, coeffsIn.AsSpan(c * size, size), scratch);
                     }
 
-                    // DCFromLowestFrequencies: a DCT8 block's DC is its first coefficient.
+                    // DCFromLowestFrequencies: the DC of an 8x8 strategy is its first coefficient.
                     dc[1][blockIndex] = coeffsIn[size];
 
                     QuantizeRoundtripYBlockAc(encState, size, quantizer, acs.Strategy, xblocks, yblocks, ref quantAc, coeffsIn, quantized);

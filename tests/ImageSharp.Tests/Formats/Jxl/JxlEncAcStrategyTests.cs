@@ -2,10 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -38,6 +43,11 @@ public class JxlEncAcStrategyTests
     // The largest relative difference of an entropy from libjxl's scalar build, which sums in another
     // order: measured 1.8e-6, on the DCT32X32 case. The 8x8 choices are the same in both builds.
     private const float ScalarLaneSumTolerance = 4e-6f;
+
+    // The share of the 8x8 blocks of cjxl -e 5 -d 1 on Bike whose strategy ours matches (informative):
+    // measured 100% (2,027 of the 2,027 blocks cjxl leaves 8x8; 2,134 of its 4,161 blocks are merged).
+    // The floor leaves room for a CPU whose cjxl build dispatches to another target.
+    private const double AgreementWithCjxlAtD1 = 0.99;
 
     private const int FixedWidth = 64;
     private const int FixedHeight = 32;
@@ -130,6 +140,90 @@ public class JxlEncAcStrategyTests
         }
 
         Assert.Equal(expected, new string(actual));
+    }
+
+    // Through the decoder's parse: the strategy of every block of Bike (73x57 blocks) is the one libjxl's
+    // FindBest8x8Transform gives, on the same opsin, quant field and masking image (the harness's AVX2 build;
+    // its scalar build chooses the same). SHA-256 of the raw strategies, row by row, and how many blocks
+    // take each. No merges yet (E4h), so every block is one 8x8 strategy; Bike has no DCT4X4 block.
+    [Theory]
+    [InlineData(0.5f, "027557DD0C98EDCE0A4BE862D440FFFCF7DFF5C5BB4B2AC2085C479655E72049", 2168, 242, 1751, 0)]
+    [InlineData(1.0f, "43F98BBB2A053FACD8BECD7D6288712FDC70F45F2DA4206E590F7C4CC3F6F20C", 2081, 68, 2012, 0)]
+    [InlineData(2.0f, "D2D62FFC1F91E9363FCFDBDE17C8703B62CA3C8256D6A3562EEDA341D9FF8446", 3975, 26, 160, 0)]
+    [InlineData(4.0f, "1FB1E6621117C3D3E13D6833962479823D1C794C5D60C4DC0FDA22FB5E1EFE8D", 4027, 24, 110, 0)]
+    public void Encode_Bike_ChoosesLibjxlsStrategyForEachBlock(float distance, string expectedSha256, int dct8, int identity, int dct2x2, int dct4x4)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(distance)));
+
+        byte[] raw = StrategiesOf(frame);
+        int[] counts = new int[JxlAcStrategy.NumValidStrategies];
+        foreach (byte r in raw)
+        {
+            counts[r]++;
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: DCT8 {counts[0]}, IDENTITY {counts[1]}, DCT2X2 {counts[2]}, DCT4X4 {counts[3]}");
+        Assert.Equal(new[] { dct8, identity, dct2x2, dct4x4 }, counts.AsSpan(0, 4).ToArray());
+        Assert.Equal(raw.Length, dct8 + identity + dct2x2 + dct4x4);
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(raw)));
+    }
+
+    // Informative: how often our 8x8 choice is cjxl -e 5's (v0.12.0, JXL_TOOLS_DIR) on the blocks of Bike
+    // that cjxl leaves as an 8x8 strategy after its merges. cjxl dispatches to AVX2 with FMA (or AVX-512)
+    // at run time, so its estimates differ from ours in the last bits, and a block close to a tie can go
+    // the other way. Measured at d1: see AgreementWithCjxlAtD1.
+    [Fact]
+    public async Task Encode_Bike_AgreesWithCjxlOnMostOfItsEightByEightBlocks()
+    {
+        JxlTools.GetToolPath("cjxl");
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+        string directory = TestEnvironment.CreateOutputDirectory("Jxl", "EncAcStrategy");
+        string pngPath = Path.Combine(directory, "bike.png");
+        string cjxlPath = Path.Combine(directory, "bike_e5_d1.jxl");
+        image.SaveAsPng(pngPath);
+        await JxlTools.RunAsync("cjxl", TestContext.Current.CancellationToken, pngPath, cjxlPath, "-e", "5", "-d", "1", "--container=0");
+
+        using JxlDecodedDcGroups ours = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(1.0f)));
+        using JxlDecodedDcGroups theirs = JxlDecodedDcGroups.Decode(await File.ReadAllBytesAsync(cjxlPath, TestContext.Current.CancellationToken));
+
+        byte[] ourStrategies = StrategiesOf(ours);
+        int xsize = theirs.State.XSizeBlocks;
+        int eightByEight = 0;
+        int agree = 0;
+        int[] cjxlCounts = new int[JxlAcStrategy.NumValidStrategies];
+        for (int i = 0; i < ourStrategies.Length; i++)
+        {
+            JxlAcStrategy acs = theirs.State.AcStrategy.Get(i % xsize, i / xsize);
+            cjxlCounts[acs.RawStrategy]++;
+            if (acs.CoveredBlocksX * acs.CoveredBlocksY != 1)
+            {
+                continue;
+            }
+
+            eightByEight++;
+            agree += acs.RawStrategy == ourStrategies[i] ? 1 : 0;
+        }
+
+        double share = (double)agree / eightByEight;
+        TestContext.Current.TestOutputHelper?.WriteLine($"cjxl -e 5 -d 1: {eightByEight} of {ourStrategies.Length} blocks 8x8, ours agree on {agree} ({100 * share:F2}%); cjxl's counts by raw strategy [{string.Join(", ", cjxlCounts)}]");
+        Assert.True(share >= AgreementWithCjxlAtD1, $"{100 * share:F2}% agree");
+    }
+
+    // The raw strategy of every block, row by row; each block is the first of its strategy (8x8 kinds).
+    internal static byte[] StrategiesOf(JxlDecodedDcGroups frame)
+    {
+        int xsize = frame.State.XSizeBlocks;
+        byte[] raw = new byte[xsize * frame.State.YSizeBlocks];
+        for (int i = 0; i < raw.Length; i++)
+        {
+            JxlAcStrategy acs = frame.State.AcStrategy.Get(i % xsize, i / xsize);
+            Assert.True(acs.IsFirstBlock, $"Block {i} is not the first of its {acs.Strategy}");
+            raw[i] = (byte)acs.RawStrategy;
+        }
+
+        return raw;
     }
 
     private static uint Bits(float value) => BitConverter.SingleToUInt32Bits(value);

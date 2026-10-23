@@ -53,8 +53,12 @@ public class JxlLossyCalibrationTests
     /// gains most from its strategy search now fail on score, as the tracer no longer over-spends there:
     /// gradient d4 (-1.88), text d1 (-0.20), d2 (-1.06) and d4 (-2.81), and line_art d1 (-1.24). E4g and
     /// E4h port that search. (E4b alone, on E4a: 8 of 18, without AdjustQuantBlockAC.)
+    /// E4g (net10.0, x64): 17 of 18. The 8x8 level of the strategy search (DCT2X2 and IDENTITY at edges,
+    /// no merges yet) lifts text d1/d2/d4 to margins of +3.75 / +4.08 / +3.49 and line_art d1 to +5.28
+    /// (0.96x cjxl's size); the photos keep theirs (bike d1 +3.61 at 1.02x). Gradient d4 still fails
+    /// (-1.83, 1.27x): cjxl merges its smooth blocks into large DCTs (E4h).
     /// </remarks>
-    private const int DefaultRowsPassing = 13;
+    private const int DefaultRowsPassing = 17;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,

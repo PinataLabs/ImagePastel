@@ -1,11 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, with the effort 5 searches in their
-// effort 3 form for now, and ComputeARHeuristics),
+// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, without the AC-strategy merges of
+// effort 5 for now, and ComputeARHeuristics),
 // lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; FindBestQuantizer, which does nothing above
-// effort 7), lib/jxl/enc_ac_strategy.cc (AcStrategyHeuristics::Init and ProcessRect from Cheetah up)
-// and lib/jxl/quantizer.cc (SetQuantFieldRect).
+// effort 7) and lib/jxl/quantizer.cc (SetQuantFieldRect).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -59,10 +58,10 @@ internal static class JxlEncHeuristics
     /// context map. The dequantization matrices keep their defaults.
     /// </summary>
     /// <remarks>
-    /// Temporary departure (E4a, the Default tracer): from Hare down libjxl searches the AC strategies.
-    /// Until E4g ports the search, DCT8 fills every block here, at every tier, as marked where it runs. The
-    /// adaptive quant field, the chroma-from-luma map of each tile and the block context map are computed
-    /// from Hare down, as libjxl does.
+    /// From Hare down the strategy of each block is searched (<see cref="JxlEncAcStrategy"/>), and the
+    /// adaptive quant field, the chroma-from-luma map of each tile and the block context map are computed,
+    /// as libjxl does. Temporary departure (E4g): the search keeps each block's 8x8 choice, without libjxl's
+    /// merges into larger blocks, until E4h.
     /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>
@@ -120,17 +119,14 @@ internal static class JxlEncHeuristics
         }
 
         // libjxl's FindBestDequantMatrices resets the matrices to the defaults, which the state already holds.
+        JxlAcsConfig acsConfig = JxlEncAcStrategy.Init(speedTier, encState.Distance, opsin, encState.InitialQuantField, encState.InitialQuantMasking1x1, encState.Matrices);
+        JxlAcsScratch acsScratch = speedTier < JxlSpeedTier.Cheetah ? new JxlAcsScratch() : null;
 
-        // Choose block sizes: DCT8 everywhere from Cheetah up (AcStrategyHeuristics::ProcessRect).
-        // Temporary departure (E4a): Hare fills DCT8 too until E4g ports the search, and Init computes
-        // only the DCT8 matrices (libjxl's Hare computes every type below 128x128).
-        encState.Matrices.EnsureComputed(1);
-        encState.AcStrategy.FillDct8();
-
-        // Per 64x64 tile, in tile order (libjxl's process_tile, after the strategies of the tile): always set
-        // the initial quant field, so we can compute the CfL map with more accuracy. The initial quant field
-        // might change in slower modes, but adjusting the quant field with butteraugli when all the other
-        // encoding parameters are fixed is likely a more reliable choice anyway.
+        // Per 64x64 tile, in tile order (libjxl's process_tile): choose block sizes, then always set the
+        // initial quant field, so we can compute the CfL map with more accuracy. The search reads the float
+        // field of its own tile before AdjustQuantField changes it. The initial quant field might change in
+        // slower modes, but adjusting the quant field with butteraugli when all the other encoding
+        // parameters are fixed is likely a more reliable choice anyway.
         int numTilesX = (int)JxlBits.DivCeil(encState.XSizeBlocks, EncTileDimInBlocks);
         int numTiles = numTilesX * (int)JxlBits.DivCeil(encState.YSizeBlocks, EncTileDimInBlocks);
         for (int tid = 0; tid < numTiles; tid++)
@@ -142,12 +138,16 @@ internal static class JxlEncHeuristics
             int bx0 = tx * EncTileDimInBlocks;
             int bx1 = Math.Min((tx + 1) * EncTileDimInBlocks, encState.XSizeBlocks);
             JxlRect r = new(bx0, by0, bx1 - bx0, by1 - by0);
+
+            // The chroma-from-luma map is still the default here, as libjxl's is before this tile's fit.
+            JxlEncAcStrategy.ProcessRect(acsConfig, speedTier, encState.Distance, r, encState.Cmap, encState.AcStrategy, acsScratch);
             JxlEncAdaptiveQuantization.AdjustQuantField(encState.AcStrategy, r, encState.Distance, encState.InitialQuantField);
             encState.Quantizer.SetQuantFieldRect(encState.InitialQuantField, r, encState.RawQuantField, encState.XSizeBlocks);
         }
 
         // Compute a non-default CfL map if we are at Hare speed, or slower. libjxl fits each tile right after
-        // its strategies and quant field; the fit reads only its own tile, so it runs here for all of them.
+        // its strategies and quant field; the fit reads only its own tile, and the search of a later tile
+        // reads only that tile's map entry, so it runs here for all of them.
         if (speedTier <= JxlSpeedTier.Hare)
         {
             JxlEncChromaFromLuma.ComputeMap(encState, opsin, fast: speedTier >= JxlSpeedTier.Wombat);

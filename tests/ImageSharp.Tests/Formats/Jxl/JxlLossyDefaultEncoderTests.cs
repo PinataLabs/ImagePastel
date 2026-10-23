@@ -16,8 +16,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// <summary>
 /// Lossy encoding at Default (libjxl effort 5, <c>kHare</c>), slice E4. E4a is the tracer: Gaborish,
 /// near-lossless DC, the <c>kACMeta</c> tree for the AC metadata and a learned tree for alpha are libjxl's
-/// Hare stages, and the heuristics that later tickets port keep their Fastest form for now (a constant
-/// quant field, DCT8 everywhere, the default chroma-from-luma map). E4e chooses the block context map.
+/// Hare stages. The later tickets add the adaptive quant field (E4b), the per-block AC quant (E4c), the
+/// chroma-from-luma map (E4d), the block context map (E4e) and the 8x8 level of the strategy search (E4g).
 /// </summary>
 /// <remarks>
 /// The colour is checked against E3a's interim bound (<see cref="JxlLossyEncoderTests"/>): each channel's
@@ -77,8 +77,9 @@ public class JxlLossyDefaultEncoderTests
 
     // libjxl's choices at Hare, read back through the decoder's parse: XYB VarDCT; Gaborish above d0.5
     // (LoopFilterFromParams); the EPF iterations and X quantisation scale as at Fastest; near-lossless DC,
-    // so one bit of extra DC precision in every LF group (the gradient has two). E4a's temporary departures
-    // is visible too: every block DCT8. The quant field adapts to the image (E4b).
+    // so one bit of extra DC precision in every LF group (the gradient has two). The quant field adapts to
+    // the image (E4b), and every block is one of the four 8x8 strategies of the search (E4g; no merges until
+    // E4h).
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -103,13 +104,15 @@ public class JxlLossyDefaultEncoderTests
         Assert.Equal(header.ToFrameDimensions().NumDcGroups, frame.ExtraDcPrecision.Length);
         Assert.All(frame.ExtraDcPrecision, p => Assert.Equal(1, p));
 
-        // Temporary departure until E4g (strategies).
+        // E4g: each block takes one of the 8x8 strategies of the search; the merges into larger blocks are
+        // a temporary departure until E4h.
+        JxlAcStrategyType[] eightByEight = { JxlAcStrategyType.Dct, JxlAcStrategyType.Dct4X4, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Identity };
         for (int by = 0; by < frame.State.YSizeBlocks; by++)
         {
             for (int bx = 0; bx < frame.State.XSizeBlocks; bx++)
             {
                 JxlAcStrategy acs = frame.State.AcStrategy.Get(bx, by);
-                Assert.True(acs.Strategy == JxlAcStrategyType.Dct && acs.IsFirstBlock, $"Block ({bx}, {by}) is {acs.Strategy}");
+                Assert.True(Array.IndexOf(eightByEight, acs.Strategy) >= 0 && acs.IsFirstBlock, $"Block ({bx}, {by}) is {acs.Strategy}");
             }
         }
 
@@ -251,6 +254,52 @@ public class JxlLossyDefaultEncoderTests
         Assert.True(lowered > 0 == lowersSome, $"AdjustQuantBlockAC lowers {lowered} blocks' quant");
     }
 
+    // The 8x8 strategies other than DCT8 (IDENTITY, DCT2X2, DCT4X4) share coefficient order 1, which libjxl
+    // customises at Hare as it does DCT8's (order 0): each channel's coefficients sorted by how often they
+    // are zero. The decoder fills an order that is not coded with the natural one, so an order that differs
+    // from it was coded.
+    [Fact]
+    public void Encode_Bike_CodesACustomOrderForTheOther8x8Strategies()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+        frame.DecodeAcGlobal();
+
+        uint[] natural = new uint[64];
+        JxlAcStrategy.FromRawStrategy((int)JxlAcStrategyType.Dct2X2).ComputeNaturalCoeffOrder(natural);
+        foreach (int ord in new[] { 0, 1 })
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                uint[] order = frame.State.CoeffOrders.AsSpan(JxlCoeffOrder.Offset(ord, c), 64).ToArray();
+                Assert.Equal(0u, order[0]);
+                Assert.Equal(natural.OrderBy(k => k), order.OrderBy(k => k));
+                Assert.NotEqual(natural, order);
+            }
+        }
+    }
+
+    // Customising the orders changes only the orders and the AC tokens: the quantised coefficients, and so
+    // the decoded pixels, are those of the natural-order encode of the same image and distance.
+    [Theory]
+    [InlineData(nameof(JxlEncoderRoundTrip.Reader.Ours))]
+    [InlineData(nameof(JxlEncoderRoundTrip.Reader.Djxl))]
+    public async Task Encode_CustomOrders_DecodeToThePixelsOfTheNaturalOrderEncode(string reader)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+
+        byte[] custom = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
+        byte[] natural = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = 1.0f, Effort = JxlEffort.Default, NaturalCoeffOrders = true });
+
+        Assert.NotEqual(natural, custom);
+        JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);
+        using Image<Rgb24> decodedNatural = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(readerKind, natural, "LossyDefaultEncoder", "bike_d1.natural");
+        using Image<Rgb24> decodedCustom = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(readerKind, custom, "LossyDefaultEncoder", "bike_d1.custom");
+        JxlLossyEncoderTests.ChannelErrors errors = JxlLossyEncoderTests.ChannelErrors.Measure(decodedNatural, decodedCustom);
+        Assert.Equal(new[] { 0, 0, 0 }, errors.Peak);
+    }
+
     [Fact]
     public void Encode_LargerDistance_GivesASmallerFile()
     {
@@ -270,16 +319,16 @@ public class JxlLossyDefaultEncoderTests
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E4 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "E58D0186E45CF6D9AE83656E86FC2D7C3B0E8B34D24636EF202C26F1EA99875F")]
-    [InlineData("flower-384x244", "", 1.0f, "B0A6DA8E3960656D6A5A685E042E1CD7E17D474265DB619D41866EC84ED806CD")]
-    [InlineData("flower-384x244", "", 2.0f, "C2E61292AA5EFCAE13D4F4FED7AD4F1BD0D79B62768AA1FAB4F4578066B9A168")]
-    [InlineData("flower-384x244", "", 4.0f, "40D54D3FC6D3DC178769C82393A9566FF281581DB52B23F17F376AB001BD0218")]
-    [InlineData("flower-17x23", "", 1.0f, "1A2B14DCB78C3183F288A09E7697717A1F8127E93CEC2ACA2ED8C7D0A81532AA")]
-    [InlineData("dot-1x1", "", 1.0f, "1980BD43F76C4846237D13E9F6AEB05B2BBB825979A100337540598D4FC94A42")]
-    [InlineData("bike-582x453", "", 1.0f, "07EF5F5298156FC035FDC368149E71691B76D18905934E964BEDDA3C55AEF7E6")]
+    [InlineData("flower-384x244", "", 0.5f, "BF03B3691D82428DD2611E49C22CBB9D5118346B1EB811BBC86414EDD3B0167A")]
+    [InlineData("flower-384x244", "", 1.0f, "0FDA8D81CD8213AA026EDAAB9192A6BA0752794B15C11A45BFA6B15E60802391")]
+    [InlineData("flower-384x244", "", 2.0f, "1D98EC339B74ADF1002E11C5021FA26BBB50BD78156F8288148B71A94F5D3130")]
+    [InlineData("flower-384x244", "", 4.0f, "B9E5445827E8595F43DAF1A593BB09BC21E55ABC30A48E118625A4AB42C144A5")]
+    [InlineData("flower-17x23", "", 1.0f, "B6D5DBB8EC4F8A411E914675B79335D0EB714B4025ED41EF1D431DF7985D95AA")]
+    [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
+    [InlineData("bike-582x453", "", 1.0f, "B05DDBC8EA61020F3C4D39FAD5F8DB93BE88B791EAC432180608117FBDBC46B3")]
     [InlineData("gradient-2049x9", "", 2.0f, "4141E57E7CA3050CD7B4FAF66EAA873E84146DFD4A0990A8C423481D84A5045C")]
-    [InlineData("flower-256x244", "soft", 1.0f, "8D32A2AB61D4E34231AA0AAB32376696651CAC1D6E91AED5A265895FA3BB087B")]
-    [InlineData("bike-582x453", "hard", 1.0f, "C357AA6EAAED56825D5780BA77153217CAD07D0202A0A0B6D361CDB7FA866B7B")]
+    [InlineData("flower-256x244", "soft", 1.0f, "FDA4F108ED3B8DEFCB15DB23E5FA1F99B743F4A0E4E1434476D8F86759D450B8")]
+    [InlineData("bike-582x453", "hard", 1.0f, "E51099671BED5B0644BEF2616F0D32F18731569080227A0EB2395AA86C6C97B4")]
     public void Encode_LossyDefault_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded;

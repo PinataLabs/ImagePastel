@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
 // lib/jxl/enc_entropy_coder.cc (NumNonZero8x8ExceptDC and TokenizeCoefficients), for one lane, 4:4:4 and
-// DCT8 blocks.
+// 8x8 strategies.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -19,8 +19,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// to the left, then each coefficient in the coefficient order up to the last non-zero.
 /// </summary>
 /// <remarks>
-/// The encoder chooses only DCT8 blocks and no chroma subsampling, so libjxl's <c>NumNonZeroExceptLLF</c>
-/// for larger blocks and the subsampled positions are not ported.
+/// The encoder chooses only 8x8 strategies (until E4h) and no chroma subsampling, so libjxl's
+/// <c>NumNonZeroExceptLLF</c> for larger blocks and the subsampled positions are not ported.
 /// </remarks>
 internal static class JxlAcTokenizer
 {
@@ -70,7 +70,7 @@ internal static class JxlAcTokenizer
                 int coveredBlocks = cx * cy;
                 int log2CoveredBlocks = JxlBits.Num0BitsBelowLs1BitNonzero((uint)coveredBlocks);
                 int size = coveredBlocks * DctBlockSize;
-                DebugGuard.IsTrue(coveredBlocks == 1, "The encoder only chooses DCT8");
+                DebugGuard.IsTrue(coveredBlocks == 1, "The encoder only chooses 8x8 strategies until E4h");
 
                 foreach (int c in ChannelOrder)
                 {
