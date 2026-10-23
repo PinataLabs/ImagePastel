@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
@@ -13,7 +12,8 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
-/// The lossy conformance vectors through the public entry points: <c>Image.Load</c> picks the pixel type and
+/// The lossy conformance vectors through the public entry points and <see cref="Configuration.Default"/>, which
+/// registers JPEG XL: <c>Image.Load</c> picks the pixel type and
 /// gives pixels within one quantisation step of the clamped reference (docs/jxl/spec.md, "Tolerance for lossy
 /// output"), and <c>Identify</c> reports the size, channels and colour encoding.
 /// </summary>
@@ -70,7 +70,7 @@ public class JxlConformanceLoadTests
         NpyArray expected = await JxlConformanceData.LoadReferenceImageAsync(vector, CancellationToken);
         string input = await JxlConformanceData.GetInputPathAsync(vector, CancellationToken);
 
-        using Image image = Image.Load(CreateConfiguration(), input);
+        using Image image = Image.Load(Configuration.Default, input);
 
         Assert.Equal(typeof(Image<>).MakeGenericType(pixelType), image.GetType());
         Assert.Equal(expected.Shape[0], image.Frames.Count);
@@ -112,8 +112,7 @@ public class JxlConformanceLoadTests
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
 
-        await using FileStream stream = File.OpenRead(input);
-        IImageInfo info = new JxlDecoder().Identify(Configuration.Default, stream, CancellationToken);
+        IImageInfo info = Image.Identify(Configuration.Default, input, out _);
 
         Assert.Equal(width, info.Width);
         Assert.Equal(height, info.Height);
@@ -144,7 +143,7 @@ public class JxlConformanceLoadTests
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load(id), CancellationToken);
 
-        IImageInfo info = Image.Identify(CreateConfiguration(), input, out _);
+        IImageInfo info = Image.Identify(Configuration.Default, input, out _);
 
         JxlMetadata metadata = info.Metadata.GetFormatMetadata(JxlFormat.Instance);
         Assert.Equal(ticksNumerator, metadata.TicksPerSecondNumerator);
@@ -159,7 +158,7 @@ public class JxlConformanceLoadTests
     {
         string input = await JxlConformanceData.GetInputPathAsync(JxlConformanceVector.Load("bench_oriented_brg"), CancellationToken);
 
-        IImageInfo info = Image.Identify(CreateConfiguration(), input, out _);
+        IImageInfo info = Image.Identify(Configuration.Default, input, out _);
 
         Assert.Equal(606, info.Width);
         Assert.Equal(500, info.Height);
@@ -185,12 +184,4 @@ public class JxlConformanceLoadTests
 
     // The sRGB encoding of IEC 61966-2-1, in double precision.
     private static double LinearToSrgb(double v) => v <= 0.0031308 ? 12.92 * v : (1.055 * Math.Pow(v, 1 / 2.4)) - 0.055;
-
-    private static Configuration CreateConfiguration()
-    {
-        Configuration configuration = Configuration.CreateDefaultInstance();
-        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
-        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
-        return configuration;
-    }
 }

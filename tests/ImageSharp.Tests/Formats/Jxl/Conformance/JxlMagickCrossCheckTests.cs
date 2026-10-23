@@ -17,7 +17,8 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
-/// Compares <c>Image.Load</c> of every committed conformance input with libjxl through Magick.NET
+/// Compares <c>Image.Load</c> of every committed conformance input, through <see cref="Configuration.Default"/>,
+/// with libjxl through Magick.NET
 /// (<see cref="MagickReferenceDecoder.HighBitDepthInstance"/>), frame by frame. It needs no <c>.npy</c> data and
 /// no libjxl tools, so it runs on every CI leg (#104). The fetched <c>bike</c>, <c>cafe</c> and <c>progressive</c>
 /// inputs are left out, because the other legs do not have them.
@@ -33,7 +34,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 /// vector, by one step each: libjxl uses FMA and this decoder does not (ADR 0004).
 /// </para>
 /// <para>
-/// Lossless vectors are compared exactly, in the pixel type that <c>Image.Load</c> picks.
+/// Lossless vectors are compared exactly, in the pixel type that <c>Image.Load</c> picks. Three of them, whose
+/// samples above 8 bits are blended, may round one 16-bit step apart on arm64 (see <see cref="Cases"/>).
 /// </para>
 /// </remarks>
 [Trait("Format", "Jxl")]
@@ -42,7 +44,7 @@ public class JxlMagickCrossCheckTests
     /// <summary>How this decoder's output relates to Magick's.</summary>
     public enum Comparison
     {
-        /// <summary>Lossless: the pixels <c>Image.Load</c> picks equal Magick's.</summary>
+        /// <summary>Lossless: the pixels <c>Image.Load</c> picks equal Magick's, within the tolerance in 16-bit steps.</summary>
         Exact,
 
         /// <summary>The unrounded samples are within the tolerance, in steps of Magick's depth.</summary>
@@ -74,7 +76,12 @@ public class JxlMagickCrossCheckTests
     // so Magick's output is oriented here before the comparison.
     //
     // Each tolerance is the largest difference measured on Windows x64 (in the comment), plus 0.01 for the
-    // other legs' libjxl builds, rounded up to two decimals. Lossless vectors have none.
+    // other legs' libjxl builds, rounded up to two decimals. Lossless vectors have none, except the three
+    // above 8 bits whose samples are blended or have spot colours rendered (blendmodes, spot, sunset_logo).
+    // Those samples fall between 16-bit steps, and thousands of them lie within one float ulp of a half
+    // step. On arm64, where FMA is always available, Magick's libjxl can fuse a multiply and an add that this
+    // decoder keeps apart (ADR 0004), so a few of them round the other way: one 16-bit step, measured on the
+    // macOS arm64 legs. On Windows and Linux x64 they match exactly.
     public static TheoryData<string, Comparison, double, ushort> Cases { get; } = new()
     {
         { "alpha_nonpremultiplied", Comparison.Exact, 0, 1 },
@@ -92,7 +99,7 @@ public class JxlMagickCrossCheckTests
         // A JPEG transcode, with orientation 5 (transposed).
         { "bench_oriented_brg", Comparison.Lossy, 1.01, 5 }, // 0.9923
         { "bicycles", Comparison.Lossy, 1.01, 1 }, // 0.9922
-        { "blendmodes", Comparison.Exact, 0, 1 },
+        { "blendmodes", Comparison.Exact, 1, 1 }, // 12-bit; 0 on x64, 1 on arm64
 
         // Blending the layers gives samples between steps, so libjxl dithers them.
         { "cmyk_layers", Comparison.CmykPlanes, 1, 1 }, // 0.9882
@@ -115,10 +122,10 @@ public class JxlMagickCrossCheckTests
         { "patches_lossless", Comparison.Exact, 0, 1 },
 
         // Both decoders render the spot colours over the colour.
-        { "spot", Comparison.Exact, 0, 1 },
+        { "spot", Comparison.Exact, 1, 1 }, // 16-bit; 0 on x64, 1 on arm64
 
         // Orientation 7 (anti-transposed).
-        { "sunset_logo", Comparison.Exact, 0, 7 },
+        { "sunset_logo", Comparison.Exact, 1, 7 }, // 10-bit; 0 on x64, 1 on arm64
         { "upsampling", Comparison.Lossy, 1.01, 1 }, // 0.9922
     };
 
@@ -169,7 +176,7 @@ public class JxlMagickCrossCheckTests
     // The largest difference in 16-bit steps.
     private static double CompareExact(string path, Image<Rgba64> reference)
     {
-        using Image image = Image.Load(CreateConfiguration(), path);
+        using Image image = Image.Load(Configuration.Default, path);
         Assert.True(image.PixelType.BitsPerPixel <= 64, $"{image.GetType()} holds more than Magick's 16 bits.");
         using Image<Rgba64> actual = image.CloneAs<Rgba64>();
         AssertSameFrames(reference, actual);
@@ -198,7 +205,7 @@ public class JxlMagickCrossCheckTests
     // The largest difference in steps of Magick's depth.
     private static double CompareUnrounded(string path, Image<Rgba64> reference, Comparison comparison)
     {
-        using Image<RgbaVector> actual = Image.Load<RgbaVector>(CreateConfiguration(), path);
+        using Image<RgbaVector> actual = Image.Load<RgbaVector>(Configuration.Default, path);
         AssertSameFrames(reference, actual);
         double steps = MagickSteps(actual.Metadata.GetFormatMetadata(JxlFormat.Instance).BitsPerSample);
 
@@ -243,7 +250,7 @@ public class JxlMagickCrossCheckTests
     private static double CompareCmykPlanes(string path, Image<Rgba64> reference)
     {
         using FileStream stream = File.OpenRead(path);
-        using JxlDecodedImage planes = new JxlDecoderCore(CreateConfiguration()).DecodeToPlanes(stream, CancellationToken);
+        using JxlDecodedImage planes = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken);
 
         // C, M and Y, then the extra channels in stream order: Black, then alpha.
         Assert.Equal(reference.Frames.Count, planes.Frames.Count);
@@ -291,12 +298,4 @@ public class JxlMagickCrossCheckTests
 
     // The sRGB decoding of IEC 61966-2-1, in double precision.
     private static double SrgbToLinear(double v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
-
-    private static Configuration CreateConfiguration()
-    {
-        Configuration configuration = Configuration.CreateDefaultInstance();
-        configuration.ImageFormatsManager.SetDecoder(JxlFormat.Instance, new JxlDecoder());
-        configuration.ImageFormatsManager.AddImageFormatDetector(new JxlImageFormatDetector());
-        return configuration;
-    }
 }

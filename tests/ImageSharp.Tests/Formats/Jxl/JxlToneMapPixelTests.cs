@@ -17,20 +17,19 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 [Trait("Format", "Jxl")]
 public class JxlToneMapPixelTests
 {
-    // The files are Rec2100HLG, Rec2100PQ and P3 primaries with HLG, all with a D65 white point (the
-    // JxlPrimaries and JxlTransferFunction values are internal, so the rows give them as numbers). libjxl's
+    // The files are Rec2100HLG, Rec2100PQ and P3 primaries with HLG, all with a D65 white point. libjxl's
     // maths may use FMA on AVX2 and the CRT's pow, exp and cbrt, so one Lab step is allowed.
     // Measured: 0 for all three (every byte equal to djxl's).
     [Theory]
-    [InlineData("hlg", 9, 18)]
-    [InlineData("pq", 9, 16)]
-    [InlineData("p3_hlg", 11, 18)]
-    public void ToneMapPixel_OnTheLutGrid_GivesDjxlsLabBytes(string name, int primaries, int transferFunction)
+    [InlineData("hlg", JxlPrimaries.Bt2100, JxlTransferFunction.Hlg)]
+    [InlineData("pq", JxlPrimaries.Bt2100, JxlTransferFunction.Pq)]
+    [InlineData("p3_hlg", JxlPrimaries.P3, JxlTransferFunction.Hlg)]
+    public void ToneMapPixel_OnTheLutGrid_GivesDjxlsLabBytes(string name, JxlPrimaries primaries, JxlTransferFunction transferFunction)
     {
         JxlColorEncodingHeader c = JxlDjxlProfiles.ColourEncoding(name);
         Assert.Equal(JxlWhitePoint.D65, c.WhitePoint);
-        Assert.Equal((JxlPrimaries)primaries, c.Primaries);
-        Assert.Equal((JxlTransferFunction)transferFunction, c.Tf.TransferFunction);
+        Assert.Equal(primaries, c.Primaries);
+        Assert.Equal(transferFunction, c.Tf.TransferFunction);
         byte[] expected = JxlDjxlProfiles.A2B0Clut(JxlDjxlProfiles.Profile(name));
 
         const int n = JxlDjxlProfiles.LutGridPoints;
