@@ -22,6 +22,7 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
         "Tga",
         "Webp",
         "Tiff",
+        "Jxl",
     ];
 
     /// <inheritdoc/>

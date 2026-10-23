@@ -273,4 +273,40 @@
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:SixLabors.ImageSharp.Formats.Jxl.JxlEncoder</Target>
   </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxl(SixLabors.ImageSharp.Image,System.String)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxlAsync(SixLabors.ImageSharp.Image,System.String)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxlAsync(SixLabors.ImageSharp.Image,System.String,System.Threading.CancellationToken)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxl(SixLabors.ImageSharp.Image,System.String,SixLabors.ImageSharp.Formats.Jxl.JxlEncoder)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxlAsync(SixLabors.ImageSharp.Image,System.String,SixLabors.ImageSharp.Formats.Jxl.JxlEncoder,System.Threading.CancellationToken)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxl(SixLabors.ImageSharp.Image,System.IO.Stream)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxlAsync(SixLabors.ImageSharp.Image,System.IO.Stream,System.Threading.CancellationToken)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxl(SixLabors.ImageSharp.Image,System.IO.Stream,SixLabors.ImageSharp.Formats.Jxl.JxlEncoder)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SixLabors.ImageSharp.ImageExtensions.SaveAsJxlAsync(SixLabors.ImageSharp.Image,System.IO.Stream,SixLabors.ImageSharp.Formats.Jxl.JxlEncoder,System.Threading.CancellationToken)</Target>
+  </Suppression>
 </Suppressions>
