@@ -274,12 +274,7 @@ public class ImageExtensionsTests
         Assert.NotEqual(lossless, smallest);
         Assert.Equal(new Size(37, 23), Image.Identify(largest).Size());
 
-        static byte[] Save(Image image, float distance)
-        {
-            using MemoryStream stream = new();
-            image.SaveAsJxl(stream, new JxlEncoder { Distance = distance });
-            return stream.ToArray();
-        }
+        static byte[] Save(Image image, float distance) => JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
     }
 
     private static string OutputPath(string fileName)

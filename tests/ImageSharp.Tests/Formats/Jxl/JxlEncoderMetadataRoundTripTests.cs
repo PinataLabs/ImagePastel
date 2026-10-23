@@ -60,7 +60,7 @@ public class JxlEncoderMetadataRoundTripTests
     public void SaveAsJxl_Metadata_OurDecoderGivesItBackWithTheOrientedPixels(float distance, bool alpha)
     {
         using Image image = CreateImage(alpha);
-        byte[] encoded = Save(image, distance);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
 
         using Image<Rgba32> decoded = Image.Load<Rgba32>(encoded);
 
@@ -98,7 +98,7 @@ public class JxlEncoderMetadataRoundTripTests
     {
         MagickReferenceDecoder.SkipUnlessJxlIsSupported();
         using Image image = CreateImage(alpha);
-        byte[] encoded = Save(image, distance);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
 
         using ImageMagick.MagickImage magick = new(encoded);
 
@@ -127,7 +127,7 @@ public class JxlEncoderMetadataRoundTripTests
     {
         JxlEncoderRoundTrip.SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader.Djxl);
         using Image image = CreateImage(alpha);
-        byte[] encoded = Save(image, distance);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
 
         using Image<Rgba32> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgba32>(JxlEncoderRoundTrip.Reader.Djxl, encoded, nameof(JxlEncoderMetadataRoundTripTests), CaseName(distance, alpha));
 
@@ -144,7 +144,7 @@ public class JxlEncoderMetadataRoundTripTests
         JxlTools.GetToolPath("jxlinfo");
         string path = Path.Combine(OutputDirectory(), CaseName(distance, alpha) + ".jxl");
         using Image image = CreateImage(alpha);
-        byte[] encoded = Save(image, distance);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
         await File.WriteAllBytesAsync(path, encoded, cancellationToken);
         IReadOnlyList<JxlBox> boxes = JxlBoxList.Read(encoded);
 
@@ -170,7 +170,7 @@ public class JxlEncoderMetadataRoundTripTests
         string pngPath = Path.Combine(directory, name + ".png");
         string cjxlPath = Path.Combine(directory, name + ".cjxl.jxl");
         using Image image = CreateImage(alpha);
-        byte[] encoded = Save(image, distance);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
         await image.SaveAsPngAsync(pngPath, cancellationToken);
         File.Delete(cjxlPath);
 
@@ -206,13 +206,6 @@ public class JxlEncoderMetadataRoundTripTests
         image.Metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes(Xmp));
         image.Metadata.IccProfile = new IccProfile(File.ReadAllBytes(TestFile.GetInputFileFullPath(TestImages.Icc.CompactDisplayP3V4)));
         return image;
-    }
-
-    internal static byte[] Save(Image image, float distance)
-    {
-        using MemoryStream stream = new();
-        image.SaveAsJxl(stream, new JxlEncoder { Distance = distance });
-        return stream.ToArray();
     }
 
     // Every value of the source's Exif (which SaveAsJxl synchronised, as every encoder does), except the

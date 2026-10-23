@@ -34,7 +34,7 @@ public class JxlEncoderLevelTests
     {
         using Image<L16> image = JxlEncoderRoundTrip.CreateImage<L16>("gradient", 17, 23);
 
-        AssertLevel10Container(Save(image, new JxlEncoder { Distance = 0 }));
+        AssertLevel10Container(JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = 0 }));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class JxlEncoderLevelTests
     {
         using Image<Rgba64> image = JxlEncoderRoundTrip.CreateImage<Rgba64>("gradient", 17, 23);
 
-        AssertLevel10Container(Save(image, new JxlEncoder { Distance = 0 }));
+        AssertLevel10Container(JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = 0 }));
     }
 
     // cjxl v0.12.0 -d 0 on the same image saved as a 16-bit PNG writes the same boxes: JXL , ftyp, jxll
@@ -77,7 +77,7 @@ public class JxlEncoderLevelTests
     {
         using Image<Rgba64> image = JxlEncoderRoundTrip.CreateImage<Rgba64>("translucent", 17, 23);
 
-        AssertLevel10Container(Save(image, new JxlEncoder { Distance = 1 }));
+        AssertLevel10Container(JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = 1 }));
     }
 
     // With metadata, jxll comes right after ftyp and the jxlp split of E6b is kept.
@@ -97,7 +97,7 @@ public class JxlEncoderLevelTests
         }
 
         JxlEncoder encoder = new() { Distance = 0 };
-        byte[] encoded = Save(image, encoder);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, encoder);
         IReadOnlyList<JxlBox> boxes = JxlBoxList.Read(encoded);
 
         Assert.Equal(expectedBoxes, JxlBoxList.Types(boxes));
@@ -107,7 +107,7 @@ public class JxlEncoderLevelTests
         Assert.Equal(exif.ToByteArray(), boxes[4].Contents[4..]);
 
         // The same codestream as without metadata, where it is the jxlc box.
-        Assert.Equal(JxlBoxList.Read(Save(bare, encoder))[3].Contents, JxlBoxList.Codestream(encoded));
+        Assert.Equal(JxlBoxList.Read(JxlEncoderRoundTrip.SaveAsJxl(bare, encoder))[3].Contents, JxlBoxList.Codestream(encoded));
     }
 
     // A side over 2^18 is beyond level 5. The image is all zeros; only its size matters.
@@ -118,7 +118,7 @@ public class JxlEncoderLevelTests
     {
         using Image<L8> image = new(width, height);
 
-        byte[] encoded = Save(image, new JxlEncoder { Distance = 0, Effort = JxlEffort.Fastest });
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = 0, Effort = JxlEffort.Fastest });
 
         AssertLevel10Container(encoded);
         IImageInfo info = Image.Identify(encoded);
@@ -179,13 +179,6 @@ public class JxlEncoderLevelTests
         Assert.Equal("jxl \0\0\0\0jxl "u8.ToArray(), boxes[1].Contents);
         Assert.Equal(new byte[] { 10 }, boxes[2].Contents);
         Assert.Equal(new byte[] { 0xFF, 0x0A }, boxes[3].Contents[..2]);
-    }
-
-    private static byte[] Save(Image image, JxlEncoder encoder)
-    {
-        using MemoryStream stream = new();
-        image.SaveAsJxl(stream, encoder);
-        return stream.ToArray();
     }
 
     // Hands out the same array for every buffer, so an image of any height costs one buffer. Its pixels
@@ -270,7 +263,7 @@ public class JxlEncoderLevelTests
                 image.Metadata.ExifProfile = exif;
             }
 
-            byte[] encoded = Save(image, new JxlEncoder { Distance = this.Distance });
+            byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = this.Distance });
             Assert.Equal(new byte[] { 10 }, JxlBoxList.Read(encoded)[2].Contents);
             bool lossless = this.Distance == 0;
             string name = $"{typeof(TPixel).Name}_d{this.Distance}_{this.Case}";
@@ -313,7 +306,7 @@ public class JxlEncoderLevelTests
             where TPixel : unmanaged, IPixel<TPixel>
         {
             using Image<TPixel> image = JxlEncoderRoundTrip.CreateImage<TPixel>(this.Pattern, this.Width, this.Height);
-            return Save(image, new JxlEncoder { Distance = this.Distance });
+            return JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = this.Distance });
         }
     }
 }

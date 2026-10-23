@@ -51,7 +51,7 @@ public class JxlEncoderOrientationTests
         using Image<Rgb24> image = CreateImage(orientation);
         using Image<Rgb24> expected = image.Clone(x => x.AutoOrient());
 
-        using Image<Rgb24> decoded = Image.Load<Rgb24>(Save(image, Lossless));
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(JxlEncoderRoundTrip.SaveAsJxl(image, Lossless));
 
         ImageComparer.Exact.VerifySimilarity(expected, decoded);
 
@@ -65,7 +65,7 @@ public class JxlEncoderOrientationTests
     {
         using Image<Rgb24> image = CreateImage(orientation);
 
-        IImageInfo info = Image.Identify(Save(image, Lossless));
+        IImageInfo info = Image.Identify(JxlEncoderRoundTrip.SaveAsJxl(image, Lossless));
 
         bool transposed = orientation >= 5;
         Assert.Equal(transposed ? Height : Width, info.Width);
@@ -79,7 +79,7 @@ public class JxlEncoderOrientationTests
     {
         using Image<Rgb24> image = CreateImage(orientation);
 
-        JxlBox exifBox = JxlBoxList.Read(Save(image, Lossless)).Single(b => b.Type == "Exif");
+        JxlBox exifBox = JxlBoxList.Read(JxlEncoderRoundTrip.SaveAsJxl(image, Lossless)).Single(b => b.Type == "Exif");
 
         ExifProfile boxed = new(exifBox.Contents[4..]);
         Assert.Equal(orientation, boxed.GetValue(ExifTag.Orientation).Value);
@@ -97,8 +97,8 @@ public class JxlEncoderOrientationTests
             using Image<Rgb24> upright = CreateImage(1);
             using Image<Rgb24> image = CreateImage(orientation);
 
-            IReadOnlyList<JxlBox> expected = JxlBoxList.Read(Save(upright, encoder));
-            IReadOnlyList<JxlBox> actual = JxlBoxList.Read(Save(image, encoder));
+            IReadOnlyList<JxlBox> expected = JxlBoxList.Read(JxlEncoderRoundTrip.SaveAsJxl(upright, encoder));
+            IReadOnlyList<JxlBox> actual = JxlBoxList.Read(JxlEncoderRoundTrip.SaveAsJxl(image, encoder));
 
             Assert.Equal(new[] { "JXL ", "ftyp", "jxlp", "Exif", "jxlp" }, JxlBoxList.Types(actual));
             Assert.Equal(expected[4].Contents, actual[4].Contents);
@@ -126,7 +126,7 @@ public class JxlEncoderOrientationTests
         using Image<Rgb24> image = bare.Clone();
         image.Metadata.ExifProfile = new ExifProfile(CreateExif(orientationEntry));
 
-        byte[] encoded = Save(image, Lossless);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, Lossless);
 
         JxlBox exifBox = JxlBoxList.Read(encoded).Single(b => b.Type == "Exif");
         ExifProfile boxed = new(exifBox.Contents[4..]);
@@ -134,7 +134,7 @@ public class JxlEncoderOrientationTests
         Assert.Equal(boxedOrientation, boxed.GetValue(ExifTag.Orientation)?.Value ?? 0);
 
         byte[] codestream = JxlContainer.Read(encoded, readMetadata: false, TestContext.Current.CancellationToken).Codestream;
-        Assert.Equal(Save(bare, Lossless), codestream);
+        Assert.Equal(JxlEncoderRoundTrip.SaveAsJxl(bare, Lossless), codestream);
 
         IImageInfo info = Image.Identify(encoded);
         Assert.Equal(Width, info.Width);
@@ -153,7 +153,7 @@ public class JxlEncoderOrientationTests
         using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Width, Height);
         image.Metadata.ExifProfile = new ExifProfile(CreateExif(orientationEntry));
 
-        byte[] encoded = Save(image, Lossless);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, Lossless);
 
         JxlBox exifBox = JxlBoxList.Read(encoded).Single(b => b.Type == "Exif");
         uint orientation = 1;
@@ -173,10 +173,10 @@ public class JxlEncoderOrientationTests
         image.Metadata.ExifProfile = new ExifProfile();
         image.Metadata.ExifProfile.SetValue(ExifTag.Software, "E6d");
 
-        byte[] encoded = Save(image, Lossless);
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, Lossless);
 
         byte[] codestream = JxlContainer.Read(encoded, readMetadata: false, TestContext.Current.CancellationToken).Codestream;
-        Assert.Equal(Save(bare, Lossless), codestream);
+        Assert.Equal(JxlEncoderRoundTrip.SaveAsJxl(bare, Lossless), codestream);
     }
 
     // InterpretExif (lib/jxl/base/exif.h) on Exif that the encoder cannot be given through ExifProfile.
@@ -217,7 +217,7 @@ public class JxlEncoderOrientationTests
         JxlEncoderRoundTrip.SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader.Magick);
         using Image<Rgb24> image = CreateImage(orientation);
 
-        using ImageMagick.MagickImage magick = new(Save(image, Lossless));
+        using ImageMagick.MagickImage magick = new(JxlEncoderRoundTrip.SaveAsJxl(image, Lossless));
 
         Assert.Equal((ImageMagick.Orientation)orientation, magick.Orientation);
 
@@ -253,7 +253,7 @@ public class JxlEncoderOrientationTests
         using Image<Rgb24> jpeg = LoadJpegWithOrientation6();
         using Image<Rgb24> expected = jpeg.Clone(x => x.AutoOrient());
 
-        byte[] encoded = Save(jpeg, new JxlEncoder { Distance = distance });
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(jpeg, new JxlEncoder { Distance = distance });
         using Image<Rgb24> decoded = Image.Load<Rgb24>(encoded);
 
         Assert.Equal(expected.Height, jpeg.Width);
@@ -295,11 +295,4 @@ public class JxlEncoderOrientationTests
     // then Software "E6d".
     private static byte[] CreateExif(string orientationEntry)
         => Convert.FromHexString("49492a00" + "08000000" + "0200" + "1201" + orientationEntry + "3101" + "0200" + "04000000" + "45366400" + "00000000");
-
-    private static byte[] Save(Image image, JxlEncoder encoder)
-    {
-        using MemoryStream stream = new();
-        image.SaveAsJxl(stream, encoder);
-        return stream.ToArray();
-    }
 }

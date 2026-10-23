@@ -35,7 +35,7 @@ public class JxlEncoderMetadataTests
     {
         using Image<Rgba32> image = CreateImage(withExif: true, withXmp: true);
 
-        IReadOnlyList<JxlBox> boxes = JxlBoxList.Read(Save(image));
+        IReadOnlyList<JxlBox> boxes = JxlBoxList.Read(JxlEncoderRoundTrip.SaveAsJxl(image));
 
         Assert.Equal(new[] { "JXL ", "ftyp", "jxlp", "Exif", "xml ", "jxlp" }, JxlBoxList.Types(boxes));
         Assert.All(boxes, b => Assert.Equal(8, b.HeaderSize));
@@ -58,7 +58,7 @@ public class JxlEncoderMetadataTests
     public void SaveAsJxl_ExifAndXmp_OurDecoderReadsTheProfilesBack(float distance)
     {
         using Image<Rgba32> image = CreateImage(withExif: true, withXmp: true);
-        byte[] encoded = Save(image, new JxlEncoder { Distance = distance });
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
 
         // Image.Load with Configuration.Default reads .jxl with our decoder.
         using Image<Rgba32> decoded = Image.Load<Rgba32>(encoded);
@@ -78,7 +78,7 @@ public class JxlEncoderMetadataTests
     {
         JxlEncoderRoundTrip.SkipUnlessReaderRuns(JxlEncoderRoundTrip.Reader.Magick);
         using Image<Rgba32> image = CreateImage(withExif: true, withXmp: true);
-        byte[] encoded = Save(image, new JxlEncoder { Distance = distance });
+        byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, new JxlEncoder { Distance = distance });
 
         using ImageMagick.MagickImage magick = new(encoded);
 
@@ -153,8 +153,8 @@ public class JxlEncoderMetadataTests
             using Image<Rgba32> image = bare.Clone();
             SetProfiles(image, profiles);
 
-            byte[] expectedCodestream = Save(bare, encoder);
-            byte[] encoded = Save(image, encoder);
+            byte[] expectedCodestream = JxlEncoderRoundTrip.SaveAsJxl(bare, encoder);
+            byte[] encoded = JxlEncoderRoundTrip.SaveAsJxl(image, encoder);
 
             if (expectedBoxes.Length == 0)
             {
@@ -197,7 +197,7 @@ public class JxlEncoderMetadataTests
         using Image<Rgba32> image = JxlEncoderRoundTrip.CreateImage<Rgba32>("gradient", 17, 23);
         image.Metadata.XmpProfile = new XmpProfile(xmp);
 
-        IImageInfo info = Image.Identify(Save(image));
+        IImageInfo info = Image.Identify(JxlEncoderRoundTrip.SaveAsJxl(image));
 
         Assert.Equal(xmp, info.Metadata.XmpProfile?.ToByteArray());
     }
@@ -264,20 +264,5 @@ public class JxlEncoderMetadataTests
         Image<Rgba32> image = JxlEncoderRoundTrip.CreateImage<Rgba32>("gradient", 17, 23);
         SetProfiles(image, (withExif ? Profiles.Exif : Profiles.None) | (withXmp ? Profiles.Xmp : Profiles.None));
         return image;
-    }
-
-    private static byte[] Save(Image image, JxlEncoder encoder = null)
-    {
-        using MemoryStream stream = new();
-        if (encoder is null)
-        {
-            image.SaveAsJxl(stream);
-        }
-        else
-        {
-            image.SaveAsJxl(stream, encoder);
-        }
-
-        return stream.ToArray();
     }
 }
