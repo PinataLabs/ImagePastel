@@ -554,6 +554,9 @@ internal sealed class JxlModularFrameEncoder : IDisposable
                 }
 
                 outAcs[num] = acs.RawStrategy;
+
+                // AdjustQuantBlockAC can raise a multi-block strategy's 256 to 257, which libjxl writes as
+                // it is (256 here); decoders clamp it to 256.
                 outQf[num] = encState.RawQuantField[blockIndex] - 1;
                 num++;
             }

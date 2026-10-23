@@ -94,9 +94,10 @@ internal static class JxlEncCoeffOrder
         uint currentUsedOrders,
         Span<uint> order)
     {
-        // Departure (ADR 0001): libjxl sizes this for every bucket (kCoeffOrderMaxSize). Only the buckets to
-        // customise are read, so this allocates up to the end of the last of them.
-        long[] numZeros = new long[NumZerosSize(currentUsedOrders)];
+        // Departure (ADR 0001): libjxl sizes this for every bucket (kCoeffOrderMaxSize). The counts are
+        // written for every bucket used (64x64 and 64x32 too, whose orders stay natural) and read for the
+        // buckets to customise, so this allocates up to the end of the last of them.
+        long[] numZeros = new long[NumZerosSize(currentUsedAcs | currentUsedOrders)];
 
         // If compressing at high speed and only using 8x8 DCTs, only consider a subset of blocks.
         double blockFraction = 1.0f;

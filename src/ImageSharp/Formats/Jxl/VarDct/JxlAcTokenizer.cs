@@ -1,8 +1,8 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_entropy_coder.cc (NumNonZero8x8ExceptDC and TokenizeCoefficients), for one lane, 4:4:4 and
-// 8x8 strategies.
+// lib/jxl/enc_entropy_coder.cc (NumNonZeroExceptLLF, NumNonZero8x8ExceptDC and TokenizeCoefficients), for
+// one lane and 4:4:4.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -19,8 +19,7 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 /// to the left, then each coefficient in the coefficient order up to the last non-zero.
 /// </summary>
 /// <remarks>
-/// The encoder chooses only 8x8 strategies (until E4h) and no chroma subsampling, so libjxl's
-/// <c>NumNonZeroExceptLLF</c> for larger blocks and the subsampled positions are not ported.
+/// The encoder never subsamples chroma, so libjxl's subsampled positions are not ported.
 /// </remarks>
 internal static class JxlAcTokenizer
 {
@@ -70,7 +69,11 @@ internal static class JxlAcTokenizer
                 int coveredBlocks = cx * cy;
                 int log2CoveredBlocks = JxlBits.Num0BitsBelowLs1BitNonzero((uint)coveredBlocks);
                 int size = coveredBlocks * DctBlockSize;
-                DebugGuard.IsTrue(coveredBlocks == 1, "The encoder only chooses 8x8 strategies until E4h");
+
+                // swap cx/cy to canonical order
+                int canonicalCx = cx;
+                int canonicalCy = cy;
+                JxlAcStrategy.CoefficientLayout(ref canonicalCy, ref canonicalCx);
 
                 foreach (int c in ChannelOrder)
                 {
@@ -78,8 +81,9 @@ internal static class JxlAcTokenizer
                     Span<int> rowNzeros = numNzeroes[c].AsSpan(by * GroupDimInBlocks, GroupDimInBlocks);
                     ReadOnlySpan<int> rowNzerosTop = by == 0 ? Span<int>.Empty : numNzeroes[c].AsSpan((by - 1) * GroupDimInBlocks, GroupDimInBlocks);
 
-                    int nzeros = NumNonZero8x8ExceptDc(block);
-                    rowNzeros[bx] = nzeros;
+                    int nzeros = coveredBlocks == 1
+                        ? NumNonZero8x8ExceptDc(block, rowNzeros.Slice(bx))
+                        : NumNonZeroExceptLlf(canonicalCx, canonicalCy, acs, coveredBlocks, log2CoveredBlocks, block, GroupDimInBlocks, numNzeroes[c].AsSpan((by * GroupDimInBlocks) + bx));
 
                     int ord = JxlCoeffOrder.StrategyOrder[acs.RawStrategy];
                     ReadOnlySpan<uint> order = orders.Slice(JxlCoeffOrder.Offset(ord, c));
@@ -113,8 +117,41 @@ internal static class JxlAcTokenizer
         }
     }
 
+    // Returns number of non-zero coefficients (but skip LLF): the LLF are the first cx coefficients of the
+    // first cy rows, in the canonical dimensions. Also writes the per-8x8 block nzeros, rounded up over the
+    // covered blocks, to every block the strategy covers, in its non-canonical dimensions.
+    private static int NumNonZeroExceptLlf(int cx, int cy, JxlAcStrategy acs, int coveredBlocks, int log2CoveredBlocks, ReadOnlySpan<int> block, int nzerosStride, Span<int> nzerosPos)
+    {
+        int nzeros = 0;
+        for (int y = 0; y < cy * BlockDim; y++)
+        {
+            for (int x = 0; x < cx * BlockDim; x++)
+            {
+                // LLF counts as zero so we don't include it in nzeros.
+                bool isLlf = y < cy && x < cx;
+                if (!isLlf && block[(y * cx * BlockDim) + x] != 0)
+                {
+                    nzeros++;
+                }
+            }
+        }
+
+        int shiftedNzeros = (nzeros + coveredBlocks - 1) >> log2CoveredBlocks;
+
+        // Need non-canonicalized dimensions!
+        for (int y = 0; y < acs.CoveredBlocksY; y++)
+        {
+            for (int x = 0; x < acs.CoveredBlocksX; x++)
+            {
+                nzerosPos[x + (y * nzerosStride)] = shiftedNzeros;
+            }
+        }
+
+        return nzeros;
+    }
+
     // Specialization for 8x8, where only top-left is LLF/DC. The DC counts as zero.
-    private static int NumNonZero8x8ExceptDc(ReadOnlySpan<int> block)
+    private static int NumNonZero8x8ExceptDc(ReadOnlySpan<int> block, Span<int> nzerosPos)
     {
         int nzeros = 0;
         for (int k = 1; k < DctBlockSize; k++)
@@ -125,6 +162,7 @@ internal static class JxlAcTokenizer
             }
         }
 
+        nzerosPos[0] = nzeros;
         return nzeros;
     }
 }

@@ -74,11 +74,13 @@ internal static class JxlEncGroup
         encState.Coeffs[groupIdx] = coeffs;
         int coeffOffset = 0;
 
-        float[] coeffsIn = new float[3 * DctBlockSize];
-        int[] quantized = new int[3 * DctBlockSize];
+        // The largest block the encoder chooses is DCT64X64 (libjxl sizes these for kMaxCoeffArea, 256x256).
+        float[] coeffsIn = new float[3 * JxlAcsScratch.MaxCoeffArea];
+        int[] quantized = new int[3 * JxlAcsScratch.MaxCoeffArea];
         float[] scratch = new float[JxlDct.ScratchSize];
-        float[] block = new float[DctBlockSize];
+        float[] block = new float[JxlAcsScratch.MaxCoeffArea];
         float[] thres = new float[4];
+        int dcStride = encState.XSizeBlocks;
 
         for (int by = 0; by < ysizeBlocks; ++by)
         {
@@ -103,26 +105,26 @@ internal static class JxlEncGroup
                     int yblocks = acs.CoveredBlocksY;
                     JxlAcStrategy.CoefficientLayout(ref yblocks, ref xblocks);
                     int size = DctBlockSize * xblocks * yblocks;
-                    DebugGuard.IsTrue(size == DctBlockSize, "The encoder only chooses 8x8 strategies until E4h");
 
                     // DCT Y channel, roundtrip-quantize it and set DC.
                     int blockIndex = encState.BlockIndex(gbx, gby);
                     int quantAc = encState.RawQuantField[blockIndex];
+                    int pixelsStride = acs.CoveredBlocksX * BlockDim;
                     for (int c = 0; c < 3; c++)
                     {
-                        // The pixels of the block, rows BlockDim apart.
-                        for (int iy = 0; iy < BlockDim; iy++)
+                        // The pixels of the block, all the blocks it covers, rows pixelsStride apart.
+                        for (int iy = 0; iy < acs.CoveredBlocksY * BlockDim; iy++)
                         {
                             opsin[c].DangerousGetRowSpan((int)(groupRect.Y0 + (by * BlockDim) + iy))
-                                .Slice((int)(groupRect.X0 + (bx * BlockDim)), BlockDim)
-                                .CopyTo(block.AsSpan(iy * BlockDim, BlockDim));
+                                .Slice((int)(groupRect.X0 + (bx * BlockDim)), pixelsStride)
+                                .CopyTo(block.AsSpan(iy * pixelsStride, pixelsStride));
                         }
 
-                        JxlDct.TransformFromPixels(acs.Strategy, block, BlockDim, coeffsIn.AsSpan(c * size, size), scratch);
+                        JxlDct.TransformFromPixels(acs.Strategy, block, pixelsStride, coeffsIn.AsSpan(c * size, size), scratch);
                     }
 
-                    // DCFromLowestFrequencies: the DC of an 8x8 strategy is its first coefficient.
-                    dc[1][blockIndex] = coeffsIn[size];
+                    // The DC of every block the strategy covers.
+                    JxlDct.DcFromLowestFrequencies(acs.Strategy, coeffsIn.AsSpan(size, size), dc[1].AsSpan(blockIndex), dcStride, scratch);
 
                     QuantizeRoundtripYBlockAc(encState, size, quantizer, acs.Strategy, xblocks, yblocks, ref quantAc, coeffsIn, quantized);
 
@@ -144,7 +146,7 @@ internal static class JxlEncGroup
                         thres[2] = 0.62f;
                         thres[3] = 0.62f;
                         QuantizeBlockAc(quantizer, c, c == 0 ? encState.XQmMultiplier : encState.BQmMultiplier, acs.Strategy, xblocks, yblocks, thres, coeffsIn.AsSpan(c * size, size), quantAc, quantized.AsSpan(c * size, size));
-                        dc[c][blockIndex] = coeffsIn[c * size];
+                        JxlDct.DcFromLowestFrequencies(acs.Strategy, coeffsIn.AsSpan(c * size, size), dc[c].AsSpan(blockIndex), dcStride, scratch);
                     }
 
                     encState.RawQuantField[blockIndex] = quantAc;
