@@ -2,12 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -52,9 +54,9 @@ public class JxlLossyThoroughEncoderTests
 
     // libjxl's choices at Squirrel, read back through the decoder's parse: XYB VarDCT, Gaborish above d0.5,
     // near-lossless DC in every LF group, and every block covered once by a strategy of Hare's set. The
-    // remaining checks are the temporary departures, each of which a later ticket flips: the X
-    // quantisation scale from the distance alone and a B scale of 2 (E5f), and an EPF sharpness of 4 in
-    // every block (E5h). The Hare set itself grows with E5b (DCT4X8, DCT8X4) and E5c (AFV).
+    // qm scale checks are a temporary departure that E5f flips: the X quantisation scale from the distance
+    // alone and a B scale of 2. The EPF sharpness is E5h's search. The Hare set itself grows with E5b
+    // (DCT4X8, DCT8X4) and E5c (AFV).
     [Theory]
     [InlineData("flower-384x244", 0.5f, false, 0u, 3u)]
     [InlineData("flower-384x244", 1.0f, true, 1u, 3u)]
@@ -94,23 +96,60 @@ public class JxlLossyThoroughEncoderTests
         Assert.Equal(expectedXQmScale, header.XQmScale);
         Assert.Equal(2u, header.BQmScale);
 
-        // Temporary departure (E5h): the constant sharpness of 4 in every block. libjxl writes 4 too where
-        // the frame has no EPF (d0.5) or the distance is below 0.5, and E5h keeps those.
-        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        // Dynamic EPF sharpness (E5h): searched over {0, 2, 7} where the frame has EPF; a constant 4 where it
+        // has none (d0.5).
+        int[] histogram = SharpnessHistogram(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} d{distance} sharpness: {FormatHistogram(histogram)}");
+        if (expectedEpfIters == 0)
         {
-            Assert.All(frame.State.EpfSharpness.DangerousGetRowSpan(by).ToArray(), s => Assert.Equal(4, s));
+            Assert.Equal(frame.State.XSizeBlocks * frame.State.YSizeBlocks, histogram[4]);
+        }
+        else
+        {
+            AssertSearched(histogram, distance, $"{sizeCase} d{distance}");
         }
     }
 
-    // E5a's record: while every temporary departure is in place, Squirrel runs Hare's VarDCT choices, so an
-    // image with no alpha is the same file at Thorough as at Default. With alpha it is not: the alpha tree
-    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). Each later
-    // E5 ticket breaks the equality on purpose, and changes this test when it does.
+    // Dynamic EPF sharpness (libjxl's ComputeARHeuristics), read back from the file's AC metadata: from
+    // distance 0.7 (where EPF starts) each block takes one of {0, 2, 7}, or of {0, 4} above d4.5, and the
+    // plane is not constant. At d0.6 the frame has no EPF, so the sharpness stays the constant 4.
     [Theory]
-    [InlineData("flower-384x244", "", 1.0f, true)]
-    [InlineData("bike-582x453", "", 1.0f, true)]
-    [InlineData("bike-582x453", "", 4.0f, true)]
-    [InlineData("gradient-2049x9", "", 2.0f, true)]
+    [InlineData("bike", 0.6f)]
+    [InlineData("bike", 1.0f)]
+    [InlineData("bike", 2.0f)]
+    [InlineData("bike", 5.0f)]
+    [InlineData("line_art", 0.6f)]
+    [InlineData("line_art", 1.0f)]
+    [InlineData("line_art", 2.0f)]
+    [InlineData("line_art", 5.0f)]
+    public void Encode_CalibrationImage_SearchesTheEpfSharpness(string imageName, float distance)
+    {
+        using Image<Rgb24> image = Image.Load<Rgb24>(JxlCalibrationTable.Instance.Images.Single(i => i.Name == imageName).FullPath);
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(distance)));
+
+        int[] histogram = SharpnessHistogram(frame);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{imageName} d{distance}: EPF iterations {frame.FrameHeader.LoopFilter.EpfIters}, sharpness {FormatHistogram(histogram)}");
+        if (distance < 0.7f)
+        {
+            Assert.Equal(0u, frame.FrameHeader.LoopFilter.EpfIters);
+            Assert.Equal(frame.State.XSizeBlocks * frame.State.YSizeBlocks, histogram[4]);
+            return;
+        }
+
+        Assert.True(frame.FrameHeader.LoopFilter.EpfIters > 0);
+        AssertSearched(histogram, distance, $"{imageName} d{distance}");
+    }
+
+    // E5a's record: while every temporary departure was in place, Squirrel ran Hare's VarDCT choices, so an
+    // image with no alpha was the same file at Thorough as at Default; with alpha it was not, as the alpha
+    // tree is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48).
+    // E5h's dynamic EPF sharpness broke the equality without alpha on purpose: every row here has EPF.
+    [Theory]
+    [InlineData("flower-384x244", "", 1.0f, false)]
+    [InlineData("bike-582x453", "", 1.0f, false)]
+    [InlineData("bike-582x453", "", 4.0f, false)]
+    [InlineData("gradient-2049x9", "", 2.0f, false)]
     [InlineData("bike-582x453", "hard", 1.0f, false)]
     [InlineData("flower-256x244", "soft", 1.0f, false)]
     public void Encode_WithEveryTemporaryDeparture_IsDefaultsFileOnlyWithoutAlpha(string sizeCase, string mask, float distance, bool expectedEqual)
@@ -125,18 +164,18 @@ public class JxlLossyThoroughEncoderTests
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). At E5a the rows without alpha equal the Default pins.
+    // (e5a-handoff.md says how). From E5h the rows with EPF differ from the Default pins.
     [Theory]
     [InlineData("flower-384x244", "", 0.5f, "88E6145ED0606797E70C0BEC85B59FF73562B4A68A4171AC5BA6F731082CDEB5")]
-    [InlineData("flower-384x244", "", 1.0f, "3D7638836E201CFA238E5B2D07DCD3F42013A1BB0B4A3B500CAF6973F8F71582")]
-    [InlineData("flower-384x244", "", 2.0f, "727DABB0E010B53556C3982039F43A1B48DE68C88DCE5A866ABA599C5D59B096")]
-    [InlineData("flower-384x244", "", 4.0f, "75EDE6EBEAB4F214CDAAB2B297E9313AB82893E02DDE285162D35FBA773ECDAA")]
-    [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
-    [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "E3F5FCE8AECAB4FDC32618FC17ADFE3E0645E58460E6C5BE2B060877EEDD420B")]
-    [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
-    [InlineData("flower-256x244", "soft", 1.0f, "77B1B50DD3E168D000B442B1DFA3A10D15051AA4322FF64F13C30663AA81770E")]
-    [InlineData("bike-582x453", "hard", 1.0f, "5E1B9398936B7DD67BFBAB8F0468C76866CA58D128E219D364BBF28F1A171473")]
+    [InlineData("flower-384x244", "", 1.0f, "C86B8AA29ED8983E4054AA18C912DA02566A23B8883C57BBE0D2C08ED6802D2A")]
+    [InlineData("flower-384x244", "", 2.0f, "259C6E3219C6202C55F892E5B4A337563C75CF1D76427C9EDAC9EC4A4974DA4B")]
+    [InlineData("flower-384x244", "", 4.0f, "A12A57BA61F8447AE4D799034C9E3115220545CFE8E3A67D8244E8D083F14D02")]
+    [InlineData("flower-17x23", "", 1.0f, "FED88E8EE80F72986918E3BCCE5C1618AE86A3920766A671783EF90E525707EA")]
+    [InlineData("dot-1x1", "", 1.0f, "A84E239F194B63933E2CF99F9088EB8661BE9E5BC3F0CD2DD4CB4F49E967B500")]
+    [InlineData("bike-582x453", "", 1.0f, "9934FB423CC82EF2B93FD38A17276B79216C948A1B1C020F7A191CE2E27F34AC")]
+    [InlineData("gradient-2049x9", "", 2.0f, "2809346538E74C6E37171A5E31DFD88AC08EECDA28B914D55508996D2C83871C")]
+    [InlineData("flower-256x244", "soft", 1.0f, "20B2EF639264D6C0D44EF3FD57D91E9C61B57DCED37B416C4DF461A3930D2529")]
+    [InlineData("bike-582x453", "hard", 1.0f, "D64D4130B34CD16311FEA6CEDECCE2EE9FCC92A6D764009854666CFD12CD38A2")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));
@@ -148,6 +187,36 @@ public class JxlLossyThoroughEncoderTests
     }
 
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Thorough };
+
+    // The number of blocks of each sharpness 0 to 7 in the parsed frame.
+    private static int[] SharpnessHistogram(JxlDecodedDcGroups frame)
+    {
+        int[] histogram = new int[8];
+        for (int by = 0; by < frame.State.YSizeBlocks; by++)
+        {
+            foreach (byte s in frame.State.EpfSharpness.DangerousGetRowSpan(by).Slice(0, frame.State.XSizeBlocks))
+            {
+                histogram[s]++;
+            }
+        }
+
+        return histogram;
+    }
+
+    private static string FormatHistogram(int[] histogram)
+        => string.Join(", ", histogram.Select((n, s) => (n, s)).Where(e => e.n > 0).Select(e => $"{e.s}: {e.n}"));
+
+    // Only the search's steps occur, and at least two of them.
+    private static void AssertSearched(int[] histogram, float distance, string label)
+    {
+        byte[] steps = distance > 4.5f ? new byte[] { 0, 4 } : new byte[] { 0, 2, 7 };
+        for (int s = 0; s < 8; s++)
+        {
+            Assert.True(histogram[s] == 0 || Array.IndexOf(steps, (byte)s) >= 0, $"{label}: {histogram[s]} blocks of sharpness {s}");
+        }
+
+        Assert.True(histogram.Count(n => n > 0) > 1, $"{label}: the sharpness is constant");
+    }
 
     // A size case as RGB, or Bike or a flower crop with a synthetic alpha mask.
     private static byte[] EncodeCase(string sizeCase, string mask, JxlEncoder encoder)

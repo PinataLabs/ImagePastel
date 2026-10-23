@@ -50,14 +50,16 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
 /// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
 /// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
-/// <c>FindBestQuantizer</c> still does nothing. The other Squirrel stages are still in their Default form,
-/// each a temporary departure named in its code with the slice that ports it, so an image without alpha
-/// is the same file as at Default: the 8x8 level tries only Default's four strategies (DCT4X8 and DCT8X4
-/// come with E5b, AFV with E5c); the merges are the aligned ones (the non-aligned 16x16 and 32x32 merges
-/// come with E5d); there is no chroma-from-luma pre-pass, and the fit after the search is the fast least
-/// squares (the DCT8 pre-pass and the Newton fit come with E5e); the X and B quantisation scales come from
-/// the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
-/// search, which decodes the frame in the encoder, comes with E5h).
+/// <c>FindBestQuantizer</c> still does nothing. Where the frame has EPF (from distance 0.7), the EPF
+/// sharpness of each block is searched (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder
+/// reconstructs the frame once per sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and
+/// keeps the step of least masked error against the pre-Gaborish opsin. The other Squirrel stages are
+/// still in their Default form, each a temporary departure named in its code with the slice that ports
+/// it: the 8x8 level tries only Default's four strategies (DCT4X8 and DCT8X4 come with E5b, AFV with E5c);
+/// the merges are the aligned ones (the non-aligned 16x16 and 32x32 merges come with E5d); there is no
+/// chroma-from-luma pre-pass, and the fit after the search is the fast least squares (the DCT8 pre-pass
+/// and the Newton fit come with E5e); and the X and B quantisation scales come from the distance alone
+/// (the pixel statistics come with E5f).
 /// </para>
 /// </content>
 /// <remarks>
@@ -173,6 +175,7 @@ internal static partial class JxlFrameEncoder
         int paddedX = (int)(frameDim.XSizeBlocks * JxlFrameDimensions.BlockDim);
         int paddedY = (int)(frameDim.YSizeBlocks * JxlFrameDimensions.BlockDim);
         Buffer2D<float>[] color = new Buffer2D<float>[3];
+        Buffer2D<float>[] origOpsin = null;
         try
         {
             for (int c = 0; c < 3; c++)
@@ -201,16 +204,33 @@ internal static partial class JxlFrameEncoder
             PadImageToBlockMultipleInPlace(color, image.Width, image.Height, paddedX, paddedY);
             ComputeChromacityAdjustments(frameHeader, encState);
 
-            // ComputeVarDCTEncodingData.
+            // ComputeVarDCTEncodingData. Save the pre-Gaborish opsin for the AR control field heuristics,
+            // shrunk to the frame size: LossyFrameHeuristics applies the inverse Gaborish filter in place.
+            // libjxl copies it for every frame; only ComputeARHeuristics's search reads it, so the copy is
+            // made only when the search runs.
+            if (JxlEncHeuristics.UsesDynamicAr(encState, frameHeader.LoopFilter.EpfIters))
+            {
+                origOpsin = new Buffer2D<float>[3];
+                for (int c = 0; c < 3; c++)
+                {
+                    origOpsin[c] = allocator.Allocate2D<float>((int)frameDim.XSize, (int)frameDim.YSize);
+                    JxlPlanes.CopyRows(color[c], origOpsin[c], (int)frameDim.XSize, (int)frameDim.YSize);
+                }
+            }
+
             JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
             InitializePassesEncoder(frameHeader, color, encState, encModular);
-            JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
+            JxlEncHeuristics.ComputeArHeuristics(frameHeader, encState, origOpsin, allocator);
             arHeuristicsProbe?.Invoke(frameHeader, encState);
             ComputeAcMetadata(encState, encModular);
         }
         finally
         {
             JxlPlanes.DisposeAll(color);
+            if (origOpsin != null)
+            {
+                JxlPlanes.DisposeAll(origOpsin);
+            }
         }
 
         ComputeAllCoeffOrders(encState);

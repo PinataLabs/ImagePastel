@@ -52,6 +52,11 @@ public class JxlLossyCalibrationTests
     /// 1.11x to 1.17x cjxl's size, which has patches). text d2 fails (-0.99), and line_art fails at every
     /// distance: d1 -2.25, d2 -9.52, d4 -9.33, at 0.98x to 1.00x cjxl's size. cjxl's e5 to e7 jump on
     /// line_art is not from patches (#318), so it comes from a stage still in its Hare form.
+    /// E5h (dynamic EPF sharpness): still 14 of 18. line_art rises from 61.19 to 61.79 at d2 and from 51.64
+    /// to 53.75 at d4 (margins -8.93 and -7.21); d1 is -2.10. Its sharpness histogram is within a few
+    /// percent of cjxl -e 7's (d2: ours 240 / 44 / 740 blocks at 0 / 2 / 7, cjxl's 205 / 43 / 776), but
+    /// cjxl's B quantisation scale there is 5, not 2, which is E5f's. text d2 is -0.32; smallest passing
+    /// margins: text d4 +1.90, bike_alpha d1 +2.37, text d1 +2.48.
     /// </remarks>
     private const int ThoroughRowsPassing = 14;
 
