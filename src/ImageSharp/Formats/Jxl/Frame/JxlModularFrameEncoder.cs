@@ -398,17 +398,28 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// B after the chroma-from-luma prediction from the quantised Y. Without near-lossless DC (effort 3 and
     /// faster) each value is rounded half away from zero. With it (effort 4 to 7), the DC has one bit of
     /// extra precision, and each value is the weighted predictor's guess plus a residual quantised with a
-    /// dead zone (libjxl's <c>QuantizeWP</c>).
+    /// dead zone (libjxl's <c>QuantizeWP</c>). Then, as libjxl's <c>DequantDC</c> there, it dequantises the
+    /// group's DC into the encoder's own copy (<see cref="JxlPassesEncoderState.Dc"/>) and sets its
+    /// quantised-DC buckets (<see cref="JxlPassesEncoderState.QuantDc"/>), as the decoder will.
     /// </summary>
-    /// <param name="dc">The X, Y and B DC of each block of the frame, rows <paramref name="stride"/> apart.</param>
-    /// <param name="stride">The width of the frame in blocks.</param>
+    /// <param name="frameHeader">The frame header.</param>
+    /// <param name="dc">The X, Y and B DC of each block of the frame, row by row.</param>
     /// <param name="r">The LF group's rectangle, in blocks.</param>
     /// <param name="groupIndex">The LF group.</param>
-    /// <param name="nlDc">Whether to quantise the DC near-losslessly, which libjxl does below Falcon.</param>
-    /// <param name="quantizer">The quantiser, which sets the DC steps.</param>
-    /// <param name="colorCorrelation">The chroma-from-luma parameters, whose DC factors predict X and B.</param>
-    public void AddVarDctDc(float[][] dc, int stride, JxlRect r, long groupIndex, bool nlDc, JxlQuantizer quantizer, JxlColorCorrelation colorCorrelation)
+    /// <param name="encState">
+    /// The encoder state: its width in blocks is the stride of <paramref name="dc"/>, its speed tier sets
+    /// near-lossless DC, its quantiser sets the DC steps, its chroma-from-luma DC factors predict X and B,
+    /// and its block context map gives the DC buckets.
+    /// </param>
+    public void AddVarDctDc(JxlFrameHeader frameHeader, float[][] dc, JxlRect r, long groupIndex, JxlPassesEncoderState encState)
     {
+        JxlQuantizer quantizer = encState.Quantizer;
+        JxlColorCorrelation colorCorrelation = encState.Cmap;
+        int stride = encState.XSizeBlocks;
+
+        // libjxl's caller passes nl_dc as speed_tier < kFalcon: the DC is quantised near-losslessly below
+        // Falcon.
+        bool nlDc = encState.SpeedTier < JxlSpeedTier.Falcon;
         this.ExtraDcPrecision[groupIndex] = nlDc ? 1 : 0;
         float mul = 1 << this.ExtraDcPrecision[groupIndex];
 
@@ -484,8 +495,10 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             JxlThrowHelper.ThrowImageFormatException("Unsupported range of DC values");
         }
 
-        // libjxl's DequantDC here fills the encoder's own reconstruction of the DC and the quantised-DC
-        // buckets. Neither is read at effort 5 and faster: the block context map has no DC thresholds.
+        // The encoder's own reconstruction of the DC and the quantised-DC buckets. The buckets are not read
+        // at effort 7 and faster (the block context map has no DC thresholds there).
+        // As libjxl, this runs at every effort, but only the reconstruction (JxlEncReconstruct) reads the DC copy.
+        JxlCompressedDc.DequantDc(r, encState.Dc, encState.QuantDc, image, quantizer.MulDc, 1.0f / mul, colorCorrelation.DcFactors, frameHeader.ChromaSubsampling, encState.BlockCtxMap);
     }
 
     /// <summary>

@@ -293,19 +293,6 @@ public class JxlLossyEncoderTests
         Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
     }
 
-    // Lossy Default is E4's (JxlLossyDefaultEncoderTests); lossy Thorough still names its slice.
-    [Fact]
-    public void Encode_LossyThorough_ThrowsNotSupportedNamingItsSlice()
-    {
-        using Image<Rgb24> image = new(1, 1);
-        using MemoryStream stream = new();
-
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(stream, new JxlEncoder { Distance = 1, Effort = JxlEffort.Thorough }));
-
-        Assert.Contains("E5", ex.Message);
-        Assert.Equal(0, stream.Length);
-    }
-
     // libjxl's JxlEncoderSetFrameDistance accepts [0, 25].
     [Theory]
     [InlineData(-1.0f)]
@@ -321,7 +308,7 @@ public class JxlLossyEncoderTests
     internal static JxlEncoder Lossy(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest };
 
     // The same encode with every coefficient order natural, as E3a wrote it.
-    private static JxlEncoder LossyNaturalOrder(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest, NaturalCoeffOrders = true };
+    private static JxlEncoder LossyNaturalOrder(float distance) => new() { Distance = distance, Effort = JxlEffort.Fastest, TestHooks = new() { NaturalCoeffOrders = true } };
 
     // A size case: "flower-WxH" (a crop of the flower photo), "bike-582x453" (the Bike photo, odd in both
     // sides), "calliphora-378x349" (the partial Calliphora photo), "dot-1x1" or "gradient-WxH" (the

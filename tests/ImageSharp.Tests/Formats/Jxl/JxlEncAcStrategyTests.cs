@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Jxl;
 using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
 using SixLabors.ImageSharp.Formats.Jxl.VarDct;
 using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
@@ -73,7 +74,9 @@ public class JxlEncAcStrategyTests
     // One block of each kind with each 8x8 strategy (row 0, blocks 0 to 5), another entropy multiplier and a
     // non-default chroma-from-luma pair (X 0.1, B 0.9), and the multi-block paths that E4h's merges reach:
     // the maximum of two quant values (DCT16X8, DCT8X16), the 16th-power mean through FastPowf (DCT16X16,
-    // DCT32X32) and the X channel's extra weight. At d1.
+    // DCT32X32) and the X channel's extra weight. Then DCT4X8 (12) and DCT8X4 (13), which Thorough's 8x8
+    // level tries (E5b), on the same six blocks, and once with their own multiplier (0.859... / 0.8) and the
+    // other chroma-from-luma pair. At d1.
     [Theory]
     [InlineData(0, 0, 0, 1f, false, 0x439DF154u, 0x439DF154u)]
     [InlineData(3, 0, 0, 1f, false, 0x43DF5B1Bu, 0x43DF5B1Bu)]
@@ -105,7 +108,57 @@ public class JxlEncAcStrategyTests
     [InlineData(7, 24, 8, 1f, false, 0x449B43EBu, 0x449B43ECu)]
     [InlineData(4, 40, 16, 1f, false, 0x45A09F77u, 0x45A09F74u)]
     [InlineData(5, 0, 0, 1f, false, 0x46BD8AB7u, 0x46BD8ACDu)]
+    [InlineData(12, 0, 0, 1f, false, 0x43BFAA4Eu, 0x43BFAA4Fu)]
+    [InlineData(13, 0, 0, 1f, false, 0x43B075BBu, 0x43B075BBu)]
+    [InlineData(12, 8, 0, 1f, false, 0x436DB541u, 0x436DB541u)]
+    [InlineData(13, 8, 0, 1f, false, 0x43449598u, 0x43449598u)]
+    [InlineData(12, 16, 0, 1f, false, 0x4537C0F3u, 0x4537C0F3u)]
+    [InlineData(13, 16, 0, 1f, false, 0x4537DC82u, 0x4537DC81u)]
+    [InlineData(12, 24, 0, 1f, false, 0x445B4AFBu, 0x445B4AFBu)]
+    [InlineData(13, 24, 0, 1f, false, 0x43B8F310u, 0x43B8F310u)]
+    [InlineData(12, 32, 0, 1f, false, 0x446572BBu, 0x446572BCu)]
+    [InlineData(13, 32, 0, 1f, false, 0x445D7817u, 0x445D7816u)]
+    [InlineData(12, 40, 0, 1f, false, 0x443609B9u, 0x443609B9u)]
+    [InlineData(13, 40, 0, 1f, false, 0x440ED09Bu, 0x440ED09Bu)]
+    [InlineData(12, 24, 8, 1.07414544f, true, 0x4423CC8Bu, 0x4423CC8Bu)]
+    [InlineData(13, 24, 8, 1.07414544f, true, 0x4410278Fu, 0x4410278Fu)]
     public void EstimateEntropy_OnFixedBlocks_MatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
+        => AssertEstimateMatchesLibjxl(rawStrategy, x, y, entropyMul, otherCmap, scalarBits, avx2Bits);
+
+    // AFV0 to AFV3, which the 8x8 level tries from Wombat down (Thorough, slice E5c), on the same six
+    // blocks, and AFV2 with the other multiplier and chroma-from-luma pair. From E4g's harness with these
+    // rows added (e5-notes/e5c-scratch/acs_afv.cc), built with TDM-GCC on Windows; its other rows are
+    // E4g's, bit for bit, in both builds.
+    [Theory]
+    [InlineData(14, 0, 0, 1f, false, 0x43EB9D87u, 0x43EB9D87u)]
+    [InlineData(15, 0, 0, 1f, false, 0x43E380F9u, 0x43E380F9u)]
+    [InlineData(16, 0, 0, 1f, false, 0x43E3E88Du, 0x43E3E88Du)]
+    [InlineData(17, 0, 0, 1f, false, 0x43ED6AA5u, 0x43ED6AA5u)]
+    [InlineData(14, 8, 0, 1f, false, 0x4378C1F0u, 0x4378C1F0u)]
+    [InlineData(15, 8, 0, 1f, false, 0x4386732Du, 0x4386732Du)]
+    [InlineData(16, 8, 0, 1f, false, 0x439B33BBu, 0x439B33BBu)]
+    [InlineData(17, 8, 0, 1f, false, 0x439B33DAu, 0x439B33DAu)]
+    [InlineData(14, 16, 0, 1f, false, 0x4551AE33u, 0x4551AE31u)]
+    [InlineData(15, 16, 0, 1f, false, 0x4551330Du, 0x4551330Cu)]
+    [InlineData(16, 16, 0, 1f, false, 0x454F7E93u, 0x454F7E90u)]
+    [InlineData(17, 16, 0, 1f, false, 0x45535735u, 0x45535733u)]
+    [InlineData(14, 24, 0, 1f, false, 0x443A82B0u, 0x443A82B0u)]
+    [InlineData(15, 24, 0, 1f, false, 0x443A82B0u, 0x443A82B0u)]
+    [InlineData(16, 24, 0, 1f, false, 0x443BC703u, 0x443BC703u)]
+    [InlineData(17, 24, 0, 1f, false, 0x443BC703u, 0x443BC703u)]
+    [InlineData(14, 32, 0, 1f, false, 0x449AA35Cu, 0x449AA35Cu)]
+    [InlineData(15, 32, 0, 1f, false, 0x449A2A07u, 0x449A2A07u)]
+    [InlineData(16, 32, 0, 1f, false, 0x44935B03u, 0x44935B03u)]
+    [InlineData(17, 32, 0, 1f, false, 0x4494FE7Cu, 0x4494FE7Cu)]
+    [InlineData(14, 40, 0, 1f, false, 0x4478BD7Fu, 0x4478BD7Fu)]
+    [InlineData(15, 40, 0, 1f, false, 0x44730F3Fu, 0x44730F3Fu)]
+    [InlineData(16, 40, 0, 1f, false, 0x44744B51u, 0x44744B51u)]
+    [InlineData(17, 40, 0, 1f, false, 0x446EDB6Fu, 0x446EDB6Fu)]
+    [InlineData(16, 16, 8, 1.35f, true, 0x447D0BA8u, 0x447D0BA8u)]
+    public void EstimateEntropy_OfAfvOnFixedBlocks_MatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
+        => AssertEstimateMatchesLibjxl(rawStrategy, x, y, entropyMul, otherCmap, scalarBits, avx2Bits);
+
+    private static void AssertEstimateMatchesLibjxl(int rawStrategy, int x, int y, float entropyMul, bool otherCmap, uint scalarBits, uint avx2Bits)
     {
         using FixedConfig fixedConfig = CreateFixedConfig(1.0f);
         float[] cmapFactors = otherCmap ? new[] { 0.1f, 0.0f, 0.9f } : new[] { 0.0f, 0.0f, 1.0f };
@@ -164,6 +217,59 @@ public class JxlEncAcStrategyTests
         TestContext.Current.TestOutputHelper?.WriteLine($"d{distance}: {coverage}");
         Assert.Equal(expectedCoverage, coverage);
         Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(map)));
+    }
+
+    // One 64x64 tile of Bike (blocks 40-47 x 32-39) through ProcessRect at Squirrel, with the default CfL
+    // map, on the same opsin, quant field and masking image as the Hare map above: the strategy of each block
+    // is the one libjxl's ProcessRectACS gives at kSquirrel (e5-notes/e5d-scratch, acs_full merge ... 3,
+    // with every 8x8 candidate; its scalar and AVX2 builds give the same whole map). Each byte is raw
+    // strategy << 1 | first block, 8 per row. The tile has merges off their size's grid at each distance: a
+    // DCT32X32 at block (44, 34) at d1, d2 and d4, and at d2 also a DCT32X32 at (40, 34) and a DCT16X16 at
+    // (41, 32). Hare's map of this tile has none. Since E5b, d1 has a DCT4X8 at (40, 33); d2 and d4 are as
+    // they were with AFV alone.
+    [Theory]
+    [InlineData(1.0f, "01011D0101010105 1901010101010105 0F0E01050B0A0A0A 01010F0E0A0A0A0A 050109080A0A0A0A 1F0108080A0A0A0A 0101010117161616 0101010516161616")]
+    [InlineData(2.0f, "010908010F0E0908 1F080801011D0808 0B0A0A0A0B0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 010F0E0117161616 0101010116161616")]
+    [InlineData(4.0f, "09080D0117161616 08080C0116161616 171616160B0A0A0A 161616160A0A0A0A 0B0A0A0A0A0A0A0A 0A0A0A0A0A0A0A0A 0A0A0A0A17161616 0A0A0A0A16161616")]
+    public void ProcessRect_BikeTileAtSquirrel_ChoosesLibjxlsStrategyForEachBlock(float distance, string expected)
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
+        MemoryAllocator allocator = Configuration.Default.MemoryAllocator;
+        Buffer2D<float>[] opsin = JxlEncAdaptiveQuantizationTests.CreateOpsin(image);
+        try
+        {
+            // LossyFrameHeuristics above d0.5: the field from the pre-Gaborish opsin, then Gaborish's inverse.
+            using Buffer2D<float> quantField = JxlEncAdaptiveQuantization.InitialQuantField(distance, opsin, 1.0f, allocator, out Buffer2D<float> mask1x1);
+            using Buffer2D<float> masking = mask1x1;
+            JxlEncGaborish.GaborishInverse(opsin, new[] { 1.0f, 1.0f, 1.0f }, allocator);
+            JxlAcsConfig config = JxlEncAcStrategy.Init(JxlSpeedTier.Squirrel, distance, opsin, quantField, masking, new JxlDequantMatrices());
+            JxlAcStrategyImage acStrategy = new(quantField.Width, quantField.Height);
+            acStrategy.FillInvalid();
+            JxlColorCorrelation cmap = new(quantField.Width * 8L, quantField.Height * 8L);
+            const int bx = 40;
+            const int by = 32;
+
+            JxlEncAcStrategy.ProcessRect(config, JxlSpeedTier.Squirrel, distance, new JxlRect(bx, by, 8, 8), cmap, acStrategy, new JxlAcsScratch());
+
+            string[] rows = new string[8];
+            for (int iy = 0; iy < 8; iy++)
+            {
+                byte[] row = new byte[8];
+                for (int ix = 0; ix < 8; ix++)
+                {
+                    JxlAcStrategy acs = acStrategy.Get(bx + ix, by + iy);
+                    row[ix] = (byte)((acs.RawStrategy << 1) | (acs.IsFirstBlock ? 1 : 0));
+                }
+
+                rows[iy] = Convert.ToHexString(row);
+            }
+
+            Assert.Equal(expected, string.Join(" ", rows));
+        }
+        finally
+        {
+            JxlPlanes.DisposeAll(opsin);
+        }
     }
 
     // Informative, so it logs and does not fail: how often our strategy map is cjxl -e 5's (JXL_TOOLS_DIR)

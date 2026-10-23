@@ -18,9 +18,8 @@ internal interface IJxlEncoderOptions
     JxlEffort Effort { get; }
 
     /// <summary>
-    /// Gets a value indicating whether a lossy frame keeps every coefficient order natural, instead of
-    /// customising the DCT8 order as libjxl does. Not one of the options of ADR 0003: tests use it to
-    /// compare an encode with the natural-order encode of the same image.
+    /// Gets the encoder's hooks for tests, or <see langword="null"/> for none. Not one of the options of
+    /// ADR 0003.
     /// </summary>
-    bool NaturalCoeffOrders { get; }
+    JxlEncoderTestHooks TestHooks { get; }
 }

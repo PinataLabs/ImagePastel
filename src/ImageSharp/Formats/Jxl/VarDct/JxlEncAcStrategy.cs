@@ -58,7 +58,7 @@ internal static class JxlEncAcStrategy
     private static readonly float[] ChannelMul = { (float)Math.Pow(8.2, 8.0), 1.0f, (float)Math.Pow(1.03, 8.0) };
 
     // libjxl's kTransforms8x8: each 8x8 strategy, the slowest speed tier that skips it, and its entropy
-    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat (lossy Thorough, slice E5).
+    // multiplier. DCT4X8, DCT8X4 and AFV start at Wombat.
     private static readonly (JxlAcStrategyType Type, int EncodingSpeedTierMaxLimit, double EntropyMul)[] Transforms8x8 =
     {
         (JxlAcStrategyType.Dct, 9, 0.8),
@@ -148,7 +148,8 @@ internal static class JxlEncAcStrategy
     /// </summary>
     /// <remarks>
     /// From Hare down the search then merges the 8x8 choices into 16x8 up to 64x64 blocks, aligned to their
-    /// size, where that lowers the estimate. The non-aligned merges below Hare are slice E5.
+    /// size, where that lowers the estimate. Below Hare it then tries 16x8, 8x16 and 16x16 blocks off the
+    /// 2-block grid, and 32x16, 16x32 and 32x32 blocks off the 4-block grid.
     /// </remarks>
     /// <param name="config">The search's configuration.</param>
     /// <param name="speedTier">The speed tier.</param>
@@ -405,7 +406,7 @@ internal static class JxlEncAcStrategy
     }
 
     // libjxl's ProcessRectACS from Hare down: the best 8x8 strategy of each block of the tile, then the
-    // aligned merges into larger DCTs.
+    // aligned merges into larger DCTs, then below Hare the non-aligned ones.
     private static void ProcessRectAcs(JxlAcsConfig config, JxlSpeedTier speedTier, float butteraugliTarget, JxlRect rect, JxlColorCorrelation cmap, JxlAcStrategyImage acStrategy, JxlAcsScratch scratch)
     {
         // Main philosophy here:
@@ -555,14 +556,40 @@ internal static class JxlEncAcStrategy
             }
         }
 
-        // From Hare up libjxl stops here. Below Hare it tries non-aligned 16x8, 8x16, 16x16, 32x16, 16x32
-        // and 32x32 merges, which lossy Thorough (slice E5) adds.
         if (speedTier >= JxlSpeedTier.Hare)
         {
             return;
         }
 
-        JxlThrowHelper.ThrowNotSupportedException("The non-aligned AC-strategy merges (libjxl effort 6 and up; slice E5)");
+        // Here we still try to do some non-aligned matching, find a few more 16X8, 8X16 and 16X16s between
+        // the non-2-aligned blocks.
+        for (int cy = 0; cy + 1 < ysize; ++cy)
+        {
+            for (int cx = 0; cx + 1 < xsize; ++cx)
+            {
+                if ((cy | cx) % 2 != 0)
+                {
+                    FindBestFirstLevelDivisionForSquare(2, true, bx, by, cx, cy, config, cmapFactors, acStrategy, EntropyMul16X8, EntropyMul16X16, entropyEstimate, scratch);
+                }
+            }
+        }
+
+        // Non-aligned matching for 32X32, 16X32 and 32X16. Tortoise and every faster tier, Squirrel among
+        // them, step by 2; only Glacier and TectonicPlate try every block.
+        int step = speedTier >= JxlSpeedTier.Tortoise ? 2 : 1;
+        for (int cy = 0; cy + 3 < ysize; cy += step)
+        {
+            for (int cx = 0; cx + 3 < xsize; cx += step)
+            {
+                if ((cy | cx) % 4 == 0)
+                {
+                    // Already tried with loop above (DCT16X32 case).
+                    continue;
+                }
+
+                FindBestFirstLevelDivisionForSquare(4, enable32x32, bx, by, cx, cy, config, cmapFactors, acStrategy, EntropyMul16X32, EntropyMul32X32, entropyEstimate, scratch);
+            }
+        }
     }
 
     // Whether a multi-block strategy crosses the horizontal line of blocks from start_x to end_x on row y:

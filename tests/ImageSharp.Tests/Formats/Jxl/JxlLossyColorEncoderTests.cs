@@ -20,7 +20,8 @@ namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 /// the ICC), and the pixels reach XYB through its transfer function and primaries; a profile it does not
 /// recognise throws; a profile whose colour space does not match the pixels is ignored. The intensity
 /// target follows the transfer function, unless <see cref="JxlMetadata.IntensityTarget"/> sets it.
-/// The Display P3 checks also run at Default (slice E4, #297 story 6).
+/// The Display P3 checks also run at Default (slice E4, #297 story 6) and at Thorough (slice E5, #318
+/// story 5). A recognised profile's output is not pinned: its curves use Math.Pow.
 /// </summary>
 /// <remarks>
 /// The decoders give the pixels in the image's own colour space (ours attaches a profile it builds for the
@@ -39,13 +40,14 @@ public class JxlLossyColorEncoderTests
         nameof(JxlEncoderRoundTrip.Reader.Djxl),
     };
 
-    // Each reader at Fastest and at Default (#297 story 6: a wide-gamut input works at Default as at
-    // Fastest).
+    // Each reader at Fastest, Default and Thorough (#297 story 6 and #318 story 5: a wide-gamut input works
+    // at Default and at Thorough as at Fastest).
     public static TheoryData<string, string> ReaderEfforts { get; } = CreateReaderEfforts();
 
     [Theory]
     [InlineData(nameof(JxlEffort.Fastest))]
     [InlineData(nameof(JxlEffort.Default))]
+    [InlineData(nameof(JxlEffort.Thorough))]
     public void Encode_DisplayP3Lossy_WritesTheP3EnumAndNoIcc(string effort)
     {
         using Image<Rgb24> image = LoadPhoto(TestImages.Icc.CompactDisplayP3V4);
@@ -350,7 +352,7 @@ public class JxlLossyColorEncoderTests
     private static TheoryData<string, string> CreateReaderEfforts()
     {
         TheoryData<string, string> data = new();
-        foreach (string effort in new[] { nameof(JxlEffort.Fastest), nameof(JxlEffort.Default) })
+        foreach (string effort in new[] { nameof(JxlEffort.Fastest), nameof(JxlEffort.Default), nameof(JxlEffort.Thorough) })
         {
             foreach (JxlEncoderRoundTrip.Reader reader in Enum.GetValues<JxlEncoderRoundTrip.Reader>())
             {

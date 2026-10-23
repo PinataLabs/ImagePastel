@@ -34,7 +34,7 @@ public class JxlLossyDefaultEncoderTests
 {
     // The strategies Hare's search chooses from: DCT8, IDENTITY, DCT2X2 and DCT4X4 at the 8x8 level, and the
     // aligned merges.
-    private static readonly JxlAcStrategyType[] HareStrategies =
+    internal static readonly JxlAcStrategyType[] HareStrategies =
     {
         JxlAcStrategyType.Dct, JxlAcStrategyType.Identity, JxlAcStrategyType.Dct2X2, JxlAcStrategyType.Dct4X4,
         JxlAcStrategyType.Dct16X8, JxlAcStrategyType.Dct8X16, JxlAcStrategyType.Dct16X16,
@@ -448,7 +448,7 @@ public class JxlLossyDefaultEncoderTests
         using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("bike-582x453");
 
         byte[] custom = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
-        byte[] natural = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = 1.0f, Effort = JxlEffort.Default, NaturalCoeffOrders = true });
+        byte[] natural = JxlEncoderRoundTrip.Encode(image, new JxlEncoder { Distance = 1.0f, Effort = JxlEffort.Default, TestHooks = new() { NaturalCoeffOrders = true } });
 
         Assert.NotEqual(natural, custom);
         JxlEncoderRoundTrip.Reader readerKind = Enum.Parse<JxlEncoderRoundTrip.Reader>(reader);

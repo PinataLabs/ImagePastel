@@ -1,20 +1,22 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_chroma_from_luma.cc (FindBestMultiplier with fast = true, ComputeTile and
+// lib/jxl/enc_chroma_from_luma.cc (CFLFunction, FindBestMultiplier, ComputeTile and
 // CfLHeuristics::ComputeTile).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
 using SixLabors.ImageSharp.Formats.Jxl.Base;
+using SixLabors.ImageSharp.Formats.Jxl.Frame;
 using SixLabors.ImageSharp.Memory;
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The encoder's AC chroma-from-luma map: for each 64x64 colour tile, the multipliers of Y that predict X
-/// and B best, by least squares over the AC coefficients of the blocks in the tile, as libjxl computes them
-/// from Hare (effort 5) down once the strategies and the quant field are known.
+/// and B best over the AC coefficients of the blocks in the tile, as libjxl computes them from Hare (effort
+/// 5) down once the strategies and the quant field are known, and from Squirrel (effort 7) down also before
+/// the strategy search, on DCT8 blocks.
 /// </summary>
 /// <remarks>
 /// libjxl sums the accumulators in vector lanes and adds the lanes with Highway's <c>SumOfLanes</c>. This
@@ -37,100 +39,26 @@ internal static class JxlEncChromaFromLuma
     private const float InvColorFactor = 1.0f / JxlColorCorrelation.DefaultColorFactor;
 
     /// <summary>
-    /// Fits the AC chroma-from-luma map of every 64x64 tile, as libjxl's <c>CfLHeuristics::ComputeTile</c>
-    /// for each encoder tile after its strategies and raw quant field are set. The tiles are independent,
-    /// so this runs them in one pass after the field is complete. The DC map keeps its default: libjxl fills
-    /// its DC values but never fits them.
+    /// Fits the AC chroma-from-luma multipliers of one 64x64 colour tile, as libjxl's
+    /// <c>CfLHeuristics::ComputeTile</c>. With <paramref name="useDct8"/> (libjxl's call with no strategy
+    /// image, raw quant field or quantizer: the pre-pass before the strategy search, from Squirrel down)
+    /// every block is taken as DCT8 with a quant of 1; otherwise the tile's chosen strategies and raw quant
+    /// field are read (from Hare down, after the search). The DC map keeps its default: libjxl fills its DC
+    /// values but never fits them.
     /// </summary>
-    /// <param name="encState">The encoder state, with the strategies and the raw quant field set.</param>
+    /// <param name="encState">The encoder state; without <paramref name="useDct8"/>, with the tile's strategies and raw quant field set.</param>
     /// <param name="opsin">The XYB planes the coefficients are computed from (after the inverse Gaborish filter), padded to whole blocks.</param>
-    /// <param name="fast">Whether to fit by least squares (libjxl's fast search, from Wombat up).</param>
-    public static void ComputeMap(JxlPassesEncoderState encState, Buffer2D<float>[] opsin, bool fast)
+    /// <param name="r">The tile, in blocks: an encoder tile, which is one colour tile.</param>
+    /// <param name="useDct8">Whether to take every block as DCT8 with no quant field (the pre-pass).</param>
+    /// <param name="fast">Whether to fit by least squares (libjxl's fast search, from Wombat up) rather than by Newton's method.</param>
+    /// <param name="scratch">The working set, reused across tiles.</param>
+    public static void ComputeTile(JxlPassesEncoderState encState, Buffer2D<float>[] opsin, JxlRect r, bool useDct8, bool fast, Scratch scratch)
     {
-        if (!fast)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("The chroma-from-luma Newton search (libjxl effort 7 and up; slice E5)");
-        }
-
-        Scratch scratch = new();
-        int xsizeBlocks = encState.XSizeBlocks;
-        int ysizeBlocks = encState.YSizeBlocks;
-        for (int by0 = 0; by0 < ysizeBlocks; by0 += ColorTileDimInBlocks)
-        {
-            for (int bx0 = 0; bx0 < xsizeBlocks; bx0 += ColorTileDimInBlocks)
-            {
-                int bx1 = Math.Min(bx0 + ColorTileDimInBlocks, xsizeBlocks);
-                int by1 = Math.Min(by0 + ColorTileDimInBlocks, ysizeBlocks);
-                ComputeTile(encState, opsin, bx0, by0, bx1, by1, scratch);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Returns libjxl's fast chroma-from-luma multiplier: the least-squares <c>x</c> for which the residual
-    /// <c>m / 84 * x + (base * m - s)</c> is smallest, with a small penalty on <c>x</c>, shrunk towards 0 by
-    /// 2.6, rounded half away from zero and clamped to a signed byte.
-    /// </summary>
-    /// <param name="valuesM">The luma coefficients; a multiple of 8 of them.</param>
-    /// <param name="valuesS">The chroma coefficients, as many.</param>
-    /// <param name="baseCorrelation">The base correlation of the channel.</param>
-    /// <param name="distanceMul">The weight of the penalty on <c>x</c>.</param>
-    /// <param name="beforeRound">The multiplier after the shrink, before it is rounded (NaN with no values).</param>
-    /// <returns>The multiplier.</returns>
-    public static int FindBestMultiplier(ReadOnlySpan<float> valuesM, ReadOnlySpan<float> valuesS, float baseCorrelation, float distanceMul, out float beforeRound)
-    {
-        int num = valuesM.Length;
-        beforeRound = float.NaN;
-        if (num == 0)
-        {
-            return 0;
-        }
-
-        DebugGuard.IsTrue(num % Lanes == 0, "The values fill whole vectors");
-        Span<float> ca = stackalloc float[Lanes];
-        Span<float> cb = stackalloc float[Lanes];
-        ca.Clear();
-        cb.Clear();
-        for (int i = 0; i < num; i += Lanes)
-        {
-            for (int l = 0; l < Lanes; l++)
-            {
-                // color residual = ax + b
-                float m = valuesM[i + l];
-                float a = InvColorFactor * m;
-                float b = (baseCorrelation * m) - valuesS[i + l];
-                ca[l] = (a * a) + ca[l];
-                cb[l] = (a * b) + cb[l];
-            }
-        }
-
-        // + distance_mul * x^2 * num. libjxl multiplies the size_t count by the float, in float.
-        float x = -JxlAvx2Lanes.SumOfLanes(cb) / (JxlAvx2Lanes.SumOfLanes(ca) + ((float)num * distanceMul * 0.5f));
-
-        // CFL seems to be tricky for larger transforms for HF components close to zero. This heuristic
-        // brings the solutions closer to zero and reduces red-green oscillations.
-        const float towardsZero = 2.6f;
-        if (x >= towardsZero)
-        {
-            x -= towardsZero;
-        }
-        else if (x <= -towardsZero)
-        {
-            x += towardsZero;
-        }
-        else
-        {
-            x = 0;
-        }
-
-        beforeRound = x;
-        return (int)Math.Clamp(MathF.Round(x, MidpointRounding.AwayFromZero), -128.0f, 127.0f);
-    }
-
-    // libjxl's ComputeTile with an AC strategy image, a raw quant field and a quantizer (use_dct8 false), for
-    // the tile of blocks [bx0, bx1) x [by0, by1).
-    private static void ComputeTile(JxlPassesEncoderState encState, Buffer2D<float>[] opsin, int bx0, int by0, int bx1, int by1, Scratch scratch)
-    {
+        int bx0 = (int)r.X0;
+        int by0 = (int)r.Y0;
+        int bx1 = bx0 + (int)r.XSize;
+        int by1 = by0 + (int)r.YSize;
+        DebugGuard.IsTrue(bx0 % ColorTileDimInBlocks == 0 && by0 % ColorTileDimInBlocks == 0 && r.XSize <= ColorTileDimInBlocks && r.YSize <= ColorTileDimInBlocks, "The rect is one colour tile");
         JxlQuantizer quantizer = encState.Quantizer;
         JxlAcStrategyImage acStrategy = encState.AcStrategy;
         int ty = by0 / ColorTileDimInBlocks;
@@ -141,7 +69,7 @@ internal static class JxlEncChromaFromLuma
         {
             for (int x = bx0; x < bx1; x++)
             {
-                JxlAcStrategy acs = acStrategy.Get(x, y);
+                JxlAcStrategy acs = useDct8 ? JxlAcStrategy.FromRawStrategy((int)JxlAcStrategyType.Dct) : acStrategy.Get(x, y);
                 if (!acs.IsFirstBlock)
                 {
                     continue;
@@ -182,12 +110,12 @@ internal static class JxlEncChromaFromLuma
                 }
 
                 // Unclear why this is like it is. (This works slightly better than the previous approach
-                // which was also a hack.)
-                float qq = encState.RawQuantField[encState.BlockIndex(x, y)];
+                // which was also a hack.) With no raw quant field (the pre-pass) libjxl takes qq = 1.
+                float qq = useDct8 ? 1.0f : encState.RawQuantField[encState.BlockIndex(x, y)];
 
                 // Experimentally values 128-130 seem best -- I don't know why we need this multiplier.
                 const float strangeMultiplier = 128;
-                float q = quantizer.Scale * strangeMultiplier * qq;
+                float q = useDct8 ? 1 : quantizer.Scale * strangeMultiplier * qq;
                 ReadOnlySpan<float> qmX = quantizer.InvDequantMatrix(acs.Strategy, 0);
                 ReadOnlySpan<float> qmB = quantizer.InvDequantMatrix(acs.Strategy, 2);
                 int size = cx * cy * BlockDim * BlockDim;
@@ -207,8 +135,155 @@ internal static class JxlEncChromaFromLuma
 
         JxlColorCorrelation cmap = encState.Cmap;
         int tile = (ty * cmap.XSizeTiles) + tx;
-        cmap.YtoXMap[tile] = (sbyte)FindBestMultiplier(scratch.CoeffsYx.AsSpan(0, numAc), scratch.CoeffsX.AsSpan(0, numAc), 0.0f, DistanceMultiplierAc, out _);
-        cmap.YtoBMap[tile] = (sbyte)FindBestMultiplier(scratch.CoeffsYb.AsSpan(0, numAc), scratch.CoeffsB.AsSpan(0, numAc), YToBRatio, DistanceMultiplierAc, out _);
+        cmap.YtoXMap[tile] = (sbyte)FindBestMultiplier(scratch.CoeffsYx.AsSpan(0, numAc), scratch.CoeffsX.AsSpan(0, numAc), 0.0f, DistanceMultiplierAc, fast, out _);
+        cmap.YtoBMap[tile] = (sbyte)FindBestMultiplier(scratch.CoeffsYb.AsSpan(0, numAc), scratch.CoeffsB.AsSpan(0, numAc), YToBRatio, DistanceMultiplierAc, fast, out _);
+    }
+
+    /// <summary>
+    /// Returns libjxl's chroma-from-luma multiplier: the <c>x</c> for which the residual
+    /// <c>m / 84 * x + (base * m - s)</c> is smallest, with a small penalty on <c>x</c>, shrunk towards 0 by
+    /// 2.6, rounded half away from zero and clamped to a signed byte. The fast fit (Wombat and up) is by
+    /// least squares; the other (Squirrel and down) minimises libjxl's <c>CFLFunction</c> by Newton's method.
+    /// </summary>
+    /// <param name="valuesM">The luma coefficients; a multiple of 8 of them.</param>
+    /// <param name="valuesS">The chroma coefficients, as many.</param>
+    /// <param name="baseCorrelation">The base correlation of the channel.</param>
+    /// <param name="distanceMul">The weight of the penalty on <c>x</c>.</param>
+    /// <param name="fast">Whether to fit by least squares rather than by Newton's method.</param>
+    /// <param name="beforeRound">The multiplier after the shrink, before it is rounded (NaN with no values).</param>
+    /// <returns>The multiplier.</returns>
+    public static int FindBestMultiplier(ReadOnlySpan<float> valuesM, ReadOnlySpan<float> valuesS, float baseCorrelation, float distanceMul, bool fast, out float beforeRound)
+    {
+        int num = valuesM.Length;
+        beforeRound = float.NaN;
+        if (num == 0)
+        {
+            return 0;
+        }
+
+        DebugGuard.IsTrue(num % Lanes == 0, "The values fill whole vectors");
+        float x;
+        if (fast)
+        {
+            Span<float> ca = stackalloc float[Lanes];
+            Span<float> cb = stackalloc float[Lanes];
+            ca.Clear();
+            cb.Clear();
+            for (int i = 0; i < num; i += Lanes)
+            {
+                for (int l = 0; l < Lanes; l++)
+                {
+                    // color residual = ax + b
+                    float m = valuesM[i + l];
+                    float a = InvColorFactor * m;
+                    float b = (baseCorrelation * m) - valuesS[i + l];
+                    ca[l] = (a * a) + ca[l];
+                    cb[l] = (a * b) + cb[l];
+                }
+            }
+
+            // + distance_mul * x^2 * num. libjxl multiplies the size_t count by the float, in float.
+            x = -JxlAvx2Lanes.SumOfLanes(cb) / (JxlAvx2Lanes.SumOfLanes(ca) + ((float)num * distanceMul * 0.5f));
+        }
+        else
+        {
+            const float eps = 100;
+            const float clamp = 20.0f;
+            x = 0;
+
+            // Up to 20 Newton iterations, with approximate derivatives. Derivatives are approximate due to
+            // the high amount of noise in the exact derivatives.
+            for (int i = 0; i < 20; i++)
+            {
+                float df = CflDerivative(valuesM, valuesS, baseCorrelation, distanceMul, x, eps, out float dfpeps, out float dfmeps);
+                float ddf = (dfpeps - dfmeps) / (2 * eps);
+                const float experimentalInsignificantStabilizer = 0.85f;
+                float step = df / (ddf + experimentalInsignificantStabilizer);
+                x -= MathF.Min(clamp, MathF.Max(-clamp, step));
+
+                // libjxl compares the float with the double 3e-3.
+                if (MathF.Abs(step) < 3e-3)
+                {
+                    break;
+                }
+            }
+        }
+
+        // CFL seems to be tricky for larger transforms for HF components close to zero. This heuristic
+        // brings the solutions closer to zero and reduces red-green oscillations.
+        const float towardsZero = 2.6f;
+        if (x >= towardsZero)
+        {
+            x -= towardsZero;
+        }
+        else if (x <= -towardsZero)
+        {
+            x += towardsZero;
+        }
+        else
+        {
+            x = 0;
+        }
+
+        beforeRound = x;
+        return (int)Math.Clamp(MathF.Round(x, MidpointRounding.AwayFromZero), -128.0f, 127.0f);
+    }
+
+    // libjxl's CFLFunction::Compute: f'(x), f'(x + eps) and f'(x - eps), where f is
+    // 1/3 * sum ((|color residual| + 1)^2 - 1) + distance_mul * x^2 * num, and residuals of 100 or more
+    // drop out of the sums. The sums run in 8 lanes and MulAdd is not fused (ADR 0004).
+    private static float CflDerivative(ReadOnlySpan<float> valuesM, ReadOnlySpan<float> valuesS, float baseCorrelation, float distanceMul, float x, float eps, out float fpeps, out float fmeps)
+    {
+        const float coeff = 1.0f / 3;
+        const float thres = 100.0f;
+        const float coeffx2 = coeff * 2.0f;
+        int num = valuesM.Length;
+
+        // libjxl multiplies 2 * distance_mul by the size_t count, in float.
+        float twiceDistanceMulNum = 2 * distanceMul * (float)num;
+        float firstDerivative = twiceDistanceMulNum * x;
+        float firstDerivativePeps = twiceDistanceMulNum * (x + eps);
+        float firstDerivativeMeps = twiceDistanceMulNum * (x - eps);
+
+        float xpe = x + eps;
+        float xme = x - eps;
+        Span<float> fd = stackalloc float[Lanes];
+        Span<float> fdpe = stackalloc float[Lanes];
+        Span<float> fdme = stackalloc float[Lanes];
+        fd.Clear();
+        fdpe.Clear();
+        fdme.Clear();
+        for (int i = 0; i < num; i += Lanes)
+        {
+            for (int l = 0; l < Lanes; l++)
+            {
+                // color residual = ax + b
+                float m = valuesM[i + l];
+                float a = InvColorFactor * m;
+                float b = (baseCorrelation * m) - valuesS[i + l];
+                float v = (a * x) + b;
+                float vpe = (a * xpe) + b;
+                float vme = (a * xme) + b;
+                float av = MathF.Abs(v);
+                float avpe = MathF.Abs(vpe);
+                float avme = MathF.Abs(vme);
+                float acoeffx2 = coeffx2 * a;
+                float d = acoeffx2 * (av + 1.0f);
+                float dpe = acoeffx2 * (avpe + 1.0f);
+                float dme = acoeffx2 * (avme + 1.0f);
+                d = v < 0.0f ? 0.0f - d : d;
+                dpe = vpe < 0.0f ? 0.0f - dpe : dpe;
+                dme = vme < 0.0f ? 0.0f - dme : dme;
+                bool above = av >= thres;
+                fd[l] += above ? 0.0f : d;
+                fdpe[l] += above ? 0.0f : dpe;
+                fdme[l] += above ? 0.0f : dme;
+            }
+        }
+
+        fpeps = firstDerivativePeps + JxlAvx2Lanes.SumOfLanes(fdpe);
+        fmeps = firstDerivativeMeps + JxlAvx2Lanes.SumOfLanes(fdme);
+        return firstDerivative + JxlAvx2Lanes.SumOfLanes(fd);
     }
 
     // The forward transform of the block of one plane whose first 8x8 block is (bx, by), covering xs x ys
@@ -224,9 +299,11 @@ internal static class JxlEncChromaFromLuma
         JxlDct.TransformFromPixels(strategy, pixels, cols, coefficients, dctScratch);
     }
 
-    // The working set of one tile. A block the encoder chooses lies in one tile, so a tile's area bounds
-    // both one block and the coefficients of all the blocks in the tile.
-    private sealed class Scratch
+    /// <summary>
+    /// The working set of one tile. A block the encoder chooses lies in one tile, so a tile's area bounds
+    /// both one block and the coefficients of all the blocks in the tile.
+    /// </summary>
+    internal sealed class Scratch
     {
         private const int TileArea = ColorTileDim * ColorTileDim;
 

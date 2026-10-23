@@ -48,13 +48,36 @@ internal sealed class JxlVarDctFrameState : IDisposable
     /// otherwise <see langword="null"/>.
     /// </param>
     public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, JxlReferenceFrame dcFrame = null)
+        : this(allocator, frameHeader, frameDim, matrices, new JxlQuantizer(matrices), new JxlAcStrategyImage((int)frameDim.XSizeBlocks, (int)frameDim.YSizeBlocks), new JxlColorCorrelation(frameDim.XSize, frameDim.YSize), new JxlBlockCtxMap(), dcFrame)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JxlVarDctFrameState"/> class on the given quantiser,
+    /// strategies, chroma-from-luma maps and block context map. The encoder's reconstruction of its own
+    /// frame (<see cref="JxlEncReconstruct"/>) passes its own, as libjxl points its decoder state at the
+    /// encoder's shared state. The block images are new and clear; the caller fills them.
+    /// </summary>
+    /// <param name="allocator">The allocator of the block images.</param>
+    /// <param name="frameHeader">The frame header.</param>
+    /// <param name="frameDim">The frame dimensions.</param>
+    /// <param name="matrices">The dequantization matrices.</param>
+    /// <param name="quantizer">The quantiser.</param>
+    /// <param name="acStrategy">The strategy of each block.</param>
+    /// <param name="cmap">The chroma-from-luma parameters and maps.</param>
+    /// <param name="blockCtxMap">The block context map.</param>
+    /// <param name="dcFrame">
+    /// For a frame that uses a DC frame, the DC slot it takes its DC from; otherwise <see langword="null"/>.
+    /// </param>
+    public JxlVarDctFrameState(MemoryAllocator allocator, JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlDequantMatrices matrices, JxlQuantizer quantizer, JxlAcStrategyImage acStrategy, JxlColorCorrelation cmap, JxlBlockCtxMap blockCtxMap, JxlReferenceFrame dcFrame = null)
     {
         this.allocator = allocator;
         this.FrameDim = frameDim;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
         this.YSizeBlocks = (int)frameDim.YSizeBlocks;
-        this.AcStrategy = new JxlAcStrategyImage(this.XSizeBlocks, this.YSizeBlocks);
-        this.Cmap = new JxlColorCorrelation(frameDim.XSize, frameDim.YSize);
+        this.AcStrategy = acStrategy;
+        this.Cmap = cmap;
+        this.BlockCtxMap = blockCtxMap;
         try
         {
             this.RawQuantField = allocator.Allocate2D<int>(this.XSizeBlocks, this.YSizeBlocks, AllocationOptions.Clean);
@@ -83,7 +106,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
         }
 
         this.Matrices = matrices;
-        this.Quantizer = new JxlQuantizer(matrices);
+        this.Quantizer = quantizer;
         this.XDmMultiplier = MathF.Pow(1 / 1.25f, frameHeader.XQmScale - 2.0f);
         this.BDmMultiplier = MathF.Pow(1 / 1.25f, frameHeader.BQmScale - 2.0f);
         this.QuantBiases = frameHeader.NonserializedMetadata.TransformData.OpsinInverseMatrix.QuantBiases;
@@ -123,7 +146,7 @@ internal sealed class JxlVarDctFrameState : IDisposable
     public JxlQuantizer Quantizer { get; }
 
     /// <summary>Gets the block context map.</summary>
-    public JxlBlockCtxMap BlockCtxMap { get; } = new();
+    public JxlBlockCtxMap BlockCtxMap { get; }
 
     /// <summary>Gets the multiplier of the X channel's dequantization matrices.</summary>
     public float XDmMultiplier { get; }

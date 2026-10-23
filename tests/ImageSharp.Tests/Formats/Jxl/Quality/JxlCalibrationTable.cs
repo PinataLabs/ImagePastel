@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using SixLabors.ImageSharp.Formats.Jxl;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
 
@@ -115,6 +117,24 @@ internal sealed class JxlCalibrationTable
 internal sealed record JxlCalibrationImage(string Name, string Path, string Kind)
 {
     public string FullPath => System.IO.Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, this.Path);
+
+    /// <summary>
+    /// Encodes the image as the pixel type its PNG stores, as cjxl reads it. The images are 8-bit sRGB with
+    /// no colour chunks, so that is RGB without an alpha channel, or RGBA (only bike_alpha).
+    /// </summary>
+    /// <param name="encoder">The encoder.</param>
+    /// <returns>The encoded file.</returns>
+    public byte[] Encode(JxlEncoder encoder)
+    {
+        if (Image.Identify(this.FullPath).Metadata.GetPngMetadata().ColorType is PngColorType.RgbWithAlpha)
+        {
+            using Image<Rgba32> rgba = Image.Load<Rgba32>(this.FullPath);
+            return JxlEncoderRoundTrip.Encode(rgba, encoder);
+        }
+
+        using Image<Rgb24> rgb = Image.Load<Rgb24>(this.FullPath);
+        return JxlEncoderRoundTrip.Encode(rgb, encoder);
+    }
 
     public override string ToString() => this.Name;
 }

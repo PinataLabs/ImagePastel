@@ -26,8 +26,9 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// <content>
 /// <para>
 /// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest, libjxl's
-/// <c>kFalcon</c>) and effort 5 (Default, <c>kHare</c>): XYB, the DC and AC metadata in Modular streams,
-/// and the AC tokens. This is the one place that lists what each effort does; other comments point here.
+/// <c>kFalcon</c>), effort 5 (Default, <c>kHare</c>) and effort 7 (Thorough, <c>kSquirrel</c>): XYB, the
+/// DC and AC metadata in Modular streams, and the AC tokens. This is the one place that lists what each
+/// effort does; other comments point here.
 /// </para>
 /// <para>
 /// Fastest codes every block as DCT8 with a constant quant field of 0.79 / distance, the default
@@ -44,7 +45,21 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// The frame then adds Gaborish above distance 0.5, near-lossless DC, <c>AdjustQuantBlockAC</c>, the
 /// <c>kACMeta</c> tree for the AC metadata, a learned tree for alpha, and custom coefficient orders for every
 /// order the blocks use. <c>FindBestQuantizer</c> does nothing at Default, so there is no butteraugli loop.
-/// The searches of effort 7 and up (Thorough; slice E5) throw <see cref="NotSupportedException"/>.
+/// </para>
+/// <para>
+/// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
+/// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
+/// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
+/// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries DCT4X8, DCT8X4 and AFV0 to AFV3.
+/// Each 64x64 tile first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and
+/// the fit after the search uses Newton's method. The X and B quantisation scales are raised from the
+/// pixel statistics of the XYB image (<see cref="JxlPixelStatsForChromacityAdjustment"/>), which leaves
+/// most photos at Default's scales. After the aligned merges the strategy search also merges blocks off
+/// their size's grid, as libjxl does below Hare. Where the frame has EPF (from distance 0.7), the EPF
+/// sharpness of each block is searched (<see cref="JxlEncHeuristics.ComputeArHeuristics"/>): the encoder
+/// reconstructs the frame once per sharpness step (<see cref="JxlEncReconstruct.ReconstructImage"/>) and
+/// keeps the step of least masked error against the pre-Gaborish opsin. No Squirrel stage is left in its
+/// Default form.
 /// </para>
 /// </content>
 /// <remarks>
@@ -73,10 +88,10 @@ internal static partial class JxlFrameEncoder
     /// <param name="image">The image.</param>
     /// <param name="speedTier">The speed tier, which the effort sets.</param>
     /// <param name="distance">The butteraugli distance, above 0.</param>
-    /// <param name="naturalCoeffOrders">Whether to keep every coefficient order natural (for tests).</param>
+    /// <param name="testHooks">The encoder's hooks for tests (<see cref="JxlEncoderTestHooks"/>), or <see langword="null"/>.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, bool naturalCoeffOrders, MemoryAllocator allocator, JxlBitWriter writer)
+    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances. libjxl then keeps a copy as
@@ -90,9 +105,9 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance) { NaturalCoeffOrders = naturalCoeffOrders };
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator) { NaturalCoeffOrders = testHooks?.NaturalCoeffOrders ?? false };
         using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
-        List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, allocator);
+        List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, testHooks, allocator);
 
         WriteFrameHeader(frameHeader, writer);
         WriteSections(groupCodes, writer);
@@ -149,13 +164,14 @@ internal static partial class JxlFrameEncoder
     }
 
     // libjxl's frame-level ComputeEncodingData for a VarDCT frame that is not a JPEG transcode.
-    private static List<JxlBitWriter> ComputeVarDctEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
+    private static List<JxlBitWriter> ComputeVarDctEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, JxlEncoderTestHooks testHooks, MemoryAllocator allocator)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // Allocating a large enough image avoids a copy when padding.
         int paddedX = (int)(frameDim.XSizeBlocks * JxlFrameDimensions.BlockDim);
         int paddedY = (int)(frameDim.YSizeBlocks * JxlFrameDimensions.BlockDim);
         Buffer2D<float>[] color = new Buffer2D<float>[3];
+        Buffer2D<float>[] origOpsin = null;
         try
         {
             for (int c = 0; c < 3; c++)
@@ -182,17 +198,35 @@ internal static partial class JxlFrameEncoder
             }
 
             PadImageToBlockMultipleInPlace(color, image.Width, image.Height, paddedX, paddedY);
-            ComputeChromacityAdjustments(frameHeader, encState);
+            ComputeChromacityAdjustments(frameHeader, encState, color, new JxlRect(0, 0, paddedX, paddedY));
 
-            // ComputeVarDCTEncodingData.
+            // ComputeVarDCTEncodingData. Save the pre-Gaborish opsin for the AR control field heuristics,
+            // shrunk to the frame size: LossyFrameHeuristics applies the inverse Gaborish filter in place.
+            // libjxl copies it for every frame; only ComputeARHeuristics's search reads it, so the copy is
+            // made only when the search runs.
+            if (JxlEncHeuristics.UsesDynamicAr(encState, frameHeader.LoopFilter.EpfIters))
+            {
+                origOpsin = new Buffer2D<float>[3];
+                for (int c = 0; c < 3; c++)
+                {
+                    origOpsin[c] = allocator.Allocate2D<float>((int)frameDim.XSize, (int)frameDim.YSize);
+                    JxlPlanes.CopyRows(color[c], origOpsin[c], (int)frameDim.XSize, (int)frameDim.YSize);
+                }
+            }
+
             JxlEncHeuristics.LossyFrameHeuristics(encState, frameHeader.LoopFilter.Gab, color, allocator);
-            InitializePassesEncoder(frameHeader, color, encState, encModular);
-            JxlEncHeuristics.ComputeArHeuristics(encState, frameHeader.LoopFilter.EpfIters);
+            InitializePassesEncoder(frameHeader, color, encState, encModular, allocator);
+            JxlEncHeuristics.ComputeArHeuristics(frameHeader, encState, origOpsin, allocator);
+            testHooks?.ArHeuristicsProbe?.Invoke(frameHeader, encState);
             ComputeAcMetadata(encState, encModular);
         }
         finally
         {
             JxlPlanes.DisposeAll(color);
+            if (origOpsin != null)
+            {
+                JxlPlanes.DisposeAll(origOpsin);
+            }
         }
 
         ComputeAllCoeffOrders(encState);
@@ -358,15 +392,17 @@ internal static partial class JxlFrameEncoder
         }
     }
 
-    // The distance-based chromacity adjustment of libjxl's ComputeChromacityAdjustments. The pixel-based
-    // one runs from Squirrel down; without it, its adjustments are 0, so the B scale is 2.
-    private static void ComputeChromacityAdjustments(JxlFrameHeader frameHeader, JxlPassesEncoderState encState)
+    // libjxl's ComputeChromacityAdjustments for a VarDCT frame (max_error_mode is never set here): the X
+    // scale from the distance, then, from Squirrel down, both scales from the pixel statistics of the
+    // opsin. Above Squirrel the statistics stay 0, so the B scale is 2.
+    //
+    // libjxl passes the colour image after ToXYB, SimplifyInvisible and PadImageToBlockMultipleInPlace,
+    // before Gaborish (which ComputeVarDCTEncodingData applies later), with the rect of the whole padded
+    // image: group_rect is (0, 0, RoundUpToBlockDim(xsize), RoundUpToBlockDim(ysize)) without streaming,
+    // so the replicated padding columns and rows are measured too. That is the opsin and rect here.
+    private static void ComputeChromacityAdjustments(JxlFrameHeader frameHeader, JxlPassesEncoderState encState, Buffer2D<float>[] opsin, JxlRect rect)
     {
-        if (encState.SpeedTier <= JxlSpeedTier.Squirrel)
-        {
-            JxlThrowHelper.ThrowNotSupportedException("The pixel-based chromacity adjustment (libjxl effort 7 and up; slice E5)");
-        }
-
+        // 1) Distance based approach for chromacity adjustment:
         float[] xQmScaleSteps = { 2.5f, 5.5f, 9.5f };
         frameHeader.XQmScale = 3;
         foreach (float step in xQmScaleSteps)
@@ -378,13 +414,24 @@ internal static partial class JxlFrameEncoder
             }
         }
 
-        // For X take the most severe adjustment: max(x_qm_scale, 2 + 0).
-        frameHeader.BQmScale = 2;
+        // 2) Pixel-based approach for chromacity adjustment: look at the individual pixels and make a guess
+        // how difficult the image would be based on the worst case pixel.
+        JxlPixelStatsForChromacityAdjustment pixelStats = default;
+        if (encState.SpeedTier <= JxlSpeedTier.Squirrel)
+        {
+            pixelStats.Calc(opsin, rect);
+        }
+
+        // For X take the most severe adjustment.
+        frameHeader.XQmScale = Math.Max(frameHeader.XQmScale, (uint)(2 + pixelStats.HowMuchIsXChannelPixelized()));
+
+        // B only adjusted by pixel-based approach.
+        frameHeader.BQmScale = (uint)(2 + pixelStats.HowMuchIsBChannelPixelized());
     }
 
     // libjxl's InitializePassesEncoder for one pass and no DC frame: the X and B multipliers, the
     // coefficients of every group, then the DC streams of every LF group.
-    private static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular)
+    private static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
     {
         // Exact powers of 1.25 for the scales the encoder writes.
         encState.XQmMultiplier = MathF.Pow(1.25f, frameHeader.XQmScale - 2.0f);
@@ -408,10 +455,15 @@ internal static partial class JxlFrameEncoder
         for (long groupIndex = 0; groupIndex < frameDim.NumDcGroups; groupIndex++)
         {
             JxlRect r = frameDim.DcGroupRect(groupIndex);
-            encModular.AddVarDctDc(dc, encState.XSizeBlocks, r, groupIndex, encState.SpeedTier < JxlSpeedTier.Falcon, encState.Quantizer, encState.Cmap);
+            encModular.AddVarDctDc(frameHeader, dc, r, groupIndex, encState);
         }
 
-        // libjxl smooths its own copy of the DC here (AdaptiveDCSmoothing), which only tests read.
+        // The encoder's own copy of the DC, dequantised by AddVarDctDc, is smoothed as the decoder's is
+        // (FinalizeDC). Only the reconstruction of the frame reads it (JxlEncReconstruct).
+        if ((frameHeader.Flags & JxlFrameFlags.SkipAdaptiveDcSmoothing) == 0)
+        {
+            JxlCompressedDc.AdaptiveDcSmoothing(allocator, encState.Quantizer.MulDc, encState.Dc, encState.XSizeBlocks, encState.YSizeBlocks);
+        }
     }
 
     private static void ComputeAcMetadata(JxlPassesEncoderState encState, JxlModularFrameEncoder encModular)
