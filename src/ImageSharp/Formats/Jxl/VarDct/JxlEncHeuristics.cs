@@ -1,10 +1,9 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 // Ported from libjxl (https://github.com/libjxl/libjxl) at commit ef67fde2:
-// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, without the AC-strategy merges of
-// effort 5 for now, and ComputeARHeuristics),
-// lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; FindBestQuantizer, which does nothing above
-// effort 7) and lib/jxl/quantizer.cc (SetQuantFieldRect).
+// lib/jxl/enc_heuristics.cc (LossyFrameHeuristics at efforts 3 and 5, and ComputeARHeuristics),
+// lib/jxl/enc_adaptive_quantization.cc (InitialQuantDC; FindBestQuantizer, which acts only from kKitten
+// down, effort 8 and up, so it is not ported) and lib/jxl/quantizer.cc (SetQuantFieldRect).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -16,9 +15,8 @@ namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The encoder's choices for a lossy frame before the coefficients: the quantiser, the strategy of each
-/// block, the quant field, the chroma-from-luma map and the EPF sharpness. libjxl gates each search by
-/// speed tier; from Falcon (effort 3) up, each is a constant. At Hare (effort 5) the quant field adapts to
-/// the image (<see cref="JxlEncAdaptiveQuantization"/>) and the opsin is inverse-Gaborish filtered.
+/// block, the quant field, the chroma-from-luma map, the block context map and the EPF sharpness. libjxl
+/// gates each search by speed tier; <see cref="JxlFrameEncoder"/> lists what each effort does.
 /// </summary>
 internal static class JxlEncHeuristics
 {
@@ -57,11 +55,6 @@ internal static class JxlEncHeuristics
     /// Gaborish, the strategy of each block, the quant field, the chroma-from-luma map and the block
     /// context map. The dequantization matrices keep their defaults.
     /// </summary>
-    /// <remarks>
-    /// From Hare down the strategy of each block is searched (<see cref="JxlEncAcStrategy"/>), with the merges
-    /// into blocks of up to 64x64, and the adaptive quant field, the chroma-from-luma map of each tile and the
-    /// block context map are computed, as libjxl does.
-    /// </remarks>
     /// <param name="encState">The encoder state.</param>
     /// <param name="gaborish">Whether the frame's loop filter has Gaborish, so the opsin is inverse-filtered.</param>
     /// <param name="opsin">The padded XYB planes; replaced by their inverse-Gaborish copies when <paramref name="gaborish"/> is set.</param>

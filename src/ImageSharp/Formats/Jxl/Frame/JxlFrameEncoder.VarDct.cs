@@ -24,10 +24,28 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 
 /// <content>
-/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest) and,
-/// in part, effort 5 (Default): XYB, DCT8 blocks with a constant quant field, the DC and AC metadata in
-/// Modular streams, and the AC tokens. Effort 5 adds Gaborish and near-lossless DC; its searches come
-/// with the E4 tickets (see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
+/// <para>
+/// The lossy VarDCT frame, as libjxl's <c>EncodeFrameOneShot</c> writes it at effort 3 (Fastest, libjxl's
+/// <c>kFalcon</c>) and effort 5 (Default, <c>kHare</c>): XYB, the DC and AC metadata in Modular streams,
+/// and the AC tokens. This is the one place that lists what each effort does; other comments point here.
+/// </para>
+/// <para>
+/// Fastest codes every block as DCT8 with a constant quant field of 0.79 / distance, the default
+/// chroma-from-luma map and the default block context map, with no Gaborish. Only the DCT8 order is
+/// customised, and the AC metadata uses libjxl's fixed Falcon tree.
+/// </para>
+/// <para>
+/// Default searches, as <see cref="JxlEncHeuristics.LossyFrameHeuristics"/> does per 64x64 tile:
+/// the adaptive quant field (<see cref="JxlEncAdaptiveQuantization"/>: <c>InitialQuantField</c>, the global
+/// scale from 0.39 / distance, and <c>AdjustQuantField</c>); the strategy of each block
+/// (<see cref="JxlEncAcStrategy"/>: DCT8, DCT4X4, DCT2X2 and IDENTITY at the 8x8 level, then the aligned
+/// merges up to 64x64); the fast least-squares chroma-from-luma map of each tile
+/// (<see cref="JxlEncChromaFromLuma"/>); and the block context map (<see cref="JxlEncBlockCtxMap"/>).
+/// The frame then adds Gaborish above distance 0.5, near-lossless DC, <c>AdjustQuantBlockAC</c>, the
+/// <c>kACMeta</c> tree for the AC metadata, a learned tree for alpha, and custom coefficient orders for every
+/// order the blocks use. <c>FindBestQuantizer</c> does nothing at Default, so there is no butteraugli loop.
+/// The searches of effort 7 and up (Thorough; slice E5) throw <see cref="NotSupportedException"/>.
+/// </para>
 /// </content>
 /// <remarks>
 /// <para>
