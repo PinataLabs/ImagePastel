@@ -139,9 +139,11 @@ internal static class JxlEncHeuristics
 
         // Compute a non-default CfL map if we are at Hare speed, or slower. libjxl fits each tile right after
         // its strategies and quant field; the fit reads only its own tile, and the search of a later tile
-        // reads only that tile's map entry, so it runs here for all of them.
+        // reads only that tile's map entry, so it runs here for all of them. That holds only while an encoder
+        // tile and a colour tile are the same 8x8 blocks.
         if (speedTier <= JxlSpeedTier.Hare)
         {
+            DebugGuard.IsTrue(EncTileDimInBlocks == JxlColorCorrelation.ColorTileDimInBlocks, "The CfL map can run after the tile loop only while an encoder tile is a colour tile");
             JxlEncChromaFromLuma.ComputeMap(encState, opsin, fast: speedTier >= JxlSpeedTier.Wombat);
         }
 
