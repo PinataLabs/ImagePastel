@@ -71,8 +71,20 @@ public class JxlLossyCalibrationTests
     /// 70.71). Other margins: text d2 +0.31, line_art d4 +0.74, calliphora d4 +1.22, text d4 +1.39. The
     /// stages still in Hare form (E5d merges, E5f qm scales, E5h EPF sharpness) are expected to win it back.
     /// </para>
+    /// <para>
+    /// E5f (the pixel-statistics X and B scales, cjxl -e 7's on every row: B 5 on line_art, X 4 and B 3 on
+    /// text, X 5 and B 4 on bike_alpha; the other rows keep Default's) alone: 16 of 18. text d2 passes
+    /// (+0.81) and line_art d1 passes (+2.30); line_art d2 (-1.52) and d4 (-4.10) fail. E5f merged with E5c
+    /// and E5g: 17 of 18 (line_art d2 +0.07, d4 -2.53). E5f merged with E5c, E5e and E5g: 18 of 18.
+    /// Smallest margins: line_art d4 +0.23 (E5e's tip had +0.48), text d2 +1.28, calliphora d4 +1.46,
+    /// text d4 +2.02; line_art d2 +2.83 and d1 +3.48.
+    /// </para>
+    /// <para>
+    /// E5b merged after E5c, E5e, E5f and E5g: 18 of 18. Smallest margins: line_art d4 +1.00 (was +0.23),
+    /// text d2 +1.20, calliphora d4 +1.22, text d4 +1.58, bike d4 +2.43.
+    /// </para>
     /// </remarks>
-    private const int ThoroughRowsPassing = 17;
+    private const int ThoroughRowsPassing = 18;
 
     /// <summary>
     /// Each Fastest row of the table, and our encode of it as measured through our decoder (net10.0, x64,
