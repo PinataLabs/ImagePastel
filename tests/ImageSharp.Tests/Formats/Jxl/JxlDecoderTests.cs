@@ -16,7 +16,6 @@ using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
 using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
@@ -53,51 +52,7 @@ public class JxlDecoderTests
         Assert.Equal(751, info.Height);
     }
 
-    [Theory]
-    [InlineData("delta_palette")]
-    [InlineData("lz77_flower")]
-    public void Load_Rgb24_MatchesMagickExactly(string id)
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        string path = JxlConformanceVector.Load(id).CommittedInputPath;
-        using Image<Rgb24> image = Image.Load<Rgb24>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgb24> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgb24>(Configuration.Default, stream, CancellationToken.None);
-
-        ImageComparer.Exact.VerifySimilarity(reference, image);
-    }
-
-    [Theory]
-    [InlineData("alpha_nonpremultiplied")]
-    [InlineData("alpha_triangles")]
-    public void Load_Rgba64_MatchesMagickExactly(string id)
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        string path = JxlConformanceVector.Load(id).CommittedInputPath;
-        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-
-        ImageComparer.Exact.VerifySimilarity(reference, image);
-    }
-
-    [Fact]
-    public void Load_Float32_MatchesMagickAt16Bits()
-    {
-        MagickReferenceDecoder.SkipUnlessJxlIsSupported();
-
-        // Magick returns 16-bit samples, so both sides are clamped to [0, 1] and compared at 16 bits.
-        string path = JxlConformanceVector.Load("lossless_pfm").CommittedInputPath;
-        using Image<Rgba64> image = Image.Load<Rgba64>(CreateConfiguration(), path);
-        using FileStream stream = File.OpenRead(path);
-        using Image<Rgba64> reference = MagickReferenceDecoder.HighBitDepthInstance.Decode<Rgba64>(Configuration.Default, stream, CancellationToken.None);
-
-        // Samples on a rounding boundary may land one 16-bit step apart, in each colour channel.
-        ImageComparer.Tolerant(0F, perPixelManhattanThreshold: 3).VerifySimilarity(reference, image);
-    }
-
+    // The Magick cross-checks of the conformance inputs are in JxlMagickCrossCheckTests.
     [Fact]
     public void Load_PremultipliedAlpha_GivesStraightAlpha()
     {
