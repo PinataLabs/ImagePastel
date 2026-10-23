@@ -135,14 +135,25 @@ public class JxlDefaultConfigurationTests
         Assert.NotEqual(Pixels(asStored), Pixels(converted));
     }
 
+    // The default encoder is lossy (Distance 1, Effort Default), so the pixels are close, not equal.
     [Fact]
-    public void Save_AsJxl_WithDefaultConfiguration_ThrowsNoEncoder()
+    public void Save_AsJxl_WithDefaultConfiguration_DecodesBack()
     {
-        using Image<Rgba32> image = new(4, 4);
+        string path = Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(JxlDefaultConfigurationTests)), "default.jxl");
+        using (Image<Rgba32> image = new(17, 9, new Rgba32(200, 120, 40, 255)))
+        {
+            image.Save(path);
+        }
 
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => image.Save(Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(JxlDefaultConfigurationTests)), "never.jxl")));
-
-        Assert.StartsWith("No encoder was found for extension '.jxl' using image format 'JPEG XL'.", ex.Message, StringComparison.Ordinal);
+        Assert.Same(JxlFormat.Instance, Image.DetectFormat(path));
+        using Image<Rgba32> decoded = Image.Load<Rgba32>(path);
+        Assert.Equal(17, decoded.Width);
+        Assert.Equal(9, decoded.Height);
+        Rgba32 pixel = decoded[8, 4];
+        Assert.InRange(pixel.R, 195, 205);
+        Assert.InRange(pixel.G, 115, 125);
+        Assert.InRange(pixel.B, 35, 45);
+        Assert.Equal(255, pixel.A);
     }
 
     private static string InputPath(string id) => JxlConformanceVector.Load(id).CommittedInputPath;
