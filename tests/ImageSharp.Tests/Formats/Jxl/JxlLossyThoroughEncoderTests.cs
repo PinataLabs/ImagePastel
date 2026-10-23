@@ -116,9 +116,9 @@ public class JxlLossyThoroughEncoderTests
 
     // Through the decoder's parse: below Hare, ProcessRectACS also merges 16x16 and 32x32 blocks off their
     // own grid (libjxl enc_ac_strategy.cc:1033-1057), which Hare never does, and every block is still covered
-    // once. With E5c's AFV and E5d (no DCT4X8 or DCT8X4 yet, default CfL map in the search), Bike has 5, 17
-    // and 24 such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 19 + 5), and its whole
-    // map is libjxl's kSquirrel map from the e5d harness restricted the same way (acs_afv).
+    // once. With AFV (E5c) and the CfL pre-pass (E5e), and no DCT4X8 or DCT8X4 yet, Bike has 5, 17 and 23
+    // such first blocks at d1, d2 and d4 (DCT16X16 + DCT32X32: 4 + 1, 14 + 3, 18 + 5). The harness has no
+    // pre-pass, so this map is no longer its map; ProcessRect_BikeTileAtSquirrel checks the search itself.
     [Theory]
     [InlineData(1.0f)]
     [InlineData(2.0f)]
@@ -169,44 +169,83 @@ public class JxlLossyThoroughEncoderTests
         Assert.Contains(strategies, b => (JxlAcStrategyType)(b >> 1) is JxlAcStrategyType.Afv0 or JxlAcStrategyType.Afv1 or JxlAcStrategyType.Afv2 or JxlAcStrategyType.Afv3);
     }
 
-    // E5a's record: while every temporary departure was in place, Squirrel ran Hare's VarDCT choices, so an
-    // image with no alpha was the same file at Thorough as at Default. With alpha it is not: the alpha tree
-    // is learned with Squirrel's parameters (7 properties and 96 values against Hare's 4 and 48). E5c (AFV at
-    // the 8x8 level) and E5d (merges off the aligned grid) change the photos' strategies, so flower and Bike
-    // now differ too; the gradient, 9 pixels high, chooses no AFV block and no off-grid merge that wins, and
-    // stays Default's file. Each later E5 ticket changes this test when it breaks an equality.
-    [Theory]
-    [InlineData("flower-384x244", "", 1.0f, false)]
-    [InlineData("bike-582x453", "", 1.0f, false)]
-    [InlineData("bike-582x453", "", 4.0f, false)]
-    [InlineData("gradient-2049x9", "", 2.0f, true)]
-    [InlineData("bike-582x453", "hard", 1.0f, false)]
-    [InlineData("flower-256x244", "soft", 1.0f, false)]
-    public void Encode_LossyThorough_IsDefaultsFileOnlyWhereNoSquirrelStageChangesIt(string sizeCase, string mask, float distance, bool expectedEqual)
+    // E5e: from Squirrel down libjxl fits a first chroma-from-luma map of each tile on DCT8 blocks before
+    // the strategy search, which reads it, and fits the final map by Newton's method rather than least
+    // squares. Read back through the decoder's parse, the flower crop's map differs from Default's.
+    [Fact]
+    public void Encode_SaturatedPhoto_FitsAChromaFromLumaMapOtherThanDefaults()
     {
-        byte[] thorough = EncodeCase(sizeCase, mask, Lossy(distance));
-        byte[] @default = EncodeCase(sizeCase, mask, JxlLossyDefaultEncoderTests.Lossy(distance));
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
 
-        TestContext.Current.TestOutputHelper?.WriteLine($"{sizeCase} {mask} d{distance}: Thorough {thorough.Length} B, Default {@default.Length} B");
-        Assert.Equal(expectedEqual, thorough.AsSpan().SequenceEqual(@default));
+        using JxlDecodedDcGroups thorough = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+        using JxlDecodedDcGroups @default = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, JxlLossyDefaultEncoderTests.Lossy(1.0f)));
+
+        JxlColorCorrelation t = thorough.State.Cmap;
+        JxlColorCorrelation d = @default.State.Cmap;
+        TestContext.Current.TestOutputHelper?.WriteLine($"Thorough YtoX [{string.Join(", ", t.YtoXMap)}], YtoB [{string.Join(", ", t.YtoBMap)}]");
+        TestContext.Current.TestOutputHelper?.WriteLine($"Default  YtoX [{string.Join(", ", d.YtoXMap)}], YtoB [{string.Join(", ", d.YtoBMap)}]");
+        Assert.Equal(d.YtoBMap.Length, t.YtoBMap.Length);
+        Assert.Contains(t.YtoBMap, f => f != 0);
+        Assert.False(t.YtoXMap.AsSpan().SequenceEqual(d.YtoXMap) && t.YtoBMap.AsSpan().SequenceEqual(d.YtoBMap), "Thorough's CfL map is Default's");
+    }
+
+    // A grey image has no X (red-green) signal in XYB, so neither the pre-pass nor the Newton fit predicts
+    // X from Y in any tile.
+    [Fact]
+    public void Encode_GreyImage_KeepsTheYtoXMapZero()
+    {
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                foreach (ref Rgb24 p in accessor.GetRowSpan(y))
+                {
+                    byte grey = (byte)(((p.R * 77) + (p.G * 150) + (p.B * 29)) >> 8);
+                    p = new Rgb24(grey, grey, grey);
+                }
+            }
+        });
+
+        using JxlDecodedDcGroups frame = JxlDecodedDcGroups.Decode(JxlEncoderRoundTrip.Encode(image, Lossy(1.0f)));
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"YtoX [{string.Join(", ", frame.State.Cmap.YtoXMap)}], YtoB [{string.Join(", ", frame.State.Cmap.YtoBMap)}]");
+        Assert.All(frame.State.Cmap.YtoXMap, f => Assert.Equal(0, f));
+    }
+
+    // The CfL pre-pass and the Newton fit leave the blue channel of the flower crop at d1 no worse than
+    // E5a's tracer, which wrote Default's file here: 24,935 bytes and a blue RMSE of 9.81 8-bit steps (our
+    // decoder). E5e's value is in the E5e handoff.
+    [Fact]
+    public async Task Encode_SaturatedPhoto_BlueErrorDoesNotGrowAgainstTheTracer()
+    {
+        const double tracerBlueRmse = 9.8110135790738;
+        using Image<Rgb24> image = JxlLossyEncoderTests.LoadSizeCase("flower-384x244");
+
+        byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(1.0f));
+
+        using Image<Rgb24> decoded = await JxlEncoderRoundTrip.DecodeAsync<Rgb24>(JxlEncoderRoundTrip.Reader.Ours, encoded, "LossyThoroughEncoder", "flower_cfl_d1");
+        JxlLossyEncoderTests.ChannelErrors errors = JxlLossyEncoderTests.ChannelErrors.Measure(image, decoded);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{encoded.Length} bytes: {errors}; blue RMSE {errors.Rmse[2]:R}");
+        Assert.True(errors.Rmse[2] <= tracerBlueRmse, $"blue RMSE {errors.Rmse[2]:R} > the tracer's {tracerBlueRmse:R}");
     }
 
     // SHA-256 of this encoder's lossy Thorough output: the one table of Thorough pins. It uses no FMA and no
     // C runtime maths on a path that reaches the bytes, so every leg gives the same file. Every E5 ticket
     // changes these on purpose; tickets that run in parallel regenerate the table when they merge
-    // (e5a-handoff.md says how). Since E5c (AFV) and E5d (off-grid merges) only the three small rows without alpha (the 17x23 flower,
-    // the dot and the gradient) still equal their Default pins.
+    // (e5a-handoff.md says how). Since E5c (AFV), E5d (off-grid merges) and E5e (the CfL pre-pass and Newton fit), only
+    // the two smallest rows (the 17x23 flower and the dot) still equal their Default pins.
     [Theory]
-    [InlineData("flower-384x244", "", 0.5f, "D65A8BEEC3A39F6338DD6009E08F0D3E92868EBDA7129AA901887B2D879BEE61")]
-    [InlineData("flower-384x244", "", 1.0f, "197DCA57A9095DE8F7056F3E6E68802AB99711D64FC8F43C31D478B038710E80")]
-    [InlineData("flower-384x244", "", 2.0f, "730E953D0C822A7F35DB4DF9585C01F995A7A60E85A0CE01A9F7361E112E11C7")]
-    [InlineData("flower-384x244", "", 4.0f, "C3B888E24E3AB7235A49DAFDB32250E4C43C285651E7B4613A9F2CA9DA3645AD")]
+    [InlineData("flower-384x244", "", 0.5f, "115A19CEF679492A93AFA42A8F6A3058684A46D95D1B4AC005C348AEEB131A30")]
+    [InlineData("flower-384x244", "", 1.0f, "2AC61E75D3523A3FDF09ADA12E1ADBB1360E2689764EB36738C5846954513315")]
+    [InlineData("flower-384x244", "", 2.0f, "5DA3CA4AD032B6E45A5BB33784FE65D059F0E874F3DE20C893FC560BA745B999")]
+    [InlineData("flower-384x244", "", 4.0f, "DA72DBFBA04DA6E3856BF2213281F40B1C9B5E2AC52BD23A11AB7371173B30AD")]
     [InlineData("flower-17x23", "", 1.0f, "02082DB03AA3368FC88DE37F300D21A0A18EB78671F873D84F1DCF36C9841568")]
     [InlineData("dot-1x1", "", 1.0f, "0E0D22FC449A4D7D33375B82BD608513BED6874DF06D79A8F7DA55DE2F61CC42")]
-    [InlineData("bike-582x453", "", 1.0f, "4B5BC5D9196502E1DFCB25B4AAC734E54922135EE47DC0876857C0E48CE32E2C")]
-    [InlineData("gradient-2049x9", "", 2.0f, "BB61F5256C35D906407A2F732AD242BDA4A47FF75CD40C16D6A83CA0CCC1E834")]
-    [InlineData("flower-256x244", "soft", 1.0f, "D148241BF6F430E0A041C603523AA4DD2DCF2A4EACD4227DDDD6C05F2BEF5A62")]
-    [InlineData("bike-582x453", "hard", 1.0f, "DD3867D7DC26AE1BD51A86678D98D224B7FF507C259B9C5C730B4AF75AC5EB7E")]
+    [InlineData("bike-582x453", "", 1.0f, "BD7D04FA71B7CB8DD24E69FCC6F8ECCB98B452508ACF7E5DB9825F5BFDA90795")]
+    [InlineData("gradient-2049x9", "", 2.0f, "77B37ED07A5E9D7E0DDAE4CCDA66DE6B79EA1690DFEB1ECB0EDC451C06592C96")]
+    [InlineData("flower-256x244", "soft", 1.0f, "5EA5E2A8B93FA5D279530E15B4E68777C1C6CF7A0B761E27DAE79AD45C891495")]
+    [InlineData("bike-582x453", "hard", 1.0f, "9E6EE452909AADD79F636B231BAFF44CF512F3F2C0283DDB56066DE10A6CC984")]
     public void Encode_LossyThorough_IsByteIdenticalToItsPin(string sizeCase, string mask, float distance, string expectedSha256)
     {
         byte[] encoded = EncodeCase(sizeCase, mask, Lossy(distance));

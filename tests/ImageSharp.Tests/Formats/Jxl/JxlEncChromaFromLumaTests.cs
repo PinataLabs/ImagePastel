@@ -8,8 +8,9 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// The encoder's fast chroma-from-luma fit (libjxl's <c>FindBestMultiplier</c> with <c>fast = true</c>), the
-/// least-squares multiplier of one 64x64 tile at Default (Hare).
+/// The encoder's chroma-from-luma fit (libjxl's <c>FindBestMultiplier</c>): with <c>fast = true</c> the
+/// least-squares multiplier of one 64x64 tile at Default (Hare), and with <c>fast = false</c> the Newton
+/// solver of Thorough (Squirrel).
 /// </summary>
 [Trait("Format", "Jxl")]
 public class JxlEncChromaFromLumaTests
@@ -18,6 +19,10 @@ public class JxlEncChromaFromLumaTests
     // Highway's scalar target, which sums in plain order. The float before rounding may differ by this much,
     // relative to its size (the largest seen is recorded in the E4d handoff).
     private const float LaneSumTolerance = 2e-6f;
+
+    // The same for the Newton solver, whose steps start from those sums (the largest seen is recorded in the
+    // E5e handoff).
+    private const float NewtonTolerance = 2e-5f;
 
     // From a harness of lib/jxl/enc_chroma_from_luma.cc at ef67fde2 on Highway's scalar target with
     // -ffp-contract=off (e4d-scratch/cfl_fast.cc). The luma is m = scale * u and the chroma
@@ -37,7 +42,7 @@ public class JxlEncChromaFromLumaTests
     {
         (float[] valuesM, float[] valuesS) = Vectors(num, k, scale, sigma, seed);
 
-        int actual = JxlEncChromaFromLuma.FindBestMultiplier(valuesM, valuesS, baseCorrelation, 1e-9f, out float beforeRound);
+        int actual = JxlEncChromaFromLuma.FindBestMultiplier(valuesM, valuesS, baseCorrelation, 1e-9f, fast: true, out float beforeRound);
 
         Assert.Equal(expected, actual);
         float expectedBeforeRound = BitConverter.UInt32BitsToSingle(expectedBeforeRoundBits);
@@ -46,10 +51,43 @@ public class JxlEncChromaFromLumaTests
         Assert.True(error <= LaneSumTolerance * MathF.Max(1, MathF.Abs(expectedBeforeRound)), $"{beforeRound:R} vs libjxl {expectedBeforeRound:R}");
     }
 
-    // No coefficients give the default multiplier.
-    [Fact]
-    public void FindBestMultiplier_NoValues_IsZero()
-        => Assert.Equal(0, JxlEncChromaFromLuma.FindBestMultiplier(Array.Empty<float>(), Array.Empty<float>(), 0.0f, 1e-9f, out _));
+    // From a harness of the same .cc with fast = false (e5e-scratch/cfl_newton.cc), on the same vectors
+    // and four more: residuals beyond CFLFunction's cut-off of 100 (thres_b, outliers_x) and a whole tile
+    // of DCT8 blocks as the pre-pass fits (prepass_x, prepass_b). The Newton steps sum their derivatives
+    // in 8 lanes too, so the float may differ from the harness's plain-order sums by NewtonTolerance.
+    [Theory]
+    [InlineData(64, 0.0f, 0.2f, 100.0f, 1.0f, 1u, 16, 0x417d5ef8u)]
+    [InlineData(256, 1.0f, 1.1f, 100.0f, 2.0f, 2u, 6, 0x40b749d5u)]
+    [InlineData(4096, 0.0f, -0.9f, 50.0f, 4.0f, 3u, -73, 0xc2920506u)]
+    [InlineData(64, 0.0f, 0.02f, 100.0f, 0.5f, 4u, 0, 0x00000000u)]
+    [InlineData(256, 0.0f, 3.0f, 100.0f, 1.0f, 5u, 127, 0x43777031u)]
+    [InlineData(256, 1.0f, -2.0f, 100.0f, 1.0f, 6u, -128, 0xc377450bu)]
+    [InlineData(1024, 1.0f, 1.0f, 30.0f, 30.0f, 7u, 0, 0x00000000u)]
+    [InlineData(512, 0.0f, 0.2f, 0.006f, 0.0f, 8u, 0, 0x00000000u)]
+    [InlineData(192, 0.0f, 0.05f, 80.0f, 3.0f, 9u, 2, 0x3fc04644u)]
+    [InlineData(4096, 1.0f, 0.7f, 1000.0f, 10.0f, 11u, -23, 0xc1b49768u)]
+    [InlineData(256, 0.0f, 0.5f, 100.0f, 300.0f, 12u, 79, 0x429ecfeau)]
+    [InlineData(4096, 0.0f, 0.1f, 20.0f, 1.0f, 13u, 0, 0x00000000u)]
+    [InlineData(4096, 1.0f, 0.93f, 20.0f, 0.5f, 14u, 1, 0x3f004cb8u)]
+    public void FindBestMultiplier_Newton_MatchesLibjxl(int num, float baseCorrelation, float k, float scale, float sigma, uint seed, int expected, uint expectedBeforeRoundBits)
+    {
+        (float[] valuesM, float[] valuesS) = Vectors(num, k, scale, sigma, seed);
+
+        int actual = JxlEncChromaFromLuma.FindBestMultiplier(valuesM, valuesS, baseCorrelation, 1e-9f, fast: false, out float beforeRound);
+
+        Assert.Equal(expected, actual);
+        float expectedBeforeRound = BitConverter.UInt32BitsToSingle(expectedBeforeRoundBits);
+        float error = MathF.Abs(beforeRound - expectedBeforeRound);
+        TestContext.Current.TestOutputHelper?.WriteLine($"before round {beforeRound:R}, libjxl {expectedBeforeRound:R}, relative error {error / MathF.Max(1, MathF.Abs(expectedBeforeRound)):E2}");
+        Assert.True(error <= NewtonTolerance * MathF.Max(1, MathF.Abs(expectedBeforeRound)), $"{beforeRound:R} vs libjxl {expectedBeforeRound:R}");
+    }
+
+    // No coefficients give the default multiplier, for either fit.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FindBestMultiplier_NoValues_IsZero(bool fast)
+        => Assert.Equal(0, JxlEncChromaFromLuma.FindBestMultiplier(Array.Empty<float>(), Array.Empty<float>(), 0.0f, 1e-9f, fast, out _));
 
     private static (float[] M, float[] S) Vectors(int num, float k, float scale, float sigma, uint seed)
     {

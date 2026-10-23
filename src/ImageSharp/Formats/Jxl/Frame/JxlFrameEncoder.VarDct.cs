@@ -50,12 +50,12 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Thorough is Default with libjxl's Squirrel gates on top. The alpha tree is learned with Squirrel's
 /// parameters (7 properties, 96 values). Splines are found as libjxl v0.12 finds them, which is never, and
 /// patches and dots are left out (a departure, ADR 0001; see <see cref="JxlEncHeuristics.LossyFrameHeuristics"/>).
-/// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries AFV0 to AFV3, and after the
-/// aligned merges the strategy search also merges blocks off their size's grid, as libjxl does below Hare.
-/// The other Squirrel stages are still in their Default form, each a temporary departure named in its code
-/// with the slice that ports it: the 8x8 level does not try DCT4X8 and DCT8X4 (they come with E5b); there
-/// is no chroma-from-luma pre-pass, and the fit after the search is the fast least
-/// squares (the DCT8 pre-pass and the Newton fit come with E5e); the X and B quantisation scales come from
+/// <c>FindBestQuantizer</c> still does nothing. The 8x8 level also tries AFV0 to AFV3. Each 64x64 tile
+/// first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and the fit after the
+/// search uses Newton's method. After the aligned merges the strategy search also merges blocks off their
+/// size's grid, as libjxl does below Hare. The other Squirrel stages are still in their Default form, each
+/// a temporary departure named in its code with the slice that ports it: the 8x8 level does not try DCT4X8
+/// and DCT8X4 (they come with E5b); the X and B quantisation scales come from
 /// the distance alone (the pixel statistics come with E5f); and the EPF sharpness is 4 in every block (the
 /// search, which decodes the frame in the encoder, comes with E5h).
 /// </para>
