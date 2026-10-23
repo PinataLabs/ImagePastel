@@ -1,5 +1,11 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
+// Stands in for libjxl's (https://github.com/libjxl/libjxl, commit ef67fde2) per-thread working memory of
+// the AC-strategy search: AcStrategyHeuristics::mem (lib/jxl/enc_ac_strategy.h:84), sized in
+// AcStrategyHeuristics::PrepareForThreads (lib/jxl/enc_ac_strategy.cc:1126-1136) as
+// 6 * AcStrategy::kMaxCoeffArea (lib/jxl/ac_strategy.h:88) plus the DCT scratch, and split into the
+// block (enc_ac_strategy.cc:843) and EstimateEntropy's mem and scratch space (:370-371).
+// Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
 
