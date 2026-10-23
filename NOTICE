@@ -1,4 +1,4 @@
-PinataLabs.ImageSharp
+PinataLabs.ImagePastel
 Copyright (c) Pinata Labs.
 
 This product is a modified version of SixLabors.ImageSharp 2.1.x.
@@ -16,11 +16,11 @@ Pinata Labs changed the original work. The main changes are:
   repository.
 - The dependencies are updated to current versions.
 - The code is changed to remove all compiler and analyzer warnings.
-- The package ID and the assembly name are PinataLabs.ImageSharp, and the
+- The package ID and the assembly name are PinataLabs.ImagePastel, and the
   assembly is signed with a Pinata Labs strong-name key.
 - The build, test, and publish pipeline is replaced.
 
-The Git history of https://github.com/PinataLabs/ImageSharp records each
+The Git history of https://github.com/PinataLabs/ImagePastel records each
 change.
 
 Pinata Labs is not affiliated with Six Labors. "Six Labors" and "ImageSharp"

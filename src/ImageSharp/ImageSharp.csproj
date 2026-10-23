@@ -2,16 +2,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>PinataLabs.ImageSharp</AssemblyName>
-    <AssemblyTitle>PinataLabs.ImageSharp</AssemblyTitle>
+    <AssemblyName>PinataLabs.ImagePastel</AssemblyName>
+    <AssemblyTitle>PinataLabs.ImagePastel</AssemblyTitle>
     <RootNamespace>SixLabors.ImageSharp</RootNamespace>
-    <PackageId>PinataLabs.ImageSharp</PackageId>
-    <PackageIcon>pinatalabs.imagesharp.128.png</PackageIcon>
+    <PackageId>PinataLabs.ImagePastel</PackageId>
+    <PackageIcon>pinatalabs.imagepastel.128.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/PinataLabs/ImageSharp/</RepositoryUrl>
+    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/PinataLabs/ImagePastel/</RepositoryUrl>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
-    <PackageTags>Image Resize Crop Gif Jpg Jpeg Bitmap Pbm Png Tga Tiff WebP NetCore</PackageTags>
+    <PackageTags>ImagePastel Image Resize Crop Gif Jpg Jpeg Bitmap Pbm Png Tga Tiff WebP NetCore</PackageTags>
     <Description>A fully managed, cross-platform 2D graphics library for .NET. A community fork of SixLabors.ImageSharp 2.1.x under the Apache License 2.0. Not affiliated with Six Labors.</Description>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
@@ -35,7 +35,7 @@
   </Choose>
 
   <ItemGroup>
-    <None Include="..\..\build\branding\pinatalabs.imagesharp.128.png" Pack="true" PackagePath="" />
+    <None Include="..\..\build\branding\pinatalabs.imagepastel.128.png" Pack="true" PackagePath="" />
     <None Include="..\..\README.md" Pack="true" PackagePath="" />
     <None Include="..\..\NOTICE" Pack="true" PackagePath="" />
     <None Include="..\..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />

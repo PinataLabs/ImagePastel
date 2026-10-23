@@ -1,5 +1,5 @@
 name: "Bug report"
-description: Report a bug in PinataLabs.ImageSharp.
+description: Report a bug in PinataLabs.ImagePastel.
 labels: ["needs triage"]
 body:
 - type: checkboxes
@@ -8,15 +8,15 @@ body:
     options:
       - label: The issue title describes the bug.
         required: true
-      - label: I use the latest version of PinataLabs.ImageSharp.
+      - label: I use the latest version of PinataLabs.ImagePastel.
         required: true
       - label: I tested the bug in both `Debug` and `Release` builds.
         required: true
-      - label: I searched the [open](https://github.com/PinataLabs/ImageSharp/issues) and [closed](https://github.com/PinataLabs/ImageSharp/issues?q=is%3Aissue+is%3Aclosed) issues, and no issue reports this bug.
+      - label: I searched the [open](https://github.com/PinataLabs/ImagePastel/issues) and [closed](https://github.com/PinataLabs/ImagePastel/issues?q=is%3Aissue+is%3Aclosed) issues, and no issue reports this bug.
         required: true
 - type: input
   attributes:
-    label: PinataLabs.ImageSharp version
+    label: PinataLabs.ImagePastel version
   validations:
     required: true
 - type: input

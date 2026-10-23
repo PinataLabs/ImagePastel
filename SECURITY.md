@@ -2,7 +2,10 @@
 
 ## Supported versions
 
-Pinata Labs supports the latest 2.x release of PinataLabs.ImageSharp.
+Pinata Labs supports the latest 2.x release of PinataLabs.ImagePastel.
+
+Up to version 2.1.14, this fork was published as PinataLabs.ImageSharp.
+That package gets no more releases, including security fixes. Move to PinataLabs.ImagePastel.
 
 ## Scope
 
@@ -19,7 +22,7 @@ For a supported version, use the official [SixLabors.ImageSharp](https://www.nug
 
 Do not open a public issue for a security problem.
 
-1. Go to [Report a vulnerability](https://github.com/PinataLabs/ImageSharp/security/advisories/new) in this repository.
+1. Go to [Report a vulnerability](https://github.com/PinataLabs/ImagePastel/security/advisories/new) in this repository.
 2. Describe the problem and the affected versions.
 3. Attach a sample image or code that shows the problem, if you have one.
 

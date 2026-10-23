@@ -73,7 +73,7 @@ jobs:
       - name: Verify the package version matches the tag
         run: |
           ls -la artifacts/packages
-          expected="artifacts/packages/PinataLabs.ImageSharp.${TAG#v}.nupkg"
+          expected="artifacts/packages/PinataLabs.ImagePastel.${TAG#v}.nupkg"
           if [ ! -f "$expected" ]; then
             echo "::error::Expected $expected - MinVer did not version the package from $TAG"
             exit 1
