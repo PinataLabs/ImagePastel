@@ -81,7 +81,9 @@ public class JxlLossyCalibrationTests
     /// </para>
     /// <para>
     /// E5b merged after E5c, E5e, E5f and E5g: 18 of 18. Smallest margins: line_art d4 +1.00 (was +0.23),
-    /// text d2 +1.20, calliphora d4 +1.22, text d4 +1.58, bike d4 +2.43.
+    /// text d2 +1.20, calliphora d4 +1.22, text d4 +1.58, bike d4 +2.43. After E5d's merge as well: 18 of
+    /// 18. Smallest margins: line_art d4 +0.88 (E5d's tip had +0.14), calliphora d4 +1.06, text d2 +1.20,
+    /// text d4 +1.58, bike d4 +2.44.
     /// </para>
     /// </remarks>
     private const int ThoroughRowsPassing = 18;

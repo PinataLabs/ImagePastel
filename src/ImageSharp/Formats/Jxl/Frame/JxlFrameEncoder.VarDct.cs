@@ -54,10 +54,10 @@ namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
 /// Each 64x64 tile first fits a chroma-from-luma map on DCT8 blocks, which the strategy search reads, and
 /// the fit after the search uses Newton's method. The X and B quantisation scales are raised from the
 /// pixel statistics of the XYB image (<see cref="JxlPixelStatsForChromacityAdjustment"/>), which leaves
-/// most photos at Default's scales. The other Squirrel stages are still in their Default form, each a
-/// temporary departure named in its code with the slice that ports it: the merges are the aligned ones
-/// (the non-aligned 16x16 and 32x32 merges come with E5d); and the EPF sharpness is 4 in every block (the
-/// search, which decodes the frame in the encoder, comes with E5h).
+/// most photos at Default's scales. After the aligned merges the strategy search also merges blocks off
+/// their size's grid, as libjxl does below Hare. The other Squirrel stages are still in their Default
+/// form, each a temporary departure named in its code with the slice that ports it: the EPF sharpness is
+/// 4 in every block (the search, which decodes the frame in the encoder, comes with E5h).
 /// </para>
 /// </content>
 /// <remarks>
