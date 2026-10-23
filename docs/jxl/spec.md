@@ -321,7 +321,7 @@ D15 ([#307](https://github.com/PinataLabs/ImageSharp/issues/307)) passed its don
 
 ### E6 done-check notes
 
-E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done-check ([#335](https://github.com/PinataLabs/ImageSharp/issues/335)) locally on Windows x64, net10.0 Release, with the libjxl v0.12.0 tools. The done-check found nothing to fix, so it adds tests and docs only. The CI legs run on the PR. Each check goes through an entry point: `SaveAsJxl` / `Image.Save` with `Configuration.Default`, then our decoder, `MagickImage`, and `djxl` / `jxlinfo` in `jxl-oracle`.
+E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done-check ([#335](https://github.com/PinataLabs/ImageSharp/issues/335)) locally on Windows x64, net10.0 Release, with the libjxl v0.12.0 tools. The done-check found nothing to fix, so it adds tests and docs only. The CI run of PR #336 at 3a459d2e5 passed on every leg. Each check goes through an entry point: `SaveAsJxl` / `Image.Save` with `Configuration.Default`, then our decoder, `MagickImage`, and `djxl` / `jxlinfo` in `jxl-oracle`.
 
 - **The public surface** (E6a, [#331](https://github.com/PinataLabs/ImageSharp/issues/331)).
   - `JxlDecoderTests.OnlyTheCodecSurfaceIsPublic` lists 16 public types: D15's 14, plus `JxlEncoder` and `JxlEffort`. `TheEncoderHasTwoOptions` checks that the public members of `JxlEncoder` are exactly `Distance`, `Effort`, `Encode` and `EncodeAsync`, and that `IJxlEncoderOptions`, `JxlSpeedTier` and `JxlEncoderTestHooks` stay internal. The generator snapshot has the 9 `SaveAsJxl` / `SaveAsJxlAsync` overloads after TIFF's.
@@ -343,7 +343,20 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   - **Our decoder:** the Exif values, with the orientation 1; the XMP bytes; the ICC profile byte for byte for lossless, and for lossy the profile built for the same colour encoding (#115); and the `AutoOrient` pixels. Lossless is exact. Lossy is within the interim bound, with alpha exact.
   - **`MagickImage`:** the Exif values, with the orientation 6; the XMP bytes; the ICC profile for lossless; and `Orientation.RightTop`.
   - **`jxl-oracle`:** `djxl`'s oriented pixels, `jxlinfo`'s boxes and orientation, and cjxl's box layout.
-- **Magick results per leg.** Locally on Windows x64, net10.0, every Magick row of E6 passes: 4 in the round trip, 2 in `JxlEncoderMetadataTests`, 8 in `JxlEncoderOrientationTests` and the level-10 decodes. The round-trip rows skip only where Magick.NET has no JPEG XL delegate, so they run under coverage too. The other legs (Linux, macOS, net11.0) are recorded from the PR's CI run.
+- **Magick results per leg.** E6 has 19 Magick rows: 4 in the round trip, 2 in `JxlEncoderMetadataTests`, 8 in `JxlEncoderOrientationTests` and 5 level-10 decodes in `JxlEncoderLevelTests`. Locally on Windows x64, net10.0, all 19 pass. The CI run of PR #336 at 3a459d2e5 is green on every leg, with 0 failed tests:
+
+  | Leg | E6 Magick rows at 3a459d2e5 | Whole test project at 3a459d2e5 |
+  |---|---|---|
+  | Windows x64 (Windows Server 2025), net10.0 and net11.0 | All 19 pass | 41,958 passed, 1,207 skipped, 0 failed (each) |
+  | Linux x64 (Ubuntu 24.04), net10.0 | The 4 round-trip rows pass. The other 15 skip | 41,164 passed, 2,001 skipped, 0 failed (the coverage leg) |
+  | Linux x64 (Ubuntu 24.04), net11.0 | All 19 pass | 41,958 passed, 1,207 skipped, 0 failed |
+  | macOS arm64 (macOS 26), net10.0 and net11.0 | All 19 pass | 41,955 passed, 1,210 skipped, 0 failed (each) |
+  | Build and analyze (Ubuntu 24.04, x64, net10.0) | The 4 round-trip rows pass. The other 15 skip | 41,164 passed, 2,001 skipped, 0 failed (with coverage) |
+  | `jxl-oracle` (Ubuntu 24.04, x64) | All 19 pass | The JPEG XL suite: 5188 passed, 0 skipped |
+
+  The API check and SonarCloud also pass at 3a459d2e5.
+
+  The test logs list each skipped test by name, but not each passed test. So a row passed on a leg when that leg's run has 0 failed tests and does not list the row as skipped. Every leg but `jxl-oracle` runs the same 43,165 tests. The logs do not print skip reasons. The 15 rows that skip under coverage call `SkipUnlessReaderRuns(Reader.Magick)`, which skips when Magick.NET has no JPEG XL delegate, or under coverage ("Adds no coverage: the same encode runs through our decoder"). The round-trip rows check only for the delegate, and they ran on both coverage legs, so the delegate is there and the 15 skip for coverage. No leg skips a Magick row for a missing delegate.
 - **netstandard2.1.** No test project targets netstandard2.1, so the Exif and XMP round trip ([#332](https://github.com/PinataLabs/ImageSharp/issues/332)) on that target is checked by a console harness. The harness is a net10.0 program that references the netstandard2.1 Release DLL by `HintPath`. It does these steps:
   - It stops unless the loaded assembly's `TargetFrameworkAttribute` is `.NETStandard,Version=v2.1`.
   - It saves a 37 x 23 `Rgba32` image with `SaveAsJxl` at `Distance` 0 and 1. The image has Exif (Software, orientation 6) and XMP.
