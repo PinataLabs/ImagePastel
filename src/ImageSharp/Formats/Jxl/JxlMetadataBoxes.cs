@@ -55,7 +55,9 @@ internal sealed class JxlMetadataBoxes
         // cjxl prepends the 4-byte offset only when the blob looks like Exif, and writes no Exif box
         // otherwise. Departure: cjxl still uses a container for such a blob (its use_boxes tests that the
         // blob is not empty), with the codestream in a jxlc box; this encoder writes a box or nothing, so
-        // a blob that is not Exif gives a bare codestream.
+        // a blob that is not Exif gives a bare codestream. After SyncProfiles the profile is parsed, so its
+        // bytes come from ExifWriter, which starts them with a TIFF header; a profile parsed from bytes that
+        // are not Exif has no values and gives no bytes.
         byte[] exif = metadata.ExifProfile?.ToByteArray();
         if (exif is not null && !IsExif(exif))
         {
