@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats;
@@ -487,10 +488,11 @@ public class JxlDecoderTests
     }
 
     [Fact]
-    public void OnlyTheDecoderSurfaceIsPublic()
+    public void OnlyTheCodecSurfaceIsPublic()
     {
-        // D15a (#308) makes the colour description and the enums public, and D15b (#311) the decoder surface.
-        // The encoder, its options and every codec type stay internal until E6.
+        // D15a (#308) makes the colour description and the enums public, D15b (#311) the decoder surface,
+        // and E6a (#331) the encoder and its effort. The encoder's options interface, the speed tier, the
+        // test hooks and every codec type stay internal.
         string[] publicTypes = typeof(Image).Assembly.GetExportedTypes()
             .Where(t => t.Namespace?.StartsWith("SixLabors.ImageSharp.Formats.Jxl", StringComparison.Ordinal) == true)
             .Select(t => t.FullName)
@@ -504,6 +506,8 @@ public class JxlDecoderTests
                 "SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlDecoder",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlEffort",
+                "SixLabors.ImageSharp.Formats.Jxl.JxlEncoder",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType",
                 "SixLabors.ImageSharp.Formats.Jxl.JxlFormat",
@@ -516,6 +520,24 @@ public class JxlDecoderTests
                 "SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint",
             },
             publicTypes);
+    }
+
+    [Fact]
+    public void TheEncoderHasTwoOptions()
+    {
+        // ADR 0003 and #108: Distance and Effort, and nothing else; the test hooks stay internal.
+        string[] members = typeof(JxlEncoder)
+            .GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(m => m.MemberType is MemberTypes.Property or MemberTypes.Method && !(m is MethodInfo { IsSpecialName: true }))
+            .Select(m => m.Name)
+            .Distinct()
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(new[] { "Distance", "Effort", "Encode", "EncodeAsync" }, members);
+        Assert.False(typeof(IJxlEncoderOptions).IsPublic);
+        Assert.False(typeof(JxlSpeedTier).IsPublic);
+        Assert.False(typeof(JxlEncoderTestHooks).IsPublic);
     }
 
     private static byte Quantize8(float value) => (byte)MathF.Round(Math.Clamp(value, 0F, 1F) * 255F);

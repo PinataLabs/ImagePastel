@@ -11,20 +11,67 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Image encoder for writing an image to a stream as a JPEG XL codestream. Lossless encoding
-/// (<see cref="Distance"/> 0) and lossy encoding are supported at every <see cref="JxlEffort"/>, for any
-/// pixel type, with or without alpha. The lossy colour space is sRGB, or the one an ICC profile describes
-/// when the encoder recognises the profile as a JPEG XL colour encoding; the file then carries that
-/// encoding instead of the profile. <see cref="Frame.JxlFrameEncoder"/> lists what each effort does,
-/// <see cref="JxlEffort.Thorough"/> among them. Lossy encoding with a profile that is not recognised throws
-/// <see cref="System.NotSupportedException"/>.
+/// Image encoder for writing an image to a stream in the JPEG XL format. The defaults write a lossy image
+/// that is visually lossless (<see cref="Distance"/> 1); set <see cref="Distance"/> to 0 for a lossless image.
 /// </summary>
-internal sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
+/// <remarks>
+/// <para>
+/// Lossless and lossy encoding work for any pixel type, with or without alpha, at every
+/// <see cref="JxlEffort"/>. The options are checked when the encode starts: a value out of range throws
+/// <see cref="ImageFormatException"/>, and nothing is written to the stream.
+/// </para>
+/// <para>
+/// Lossless encoding embeds the image's ICC profile when it describes the pixels. Lossy encoding codes the
+/// colour as sRGB, or as the colour space that the ICC profile describes when the encoder recognises it as
+/// a JPEG XL colour encoding; the file then carries that encoding instead of the profile. Lossy encoding
+/// with an ICC profile that the encoder cannot describe throws <see cref="NotSupportedException"/>: save
+/// it lossless, or convert the image to sRGB first.
+/// </para>
+/// <para>
+/// The image's <see cref="Metadata.ImageMetadata.ExifProfile"/> and
+/// <see cref="Metadata.ImageMetadata.XmpProfile"/> are written in <c>Exif</c> and <c>xml </c> boxes of a
+/// JPEG XL container, uncompressed. An Exif profile without values and an empty XMP profile are not
+/// written. An Exif or XMP profile over 64 MiB, the most the JPEG XL decoder reads, throws
+/// <see cref="ImageFormatException"/>. The ICC profile is part of the codestream, not a box. IPTC, JUMBF
+/// and gain maps are not written.
+/// </para>
+/// <para>
+/// The output is a bare codestream unless it needs a container, as in libjxl. It needs one when there is
+/// Exif or XMP to store, or when the codestream needs level 10. Level 10 is needed for lossless samples
+/// or alpha above 12 bits (for example a 16-bit image saved lossless, or 16-bit alpha at any
+/// <see cref="Distance"/>), and for a side over 2^18 pixels or more than 2^28 pixels. The container then
+/// has a <c>jxll</c> box that gives the level. A side over 2^30 pixels throws
+/// <see cref="ImageFormatException"/>. The JPEG XL decoder of this library refuses a frame over 2^28
+/// pixels, although such a file is a valid level-10 file.
+/// </para>
+/// <para>
+/// The Exif orientation is carried into the codestream, as cjxl does: when the Exif profile's
+/// <see cref="Metadata.Profiles.Exif.ExifTag.Orientation"/> is a value from 1 to 8, the file's orientation
+/// is set to it. The pixels and the Exif are written as they are stored, so a JPEG whose Exif says it is
+/// rotated shows upright in readers that apply the JPEG XL orientation. The JPEG XL decoder applies it:
+/// it returns the oriented pixels and sets the Exif orientation to 1. Without a valid Exif orientation,
+/// the file's orientation is 1.
+/// </para>
+/// <para>
+/// Only the root frame is written. From <see cref="JxlMetadata"/> the encoder reads only
+/// <see cref="JxlMetadata.BitsPerSample"/>, <see cref="JxlMetadata.ExponentBitsPerSample"/> and
+/// <see cref="JxlMetadata.IntensityTarget"/>; it ignores the other members.
+/// </para>
+/// </remarks>
+public sealed class JxlEncoder : IImageEncoder, IJxlEncoderOptions
 {
-    /// <inheritdoc/>
+    /// <summary>
+    /// Gets or sets the target for lossy error, in butteraugli units. It has to be in [0, 25]. 0 means
+    /// lossless, about 1 is visually lossless, and larger values give smaller files with more visible loss.
+    /// Values above 0 and below 0.05 are encoded as 0.05, as libjxl does. Defaults to 1.
+    /// </summary>
     public float Distance { get; set; } = 1.0f;
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Gets or sets how much search the encoder spends to reach <see cref="Distance"/>: more effort gives
+    /// smaller files and takes longer. It does not change the target error. Defaults to
+    /// <see cref="JxlEffort.Default"/>.
+    /// </summary>
     public JxlEffort Effort { get; set; } = JxlEffort.Default;
 
     /// <summary>

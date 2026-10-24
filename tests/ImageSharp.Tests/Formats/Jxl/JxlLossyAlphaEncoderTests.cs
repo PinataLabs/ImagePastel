@@ -105,7 +105,7 @@ public class JxlLossyAlphaEncoderTests
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlLossyEncoderTests.Lossy(1.0f));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     // A size case of JxlLossyEncoderTests with an alpha mask: "soft" ramps from opaque inside a disk to

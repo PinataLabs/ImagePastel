@@ -290,7 +290,7 @@ public class JxlLossyEncoderTests
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, Lossy(distance));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     // libjxl's JxlEncoderSetFrameDistance accepts [0, 25].

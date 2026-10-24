@@ -16,8 +16,8 @@ using Xunit;
 namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
 
 /// <summary>
-/// Reads the first frame of an encoded codestream with the decoder's own parse, so encoder tests can
-/// check what the encoder chose without reaching into the encoder.
+/// Reads the first frame of an encoded file, a bare codestream or a container, with the decoder's own
+/// parse, so encoder tests can check what the encoder chose without reaching into the encoder.
 /// </summary>
 internal static class JxlEncodedFrame
 {
@@ -25,7 +25,7 @@ internal static class JxlEncodedFrame
     /// Returns the transforms of the first frame's global Modular stream, in the order the encoder
     /// applied them.
     /// </summary>
-    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="codestream">A bare codestream or a container.</param>
     /// <returns>The transforms.</returns>
     public static List<JxlTransform> ReadGlobalTransforms(byte[] codestream)
     {
@@ -37,7 +37,7 @@ internal static class JxlEncodedFrame
     /// Returns the first frame's global MA tree, as the decoder reads it: numbered breadth first, with
     /// each leaf's <see cref="JxlPropertyDecisionNode.LChild"/> its context.
     /// </summary>
-    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="codestream">A bare codestream or a container.</param>
     /// <returns>The tree.</returns>
     public static List<JxlPropertyDecisionNode> ReadGlobalTree(byte[] codestream)
     {
@@ -50,10 +50,11 @@ internal static class JxlEncodedFrame
     /// none for a frame of one group, whose global stream codes everything. A group with no channels
     /// has an empty list.
     /// </summary>
-    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="codestream">A bare codestream or a container.</param>
     /// <returns>The transforms of each group.</returns>
     public static List<List<JxlTransform>> ReadGroupTransforms(byte[] codestream)
     {
+        codestream = JxlBoxList.Codestream(codestream);
         List<List<JxlTransform>> groups = new();
         (JxlFrameHeader frameHeader, uint[] sizes, int sectionStart) = ReadFrameHeader(codestream);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
@@ -87,11 +88,12 @@ internal static class JxlEncodedFrame
     }
 
     /// <summary>Reads the first frame up to the end of its global Modular stream.</summary>
-    /// <param name="codestream">A bare codestream.</param>
+    /// <param name="codestream">A bare codestream or a container.</param>
     /// <param name="cancellationToken">The token the frame decoder checks.</param>
     /// <returns>The frame decoder, which the caller disposes.</returns>
     public static JxlModularFrameDecoder ReadGlobalInfo(byte[] codestream, CancellationToken cancellationToken = default)
     {
+        codestream = JxlBoxList.Codestream(codestream);
         (JxlFrameHeader frameHeader, uint[] sizes, int sectionStart) = ReadFrameHeader(codestream);
 
         // The DC global section: the all-default DC quantisation bit, then the global Modular stream.

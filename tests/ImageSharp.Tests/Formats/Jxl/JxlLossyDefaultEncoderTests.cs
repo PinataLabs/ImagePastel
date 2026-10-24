@@ -204,7 +204,7 @@ public class JxlLossyDefaultEncoderTests
         using Image<Rgb24> decoded = Image.Load<Rgb24>(JxlEncoderRoundTrip.CreateConfiguration(), encoded);
         JxlLossyEncoderTests.AssertWithinInterimBound(image, decoded, $"block-periodic d{distance}, {encoded.Length} bytes");
 
-        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        string actual = Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded)));
         TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData({distance:0.0#}f, \"{actual}\")]");
         Assert.Equal(expectedSha256, actual);
     }
@@ -502,7 +502,7 @@ public class JxlLossyDefaultEncoderTests
         }
 
         // Logged in full, so that a ticket that changes the output on purpose can regenerate the table.
-        string actual = Convert.ToHexString(SHA256.HashData(encoded));
+        string actual = Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded)));
         TestContext.Current.TestOutputHelper?.WriteLine($"[InlineData(\"{sizeCase}\", \"{mask}\", {distance:0.0#}f, \"{actual}\")]");
         Assert.Equal(expectedSha256, actual);
     }

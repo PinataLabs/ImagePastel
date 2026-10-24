@@ -5,7 +5,7 @@
 // JxlEncoderSetFrameDistance, and the
 // codestream header write of JxlEncoder::ProcessOneEnqueuedInput), lib/jxl/color_encoding_internal.h
 // (ColorEncoding::SetICCRaw), lib/jxl/color_encoding_internal.cc (ColorEncoding::SRGB) and
-// lib/jxl/luminance.cc (SetIntensityTarget).
+// lib/jxl/luminance.cc (SetIntensityTarget), and the Exif orientation rule of tools/cjxl_main.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
@@ -24,7 +24,7 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace SixLabors.ImageSharp.Formats.Jxl;
 
 /// <summary>
-/// Writes an image as a bare JPEG XL codestream.
+/// Writes an image as a JPEG XL codestream, in a container when it has Exif or XMP to store or needs level 10.
 /// </summary>
 internal sealed class JxlEncoderCore : IImageEncoderInternals
 {
@@ -58,8 +58,21 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         this.CheckOptions();
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Taken before the encode, so that a box over the decoder's cap throws before any work is done.
+        JxlMetadataBoxes boxes = JxlMetadataBoxes.Create(image.Metadata);
+
         bool lossy = this.distance != 0;
         JxlCodecMetadata metadata = CreateMetadata<TPixel>(image, lossy);
+
+        // cjxl's rule (InterpretExif before the encode): a valid Exif orientation becomes the codestream
+        // orientation. The pixels and the Exif box are written as they are, so the two stay in sync, as
+        // libjxl's encode.h asks; a decoder that applies the orientation then resets the Exif to 1.
+        if (boxes.Exif is not null)
+        {
+            uint orientation = metadata.M.Orientation;
+            JxlExif.InterpretExif(boxes.Exif, ref orientation);
+            metadata.M.Orientation = orientation;
+        }
 
         // Lossless embeds a matching profile verbatim; lossy writes the colour encoding it recognises.
         byte[] icc = lossy
@@ -69,6 +82,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         // Both modes: libjxl's JxlEncoderSetBasicInfo takes intensity_target whether or not the frame is
         // lossless, and JxlEncoderSetColorEncoding / JxlEncoderSetICCProfile fall back to SetIntensityTarget.
         SetIntensityTarget(metadata.M, image.Metadata.GetFormatMetadata(JxlFormat.Instance).IntensityTarget);
+
+        // libjxl verifies the level when the first input arrives, before any pixel is read.
+        int level = JxlCodestreamLevel.Verify(metadata, icc);
 
         // The whole codestream is built in memory, so nothing reaches the stream if encoding fails.
         JxlBitWriter writer = new();
@@ -82,6 +98,9 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         writer.ZeroPadToByte();
 
+        // In a container, the codestream splits here into the header's jxlp box and the frame's.
+        int headerSize = (int)(writer.BitsWritten / 8);
+
         if (lossy)
         {
             JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.testHooks, this.memoryAllocator, writer);
@@ -91,7 +110,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
             JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
         }
 
-        stream.Write(writer.GetSpan());
+        JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes, level);
     }
 
     // libjxl's JxlEncoderSetBasicInfo and JxlEncoderSetColorEncoding: the image's own colour space,
@@ -253,7 +272,8 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     /// <summary>
     /// Returns the libjxl speed tier of <paramref name="effort"/>, the one place the encoder maps the
     /// two: Fastest is libjxl's effort 3, Default effort 5 and Thorough effort 7. Every stage is then
-    /// gated by the speed tier, as libjxl gates it.
+    /// gated by the speed tier, as libjxl gates it. <see cref="CheckOptions"/> has already rejected an
+    /// effort that <see cref="JxlEffort"/> does not define, with the documented <see cref="ImageFormatException"/>.
     /// </summary>
     /// <param name="effort">The effort.</param>
     /// <returns>The speed tier.</returns>
@@ -261,16 +281,26 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
     {
         JxlEffort.Fastest => JxlSpeedTier.Falcon,
         JxlEffort.Default => JxlSpeedTier.Hare,
-        _ => JxlSpeedTier.Squirrel,
+        JxlEffort.Thorough => JxlSpeedTier.Squirrel,
+
+        // Unreachable: CheckOptions runs first and is the one check of the effort's range. A switch
+        // expression needs a default arm.
+        _ => throw new ArgumentOutOfRangeException(nameof(effort), effort, "Not a JxlEffort"),
     };
 
     // Lossless and lossy are ported at every effort. The distance must be in libjxl's range
-    // (JxlEncoderSetFrameDistance).
+    // (JxlEncoderSetFrameDistance), and the effort one that JxlEffort defines: libjxl's
+    // JXL_ENC_FRAME_SETTING_EFFORT rejects an effort outside its range too.
     private void CheckOptions()
     {
         if (!(this.distance >= 0 && this.distance <= MaxDistance))
         {
             JxlThrowHelper.ThrowImageFormatException($"JPEG XL distance {this.distance} is out of range: it has to be in [0.0..25.0].");
+        }
+
+        if (this.effort is < JxlEffort.Fastest or > JxlEffort.Thorough)
+        {
+            JxlThrowHelper.ThrowImageFormatException($"JPEG XL effort {(int)this.effort} is not defined: it has to be Fastest, Default or Thorough.");
         }
     }
 }

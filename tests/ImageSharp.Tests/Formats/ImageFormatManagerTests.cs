@@ -43,6 +43,7 @@ public class ImageFormatManagerTests
         Assert.Equal(1, this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<TgaEncoder>().Count());
         Assert.Equal(1, this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<TiffEncoder>().Count());
         Assert.Equal(1, this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<WebpEncoder>().Count());
+        Assert.Equal(1, this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<JxlEncoder>().Count());
 
         Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<PbmDecoder>().Count());
         Assert.Equal(1, this.DefaultFormatsManager.ImageDecoders.Select(item => item.Value).OfType<PngDecoder>().Count());
@@ -56,12 +57,10 @@ public class ImageFormatManagerTests
     }
 
     [Fact]
-    public void DefaultFormatsManager_RegistersNoJxlEncoder()
+    public void DefaultFormatsManager_RegistersTheJxlEncoder()
     {
-        // JPEG XL is decode only until the encoder is released (E6).
         Assert.Same(JxlFormat.Instance, this.DefaultFormatsManager.FindFormatByFileExtension("jxl"));
-        Assert.Null(this.DefaultFormatsManager.FindEncoder(JxlFormat.Instance));
-        Assert.Empty(this.DefaultFormatsManager.ImageEncoders.Select(item => item.Value).OfType<JxlEncoder>());
+        Assert.IsType<JxlEncoder>(this.DefaultFormatsManager.FindEncoder(JxlFormat.Instance));
     }
 
     [Fact]

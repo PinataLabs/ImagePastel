@@ -35,7 +35,7 @@ public class JxlEncoderEffortTests
     {
         byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, width, height, JxlEncoderRoundTrip.LosslessFastest));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class JxlEncoderEffortTests
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.LosslessFastest);
 
-        Assert.Equal("CAC3BA22594C71A7E1E139DCD945BEC08190014E6B113D23D6F39DD288187A26", Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal("CAC3BA22594C71A7E1E139DCD945BEC08190014E6B113D23D6F39DD288187A26", Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     // SHA-256 of the Default and Thorough output once E2a to E2d had all merged (feat/jxl-e2c at
@@ -74,7 +74,7 @@ public class JxlEncoderEffortTests
     {
         byte[] encoded = JxlPixelTypes.Call(pixelType, new EncodePattern(pattern, width, height, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort))));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     [Theory]
@@ -86,7 +86,7 @@ public class JxlEncoderEffortTests
 
         byte[] encoded = JxlEncoderRoundTrip.Encode(image, JxlEncoderRoundTrip.Lossless(Enum.Parse<JxlEffort>(effort)));
 
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(encoded)));
+        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(JxlBoxList.Codestream(encoded))));
     }
 
     [Fact]

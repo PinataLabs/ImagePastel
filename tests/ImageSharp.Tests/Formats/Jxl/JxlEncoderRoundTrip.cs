@@ -228,6 +228,20 @@ internal static class JxlEncoderRoundTrip
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Saves <paramref name="image"/> through <c>SaveAsJxl</c>, with <paramref name="encoder"/>, or with the
+    /// JPEG XL encoder of the image's configuration when it is null.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <param name="encoder">The encoder, or null.</param>
+    /// <returns>The bytes written.</returns>
+    public static byte[] SaveAsJxl(Image image, JxlEncoder encoder = null)
+    {
+        using MemoryStream stream = new();
+        image.SaveAsJxl(stream, encoder);
+        return stream.ToArray();
+    }
+
     /// <summary>Gets a configuration with the JPEG XL decoder and detector registered.</summary>
     /// <returns>The configuration.</returns>
     public static Configuration CreateConfiguration()

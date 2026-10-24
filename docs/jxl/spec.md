@@ -32,7 +32,7 @@ Correctness comes first. There is no performance target.
 | Decoded colour | XYB + ICC decodes to gamma-encoded sRGB; the pixel profile only ever describes the pixels; enum spaces other than sRGB get a profile built through `IccWriter` | [#105](https://github.com/PinataLabs/ImageSharp/issues/105), [ADR 0002](../adr/0002-jxl-xyb-icc-decodes-to-srgb.md) |
 | Test data | Inputs and `test.json` committed under LFS; `.npy` references fetched by sha256 into a gitignored cache; attribution in a README per directory plus a notices entry | [#106](https://github.com/PinataLabs/ImageSharp/issues/106) |
 | Encoder verification | Magick plus our own decoder for validity; bit-exact lossless; managed SSIMULACRA2 against a committed cjxl calibration table | [#107](https://github.com/PinataLabs/ImageSharp/issues/107) |
-| Public API | WebP-style types; the decoder exposes `IgnoreMetadata` and `MaxFrames`; the encoder exposes `Distance` and `JxlEffort` only | [#108](https://github.com/PinataLabs/ImageSharp/issues/108), [ADR 0003](../adr/0003-jxl-encoder-takes-distance-not-quality.md) |
+| Public API | WebP-style types; the decoder exposes `IgnoreMetadata` and `MaxFrames`; the encoder exposes `Distance` and `JxlEffort` only. E6 refined the encoder: `Distance` is in [0, 25] (0 is lossless, and values in (0, 0.05) are clamped to 0.05, as libjxl's `kMinButteraugliDistance`; this replaces "0.1–25"); the output is a container only when it has Exif or XMP to store or needs level 10; the Exif orientation becomes the codestream orientation, as cjxl's `InterpretExif` | [#108](https://github.com/PinataLabs/ImageSharp/issues/108), [ADR 0003](../adr/0003-jxl-encoder-takes-distance-not-quality.md), [E6 notes](#e6-done-check-notes) |
 | Extra channels | Straight alpha; CMYK converted naively; spot colours rendered; other channels described in `JxlMetadata` but dropped; internal float-plane seam for conformance | [#111](https://github.com/PinataLabs/ImageSharp/issues/111) |
 | Hostile input | Fixed 2^28-pixel cap per frame; libjxl's structural bounds ported verbatim; only three exception types may escape | [#112](https://github.com/PinataLabs/ImageSharp/issues/112) |
 | Pipeline and memory | Serial, full-frame simple pipeline; one `Buffer2D` per channel; stages in place or ping-pong; the final stage is a swappable sink | [#113](https://github.com/PinataLabs/ImageSharp/issues/113) |
@@ -43,6 +43,7 @@ Correctness comes first. There is no performance target.
 
 - JPEG bitstream reconstruction (`jbrd`) on decode, and lossless JPEG → JXL transcoding.
 - Animation encoding.
+- `brob` compression of the Exif and XMP boxes on encode. E6 writes them as plain boxes on both targets (see the [E6 notes](#e6-done-check-notes)).
 - Encoder e1 fast-lossless, patches and dots (E5 skips both as one departure; splines are libjxl v0.12's own no-op, ported as such), butteraugli iteration, and e8+.
 - Incremental or streaming partial-image decode.
 - A general ICC colour-management engine.
@@ -58,7 +59,7 @@ Correctness comes first. There is no performance target.
 
 Merge each slice to `main` on its own. A JXL type stays `internal` until its release slice. Tests reach the internal types through the existing `InternalsVisibleTo`. Two release slices make the codec public:
 - **D15** for the decoder (done; see the [D15 notes](#d15-done-check-notes)). The decoder surface is public: `JxlFormat`, `JxlDecoder`, `JxlImageFormatDetector`, `JxlMetadata`, `JxlFrameMetadata`, `JxlExtraChannel`, the colour description `JxlColorEncoding`, their enums, `JxlConfigurationModule`, and `GetJxlMetadata()` / `GetJxlFrameMetadata()`. `JxlConfigurationModule` is in `Configuration.CreateDefaultInstance()` and registers the decoder and the detector only. `IJxlDecoderOptions` and every codec type stay `internal`, as WebP's options interface does.
-- **E6** for the encoder: it makes the encoder public and adds `SaveAsJxl` / `SaveAsJxlAsync`. Until then `JxlEncoder`, `IJxlEncoderOptions`, `JxlEffort` and `JxlSpeedTier` stay `internal`, the default configuration registers no JPEG XL encoder, and saving to `.jxl` throws the usual no-encoder `NotSupportedException`.
+- **E6** for the encoder (done; see the [E6 notes](#e6-done-check-notes)). The encoder surface is public: `JxlEncoder`, with `Distance`, `Effort`, `Encode` and `EncodeAsync`, and `JxlEffort`. The source generator adds the 9 `SaveAsJxl` / `SaveAsJxlAsync` overloads. `JxlConfigurationModule` now registers the encoder too, so `image.Save("x.jxl")` writes JPEG XL with the defaults. `IJxlEncoderOptions`, `JxlSpeedTier`, the encoder's test hooks and every codec type stay `internal`.
 
 ### Order
 
@@ -318,6 +319,157 @@ D15 ([#307](https://github.com/PinataLabs/ImageSharp/issues/307)) passed its don
   - The VarDCT coefficients stay `int`, where libjxl can keep them as `int16` and wrap on a crafted stream.
 - **Test counts.** The JPEG XL suite has 4371 tests on net10.0. With `JXL_CONFORMANCE=1` and the tools, all of them pass and none skip, locally (Windows x64, Debug) and in `jxl-oracle` (Release). D15 adds 13 tests through `Configuration.Default` (`JxlDefaultConfigurationTests`), 15 for the colour description (`JxlColorEncodingDescriptionTests`), 25 for the Magick cross-check (5 older ones folded in), and 37 parse-only tests. It removes `DefaultConfiguration_HasNoJxlFormat`, whose opposite now holds. The D15 review fixes add 2 rows for a negative bit depth, so the suite has 4373 tests; all of them pass locally with `JXL_CONFORMANCE=1` and the tools, and none skip. The netstandard2.1 and net10.0 Release builds have 0 warnings, and `ci-apicompat.ps1` finds no breaking change on either leg.
 
+### E6 done-check notes
+
+E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done-check ([#335](https://github.com/PinataLabs/ImageSharp/issues/335)) locally on Windows x64, net10.0 Release, with the libjxl v0.12.0 tools. The done-check found nothing to fix, so it adds tests and docs only. The CI run of PR #336 at 3a459d2e5 passed on every leg. Each check goes through an entry point: `SaveAsJxl` / `Image.Save` with `Configuration.Default`, then our decoder, `MagickImage`, and `djxl` / `jxlinfo` in `jxl-oracle`.
+
+- **The public surface** (E6a, [#331](https://github.com/PinataLabs/ImageSharp/issues/331)).
+  - `JxlDecoderTests.OnlyTheCodecSurfaceIsPublic` lists 16 public types: D15's 14, plus `JxlEncoder` and `JxlEffort`. `TheEncoderHasTwoOptions` checks that the public members of `JxlEncoder` are exactly `Distance`, `Effort`, `Encode` and `EncodeAsync`, and that `IJxlEncoderOptions`, `JxlSpeedTier` and `JxlEncoderTestHooks` stay internal. The generator snapshot has the 9 `SaveAsJxl` / `SaveAsJxlAsync` overloads after TIFF's.
+  - **The API check.** `apicompat-suppressions.xml` has one commented block, "Additions: JPEG XL encoder and SaveAsJxl, #331 (E6a)", with 2 CP0001 (`JxlEncoder`, `JxlEffort`) and 9 CP0002 (the overloads). `ci-apicompat.ps1` finds no other change.
+  - **Validation**, when the encode starts, with `ImageFormatException`, and nothing written. This holds through `SaveAsJxl` and `SaveAsJxlAsync`. `Distance` must be in [0, 25], and NaN is rejected. A value in (0, 0.05) is clamped to 0.05: 0.01 writes the same bytes as 0.05. An `Effort` that `JxlEffort` does not define throws, where it used to fall back to Squirrel.
+- **The container rules** (E6b [#332](https://github.com/PinataLabs/ImageSharp/issues/332), E6c [#333](https://github.com/PinataLabs/ImageSharp/issues/333)). The output is a container only when libjxl's `MustUseContainer` holds: there is a metadata box, or the codestream needs level 10. Otherwise it is the bare codestream, byte for byte as before E6.
+  - **Metadata.** The encoder calls `SyncProfiles()`, then writes `ExifProfile.ToByteArray()` only when it starts with a TIFF header (cjxl's `IsExif`), after a 4-byte offset of 0. It writes `XmpProfile` when it is not empty. The ICC profile stays in the codestream ([#115](https://github.com/PinataLabs/ImageSharp/issues/115)). An Exif or XMP box over 64 MiB, the decoder's cap, throws before any work is done. The layout is `JXL `, `ftyp` (version 0), [`jxll`], `jxlp` 0 (the header), `Exif`, `xml `, then `jxlp` 0x80000001 (the frame).
+  - **Level 10.** `JxlCodestreamLevel.Verify` ports `VerifyLevelSettings` (`encode.cc:560-628`). It gives level 10 when the 16-bit buffer is not enough (lossless samples or alpha above 12 bits), for a side over 2^18, more than 2^28 pixels, more than 4 extra channels, or a Black channel. It throws where libjxl returns -1: for example, a side over 2^30. Level 10 alone is `JXL `, `ftyp`, `jxll` (10), `jxlc`. With metadata, `jxll` comes before `jxlp` 0.
+  - **The codestream does not change.** The codestream that `JxlContainer.Read` joins equals the bare encode for every profile mix, lossless and lossy. The pin tables hash `JxlBoxList.Codestream`, so 10 pins of L16, Rgba64 and RgbaVector rows now hash the joined codestream. No pin value changed since `main` (`ac75e342b`).
+- **The cjxl comparison.** cjxl v0.12.0 with `--compress_boxes=0` runs on the same image, saved as PNG, in `jxl-oracle`:
+  - E6b ran `-d 0 -e 1` with Exif and XMP;
+  - the done-check ran `-d 0` and `-d 1` at `-e 1`, opaque and with alpha, each with Exif, orientation 6, XMP and a Display P3 profile.
+
+  In each case cjxl gives the same box types in the same order, the same `ftyp` and `jxlp` indexes, and the same `Exif` and `xml ` contents. For level 10, `-d 0 -e 1` on a 16-bit L16 and Rgba64 PNG gives the same box types, `ftyp` and `jxll` contents (E6c). `jxlinfo` lists our boxes with their sizes, and `djxl` decodes every E6 output.
+- **The `brob` departure.** Exif and XMP are always plain boxes. netstandard2.1 has no `BrotliEncoder`, so the bytes would depend on the target, and our netstandard2.1 decoder drops `brob` ([#317](https://github.com/PinataLabs/ImageSharp/issues/317)). This departs from cjxl's default (`--compress_boxes=1`), not from libjxl, which leaves compression to the caller (`JxlEncoderAddBox`'s `compress_box`).
+- **The orientation rule** (E6d, [#334](https://github.com/PinataLabs/ImageSharp/issues/334)). The encoder follows cjxl's `InterpretExif` (`exif.h:69-86`): a SHORT Exif orientation from 1 to 8 becomes the codestream orientation. The pixels and the Exif box are written as they are stored, so the two stay in sync, as `encode.h` asks. Our decoder applies the orientation and resets the Exif orientation to 1. `SyncProfiles` rewrites the tag as a SHORT, or drops it when its value does not fit. So on a malformed JPEG, cjxl (which copies the Exif blob) and this encoder can differ, but each keeps its codestream in sync with the Exif it writes.
+  - **Mutation check:** with the codestream orientation left at 1, the 12 round-trip cases through our decoder, `djxl` and `jxlinfo` fail. The Magick and cjxl rows still pass, because they read the Exif.
+- **The metadata round trip** (`JxlEncoderMetadataRoundTripTests`, 20 cases). It covers lossless and lossy, with and without alpha.
+  - **Our decoder:** the Exif values, with the orientation 1; the XMP bytes; the ICC profile byte for byte for lossless, and for lossy the profile built for the same colour encoding (#115); and the `AutoOrient` pixels. Lossless is exact. Lossy is within the interim bound, with alpha exact.
+  - **`MagickImage`:** the Exif values, with the orientation 6; the XMP bytes; the ICC profile for lossless; and `Orientation.RightTop`.
+  - **`jxl-oracle`:** `djxl`'s oriented pixels, `jxlinfo`'s boxes and orientation, and cjxl's box layout.
+- **Magick results per leg.** E6 has 19 Magick rows: 4 in the round trip, 2 in `JxlEncoderMetadataTests`, 8 in `JxlEncoderOrientationTests` and 5 level-10 decodes in `JxlEncoderLevelTests`. Locally on Windows x64, net10.0, all 19 pass. The CI run of PR #336 at 3a459d2e5 is green on every leg, with 0 failed tests:
+
+  | Leg | E6 Magick rows at 3a459d2e5 | Whole test project at 3a459d2e5 |
+  |---|---|---|
+  | Windows x64 (Windows Server 2025), net10.0 and net11.0 | All 19 pass | 41,958 passed, 1,207 skipped, 0 failed (each) |
+  | Linux x64 (Ubuntu 24.04), net10.0 | The 4 round-trip rows pass. The other 15 skip | 41,164 passed, 2,001 skipped, 0 failed (the coverage leg) |
+  | Linux x64 (Ubuntu 24.04), net11.0 | All 19 pass | 41,958 passed, 1,207 skipped, 0 failed |
+  | macOS arm64 (macOS 26), net10.0 and net11.0 | All 19 pass | 41,955 passed, 1,210 skipped, 0 failed (each) |
+  | Build and analyze (Ubuntu 24.04, x64, net10.0) | The 4 round-trip rows pass. The other 15 skip | 41,164 passed, 2,001 skipped, 0 failed (with coverage) |
+  | `jxl-oracle` (Ubuntu 24.04, x64) | All 19 pass | The JPEG XL suite: 5188 passed, 0 skipped |
+
+  The API check and SonarCloud also pass at 3a459d2e5.
+
+  The test logs list each skipped test by name, but not each passed test. So a row passed on a leg when that leg's run has 0 failed tests and does not list the row as skipped. Every leg but `jxl-oracle` runs the same 43,165 tests. The logs do not print skip reasons. The 15 rows that skip under coverage call `SkipUnlessReaderRuns(Reader.Magick)`, which skips when Magick.NET has no JPEG XL delegate, or under coverage ("Adds no coverage: the same encode runs through our decoder"). The round-trip rows check only for the delegate, and they ran on both coverage legs, so the delegate is there and the 15 skip for coverage. No leg skips a Magick row for a missing delegate.
+- **netstandard2.1.** No test project targets netstandard2.1, so the Exif and XMP round trip ([#332](https://github.com/PinataLabs/ImageSharp/issues/332)) on that target is checked by a console harness. The harness is a net10.0 program that references the netstandard2.1 Release DLL by `HintPath`. It does these steps:
+  - It stops unless the loaded assembly's `TargetFrameworkAttribute` is `.NETStandard,Version=v2.1`.
+  - It saves a 37 x 23 `Rgba32` image with `SaveAsJxl` at `Distance` 0 and 1. The image has Exif (Software, orientation 6) and XMP.
+  - It checks that the output is a container with `Exif` and `xml ` boxes.
+  - It loads the output with `Image.Load` and checks the Exif Software value, the Exif orientation (reset to 1), the XMP bytes and the oriented size (23 x 37). For `Distance` 0, it also checks that the pixels equal the `AutoOrient` pixels exactly.
+
+  The E6 review fixes ran it on 2026-10-24 and it printed `d0: 351 bytes, OK`, `d1: 439 bytes, OK` and `OK on .NETStandard,Version=v2.1`. To run it again, put the two files below in a folder outside the repository, so that the repository's `Directory.Build.props` does not apply, then run these commands in PowerShell from the repository root:
+
+  ```powershell
+  dotnet build src/ImageSharp -c Release -f netstandard2.1
+  dotnet run --project $env:TEMP\jxl-ns21\jxl-ns21.csproj -c Release "-p:ImagePastelDll=$PWD\artifacts\bin\src\ImageSharp\Release\netstandard2.1\PinataLabs.ImagePastel.dll"
+  ```
+
+  <details><summary><code>jxl-ns21.csproj</code> and <code>Program.cs</code></summary>
+
+  ```xml
+  <Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+      <OutputType>Exe</OutputType>
+      <TargetFramework>net10.0</TargetFramework>
+    </PropertyGroup>
+    <ItemGroup>
+      <Reference Include="PinataLabs.ImagePastel" HintPath="$(ImagePastelDll)" />
+    </ItemGroup>
+  </Project>
+  ```
+
+  ```csharp
+  using System;
+  using System.IO;
+  using System.Linq;
+  using System.Reflection;
+  using System.Runtime.Versioning;
+  using System.Text;
+  using SixLabors.ImageSharp;
+  using SixLabors.ImageSharp.Formats.Jxl;
+  using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+  using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
+  using SixLabors.ImageSharp.PixelFormats;
+  using SixLabors.ImageSharp.Processing;
+
+  string tfm = typeof(Image).Assembly.GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName;
+  Check(tfm == ".NETStandard,Version=v2.1", $"loaded {tfm}");
+  byte[] xmp = Encoding.UTF8.GetBytes("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"/></x:xmpmeta>");
+  foreach (float distance in new[] { 0f, 1f })
+  {
+      using Image<Rgba32> image = new(37, 23);
+      for (int y = 0; y < image.Height; y++)
+      {
+          for (int x = 0; x < image.Width; x++)
+          {
+              image[x, y] = new Rgba32((byte)(x * 7), (byte)(y * 11), (byte)(x + y), 200);
+          }
+      }
+
+      image.Metadata.ExifProfile = new ExifProfile();
+      image.Metadata.ExifProfile.SetValue(ExifTag.Software, "ns21");
+      image.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+      image.Metadata.XmpProfile = new XmpProfile(xmp);
+
+      using MemoryStream stream = new();
+      image.SaveAsJxl(stream, new JxlEncoder { Distance = distance });
+      byte[] encoded = stream.ToArray();
+      string ascii = Encoding.ASCII.GetString(encoded);
+      Check(ascii.Substring(4, 4) == "JXL " && ascii.Contains("Exif") && ascii.Contains("xml "), "container with Exif and xml boxes");
+
+      using Image<Rgba32> decoded = Image.Load<Rgba32>(encoded);
+      Check(decoded.Metadata.ExifProfile.GetValue(ExifTag.Software).Value == "ns21", "Exif Software");
+      Check(decoded.Metadata.ExifProfile.GetValue(ExifTag.Orientation).Value == 1, "Exif orientation reset to 1");
+      Check(decoded.Metadata.XmpProfile.ToByteArray().SequenceEqual(xmp), "XMP bytes");
+      Check(decoded.Width == 23 && decoded.Height == 37, "oriented size");
+      if (distance == 0)
+      {
+          using Image<Rgba32> oriented = image.Clone(c => c.AutoOrient());
+          for (int y = 0; y < oriented.Height; y++)
+          {
+              for (int x = 0; x < oriented.Width; x++)
+              {
+                  Check(oriented[x, y] == decoded[x, y], $"pixel ({x}, {y})");
+              }
+          }
+      }
+
+      Console.WriteLine($"d{distance}: {encoded.Length} bytes, OK");
+  }
+
+  Console.WriteLine($"OK on {tfm}");
+
+  static void Check(bool condition, string what)
+  {
+      if (!condition)
+      {
+          throw new InvalidOperationException($"FAILED: {what}");
+      }
+  }
+  ```
+
+  </details>
+- **Left recorded:**
+  - **No cancellation inside the encode.** The token is checked once, at the start, as in the other encoders here. A follow-up issue can add per-group checks, like D14e.
+  - **No IPTC, JUMBF or gain-map boxes.** No JPEG XL box carries IPTC-IIM, and ImageSharp 2.x has no profile for JUMBF or gain maps.
+  - **The decoder's 2^28-pixel cap against level-10 writes.** The encoder writes an image over 2^28 pixels as a valid level-10 file, which libjxl reads, but this library's decoder refuses it. The `JxlEncoder` docs say so.
+  - **Exif without a TIFF header** gives a bare codestream here, where cjxl writes a `jxlc` container for it (E6b).
+  - **Not covered by a unit test:** more than 2^28 pixels with both sides at most 2^18. The encode would read 268M pixels. The side checks cover the same branch of `Verify` (E6c).
+- **Test counts.** The new E6 classes have these case counts:
+  - `Formats/Jxl/ImageExtensionsTests`: 31;
+  - `JxlEncoderMetadataTests`: 16;
+  - `JxlEncoderLevelTests`: 30;
+  - `JxlEncoderOrientationTests`: 73;
+  - `JxlEncoderMetadataRoundTripTests`: 20.
+
+  E6 also changed `JxlDecoderTests`, `JxlDefaultConfigurationTests` and `ImageFormatManagerTests`, from "no encoder" to the registered encoder. The JPEG XL suite has 5188 tests on net10.0. With the tools and without `JXL_CONFORMANCE`, 5124 pass and 64 skip; the skips are the conformance vectors that are not cached. The whole test project gives 43,082 passed, 83 skipped and 0 failed. The generator tests pass (16). The netstandard2.1 and net10.0 Release builds have 0 warnings, and `ci-apicompat.ps1` passes.
+
 ## Slices
 
 The size column is a rough count of libjxl C++ lines, taken from the [decoder](https://github.com/PinataLabs/ImageSharp/issues/102) and [encoder](https://github.com/PinataLabs/ImageSharp/issues/103) research and corrected at the [re-estimation gate](#re-estimation-gate-outcome). The C# column is the size times 0.72, and the agent-hours column is the size times 0.17 hours per 1,000 lines, both measured on D1. Agent hours are wall-clock time for an AI agent, not a human rate.
@@ -358,7 +510,7 @@ The size column is a rough count of libjxl C++ lines, taken from the [decoder](h
 | E3 ([#263](https://github.com/PinataLabs/ImageSharp/issues/263), [#264](https://github.com/PinataLabs/ImageSharp/issues/264), [#265](https://github.com/PinataLabs/ImageSharp/issues/265), [#266](https://github.com/PinataLabs/ImageSharp/issues/266), [#267](https://github.com/PinataLabs/ImageSharp/issues/267), [#268](https://github.com/PinataLabs/ImageSharp/issues/268), [#269](https://github.com/PinataLabs/ImageSharp/issues/269), [#270](https://github.com/PinataLabs/ImageSharp/issues/270)) | Lossy Fastest: `TryFromIccProfile` and the colour rules, forward XYB, DCT8, constant quant field, custom DCT8 coefficient order (libjxl reorders at e3), AC tokens, DC/AC-metadata streams, alpha with the predefined tree | Fastest rows of the calibration table; colour-rule tests (an unrecognised ICC throws, a mismatched profile is ignored) | ≈ 1.8K | ≈ 1.3K | ≈ 0.3 |
 | E4 ([#297](https://github.com/PinataLabs/ImageSharp/issues/297), [#298](https://github.com/PinataLabs/ImageSharp/issues/298), [#299](https://github.com/PinataLabs/ImageSharp/issues/299), [#300](https://github.com/PinataLabs/ImageSharp/issues/300), [#301](https://github.com/PinataLabs/ImageSharp/issues/301), [#302](https://github.com/PinataLabs/ImageSharp/issues/302), [#303](https://github.com/PinataLabs/ImageSharp/issues/303), [#304](https://github.com/PinataLabs/ImageSharp/issues/304), [#305](https://github.com/PinataLabs/ImageSharp/issues/305), [#306](https://github.com/PinataLabs/ImageSharp/issues/306)) | Lossy Default (libjxl e5, `kHare`): the adaptive quant field (`InitialQuantField` with the global scale from 0.39 / d, and `AdjustQuantField` over multi-block transforms); `AdjustQuantBlockAC`; the AC-strategy search, which at Hare tries only DCT8, DCT4X4, DCT2X2 and IDENTITY at the 8x8 level, then the aligned merges up to 64x64 (16x8, 8x16, 16x16, 32x16, 16x32, 32x32, 64x32, 32x64, 64x64); the fast least-squares chroma-from-luma map per 64x64 tile; the block context map (`FindBestBlockEntropyModel`); Gaborish above d0.5; near-lossless DC; the `kACMeta` tree for the AC metadata and a learned tree for alpha; custom coefficient orders for every order the search uses. `FindBestQuantizer` is a no-op at Hare, so there is no butteraugli | All 18 Default rows of the calibration table at the slack of 3, through our decoder, Magick.NET and `djxl` (through our decoder each row is within 0.09 of cjxl's score at 0.98x to 1.02x its size; the smallest margin is 3.23, through Magick.NET on gradient d1); the encoder's choices read back through the decoder's parse | ≈ 2.5K | ≈ 1.8K | ≈ 0.45 |
 | E5 ([#318](https://github.com/PinataLabs/ImageSharp/issues/318), [#319](https://github.com/PinataLabs/ImageSharp/issues/319), [#320](https://github.com/PinataLabs/ImageSharp/issues/320), [#321](https://github.com/PinataLabs/ImageSharp/issues/321), [#322](https://github.com/PinataLabs/ImageSharp/issues/322), [#323](https://github.com/PinataLabs/ImageSharp/issues/323), [#324](https://github.com/PinataLabs/ImageSharp/issues/324), [#325](https://github.com/PinataLabs/ImageSharp/issues/325), [#326](https://github.com/PinataLabs/ImageSharp/issues/326), [#327](https://github.com/PinataLabs/ImageSharp/issues/327)) | Lossy Thorough (libjxl e7, `kSquirrel`), every stage behind libjxl's own `speed_tier` comparison: the 8x8 candidates DCT4X8, DCT8X4 and AFV0-3, with their forward transforms (AFV's 4x4 basis is libjxl's 256 encoder literals); the non-aligned 16x16 and 32x32 merges after the aligned ones (libjxl steps by `speed_tier >= kTortoise ? 2 : 1`, so 2 at Squirrel, not 1); the chroma-from-luma DCT8 pre-pass per tile before the strategy search, and the Newton solver (`fast = false`) in the fit after it; the pixel-statistics `x_qm_scale` and `b_qm_scale` (`PixelStatsForChromacityAdjustment`; cjxl -e 7's on all 18 rows); dynamic EPF sharpness (`ComputeARHeuristics`), which reconstructs the frame inside the encoder once per EPF step through the decoder's VarDCT group decode, Gaborish and EPF (`ReconstructImage`). Squirrel's alpha tree parameters were already E2's. Splines are not a departure: libjxl v0.12's `FindSplines` returns an empty set (`enc_splines.cc:103-106`), so the step is ported as that no-op. Departure (ADR 0001): no patches or dots. Measured with cjxl -e 7 `--patches=0` against `--patches=1`, only `text` changes (1.18x the size; 0.34, 1.49 and 1.18 lower at d1, d2 and d4 by the table's scorer); our `text` encodes score the same as cjxl -e 7 `--patches=0` to 4 decimals through our decoder, at 0.998x its size, so the whole `text` gap to the table is the patches | All 18 Thorough rows of the calibration table at the slack of 3, through our decoder, Magick.NET and `djxl`; alpha exact. Without `text`, every score is within 0.28 of cjxl -e 7's at 0.99x to 1.02x its size; `text` is 0.55, 1.46 and 1.17 below at 1.17x to 1.18x (the patches). The smallest margins are `text` d2 2.04 (our decoder), 2.05 (djxl) and 2.09 (Magick.NET); `line_art`, the risk row (E5a: -9.5 at d2), passes by 3.5. Bike's whole strategy map at d0.5, d1, d2 and d4 is a no-FMA libjxl harness's (the CfL pre-pass, then `ProcessRectACS`, per tile), and agrees with cjxl -e 7 on 99.86 % to 99.95 % of its blocks (Calliphora: 100 %). On the photo set Thorough is no larger than Default, or larger by as much as cjxl -e 7 is over -e 5 (at most 1.034x, bike d4, for 1.15 points more). Mutation check: an AFV basis sign fails 13 rows; the merge step 2 -> 1 fails no row but the map and 5 pins; `kFavorNoSmoothing` 0.99 -> 1.2 changes no output (the first pass of the sharpness choice feeds only a histogram whose quotients are 0) | ≈ 0.9K | ≈ 1.2K | ≈ 0.15 |
-| E6 | **Encoder release:** `JxlEncoder` public, `SaveAsJxl` / `SaveAsJxlAsync`, Exif/XMP boxes in a container | Public-API tests; metadata round-trip through our decoder and Magick | small | — | — |
+| E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330), [#331](https://github.com/PinataLabs/ImageSharp/issues/331), [#332](https://github.com/PinataLabs/ImageSharp/issues/332), [#333](https://github.com/PinataLabs/ImageSharp/issues/333), [#334](https://github.com/PinataLabs/ImageSharp/issues/334), [#335](https://github.com/PinataLabs/ImageSharp/issues/335)) | **Encoder release:** `JxlEncoder` (`Distance`, `Effort`) and `JxlEffort` public; `JxlConfigurationModule` registers the encoder; `SaveAsJxl` / `SaveAsJxlAsync` from the source generator; an undefined `Effort` throws `ImageFormatException`. Exif and XMP in plain `Exif` and `xml ` boxes of a container, in libjxl's layout (`JXL `, `ftyp`, [`jxll`], `jxlp` 0, `Exif`, `xml `, `jxlp` last), with an Exif or XMP box over 64 MiB refused; a level-10 codestream (`VerifyLevelSettings`) in a container with a `jxll` box, alone as `JXL `, `ftyp`, `jxll`, `jxlc`; a side over 2^30 refused; the Exif orientation carried into the codestream (`InterpretExif`). Otherwise a bare codestream, byte for byte as before. Departure from cjxl's default, not from libjxl: no `brob` | Public-API tests through `Configuration.Default` (every overload, `Save("x.jxl")`, each effort at `Distance` 0 and 1, the validation errors); the metadata round trip (lossless and lossy, with and without alpha, each with Exif, orientation 6, XMP and a Display P3 profile) through our decoder, `MagickImage`, and in `jxl-oracle` `djxl` and `jxlinfo`; every box layout equals cjxl v0.12.0 `--compress_boxes=0`'s on the same input. No codestream SHA-256 pin moved, and every calibration row still passes. See the [E6 notes](#e6-done-check-notes) | ≈ 0.15K | ≈ 0.5K | ≈ 0.03 |
 
 ### Hardening
 
