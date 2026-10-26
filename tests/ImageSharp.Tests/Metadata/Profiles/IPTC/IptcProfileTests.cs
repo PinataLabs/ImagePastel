@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
@@ -178,6 +179,83 @@ public class IptcProfileTests
         var iptcValues = profileFromBytes.Values.ToList();
         ContainsIptcValue(iptcValues, IptcTag.CaptionWriter, expectedCaptionWriter);
         ContainsIptcValue(iptcValues, IptcTag.Caption, expectedCaption);
+    }
+
+    [Fact]
+    public void IptcProfile_WithUtf8Data_WritesEnvelopeRecord_Works()
+    {
+        // arrange
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "ESPAÑA");
+        byte[] expectedEnvelopeData = { 0x1C, 0x01, 0x5A, 0x00, 0x03, 0x1B, 0x25, 0x47 };
+
+        // act
+        profile.UpdateData();
+        byte[] profileBytes = profile.Data;
+
+        // assert
+        Assert.Equal(expectedEnvelopeData, profileBytes.AsSpan(0, expectedEnvelopeData.Length).ToArray());
+    }
+
+    [Fact]
+    public void IptcProfile_WithAsciiData_DoesNotWriteEnvelopeRecord()
+    {
+        // arrange
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "test");
+
+        // act
+        profile.UpdateData();
+
+        // assert
+        Assert.Equal(new byte[] { 0x1C, 0x02, (byte)IptcTag.Caption }, profile.Data.AsSpan(0, 3).ToArray());
+    }
+
+    [Fact]
+    public void IptcProfile_WithMixedEncodings_DoesNotWriteEnvelopeRecord()
+    {
+        // arrange
+        var profile = new IptcProfile();
+        profile.SetValue(IptcTag.Caption, "ESPAÑA");
+        profile.SetValue(IptcTag.City, Encoding.Latin1, "Málaga");
+
+        // act
+        profile.UpdateData();
+
+        // assert
+        Assert.Equal(new byte[] { 0x1C, 0x02, (byte)IptcTag.Caption }, profile.Data.AsSpan(0, 3).ToArray());
+    }
+
+    [Fact]
+    public void IptcProfile_WithDecodedLatin1Data_DoesNotWriteEnvelopeRecord()
+    {
+        // arrange
+        byte[] latin1Profile = { 0x1C, 0x02, (byte)IptcTag.Caption, 0x00, 0x06, 0x45, 0x53, 0x50, 0x41, 0xD1, 0x41 };
+        var profile = new IptcProfile(latin1Profile);
+
+        // act
+        profile.UpdateData();
+
+        // assert
+        Assert.Equal(latin1Profile, profile.Data);
+    }
+
+    [Fact]
+    public void IptcProfile_WithUtf8Data_ToAndFromByteArray_DoesNotAddEnvelopeValue()
+    {
+        // arrange
+        var profile = new IptcProfile();
+        const string expectedCaption = "ESPAÑA";
+        profile.SetValue(IptcTag.Caption, expectedCaption);
+
+        // act
+        profile.UpdateData();
+        var profileFromBytes = new IptcProfile(profile.Data);
+
+        // assert
+        IptcValue actual = Assert.Single(profileFromBytes.Values);
+        Assert.Equal(IptcTag.Caption, actual.Tag);
+        Assert.Equal(expectedCaption, actual.Value);
     }
 
     [Fact]
