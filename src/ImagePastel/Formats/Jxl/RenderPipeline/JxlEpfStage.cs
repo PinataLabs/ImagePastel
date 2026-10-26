@@ -138,8 +138,16 @@ internal abstract class JxlEpfStage : IJxlNeighbourStage
     }
 
     // The whole vectors of the row, as libjxl's loop. Returns the first pixel left for the scalar code.
+    // The loads and stores are not bounds-checked one by one, which costs up to a fifth of the decode
+    // time, so the row is checked once here: if the window or an output row does not cover it, the
+    // scalar code, whose indexers are checked, filters the whole row.
     private int ProcessVectors(Rows rows, ReadOnlySpan<float> rowSigma, bool borderRow, Span<float> outX, Span<float> outY, Span<float> outB, int xsize)
     {
+        if (!rows.Cover(xsize) || outX.Length < xsize || outY.Length < xsize || outB.Length < xsize)
+        {
+            return 0;
+        }
+
         int lanes = Vector<float>.Count;
         Vector<float> borderSadMul = new(this.borderSadMul);
         int x = 0;
@@ -213,7 +221,7 @@ internal abstract class JxlEpfStage : IJxlNeighbourStage
         return Vector.ConditionalSelect(Vector.LessThan(v, Vector<float>.Zero), Vector<float>.Zero, v);
     }
 
-    // Stores a vector at pixel x of a row that holds it.
+    // Stores a vector at pixel x of a row that holds it, which ProcessVectors has checked for the row.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Store(Vector<float> value, Span<float> row, int x)
     {
@@ -263,12 +271,33 @@ internal abstract class JxlEpfStage : IJxlNeighbourStage
         /// <param name="dy">The row offset, from <c>-Border</c> to <c>Border</c>.</param>
         /// <param name="x">The first column, from <c>-Border</c>, with the last at most <c>xsize + Border - 1</c>.</param>
         /// <returns>The pixels.</returns>
+        /// <remarks>Not bounds-checked: <see cref="Cover"/> checks the whole row first.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Vector<float> Load(int c, int dy, int x)
         {
             int index = this.pixel0[(c * this.rowsPerChannel) + this.border + dy] + x;
             DebugGuard.MustBeBetweenOrEqualTo(index, 0, this.window.Length - Vector<float>.Count, nameof(x));
             return Unsafe.ReadUnaligned<Vector<float>>(ref Unsafe.As<float, byte>(ref Unsafe.Add(ref MemoryMarshal.GetReference(this.window), index)));
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the window holds every pixel that <see cref="Load"/> reads for a
+        /// row of <paramref name="xsize"/> pixels: columns <c>-Border</c> to <c>xsize + Border - 1</c> of each
+        /// row of each channel.
+        /// </summary>
+        /// <param name="xsize">The row width.</param>
+        /// <returns>Whether the loads stay in the window.</returns>
+        public bool Cover(int xsize)
+        {
+            foreach (int start in this.pixel0)
+            {
+                if (start - this.border < 0 || (long)start + xsize + this.border > this.window.Length)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 

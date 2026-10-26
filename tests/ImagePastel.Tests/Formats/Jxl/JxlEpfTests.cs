@@ -104,20 +104,29 @@ public class JxlEpfTests
     // #315: each pass filters a vector of pixels at a time where the hardware has vectors, and the rest
     // of a row with the scalar code. Both must give the same bits, on any planes and sigmas: the vector
     // code does each pixel's sums in the scalar code's order, without FMA (ADR 0004). The widths take in
-    // a row shorter than a vector, whole vectors, and a tail; a third of the blocks pass through.
+    // a row shorter than a vector, whole vectors, and a tail; a third of the blocks pass through. Low
+    // contrast, as in a lossy image, puts most weights between 0 and 1. High contrast spans magnitudes
+    // from denormals to 1e30, as a hostile stream can give, and the special planes add NaN and infinities,
+    // so the weight's select and the weight sum's reciprocal see them too.
     [Theory]
-    [InlineData(0, 3, 5)]
-    [InlineData(0, 64, 24)]
-    [InlineData(0, 77, 19)]
-    [InlineData(1, 3, 5)]
-    [InlineData(1, 64, 24)]
-    [InlineData(1, 77, 19)]
-    [InlineData(2, 3, 5)]
-    [InlineData(2, 64, 24)]
-    [InlineData(2, 77, 19)]
-    public void Pass_VectorAndScalar_AreBitIdentical(int pass, int xsize, int ysize)
+    [InlineData(0, 3, 5, PlaneValues.LowContrast)]
+    [InlineData(0, 64, 24, PlaneValues.LowContrast)]
+    [InlineData(0, 77, 19, PlaneValues.LowContrast)]
+    [InlineData(0, 77, 19, PlaneValues.HighContrast)]
+    [InlineData(0, 77, 19, PlaneValues.Special)]
+    [InlineData(1, 3, 5, PlaneValues.LowContrast)]
+    [InlineData(1, 64, 24, PlaneValues.LowContrast)]
+    [InlineData(1, 77, 19, PlaneValues.LowContrast)]
+    [InlineData(1, 77, 19, PlaneValues.HighContrast)]
+    [InlineData(1, 77, 19, PlaneValues.Special)]
+    [InlineData(2, 3, 5, PlaneValues.LowContrast)]
+    [InlineData(2, 64, 24, PlaneValues.LowContrast)]
+    [InlineData(2, 77, 19, PlaneValues.LowContrast)]
+    [InlineData(2, 77, 19, PlaneValues.HighContrast)]
+    [InlineData(2, 77, 19, PlaneValues.Special)]
+    public void Pass_VectorAndScalar_AreBitIdentical(int pass, int xsize, int ysize, PlaneValues values)
     {
-        Random random = new(315 + (pass * 1000) + xsize);
+        Random random = new(315 + (pass * 1000) + xsize + ((int)values * 100));
         JxlLoopFilter lf = new();
         for (int c = 0; c < 3; c++)
         {
@@ -147,8 +156,7 @@ public class JxlEpfTests
                 Span<float> row = planes[c].DangerousGetRowSpan(y);
                 for (int x = 0; x < xsize; x++)
                 {
-                    // Low contrast, as in a lossy image, so that most weights are between 0 and 1.
-                    row[x] = 0.5f + NextFloat(random, -0.01f, 0.01f);
+                    row[x] = NextSample(random, values);
                 }
             }
         }
@@ -217,6 +225,36 @@ public class JxlEpfTests
 
     private static float NextFloat(Random random, float min, float max) => min + ((float)random.NextDouble() * (max - min));
 
+    private static float NextSample(Random random, PlaneValues values)
+    {
+        if (values == PlaneValues.LowContrast)
+        {
+            return 0.5f + NextFloat(random, -0.01f, 0.01f);
+        }
+
+        int pick = random.Next(16);
+        if (values == PlaneValues.Special)
+        {
+            switch (pick)
+            {
+                case 0:
+                    return float.NaN;
+                case 1:
+                    return float.PositiveInfinity;
+                case 2:
+                    return float.NegativeInfinity;
+            }
+        }
+
+        return pick switch
+        {
+            3 => NextFloat(random, -1f, 1f) * 1e-40f, // denormal
+            4 => NextFloat(random, -1f, 1f) * 1e30f,
+            5 => 0f,
+            _ => NextFloat(random, -4f, 4f),
+        };
+    }
+
     private static Configuration CreateConfiguration()
     {
         Configuration configuration = Configuration.CreateDefaultInstance();
@@ -228,4 +266,17 @@ public class JxlEpfTests
     private static string InputPath(string name) => Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, "Jxl", "Generated", name + ".jxl");
 
     private static NpyArray LoadReference(string name) => NpyArray.Load(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "JxlDecoderTests", name + ".npy"));
+
+    /// <summary>The samples of the planes of <see cref="Pass_VectorAndScalar_AreBitIdentical"/>.</summary>
+    public enum PlaneValues
+    {
+        /// <summary>0.5 plus or minus 0.01.</summary>
+        LowContrast,
+
+        /// <summary>Mostly -4 to 4, with zeros, denormals and magnitudes up to 1e30.</summary>
+        HighContrast,
+
+        /// <summary>As <see cref="HighContrast"/>, with NaN and both infinities.</summary>
+        Special,
+    }
 }
