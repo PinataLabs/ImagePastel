@@ -43,8 +43,8 @@ public static class TestFontUtilities
         List<string> directories = new List<string>
         {
              "TestFonts/", // Here for code coverage tests.
-             "tests/ImageSharp.Tests/TestFonts/", // from travis/build script
-             "../../../../../ImageSharp.Tests/TestFonts/", // from Sandbox46
+             "tests/ImagePastel.Tests/TestFonts/", // from travis/build script
+             "../../../../../ImagePastel.Tests/TestFonts/", // from Sandbox46
              "../../../../TestFonts/"
         };
 
@@ -68,7 +68,7 @@ public static class TestFontUtilities
     /// <summary>
     /// The path returned by Path.GetFullPath(x) can be relative to dotnet framework directory
     /// in certain scenarios like dotTrace test profiling.
-    /// This method calculates and adds the format directory based on the ImageSharp.Tests assembly location.
+    /// This method calculates and adds the format directory based on the ImagePastel.Tests assembly location.
     /// </summary>
     /// <param name="directories">The directories list</param>
     private static void AddFormatsDirectoryFromTestAssemblyPath(List<string> directories)

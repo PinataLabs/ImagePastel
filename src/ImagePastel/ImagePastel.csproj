@@ -42,14 +42,14 @@
   </ItemGroup>
 
   <!--
-    Code that used to come from T4 templates is written by gen/ImageSharp.SourceGenerators.
-    The generated files are under artifacts/obj/src/ImageSharp/<configuration>/<tfm>/generated/.
+    Code that used to come from T4 templates is written by gen/ImagePastel.SourceGenerators.
+    The generated files are under artifacts/obj/src/ImagePastel/<configuration>/<tfm>/generated/.
   -->
   <PropertyGroup>
     <ImageSharpGeneratedSources>Library</ImageSharpGeneratedSources>
   </PropertyGroup>
 
-  <Import Project="..\..\gen\ImageSharp.SourceGenerators.props" />
+  <Import Project="..\..\gen\ImagePastel.SourceGenerators.props" />
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />

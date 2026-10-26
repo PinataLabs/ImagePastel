@@ -12,7 +12,7 @@ namespace SixLabors.ImageSharp.SourceGenerators;
 /// </summary>
 internal static class DiagnosticDescriptors
 {
-    private const string Category = "ImageSharp.SourceGenerators";
+    private const string Category = "ImagePastel.SourceGenerators";
 
     // The valid values, for example "'Library' or 'Tests'".
     private static readonly string TargetNames =

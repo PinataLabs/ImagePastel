@@ -18,7 +18,7 @@ if (-not (Test-Path "$baseline/lib")) {
 # Version only needs the same major as the baseline so the assembly version matches (2.0.0.0).
 # BaseArtifactsPath moves the output of every project in the build, the library and the
 # source generator it references, while each keeps its own obj and bin folders.
-dotnet build "$PSScriptRoot/src/ImageSharp/ImageSharp.csproj" -c Release `
+dotnet build "$PSScriptRoot/src/ImagePastel/ImagePastel.csproj" -c Release `
     -p:AssemblyName=SixLabors.ImageSharp `
     -p:Version=2.2.0 `
     -p:BaseArtifactsPath="$output/"
@@ -37,6 +37,6 @@ foreach ($pair in $pairs) {
     dotnet apicompat --noWarn CP0003 --strict-mode `
         --suppression-file "$PSScriptRoot/apicompat-suppressions.xml" `
         -l "$baseline/lib/$($pair.Baseline)/SixLabors.ImageSharp.dll" `
-        -r "$output/bin/src/ImageSharp/Release/$($pair.Current)/SixLabors.ImageSharp.dll"
+        -r "$output/bin/src/ImagePastel/Release/$($pair.Current)/SixLabors.ImageSharp.dll"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

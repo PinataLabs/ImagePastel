@@ -2,7 +2,7 @@
 <Project>
 
   <!--
-    Runs gen/ImageSharp.SourceGenerators in the project that imports this file.
+    Runs gen/ImagePastel.SourceGenerators in the project that imports this file.
     The project must also set ImageSharpGeneratedSources to its target: Library or Tests.
     The generated files are under artifacts/obj/<category>/<project>/<configuration>/<tfm>/generated/.
   -->
@@ -17,7 +17,7 @@
   -->
   <ItemGroup>
     <CompilerVisibleProperty Include="ImageSharpGeneratedSources" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj"
+    <ProjectReference Include="$(MSBuildThisFileDirectory)ImagePastel.SourceGenerators\ImagePastel.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all"

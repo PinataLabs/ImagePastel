@@ -69,7 +69,7 @@ jobs:
           global-json-file: global.json
 
       - name: Pack
-        run: dotnet pack src/ImageSharp/ImageSharp.csproj -c Release -o artifacts/packages
+        run: dotnet pack src/ImagePastel/ImagePastel.csproj -c Release -o artifacts/packages
 
       # A pre-release run that published a stable version would take a version number
       # the real release then cannot have - nuget.org never reuses one. That happens

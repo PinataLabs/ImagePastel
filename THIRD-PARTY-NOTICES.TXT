@@ -23,9 +23,9 @@ https://github.com/chromium/chromium
 License notice for libjxl
 -----
 
-The JPEG XL codec under src/ImageSharp/Formats/Jxl is ported from libjxl
+The JPEG XL codec under src/ImagePastel/Formats/Jxl is ported from libjxl
 (commit ef67fde2). Each ported file names its libjxl source files.
-The SSIMULACRA2 metric under tests/ImageSharp.Tests/Formats/Jxl/Quality is
+The SSIMULACRA2 metric under tests/ImagePastel.Tests/Formats/Jxl/Quality is
 ported from libjxl tools/ssimulacra2.cc at the same commit, as test code.
 Licensed under the BSD 3-Clause License, with an additional patent grant
 from Google (the PATENTS file of libjxl).
@@ -88,11 +88,11 @@ The README.md in each directory lists the source, licence and author of every fi
 License notice for Little CMS
 -----
 
-Parts of the ICC colour engine under src/ImageSharp/ColorManagement and
-src/ImageSharp/Metadata/Profiles/ICC follow Little CMS (commit 5176347, as
+Parts of the ICC colour engine under src/ImagePastel/ColorManagement and
+src/ImagePastel/Metadata/Profiles/ICC follow Little CMS (commit 5176347, as
 vendored in libjxl third_party/lcms, and commit a57322d8, Little CMS 2.20).
 So does the JPEG XL codec's profile recognition in
-src/ImageSharp/Formats/Jxl/Headers/JxlColorEncoding.FromIcc.cs, which ports
+src/ImagePastel/Formats/Jxl/Headers/JxlColorEncoding.FromIcc.cs, which ports
 cmsEstimateGamma from src/cmsgamma.c at commit 5176347.
 Each such file names its Little CMS commit and source files. Some test profiles under tests/Images/Input/Icc were written
 by Little CMS.

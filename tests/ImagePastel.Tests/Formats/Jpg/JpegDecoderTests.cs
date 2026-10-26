@@ -356,7 +356,7 @@ public partial class JpegDecoderTests
     }
 
     // DEBUG ONLY!
-    // The PDF.js output should be saved by "tests\ImageSharp.Tests\Formats\Jpg\pdfjs\jpeg-converter.htm"
+    // The PDF.js output should be saved by "tests\ImagePastel.Tests\Formats\Jpg\pdfjs\jpeg-converter.htm"
     // into "\tests\Images\ActualOutput\JpegDecoderTests\"
     // [Theory]
     // [WithFile(TestImages.Jpeg.Progressive.Progress, PixelTypes.Rgba32, "PdfJsOriginal_progress.png")]
@@ -365,7 +365,7 @@ public partial class JpegDecoderTests
         string pdfJsOriginalResultImage)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        // tests\ImageSharp.Tests\Formats\Jpg\pdfjs\jpeg-converter.htm
+        // tests\ImagePastel.Tests\Formats\Jpg\pdfjs\jpeg-converter.htm
         string pdfJsOriginalResultPath = Path.Combine(
             provider.Utility.GetTestOutputDir(),
             pdfJsOriginalResultImage);

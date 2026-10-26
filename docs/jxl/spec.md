@@ -8,7 +8,7 @@ Each decision below names the ticket that holds its detail. The ticket is the so
 
 ### Goal
 
-A pure managed JPEG XL (ISO/IEC 18181) codec in `src/ImageSharp/Formats/Jxl`, for `net10.0` and `netstandard2.1`, with no native dependency in the shipped library.
+A pure managed JPEG XL (ISO/IEC 18181) codec in `src/ImagePastel/Formats/Jxl`, for `net10.0` and `netstandard2.1`, with no native dependency in the shipped library.
 
 - **Decoder:** the full Main profile (Level 5 and Level 10). It must pass all 27 libjxl conformance vectors within their thresholds.
 - **Encoder:** lossless Modular and lossy VarDCT at three effort levels. It is verified by reference-decoder validity, bit-exact lossless round-trips and an SSIMULACRA2 floor for lossy output.
@@ -366,8 +366,8 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   The E6 review fixes ran it on 2026-10-24 and it printed `d0: 351 bytes, OK`, `d1: 439 bytes, OK` and `OK on .NETStandard,Version=v2.1`. To run it again, put the two files below in a folder outside the repository, so that the repository's `Directory.Build.props` does not apply, then run these commands in PowerShell from the repository root:
 
   ```powershell
-  dotnet build src/ImageSharp -c Release -f netstandard2.1
-  dotnet run --project $env:TEMP\jxl-ns21\jxl-ns21.csproj -c Release "-p:ImagePastelDll=$PWD\artifacts\bin\src\ImageSharp\Release\netstandard2.1\PinataLabs.ImagePastel.dll"
+  dotnet build src/ImagePastel -c Release -f netstandard2.1
+  dotnet run --project $env:TEMP\jxl-ns21\jxl-ns21.csproj -c Release "-p:ImagePastelDll=$PWD\artifacts\bin\src\ImagePastel\Release\netstandard2.1\PinataLabs.ImagePastel.dll"
   ```
 
   <details><summary><code>jxl-ns21.csproj</code> and <code>Program.cs</code></summary>
@@ -516,4 +516,4 @@ The size column is a rough count of libjxl C++ lines, taken from the [decoder](h
 
 | # | Ships | Done-check | Size | C# (est.) | Agent hours (est.) |
 |---|---|---|---|---|---|
-| F1 | SharpFuzz harness `tests/ImageSharp.Fuzz`, seeded with the conformance and libjxl inputs; runs locally only | One hour with no new failure; each crash it finds is committed as `tests/Images/Input/Jxl/issues/fuzz/IssueNNN-<Exception>.jxl` | test code only | — | — |
+| F1 | SharpFuzz harness `tests/ImagePastel.Fuzz`, seeded with the conformance and libjxl inputs; runs locally only | One hour with no new failure; each crash it finds is committed as `tests/Images/Input/Jxl/issues/fuzz/IssueNNN-<Exception>.jxl` | test code only | — | — |

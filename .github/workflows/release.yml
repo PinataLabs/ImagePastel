@@ -66,7 +66,7 @@ jobs:
           global-json-file: global.json
 
       - name: Pack
-        run: dotnet pack src/ImageSharp/ImageSharp.csproj -c Release -o artifacts/packages
+        run: dotnet pack src/ImagePastel/ImagePastel.csproj -c Release -o artifacts/packages
 
       # A mismatch means MinVer did not see the tag, which would publish a
       # pre-release-versioned package under a release tag.
