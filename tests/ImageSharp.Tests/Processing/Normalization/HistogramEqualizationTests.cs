@@ -201,4 +201,46 @@ public class HistogramEqualizationTests
 
         ValidatorComparer.VerifySimilarity(referenceResult, processed);
     }
+
+    // A pixel format that holds values outside [0, 1] gives a luminance outside the histogram, which was
+    // used as an index without a check: +Infinity ended the process (GHSA-j3p4-wp97-rph4).
+    [Theory]
+    [InlineData(HistogramEqualizationMethod.Global, float.PositiveInfinity)]
+    [InlineData(HistogramEqualizationMethod.Global, float.NegativeInfinity)]
+    [InlineData(HistogramEqualizationMethod.Global, float.NaN)]
+    [InlineData(HistogramEqualizationMethod.Global, 2F)]
+    [InlineData(HistogramEqualizationMethod.Global, -1F)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveTileInterpolation, float.PositiveInfinity)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveTileInterpolation, float.NegativeInfinity)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveTileInterpolation, float.NaN)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveTileInterpolation, 2F)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveTileInterpolation, -1F)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveSlidingWindow, float.PositiveInfinity)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveSlidingWindow, float.NegativeInfinity)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveSlidingWindow, float.NaN)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveSlidingWindow, 2F)]
+    [InlineData(HistogramEqualizationMethod.AdaptiveSlidingWindow, -1F)]
+    public void HistogramEqualization_PixelOutsideUnitRange_GivesLuminanceInUnitRange(HistogramEqualizationMethod method, float value)
+    {
+        using var image = new Image<HalfVector4>(16, 16);
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                float v = (x + y) % 2 == 0 ? value : 0.5F;
+                image[x, y] = new HalfVector4(v, v, v, 1F);
+            }
+        }
+
+        image.Mutate(x => x.HistogramEqualization(new HistogramEqualizationOptions { Method = method }));
+
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                float luminance = image[x, y].ToVector4().X;
+                Assert.InRange(luminance, 0F, 1F);
+            }
+        }
+    }
 }
