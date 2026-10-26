@@ -1059,7 +1059,7 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
 
     /// <summary>
     /// Decodes and assigns marker colors that identify transparent pixels in non indexed images,
-    /// and flags indexed images that have palette alpha values as transparent.
+    /// and flags indexed images whose palette has any entry that is not fully opaque.
     /// </summary>
     /// <param name="alpha">The alpha tRNS array.</param>
     /// <param name="pngMetadata">The png metadata.</param>
@@ -1104,11 +1104,29 @@ internal sealed class PngDecoderCore : IImageDecoderInternals
                 pngMetadata.HasTransparency = true;
             }
         }
-        else if (this.pngColorType == PngColorType.Palette && alpha.Length > 0)
+        else if (this.pngColorType == PngColorType.Palette && HasTransparentPaletteEntry(alpha))
         {
             // The alpha values themselves are stored as the palette alpha by the caller.
             pngMetadata.HasTransparency = true;
         }
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether any palette alpha value in the tRNS array is below fully opaque.
+    /// </summary>
+    /// <param name="alpha">The alpha tRNS array.</param>
+    /// <returns><see langword="true"/> if any entry is not fully opaque; otherwise, <see langword="false"/>.</returns>
+    private static bool HasTransparentPaletteEntry(ReadOnlySpan<byte> alpha)
+    {
+        foreach (byte value in alpha)
+        {
+            if (value < byte.MaxValue)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
