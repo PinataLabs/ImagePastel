@@ -1,11 +1,11 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Processing.Processors.ColorManagement;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines extensions that convert an <see cref="Image"/> between ICC profiles using Mutate/Clone.

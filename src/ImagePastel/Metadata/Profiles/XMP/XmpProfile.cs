@@ -6,7 +6,7 @@ using System.IO;
 using System.Text;
 using System.Xml.Linq;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Xmp;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
 
 /// <summary>
 /// Represents an XMP profile, providing access to the raw XML.

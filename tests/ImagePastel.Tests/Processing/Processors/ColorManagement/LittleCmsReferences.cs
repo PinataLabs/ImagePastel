@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 
 /// <summary>
 /// Colour conversions computed by Little CMS 2.20 (<c>mm2/Little-CMS</c> at <c>a57322d8</c>), the

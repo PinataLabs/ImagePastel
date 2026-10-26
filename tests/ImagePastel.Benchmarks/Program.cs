@@ -3,7 +3,7 @@
 
 using BenchmarkDotNet.Running;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 public class Program
 {

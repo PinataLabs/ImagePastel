@@ -4,7 +4,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Tuples;
+namespace PinataLabs.ImagePastel.Tuples;
 
 /// <summary>
 /// Contains 8 element value tuples of various types.

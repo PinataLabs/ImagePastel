@@ -4,7 +4,7 @@
 using System;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Primitives;
+namespace PinataLabs.ImagePastel.Tests.Primitives;
 
 public class DenseMatrixTests
 {

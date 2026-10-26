@@ -5,10 +5,10 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 /// <summary>
 /// Decompresses and decodes data using the dynamic LZW algorithms.

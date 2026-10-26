@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.SourceGenerators.Names;
+using PinataLabs.ImagePastel.SourceGenerators.Names;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Library;
+namespace PinataLabs.ImagePastel.SourceGenerators.Library;
 
 /// <summary>
 /// Writes the Porter-Duff blending functions, <c>PorterDuffFunctions.Generated.cs</c>, and the
@@ -35,7 +35,7 @@ internal sealed class PixelBlendersEmitter : IEmitter
             using System.Numerics;
             using System.Runtime.CompilerServices;
 
-            namespace SixLabors.ImageSharp.PixelFormats.PixelBlenders;
+            namespace PinataLabs.ImagePastel.PixelFormats.PixelBlenders;
 
             internal static partial class PorterDuffFunctions
             {
@@ -273,7 +273,7 @@ internal sealed class PixelBlendersEmitter : IEmitter
             using System;
             using System.Numerics;
 
-            namespace SixLabors.ImageSharp.PixelFormats.PixelBlenders;
+            namespace PinataLabs.ImagePastel.PixelFormats.PixelBlenders;
 
             /// <summary>
             /// Collection of Porter Duff alpha blending functions applying different composition models.

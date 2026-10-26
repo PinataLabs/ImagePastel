@@ -4,11 +4,11 @@
 using System.IO;
 using System.Runtime.Versioning;
 using System.Threading;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 [SupportedOSPlatform("windows6.1")]
 public class SystemDrawingReferenceDecoder : IImageDecoder, IImageInfoDetector

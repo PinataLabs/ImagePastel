@@ -4,7 +4,7 @@
 using System;
 using System.Security.Cryptography;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// Represents an ICC profile

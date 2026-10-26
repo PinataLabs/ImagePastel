@@ -6,9 +6,9 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>Writes a context map, as <see cref="JxlContextMap.DecodeContextMap"/> reads it.</summary>
 internal static class JxlContextMapEncoder

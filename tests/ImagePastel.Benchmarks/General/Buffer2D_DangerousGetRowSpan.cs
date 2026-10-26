@@ -3,10 +3,10 @@
 
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.General;
+namespace PinataLabs.ImagePastel.Benchmarks.General;
 
 public class Buffer2D_DangerousGetRowSpan
 {

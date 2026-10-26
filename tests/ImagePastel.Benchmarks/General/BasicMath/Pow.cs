@@ -4,7 +4,7 @@
 using System;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.BasicMath;
+namespace PinataLabs.ImagePastel.Benchmarks.General.BasicMath;
 
 public class Pow
 {

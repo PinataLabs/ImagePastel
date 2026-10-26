@@ -6,9 +6,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Fields;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
 /// <summary>
 /// Reads and writes bundles, and gives them their defaults. <see cref="Write"/> is in

@@ -3,7 +3,7 @@
 
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 public class TestType<T> : IXunitSerializable
 {

@@ -3,10 +3,10 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Helpers;
+namespace PinataLabs.ImagePastel.Tests.Helpers;
 
 public class RowIntervalTests
 {

@@ -3,11 +3,11 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Implements the 'RGB' photometric interpretation with 'Planar' layout for each color channel with 16 bit.

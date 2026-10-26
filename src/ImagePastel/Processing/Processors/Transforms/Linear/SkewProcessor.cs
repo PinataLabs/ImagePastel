@@ -3,7 +3,7 @@
 
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 /// <summary>
 /// Defines a skew transformation applicable to an <see cref="Image"/>.

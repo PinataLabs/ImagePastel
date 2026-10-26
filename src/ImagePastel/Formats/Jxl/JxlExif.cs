@@ -8,7 +8,7 @@
 using System;
 using System.Buffers.Binary;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Reads the orientation from Exif as cjxl does, and edits the Exif of a JPEG XL file as djxl does.

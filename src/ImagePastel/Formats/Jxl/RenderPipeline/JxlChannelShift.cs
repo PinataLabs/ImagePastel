@@ -4,7 +4,7 @@
 // RenderPipeline::channel_shifts_ in lib/jxl/render_pipeline/render_pipeline.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// The shift of one channel of the render pipeline: log2 of how much the stages still to run will

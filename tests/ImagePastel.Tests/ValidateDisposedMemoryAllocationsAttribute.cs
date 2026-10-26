@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Xunit.v3;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public class ValidateDisposedMemoryAllocationsAttribute : BeforeAfterTestAttribute

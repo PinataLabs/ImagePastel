@@ -4,7 +4,7 @@
 using System;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Common;
+namespace PinataLabs.ImagePastel.Tests.Common;
 
 public class NumericsTests
 {

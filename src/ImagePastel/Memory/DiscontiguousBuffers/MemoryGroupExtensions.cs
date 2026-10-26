@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 internal static class MemoryGroupExtensions
 {

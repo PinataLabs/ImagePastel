@@ -5,12 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using SixLabors.ImageSharp.Diagnostics;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Diagnostics;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.Allocators;
+namespace PinataLabs.ImagePastel.Tests.Memory.Allocators;
 
 public class MemoryDiagnosticsTests
 {

@@ -7,11 +7,11 @@ using System.Threading;
 using BenchmarkDotNet.Attributes;
 using ImageMagick;
 using Pfim;
-using SixLabors.ImageSharp.Formats.Tga;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Tga;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class DecodeTga

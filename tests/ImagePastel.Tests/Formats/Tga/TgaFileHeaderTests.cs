@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Tga;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Tga;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tga;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tga;
 
 [Trait("Format", "Tga")]
 public class TgaFileHeaderTests

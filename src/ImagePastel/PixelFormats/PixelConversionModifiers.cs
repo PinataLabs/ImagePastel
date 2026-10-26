@@ -2,15 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.ColorSpaces.Companding;
+using PinataLabs.ImagePastel.ColorSpaces.Companding;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Flags responsible to select additional operations which could be efficiently applied in
-/// <see cref="PixelOperations{TPixel}.ToVector4(SixLabors.ImageSharp.Configuration,System.ReadOnlySpan{TPixel},System.Span{System.Numerics.Vector4},SixLabors.ImageSharp.PixelFormats.PixelConversionModifiers)"/>
+/// <see cref="PixelOperations{TPixel}.ToVector4(PinataLabs.ImagePastel.Configuration,System.ReadOnlySpan{TPixel},System.Span{System.Numerics.Vector4},PinataLabs.ImagePastel.PixelFormats.PixelConversionModifiers)"/>
 /// or
-/// <see cref="PixelOperations{TPixel}.FromVector4Destructive(SixLabors.ImageSharp.Configuration,System.Span{System.Numerics.Vector4},System.Span{TPixel},SixLabors.ImageSharp.PixelFormats.PixelConversionModifiers)"/>
+/// <see cref="PixelOperations{TPixel}.FromVector4Destructive(PinataLabs.ImagePastel.Configuration,System.Span{System.Numerics.Vector4},System.Span{TPixel},PinataLabs.ImagePastel.PixelFormats.PixelConversionModifiers)"/>
 /// knowing the pixel type.
 /// </summary>
 [Flags]

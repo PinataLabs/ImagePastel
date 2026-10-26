@@ -5,7 +5,7 @@ using System;
 using System.Buffers;
 using System.IO;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Extension methods for the <see cref="Stream"/> type.

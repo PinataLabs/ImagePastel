@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Tga;
+namespace PinataLabs.ImagePastel.Formats.Tga;
 
 /// <summary>
 /// Detects tga file headers.

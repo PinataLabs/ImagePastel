@@ -6,7 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 // https://github.com/dotnet/aspnetcore/blob/620c673705bb17b33cbc5ff32872d85a5fbf82b9/src/Hosting/TestHost/src/AsyncStreamWrapper.cs
 internal class AsyncStreamWrapper : Stream

@@ -4,7 +4,7 @@
 // lib/jxl/enc_ans.h (Token).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>
 /// An integer to be encoded by an entropy coder, either ANS or prefix codes, in a context. An LZ77

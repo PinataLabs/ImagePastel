@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class RgbColorConversion : ColorConversionBenchmark

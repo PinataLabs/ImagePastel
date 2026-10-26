@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.ColorSpaces.Companding;
+using PinataLabs.ImagePastel.ColorSpaces.Companding;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// The gamma working space.

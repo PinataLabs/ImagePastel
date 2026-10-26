@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces.Bulk;
 
 [Config(typeof(Config.ShortCore31))]
 public class PremultiplyVector4

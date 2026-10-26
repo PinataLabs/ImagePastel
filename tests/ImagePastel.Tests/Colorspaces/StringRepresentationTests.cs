@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.ColorSpaces;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Colorspaces;
+namespace PinataLabs.ImagePastel.Tests.Colorspaces;
 
 public class StringRepresentationTests
 {

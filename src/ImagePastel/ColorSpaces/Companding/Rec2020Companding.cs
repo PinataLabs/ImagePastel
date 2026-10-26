@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Companding;
+namespace PinataLabs.ImagePastel.ColorSpaces.Companding;
 
 /// <summary>
 /// Implements Rec. 2020 companding function.

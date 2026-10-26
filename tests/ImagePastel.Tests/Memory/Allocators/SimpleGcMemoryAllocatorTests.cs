@@ -4,10 +4,10 @@
 using System;
 using System.Buffers;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.Allocators;
+namespace PinataLabs.ImagePastel.Tests.Memory.Allocators;
 
 public class SimpleGcMemoryAllocatorTests
 {

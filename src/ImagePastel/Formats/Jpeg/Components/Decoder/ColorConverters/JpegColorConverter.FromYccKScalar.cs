@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
 internal abstract partial class JpegColorConverterBase
 {

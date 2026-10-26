@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Processing.Processors.Quantization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
 /// <summary>
 /// A palette quantizer consisting of colors as defined in the original second edition of Werner’s Nomenclature of Colours 1821.

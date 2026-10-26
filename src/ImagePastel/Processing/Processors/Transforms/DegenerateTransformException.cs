@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 /// <summary>
 /// Represents an error that occurs during a transform operation.

@@ -4,7 +4,7 @@
 using System;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory;
+namespace PinataLabs.ImagePastel.Tests.Memory;
 
 public static class TestStructs
 {

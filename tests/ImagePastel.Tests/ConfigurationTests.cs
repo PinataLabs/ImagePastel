@@ -4,15 +4,15 @@
 using System;
 using System.Linq;
 using Moq;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Tests.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Tests.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Tests the configuration class.

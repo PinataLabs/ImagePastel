@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
 /// Resolves conformance files that are not committed: the <c>.npy</c> references and the inputs

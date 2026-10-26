@@ -3,11 +3,11 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Formats.Tiff.Compression;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Writers;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Writers;
 
 /// <summary>
 /// The base class for composite color types: 8-bit gray, 24-bit RGB (4-bit gray, 16-bit (565/555) RGB, 32-bit RGB, CMYK, YCbCr).

@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression;
 
 internal static class BitWriterUtils
 {

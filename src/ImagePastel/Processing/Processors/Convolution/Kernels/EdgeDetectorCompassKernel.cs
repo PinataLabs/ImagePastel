@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
 /// <summary>
 /// Represents an edge detection convolution kernel consisting of eight gradient operators.

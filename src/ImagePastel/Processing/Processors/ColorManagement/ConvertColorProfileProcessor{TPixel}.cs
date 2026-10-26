@@ -4,11 +4,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.ColorManagement;
+namespace PinataLabs.ImagePastel.Processing.Processors.ColorManagement;
 
 /// <summary>
 /// Converts an image from its pixel profile to a target ICC profile.

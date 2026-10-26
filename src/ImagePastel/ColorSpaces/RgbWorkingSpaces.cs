@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.ColorSpaces.Companding;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces.Companding;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.ColorSpaces;
+namespace PinataLabs.ImagePastel.ColorSpaces;
 
 /// <summary>
 /// Chromaticity coordinates based on: <see href="http://www.brucelindbloom.com/index.html?WorkingSpaceInfo.html"/>

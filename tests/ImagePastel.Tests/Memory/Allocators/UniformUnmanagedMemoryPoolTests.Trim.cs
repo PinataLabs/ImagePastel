@@ -7,11 +7,11 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
-using SixLabors.ImageSharp.Memory.Internals;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Memory.Internals;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.Allocators;
+namespace PinataLabs.ImagePastel.Tests.Memory.Allocators;
 
 public partial class UniformUnmanagedMemoryPoolTests
 {

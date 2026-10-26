@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement;
+namespace PinataLabs.ImagePastel.ColorManagement;
 
 /// <summary>
 /// Creates ICC profiles for standard color spaces, and for RGB and gray spaces given by their primaries,

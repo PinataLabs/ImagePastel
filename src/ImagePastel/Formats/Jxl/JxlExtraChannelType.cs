@@ -6,7 +6,7 @@
 // lib/jxl/image_metadata.h and lib/jxl/color_encoding_internal.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 // Each enum defines exactly the values in libjxl's EnumBits, because JxlVisitor.Enum
 // rejects any value the enum does not define.

@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Xunit;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Tests;
+namespace PinataLabs.ImagePastel.SourceGenerators.Tests;
 
 /// <summary>
 /// Runs <see cref="ImageSharpSourceGenerator"/> the way the compiler does, and compares its

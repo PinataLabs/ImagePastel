@@ -1,14 +1,14 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Drawing;
-using SixLabors.ImageSharp.Tests.Processing;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Drawing;
+using PinataLabs.ImagePastel.Tests.Processing;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Drawing;
+namespace PinataLabs.ImagePastel.Tests.Drawing;
 
 public class DrawImageExtensionsTests : BaseImageOperationsExtensionTest
 {

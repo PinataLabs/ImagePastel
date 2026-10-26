@@ -3,10 +3,10 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 public class TestPixel<TPixel> : IXunitSerializable
     where TPixel : unmanaged, IPixel<TPixel>

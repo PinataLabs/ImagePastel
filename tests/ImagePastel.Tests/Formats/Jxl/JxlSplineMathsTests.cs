@@ -3,10 +3,10 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The spline maths that no test vector checks on its own: the continuous IDCT along a spline and the

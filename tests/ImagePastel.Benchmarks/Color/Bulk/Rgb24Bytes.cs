@@ -3,11 +3,11 @@
 
 using System.Buffers;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces.Bulk;
 
 public abstract class Rgb24Bytes<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>

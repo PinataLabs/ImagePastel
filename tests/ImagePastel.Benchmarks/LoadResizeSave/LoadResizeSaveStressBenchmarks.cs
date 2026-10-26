@@ -3,9 +3,9 @@
 
 using System;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave;
+namespace PinataLabs.ImagePastel.Benchmarks.LoadResizeSave;
 
 // See README.md for instructions about initialization.
 [MemoryDiagnoser]

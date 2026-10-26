@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.PhotometricInterpretation;
 
 [Trait("Format", "Tiff")]
 public abstract class PhotometricInterpretationTestBase

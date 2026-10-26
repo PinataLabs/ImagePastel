@@ -7,7 +7,7 @@ using System.ComponentModel;
 using System.IO;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 /// <summary>
 /// RemoteExecutor can only execute static methods, which can only consume string arguments,

@@ -7,10 +7,10 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>A Modular transform and its parameters.</summary>
 internal sealed class JxlTransform : JxlFields

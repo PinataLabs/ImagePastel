@@ -5,15 +5,15 @@
 using System;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.BigTiff;
+using static PinataLabs.ImagePastel.Tests.TestImages.BigTiff;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff;
 
 [Collection("RunSerial")]
 [Trait("Format", "Tiff")]
@@ -88,8 +88,8 @@ public class BigTiffDecoderTests : TiffDecoderBaseTester
     }
 
     [Theory]
-    [InlineData(BigTIFFLong, ImageSharp.ByteOrder.LittleEndian)]
-    [InlineData(BigTIFFMotorola, ImageSharp.ByteOrder.BigEndian)]
+    [InlineData(BigTIFFLong, ImagePastel.ByteOrder.LittleEndian)]
+    [InlineData(BigTIFFMotorola, ImagePastel.ByteOrder.BigEndian)]
     public void ByteOrder(string imagePath, ByteOrder expectedByteOrder)
     {
         var testFile = TestFile.Create(imagePath);

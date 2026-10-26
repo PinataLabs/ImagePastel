@@ -1,15 +1,15 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.Tests;
 
 public class SystemDrawingReferenceCodecTests
 {

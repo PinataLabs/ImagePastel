@@ -4,9 +4,9 @@
 using System;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp;
+using PinataLabs.ImagePastel;
 
-namespace SixLabors.ImageSharp.Benchmarks.General;
+namespace PinataLabs.ImagePastel.Benchmarks.General;
 
 /*
                                   Method | Count |     Mean |    Error |   StdDev | Scaled | ScaledSD |

@@ -3,14 +3,14 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Pbm;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Pbm;
 
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Pbm;
+using static PinataLabs.ImagePastel.Tests.TestImages.Pbm;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Tests.Formats.Pbm;
 
 [Trait("Format", "Pbm")]
 public class PbmMetadataTests

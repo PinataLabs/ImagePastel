@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.Tests;
 
 public class SemaphoreReadMemoryStreamTests
 {

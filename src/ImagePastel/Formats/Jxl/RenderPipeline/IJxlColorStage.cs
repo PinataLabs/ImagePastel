@@ -6,9 +6,9 @@
 // lib/jxl/dec_cache.cc adds after the save before the colour transform and before the blending.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// A colour-transform stage of the render pipeline: it changes the colour planes of one row in place.

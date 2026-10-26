@@ -8,10 +8,10 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 public abstract class MultiImageBenchmarkBase
 {

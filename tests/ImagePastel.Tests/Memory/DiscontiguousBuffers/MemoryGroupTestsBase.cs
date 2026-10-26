@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
+namespace PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
 
 public abstract class MemoryGroupTestsBase
 {

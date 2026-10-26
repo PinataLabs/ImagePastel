@@ -5,12 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// A test image file.
 /// </summary>
-public class TestFileSystem : ImageSharp.IO.IFileSystem
+public class TestFileSystem : ImagePastel.IO.IFileSystem
 {
     private readonly Dictionary<string, Func<Stream>> fileSystem = new Dictionary<string, Func<Stream>>(StringComparer.OrdinalIgnoreCase);
 

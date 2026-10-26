@@ -3,7 +3,7 @@
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Tests;
+namespace PinataLabs.ImagePastel.SourceGenerators.Tests;
 
 /// <summary>
 /// Compares the generator output for each <c>ImageSharpGeneratedSources</c> target with the

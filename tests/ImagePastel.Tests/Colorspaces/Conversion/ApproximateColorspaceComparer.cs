@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.ColorSpaces;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
-namespace SixLabors.ImageSharp.Tests.Colorspaces.Conversion;
+namespace PinataLabs.ImagePastel.Tests.Colorspaces.Conversion;
 
 /// <summary>
 /// Allows the approximate comparison of colorspace component values.

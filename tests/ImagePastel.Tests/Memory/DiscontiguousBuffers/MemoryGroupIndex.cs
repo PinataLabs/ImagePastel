@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
+namespace PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
 
 public struct MemoryGroupIndex : IEquatable<MemoryGroupIndex>
 {

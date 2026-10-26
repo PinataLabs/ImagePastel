@@ -3,9 +3,9 @@
 
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tga;
+namespace PinataLabs.ImagePastel.Formats.Tga;
 
 /// <summary>
 /// Image decoder for Truevision TGA images.

@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Compression.Zlib;
+namespace PinataLabs.ImagePastel.Compression.Zlib;
 
 /// <summary>
 /// This class compresses input with the deflate algorithm described in RFC 1951.

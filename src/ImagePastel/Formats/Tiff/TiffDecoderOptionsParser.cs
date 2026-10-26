@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Tiff.Compression;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
-namespace SixLabors.ImageSharp.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Formats.Tiff;
 
 /// <summary>
 /// The decoder options parser.

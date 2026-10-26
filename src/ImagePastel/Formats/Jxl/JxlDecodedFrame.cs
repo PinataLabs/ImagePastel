@@ -3,9 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>One decoded frame: one float plane per channel.</summary>
 internal sealed class JxlDecodedFrame : IDisposable

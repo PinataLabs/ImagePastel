@@ -3,12 +3,12 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests;
 using SDImage = System.Drawing.Image;
 using SDSize = System.Drawing.Size;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class DecodeBmp

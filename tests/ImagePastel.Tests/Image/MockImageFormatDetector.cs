@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats;
+using PinataLabs.ImagePastel.Formats;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 ///  You can't mock the "DetectFormat" method due to the  ReadOnlySpan{byte} parameter.

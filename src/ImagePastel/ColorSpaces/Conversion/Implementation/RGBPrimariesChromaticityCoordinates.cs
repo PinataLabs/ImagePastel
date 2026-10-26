@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// Represents the chromaticity coordinates of RGB primaries.

@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.SourceGenerators.Names;
+namespace PinataLabs.ImagePastel.SourceGenerators.Names;
 
 /// <summary>
 /// The Porter-Duff composers and the color blenders. Each pair of a blender and a composer

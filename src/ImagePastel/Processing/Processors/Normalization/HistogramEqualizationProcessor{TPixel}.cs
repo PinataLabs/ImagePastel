@@ -4,9 +4,9 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Normalization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Normalization;
 
 /// <summary>
 /// Defines a processor that normalizes the histogram of an image.

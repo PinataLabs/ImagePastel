@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.General;
+namespace PinataLabs.ImagePastel.Benchmarks.General;
 
 /// <summary>
 /// Compare different methods for copying native and/or managed buffers.

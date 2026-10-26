@@ -5,7 +5,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
-namespace ImageSharp.Benchmarks.General.Vectorization;
+namespace ImagePastel.Benchmarks.General.Vectorization;
 
 public abstract class SIMDBenchmarkBase<T>
     where T : struct

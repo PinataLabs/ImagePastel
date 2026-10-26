@@ -1,10 +1,10 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Common.Helpers;
+using PinataLabs.ImagePastel.Common.Helpers;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Helpers;
+namespace PinataLabs.ImagePastel.Tests.Helpers;
 
 public class UnitConverterHelperTests
 {

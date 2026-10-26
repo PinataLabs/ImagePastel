@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Formats.Pbm;
 
 /// <summary>
 /// Contains PBM constant values defined in the specification.

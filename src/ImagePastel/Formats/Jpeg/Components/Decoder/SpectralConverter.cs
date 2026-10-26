@@ -1,9 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Converter used to convert jpeg spectral data to color pixels.

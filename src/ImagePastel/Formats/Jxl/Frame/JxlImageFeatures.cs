@@ -4,9 +4,9 @@
 // ImageFeatures in lib/jxl/passes_state.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 /// <summary>
 /// The features of a frame that its DC global section reads before the dequantization matrices: the

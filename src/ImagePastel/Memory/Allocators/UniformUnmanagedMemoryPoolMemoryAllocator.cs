@@ -7,9 +7,9 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory.Internals;
+using PinataLabs.ImagePastel.Memory.Internals;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 internal sealed class UniformUnmanagedMemoryPoolMemoryAllocator : MemoryAllocator
 {

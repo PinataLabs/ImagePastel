@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 using Xunit;
-using JpegQuantization = SixLabors.ImageSharp.Formats.Jpeg.Components.Quantization;
+using JpegQuantization = PinataLabs.ImagePastel.Formats.Jpeg.Components.Quantization;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public class QuantizationTests

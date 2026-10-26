@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Memory.Internals;
+namespace PinataLabs.ImagePastel.Memory.Internals;
 
 // CriticalFinalizerObject:
 // In case UniformUnmanagedMemoryPool is finalized, we prefer to run its finalizer after the guard finalizers,

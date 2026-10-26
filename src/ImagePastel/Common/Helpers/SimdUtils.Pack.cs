@@ -4,12 +4,12 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 #if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 internal static partial class SimdUtils
 {

@@ -9,7 +9,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// libjxl's transfer functions, as the render pipeline applies them.

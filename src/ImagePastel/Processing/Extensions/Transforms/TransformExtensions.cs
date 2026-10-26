@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines extensions that allow the application of composable transform operations on an <see cref="Image"/>

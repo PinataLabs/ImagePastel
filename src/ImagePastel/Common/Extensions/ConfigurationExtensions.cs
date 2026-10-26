@@ -3,7 +3,7 @@
 
 using System.Threading.Tasks;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Contains extension methods for <see cref="Configuration"/>

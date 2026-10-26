@@ -3,9 +3,9 @@
 
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// An RGB matrix/TRC profile (ICC.1:2022 section 8.3.4): three tone curves (<c>rTRC</c>,

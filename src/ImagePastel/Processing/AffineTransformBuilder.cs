@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// A helper class for constructing <see cref="Matrix3x2"/> instances for use in affine transforms.

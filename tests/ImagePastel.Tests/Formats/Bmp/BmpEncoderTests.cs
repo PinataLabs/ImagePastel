@@ -3,20 +3,20 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Bmp;
+using static PinataLabs.ImagePastel.Tests.TestImages.Bmp;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Bmp;
 
 [Trait("Format", "Bmp")]
 public class BmpEncoderTests

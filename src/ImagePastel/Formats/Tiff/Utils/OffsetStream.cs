@@ -4,7 +4,7 @@
 using System;
 using System.IO;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Utils;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Utils;
 
 /// <summary>
 /// A view of a seekable stream that starts at the position the stream had when the view was created.

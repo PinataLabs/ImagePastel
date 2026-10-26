@@ -3,10 +3,10 @@
 
 using System;
 using System.Threading;
-using SixLabors.ImageSharp.Diagnostics;
+using PinataLabs.ImagePastel.Diagnostics;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public static class MemoryAllocatorValidator
 {

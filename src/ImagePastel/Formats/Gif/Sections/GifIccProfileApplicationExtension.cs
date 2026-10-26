@@ -6,7 +6,7 @@
 using System;
 using System.IO;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 /// <summary>
 /// The application extension that embeds an ICC profile in a GIF file.

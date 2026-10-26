@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.SourceGenerators.Names;
+namespace PinataLabs.ImagePastel.SourceGenerators.Names;
 
 /// <summary>
 /// The pixel types that the library's pixel operations are generated for. Ported from

@@ -3,9 +3,9 @@
 
 using System;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <summary>
 /// Defines execution settings for methods in <see cref="ParallelRowIterator"/>.
@@ -88,7 +88,7 @@ public readonly struct ParallelExecutionSettings
     }
 
     /// <summary>
-    /// Get the default <see cref="SixLabors.ImageSharp.Advanced.ParallelExecutionSettings"/> for a <see cref="SixLabors.ImageSharp.Configuration"/>
+    /// Get the default <see cref="PinataLabs.ImagePastel.Advanced.ParallelExecutionSettings"/> for a <see cref="PinataLabs.ImagePastel.Configuration"/>
     /// </summary>
     /// <param name="configuration">The <see cref="Configuration"/>.</param>
     /// <returns>The <see cref="ParallelExecutionSettings"/>.</returns>

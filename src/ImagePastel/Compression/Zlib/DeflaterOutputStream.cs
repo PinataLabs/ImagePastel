@@ -4,9 +4,9 @@
 using System;
 using System.Buffers;
 using System.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Compression.Zlib;
+namespace PinataLabs.ImagePastel.Compression.Zlib;
 
 /// <summary>
 /// A special stream deflating or compressing the bytes that are

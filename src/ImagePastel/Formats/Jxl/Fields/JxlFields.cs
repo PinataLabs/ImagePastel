@@ -6,9 +6,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Fields;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
 /// <summary>
 /// A bundle of header fields. One <see cref="VisitFields"/> method describes the fields once, and each

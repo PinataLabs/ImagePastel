@@ -7,23 +7,23 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using ImageMagick;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 using Xunit;
-using ExifTag = SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag;
+using ExifTag = PinataLabs.ImagePastel.Metadata.Profiles.Exif.ExifTag;
 
-namespace SixLabors.ImageSharp.Tests.Formats;
+namespace PinataLabs.ImagePastel.Tests.Formats;
 
 /// <summary>
 /// Decodes Adobe CMYK and YCCK JPEGs and <c>Separated</c> TIFFs with the <c>ColorProfileConversion</c>
@@ -253,14 +253,14 @@ public class CmykDecoderColorProfileConversionTests
         Assert.Equal(IccColorSpaceType.Cmyk, EmbeddedIccProfile(image.Metadata, bytes).DataColorSpace);
         if (bytes[0] != 0xFF)
         {
-            ImageSharp.Metadata.ImageFrameMetadata frame = image.Frames.RootFrame.Metadata;
+            ImagePastel.Metadata.ImageFrameMetadata frame = image.Frames.RootFrame.Metadata;
             Assert.Null(frame.IccProfile);
             Assert.Null(frame.ExifProfile.GetValue(ExifTag.IccProfile));
             Assert.Equal(IccColorSpaceType.Cmyk, frame.GetTiffMetadata().EmbeddedIccProfile.DataColorSpace);
         }
     }
 
-    private static IccProfile EmbeddedIccProfile(ImageSharp.Metadata.ImageMetadata metadata, byte[] bytes)
+    private static IccProfile EmbeddedIccProfile(ImagePastel.Metadata.ImageMetadata metadata, byte[] bytes)
         => bytes[0] == 0xFF ? metadata.GetJpegMetadata().EmbeddedIccProfile : metadata.GetTiffMetadata().EmbeddedIccProfile;
 
     private static byte[] ReadFile(string file) => File.ReadAllBytes(TestFile.GetInputFileFullPath(file));
@@ -273,7 +273,7 @@ public class CmykDecoderColorProfileConversionTests
             : new TiffDecoder { ColorProfileConversion = conversion, ColorProfileConversionTarget = target, IgnoreMetadata = ignoreMetadata };
 
     private static Image<TPixel> Decode<TPixel>(byte[] bytes, ColorProfileConversion conversion = ColorProfileConversion.None, IccProfile target = null, bool ignoreMetadata = false)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
         => Image.Load<TPixel>(bytes, CreateDecoder(bytes, conversion, target, ignoreMetadata));
 
     // Adds an ICC profile to a JPEG as APP2 ICC_PROFILE segments right after SOI (ICC.1 annex B.4).
@@ -426,7 +426,7 @@ public class CmykDecoderColorProfileConversionTests
     }
 
     private static void AssertSamePixels<TPixel>(Image<TPixel> expected, Image<TPixel> actual)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         Assert.Equal(expected.Size(), actual.Size());
         for (int y = 0; y < expected.Height; y++)

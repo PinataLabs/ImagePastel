@@ -4,9 +4,9 @@
 using System;
 using System.Buffers;
 using System.Numerics;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Abstract base class for calling pixel composition functions

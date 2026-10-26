@@ -4,11 +4,11 @@
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.Tests;
 
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 public class MagickReferenceCodecTests
 {

@@ -3,10 +3,10 @@
 
 using System;
 using System.Buffers.Binary;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Icc;
 
 /// <summary>
 /// Element counts read from a tag's own bytes, from crafted bytes. A count that the rest of the profile

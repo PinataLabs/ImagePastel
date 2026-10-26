@@ -5,11 +5,11 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression;
 
 /// <summary>
 /// Methods for undoing the horizontal prediction used in combination with deflate and LZW compressed TIFF images.

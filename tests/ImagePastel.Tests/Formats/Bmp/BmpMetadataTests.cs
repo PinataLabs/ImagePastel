@@ -5,15 +5,15 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 using ImageMagick;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.ColorManagement;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.ColorManagement;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Bmp;
+using static PinataLabs.ImagePastel.Tests.TestImages.Bmp;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Bmp;
 
 [Trait("Format", "Bmp")]
 public class BmpMetadataTests

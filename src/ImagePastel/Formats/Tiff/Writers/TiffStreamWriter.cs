@@ -4,9 +4,9 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Writers;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Writers;
 
 /// <summary>
 /// Utility class for writing TIFF data to a <see cref="Stream"/>.

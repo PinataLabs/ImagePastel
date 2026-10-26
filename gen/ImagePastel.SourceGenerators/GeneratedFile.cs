@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// One file that an emitter writes: its hint name and the action that writes its text.

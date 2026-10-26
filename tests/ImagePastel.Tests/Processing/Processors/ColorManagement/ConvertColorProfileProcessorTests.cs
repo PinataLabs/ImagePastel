@@ -4,15 +4,15 @@
 using System;
 using System.IO;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.ColorSpaces;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.ColorSpaces;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 
 /// <summary>
 /// Converts loaded images between ICC profiles with the <c>ConvertColorProfile</c> processor and

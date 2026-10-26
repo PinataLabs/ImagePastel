@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors;
+namespace PinataLabs.ImagePastel.Processing.Processors;
 
 /// <summary>
 /// Implements an algorithm to alter the pixels of an image.

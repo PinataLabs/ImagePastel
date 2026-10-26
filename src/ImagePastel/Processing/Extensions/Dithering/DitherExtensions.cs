@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Processing.Processors.Dithering;
+using PinataLabs.ImagePastel.Processing.Processors.Dithering;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines dithering extensions to apply on an <see cref="Image"/>

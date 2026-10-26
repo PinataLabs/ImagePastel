@@ -3,10 +3,10 @@
 
 using System;
 using System.Buffers.Binary;
-using SixLabors.ImageSharp.Common.Helpers;
-using SixLabors.ImageSharp.Metadata;
+using PinataLabs.ImagePastel.Common.Helpers;
+using PinataLabs.ImagePastel.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Png.Chunks;
+namespace PinataLabs.ImagePastel.Formats.Png.Chunks;
 
 /// <summary>
 /// The pHYs chunk specifies the intended pixel size or aspect ratio for display of the image.

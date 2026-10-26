@@ -10,7 +10,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Reads a JPEG XL container: joins the codestream from its <c>jxlc</c> or <c>jxlp</c> boxes.

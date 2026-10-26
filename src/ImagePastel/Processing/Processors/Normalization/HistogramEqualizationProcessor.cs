@@ -1,9 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Normalization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Normalization;
 
 /// <summary>
 /// Defines a processor that normalizes the histogram of an image.

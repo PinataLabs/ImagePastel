@@ -3,9 +3,9 @@
 
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <summary>
 /// A visitor to implement a double-dispatch pattern in order to apply pixel-specific operations

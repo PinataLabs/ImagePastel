@@ -4,7 +4,7 @@
 using System;
 using System.Reflection;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class WithBasicTestPatternImagesAttribute : ImageDataAttributeBase
 {

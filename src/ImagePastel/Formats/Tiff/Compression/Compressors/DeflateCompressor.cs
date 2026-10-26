@@ -3,11 +3,11 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
 
 internal sealed class DeflateCompressor : TiffBaseCompressor
 {

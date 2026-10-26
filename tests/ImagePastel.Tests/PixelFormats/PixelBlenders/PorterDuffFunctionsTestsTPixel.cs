@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.PixelFormats.PixelBlenders;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats.PixelBlenders;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelBlenders;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats.PixelBlenders;
 
 public class PorterDuffFunctionsTestsTPixel
 {

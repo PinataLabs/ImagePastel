@@ -7,7 +7,7 @@ using System.Diagnostics;
 using Microsoft.DotNet.RemoteExecutor;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 /// <summary>
 /// Allows the testing against specific feature sets.

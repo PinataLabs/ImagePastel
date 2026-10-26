@@ -5,7 +5,7 @@ using System.Linq;
 
 // ReSharper disable InconsistentNaming
 // ReSharper disable MemberHidesStaticFromOuterClass
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Class that contains all the relative test image paths in the TestImages/Formats directory.

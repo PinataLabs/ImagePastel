@@ -6,9 +6,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Fields;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
 /// <summary>
 /// Visits the fields of a bundle. libjxl passes field pointers; this port passes each field's

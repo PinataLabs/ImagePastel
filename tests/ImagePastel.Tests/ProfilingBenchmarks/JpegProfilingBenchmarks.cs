@@ -5,16 +5,16 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
 // in this file, comments are used for disabling stuff for local execution
 #pragma warning disable SA1515
 
-namespace SixLabors.ImageSharp.Tests.ProfilingBenchmarks;
+namespace PinataLabs.ImagePastel.Tests.ProfilingBenchmarks;
 
 public class JpegProfilingBenchmarks : MeasureFixture
 {

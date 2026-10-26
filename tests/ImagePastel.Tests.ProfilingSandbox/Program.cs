@@ -4,17 +4,17 @@
 using System;
 using System.Reflection;
 using System.Threading;
-using SixLabors.ImageSharp.Memory.Internals;
-using SixLabors.ImageSharp.Tests.Formats.Jpg;
-using SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations;
-using SixLabors.ImageSharp.Tests.ProfilingBenchmarks;
+using PinataLabs.ImagePastel.Memory.Internals;
+using PinataLabs.ImagePastel.Tests.Formats.Jpg;
+using PinataLabs.ImagePastel.Tests.PixelFormats.PixelOperations;
+using PinataLabs.ImagePastel.Tests.ProfilingBenchmarks;
 using Xunit;
 
 // in this file, comments are used for disabling stuff for local execution
 #pragma warning disable SA1515
 #pragma warning disable SA1512
 
-namespace SixLabors.ImageSharp.Tests.ProfilingSandbox;
+namespace PinataLabs.ImagePastel.Tests.ProfilingSandbox;
 
 public class Program
 {

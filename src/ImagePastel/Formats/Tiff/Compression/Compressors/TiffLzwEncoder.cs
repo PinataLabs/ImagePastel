@@ -4,10 +4,10 @@
 using System;
 using System.Buffers;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
 
 /*
     This implementation is a port of a java tiff encoder by Harald Kuhr: https://github.com/haraldk/TwelveMonkeys

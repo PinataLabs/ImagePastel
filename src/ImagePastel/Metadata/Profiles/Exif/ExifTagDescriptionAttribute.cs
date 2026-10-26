@@ -4,7 +4,7 @@
 using System;
 using System.Reflection;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 /// <summary>
 /// Class that provides a description for an ExifTag value.

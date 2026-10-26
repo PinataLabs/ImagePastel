@@ -4,10 +4,10 @@
 using System;
 using System.Buffers;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
 
 /// <summary>
 /// Bitwriter for writing compressed CCITT T6 2D data.

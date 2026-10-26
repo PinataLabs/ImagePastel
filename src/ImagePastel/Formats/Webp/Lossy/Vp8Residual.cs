@@ -9,7 +9,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossy;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 /// <summary>
 /// On-the-fly info about the current set of residuals.

@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
+namespace PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
 
 public partial class MemoryGroupTests
 {

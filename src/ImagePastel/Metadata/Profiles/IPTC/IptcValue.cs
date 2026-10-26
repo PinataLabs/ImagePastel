@@ -4,7 +4,7 @@
 using System;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Iptc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
 
 /// <summary>
 /// Represents a single value of the IPTC profile.

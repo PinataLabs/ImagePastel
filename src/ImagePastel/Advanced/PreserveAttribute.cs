@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <summary>
 /// This is necessary to avoid being excluded from compilation in environments that do AOT builds, such as Unity's IL2CPP and Xamarin.

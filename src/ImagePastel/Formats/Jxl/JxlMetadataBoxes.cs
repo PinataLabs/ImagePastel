@@ -4,9 +4,9 @@
 // lib/extras/enc/jxl.cc (the metadata boxes of EncodeImageJXL); IsExif is in JxlExif.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Metadata;
+using PinataLabs.ImagePastel.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// The Exif and XMP data the encoder stores in container boxes, taken from an image's metadata as cjxl

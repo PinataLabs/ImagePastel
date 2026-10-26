@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Icc;
 
 /// <summary>
 /// Tests the questions <see cref="IccProfile"/> answers without the caller knowing the tag layout.

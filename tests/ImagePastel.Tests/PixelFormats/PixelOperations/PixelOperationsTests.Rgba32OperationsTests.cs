@@ -3,11 +3,11 @@
 
 using System.Buffers;
 using System.Numerics;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats.PixelOperations;
 
 [Trait("Category", "PixelFormats")]
 public partial class PixelOperationsTests

@@ -3,10 +3,10 @@
 
 using System;
 using System.Buffers.Binary;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Icc;
 
 /// <summary>
 /// CLUTs whose declared dimensions do not match the data, read through <see cref="IccProfile.Entries"/>.

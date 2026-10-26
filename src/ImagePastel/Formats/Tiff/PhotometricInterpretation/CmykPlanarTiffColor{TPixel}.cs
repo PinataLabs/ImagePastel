@@ -4,11 +4,11 @@
 using System;
 using System.Buffers;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Implements the 'Separated' photometric interpretation with the CMYK ink set, planar, with 8 or 16 bits per sample.

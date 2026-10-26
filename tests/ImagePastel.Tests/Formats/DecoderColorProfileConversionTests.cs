@@ -6,23 +6,23 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using ImageMagick;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests.Formats.Png;
-using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests.Formats.Png;
+using PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats;
+namespace PinataLabs.ImagePastel.Tests.Formats;
 
 /// <summary>
 /// Decodes JPEG, PNG, TIFF, WebP, GIF, BMP and JPEG XL files with the <c>ColorProfileConversion</c>
@@ -384,7 +384,7 @@ public class DecoderColorProfileConversionTests
         };
 
     private static Image<TPixel> Decode<TPixel>(string format, byte[] file, ColorProfileConversion conversion = ColorProfileConversion.None, IccProfile target = null, bool ignoreMetadata = false)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
         => Image.Load<TPixel>(file, CreateDecoder(format, conversion, target, ignoreMetadata));
 
     private static IImageEncoder CreateEncoder(string format, Image<Rgb24> image)
@@ -493,7 +493,7 @@ public class DecoderColorProfileConversionTests
     }
 
     private static void AssertSamePixels<TPixel>(Image<TPixel> expected, Image<TPixel> actual)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         Assert.Equal(expected.Size(), actual.Size());
         for (int y = 0; y < expected.Height; y++)

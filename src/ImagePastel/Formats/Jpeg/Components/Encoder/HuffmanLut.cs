@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
 
 /// <summary>
 /// A compiled look-up table representation of a huffmanSpec.

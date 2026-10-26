@@ -4,7 +4,7 @@
 // PatchBlendMode in lib/jxl/dec_patch_dictionary.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// How a patch, or a frame, blends onto what is under it. In the <c>Above</c> modes the new values are

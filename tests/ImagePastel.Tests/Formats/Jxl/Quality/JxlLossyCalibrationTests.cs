@@ -7,12 +7,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Quality;
 
 /// <summary>
 /// E3's done-check (#270), E4's (#306) and E5's (#327): every Fastest (libjxl effort 3), Default (effort 5)

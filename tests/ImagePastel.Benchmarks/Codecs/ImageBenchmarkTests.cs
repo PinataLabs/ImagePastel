@@ -18,7 +18,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 internal class Assert
 {
@@ -69,7 +69,7 @@ public class UseCustomConfigTest : MultiImageBenchmarkBase
     public void Run()
     {
         this.ForEachStream(
-            ms => new ImageSharp.Image(ms)
+            ms => new ImagePastel.Image(ms)
             );
     }
 }

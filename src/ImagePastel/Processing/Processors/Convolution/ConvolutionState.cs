@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
 /// <summary>
 /// A stack only struct used for reducing reference indirection during convolution operations.

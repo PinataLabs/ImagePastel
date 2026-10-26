@@ -4,9 +4,9 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion;
+namespace PinataLabs.ImagePastel.Benchmarks.General.PixelConversion;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct TestArgb : ITestPixel<TestArgb>

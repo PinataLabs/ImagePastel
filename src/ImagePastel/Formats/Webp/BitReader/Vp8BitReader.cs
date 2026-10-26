@@ -6,9 +6,9 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Webp.BitReader;
+namespace PinataLabs.ImagePastel.Formats.Webp.BitReader;
 
 /// <summary>
 /// A bit reader for VP8 streams.

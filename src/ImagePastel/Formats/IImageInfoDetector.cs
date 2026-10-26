@@ -4,7 +4,7 @@
 using System.IO;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 /// <summary>
 /// Encapsulates methods used for detecting the raw image information without fully decoding it.

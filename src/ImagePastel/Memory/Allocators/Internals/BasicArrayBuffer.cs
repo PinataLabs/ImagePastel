@@ -4,7 +4,7 @@
 using System;
 using System.Buffers;
 
-namespace SixLabors.ImageSharp.Memory.Internals;
+namespace PinataLabs.ImagePastel.Memory.Internals;
 
 /// <summary>
 /// Wraps an array as an <see cref="MemoryManager{T}"/> instance.

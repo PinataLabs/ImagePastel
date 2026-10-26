@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 public abstract class ImageComparer
 {

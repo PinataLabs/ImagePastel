@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 /// <summary>
 /// Class that represents an exif tag from the Exif standard 2.31 with <typeparamref name="TValueType"/> as the data type of the tag.

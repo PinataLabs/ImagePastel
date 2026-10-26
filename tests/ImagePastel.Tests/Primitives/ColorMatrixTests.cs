@@ -3,10 +3,10 @@
 
 using System;
 using System.Globalization;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Primitives;
+namespace PinataLabs.ImagePastel.Tests.Primitives;
 
 public class ColorMatrixTests
 {

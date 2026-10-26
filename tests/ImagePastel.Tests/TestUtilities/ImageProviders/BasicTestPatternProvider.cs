@@ -3,10 +3,10 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Advanced;
+using PinataLabs.ImagePastel.Advanced;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public abstract partial class TestImageProvider<TPixel> : IXunitSerializable
 {

@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Gif;
+using PinataLabs.ImagePastel.Formats.Gif;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Gif;
+namespace PinataLabs.ImagePastel.Tests.Formats.Gif;
 
 [Trait("Format", "Gif")]
 public class GifFrameMetadataTests

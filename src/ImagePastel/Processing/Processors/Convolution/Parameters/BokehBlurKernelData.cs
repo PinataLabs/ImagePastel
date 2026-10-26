@@ -3,7 +3,7 @@
 
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution.Parameters;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution.Parameters;
 
 /// <summary>
 /// A <see langword="struct"/> that contains data about a set of bokeh blur kernels

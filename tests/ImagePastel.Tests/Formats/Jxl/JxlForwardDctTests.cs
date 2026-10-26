@@ -4,10 +4,10 @@
 using System;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder's forward transforms of the AC strategies that the Default (Hare) and Thorough (Squirrel)

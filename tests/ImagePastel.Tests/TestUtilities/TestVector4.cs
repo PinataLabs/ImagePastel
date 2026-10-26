@@ -4,7 +4,7 @@
 using System.Numerics;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 public class TestVector4 : IXunitSerializable
 {

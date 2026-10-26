@@ -4,9 +4,9 @@
 using System;
 using System.Buffers;
 using System.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Webp.BitReader;
+namespace PinataLabs.ImagePastel.Formats.Webp.BitReader;
 
 /// <summary>
 /// Base class for VP8 and VP8L bitreader.

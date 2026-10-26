@@ -4,7 +4,7 @@
 // lib/jxl/convolve.h (WeightsSymmetric5).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// The weights of a symmetric 5x5 kernel, as libjxl's <c>WeightsSymmetric5</c>. The lower-right quadrant

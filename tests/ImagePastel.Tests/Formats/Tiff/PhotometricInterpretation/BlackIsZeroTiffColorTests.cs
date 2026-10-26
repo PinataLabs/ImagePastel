@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.PhotometricInterpretation;
 
 [Trait("Format", "Tiff")]
 public class BlackIsZeroTiffColorTests : PhotometricInterpretationTestBase

@@ -3,7 +3,7 @@
 
 using System.IO;
 
-namespace SixLabors.ImageSharp.IO;
+namespace PinataLabs.ImagePastel.IO;
 
 /// <summary>
 /// A wrapper around the local File apis.

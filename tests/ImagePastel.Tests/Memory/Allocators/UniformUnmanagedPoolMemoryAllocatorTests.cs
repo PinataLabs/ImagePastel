@@ -7,13 +7,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Memory.Internals;
-using SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Memory.Internals;
+using PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.Allocators;
+namespace PinataLabs.ImagePastel.Tests.Memory.Allocators;
 
 public class UniformUnmanagedPoolMemoryAllocatorTests
 {

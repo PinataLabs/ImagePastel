@@ -8,11 +8,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Quality;
 
 /// <summary>
 /// The <c>jxl-oracle</c> checks of the calibration table and the managed SSIMULACRA2: each row's cjxl

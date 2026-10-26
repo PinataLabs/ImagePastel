@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors;
+namespace PinataLabs.ImagePastel.Processing.Processors;
 
 /// <summary>
 /// The base class for all pixel specific image processors.
@@ -38,7 +38,7 @@ public abstract class ImageProcessor<TPixel> : IImageProcessor<TPixel>
     protected Rectangle SourceRectangle { get; }
 
     /// <summary>
-    /// Gets the <see cref="ImageSharp.Configuration"/> instance to use when performing operations.
+    /// Gets the <see cref="ImagePastel.Configuration"/> instance to use when performing operations.
     /// </summary>
     protected Configuration Configuration { get; }
 

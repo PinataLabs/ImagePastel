@@ -7,7 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Implements <see cref="IMemoryGroup{T}"/>, defining a view for <see cref="Memory.MemoryGroup{T}"/>

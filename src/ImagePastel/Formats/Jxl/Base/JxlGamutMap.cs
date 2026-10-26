@@ -5,9 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using static SixLabors.ImageSharp.Formats.Jxl.Base.JxlScalarMath;
+using static PinataLabs.ImagePastel.Formats.Jxl.Base.JxlScalarMath;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// libjxl's scalar gamut map, which its ICC builder applies after tone mapping a PQ or HLG pixel: it brings

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Numerics;
 
 // TODO: Review the use of base IccTagDataEntry comparison.
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// This structure represents a color transform.

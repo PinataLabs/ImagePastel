@@ -5,7 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Reads the samples of a 'Separated' (CMYK) TIFF row into ink amounts.

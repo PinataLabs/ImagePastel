@@ -4,11 +4,11 @@
 using System.Collections.Generic;
 using System.Drawing.Imaging;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class EncodeGifMultiple : MultiImageBenchmarkBase.WithImagesPreloaded

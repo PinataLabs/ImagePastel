@@ -6,10 +6,10 @@ using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// A stateless class implementing Strategy Pattern for batched pixel-data conversion operations

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 public class ImageDifferenceIsOverThresholdException : ImagesSimilarityException
 {

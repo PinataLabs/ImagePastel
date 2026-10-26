@@ -6,9 +6,9 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory.Internals;
+using PinataLabs.ImagePastel.Memory.Internals;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 internal abstract partial class MemoryGroup<T>
 {

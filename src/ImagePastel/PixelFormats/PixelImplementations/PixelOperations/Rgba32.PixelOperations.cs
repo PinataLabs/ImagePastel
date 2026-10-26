@@ -4,10 +4,10 @@
 using System;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats.Utils;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats.Utils;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <content>
 /// Provides optimized overrides for bulk operations.

@@ -3,10 +3,10 @@
 
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces.Bulk;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class ToVector4_Bgra32 : ToVector4<Bgra32>

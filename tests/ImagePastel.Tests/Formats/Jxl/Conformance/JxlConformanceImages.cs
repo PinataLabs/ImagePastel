@@ -3,12 +3,12 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
 /// Converts an <see cref="Image{TPixel}"/> to the conformance reference layout (frames, height, width, channels).

@@ -5,9 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using static SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms.JxlTransform;
+using static PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms.JxlTransform;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>Applies the reversible colour transform; the inverse is <see cref="JxlRct.InvRct"/>.</summary>
 internal static class JxlRctEncoder

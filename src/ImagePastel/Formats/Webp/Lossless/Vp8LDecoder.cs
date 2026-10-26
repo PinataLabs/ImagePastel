@@ -4,9 +4,9 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 /// <summary>
 /// Holds information for decoding a lossless webp image.

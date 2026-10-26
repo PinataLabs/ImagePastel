@@ -10,7 +10,7 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Writes an encoded codestream to a stream: bare, or in a JPEG XL container with a level box and

@@ -3,12 +3,12 @@
 
 using System;
 using System.Buffers.Binary;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats.Png;
+namespace PinataLabs.ImagePastel.Formats.Png;
 
 /// <summary>
 /// Collects the <c>cICP</c>, <c>sRGB</c>, <c>cHRM</c> and <c>gAMA</c> chunks of a PNG file and works out

@@ -5,7 +5,7 @@
 // #define PROFILING
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Global inlining options. Helps temporarily disable inlining for better profiler output.

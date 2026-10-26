@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.Tests;
 
 public class ReferenceDecoderBenchmarks
 {

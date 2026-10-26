@@ -7,7 +7,7 @@
     <!-- xUnit.net v3 test projects are stand-alone executables. -->
     <OutputType>Exe</OutputType>
     <Platforms>AnyCPU;x64;x86</Platforms>
-    <RootNamespace>SixLabors.ImageSharp.Tests</RootNamespace>
+    <RootNamespace>PinataLabs.ImagePastel.Tests</RootNamespace>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
 

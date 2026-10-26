@@ -4,9 +4,9 @@
 using System;
 using System.IO;
 using System.IO.Compression;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 
-namespace SixLabors.ImageSharp.Compression.Zlib;
+namespace PinataLabs.ImagePastel.Compression.Zlib;
 
 /// <summary>
 /// Provides methods and properties for deframing streams from PNGs.

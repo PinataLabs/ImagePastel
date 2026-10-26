@@ -8,10 +8,10 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// Takes samples of a colour encoding to linear sRGB (linear grey for a grey encoding), the input of the

@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.Convolution;
 
 [Trait("Category", "Processors")]
 [GroupOutput("Convolution")]

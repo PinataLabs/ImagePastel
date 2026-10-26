@@ -6,14 +6,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder round trip: encode an image, then check that our decoder, Magick.NET and djxl each give
@@ -638,7 +638,7 @@ internal static class JxlEncoderRoundTrip
     {
         using MemoryStream stream = new(encoded);
         using JxlDecodedImage decoded = new JxlDecoderCore(Configuration.Default).DecodeToPlanes(stream, CancellationToken.None);
-        IReadOnlyList<SixLabors.ImageSharp.Memory.Buffer2D<float>> planes = decoded.Frames[0].Planes;
+        IReadOnlyList<PinataLabs.ImagePastel.Memory.Buffer2D<float>> planes = decoded.Frames[0].Planes;
         Assert.Equal(4, planes.Count);
         for (int y = 0; y < expected.Height; y++)
         {

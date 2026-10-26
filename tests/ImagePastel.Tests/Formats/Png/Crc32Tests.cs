@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Compression.Zlib;
+using PinataLabs.ImagePastel.Compression.Zlib;
 using Xunit;
 using SharpCrc32 = ICSharpCode.SharpZipLib.Checksum.Crc32;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Png;
+namespace PinataLabs.ImagePastel.Tests.Formats.Png;
 
 [Trait("Format", "Png")]
 public class Crc32Tests

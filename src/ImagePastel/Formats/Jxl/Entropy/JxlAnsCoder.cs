@@ -4,7 +4,7 @@
 // lib/jxl/enc_ans.h (ANSEncSymbolInfo, ANSCoder).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>
 /// The ANS state machine of the writer. libjxl can divide by multiplying with a reciprocal

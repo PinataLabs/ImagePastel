@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The round trips of <see cref="JxlEncoderRoundTrip"/>, through each reader. Each effort has a class of

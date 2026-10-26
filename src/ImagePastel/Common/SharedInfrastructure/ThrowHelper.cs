@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors;
+namespace PinataLabs;
 
 /// <summary>
 /// Helper methods to throw exceptions

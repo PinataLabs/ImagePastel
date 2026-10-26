@@ -4,11 +4,11 @@
 using System;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The Default (Hare) encoder's per-block AC quant adjustment, libjxl's <c>AdjustQuantBlockAC</c>: the quant

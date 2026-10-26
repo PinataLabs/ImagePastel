@@ -3,10 +3,10 @@
 
 using System;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Compression.Zlib;
+using PinataLabs.ImagePastel.Compression.Zlib;
 using SharpAdler32 = ICSharpCode.SharpZipLib.Checksum.Adler32;
 
-namespace SixLabors.ImageSharp.Benchmarks.General;
+namespace PinataLabs.ImagePastel.Benchmarks.General;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class Adler32Benchmark

@@ -11,7 +11,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Png.Filters;
+namespace PinataLabs.ImagePastel.Formats.Png.Filters;
 
 /// <summary>
 /// The Paeth filter computes a simple linear function of the three neighboring pixels (left, above, upper left),

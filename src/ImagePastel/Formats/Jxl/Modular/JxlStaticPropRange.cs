@@ -4,7 +4,7 @@
 // lib/jxl/modular/options.h (StaticPropRange).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// A box over the two static properties, channel and stream id: for each, the half-open range

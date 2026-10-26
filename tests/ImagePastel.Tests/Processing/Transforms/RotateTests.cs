@@ -1,12 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Transforms;
+namespace PinataLabs.ImagePastel.Tests.Processing.Transforms;
 
 [Trait("Category", "Processors")]
 public class RotateTests : BaseImageOperationsExtensionTest

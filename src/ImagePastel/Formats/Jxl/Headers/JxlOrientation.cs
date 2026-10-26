@@ -4,7 +4,7 @@
 // Orientation in lib/jxl/image_metadata.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
 /// <summary>
 /// The EXIF orientation of the image: the transformation the decoder applies after decoding to show

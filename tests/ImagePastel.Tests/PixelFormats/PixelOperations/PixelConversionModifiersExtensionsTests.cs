@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.PixelFormats.PixelOperations;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats.PixelOperations;
 
 [Trait("Category", "PixelFormats")]
 public class PixelConversionModifiersExtensionsTests

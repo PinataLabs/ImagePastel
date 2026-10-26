@@ -3,9 +3,9 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// Applies one curve per channel (<c>curveType</c> or <c>parametricCurveType</c>), or the inverse of each.

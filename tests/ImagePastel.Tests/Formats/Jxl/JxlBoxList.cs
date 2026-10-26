@@ -7,10 +7,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Lists the boxes of a JPEG XL container, for the tests that check the encoder's box layout. It reads

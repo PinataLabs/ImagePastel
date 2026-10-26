@@ -8,7 +8,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution.Parameters;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution.Parameters;
 
 /// <summary>
 /// Provides parameters to be used in the <see cref="BokehBlurProcessor{TPixel}"/>.

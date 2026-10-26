@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing.Extensions.Transforms;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing.Extensions.Transforms;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Transforms;
+namespace PinataLabs.ImagePastel.Tests.Processing.Transforms;
 
 [Trait("Category", "Processors")]
 public class SwizzleTests : BaseImageOperationsExtensionTest

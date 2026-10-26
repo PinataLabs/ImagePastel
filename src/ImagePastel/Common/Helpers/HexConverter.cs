@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Common.Helpers;
+namespace PinataLabs.ImagePastel.Common.Helpers;
 
 internal static class HexConverter
 {

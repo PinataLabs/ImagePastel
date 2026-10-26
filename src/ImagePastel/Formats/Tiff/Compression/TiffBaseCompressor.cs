@@ -3,10 +3,10 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression;
 
 internal abstract class TiffBaseCompressor : TiffBaseCompression
 {

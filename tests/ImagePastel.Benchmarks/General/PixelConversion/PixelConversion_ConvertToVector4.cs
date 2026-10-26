@@ -5,7 +5,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion;
+namespace PinataLabs.ImagePastel.Benchmarks.General.PixelConversion;
 
 public class PixelConversion_ConvertToVector4
 {

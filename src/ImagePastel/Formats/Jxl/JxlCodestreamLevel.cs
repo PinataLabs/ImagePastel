@@ -4,9 +4,9 @@
 // lib/jxl/encode.cc (VerifyLevelSettings, and the auto level of JxlEncoder::ProcessOneEnqueuedInput).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// The codestream level an encode needs: 5, or 10 when the image is beyond level 5's limits.

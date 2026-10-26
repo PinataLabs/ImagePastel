@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Library;
+namespace PinataLabs.ImagePastel.SourceGenerators.Library;
 
 /// <summary>
 /// Writes <c>ImageExtensions.Save.cs</c>: the public <c>SaveAs&lt;Format&gt;</c> extension methods
@@ -38,18 +38,18 @@ internal sealed class ImageExtensionsSaveEmitter : IEmitter
             using System.IO;
             using System.Threading;
             using System.Threading.Tasks;
-            using SixLabors.ImageSharp.Advanced;
+            using PinataLabs.ImagePastel.Advanced;
 
             """);
 
         foreach (string format in Formats)
         {
-            writer.WriteLine($"using SixLabors.ImageSharp.Formats.{format};");
+            writer.WriteLine($"using PinataLabs.ImagePastel.Formats.{format};");
         }
 
         writer.WriteLine("""
 
-            namespace SixLabors.ImageSharp;
+            namespace PinataLabs.ImagePastel;
 
             /// <summary>
             /// Extension methods for the <see cref="Image"/> type.

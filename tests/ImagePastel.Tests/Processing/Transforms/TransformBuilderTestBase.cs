@@ -3,11 +3,11 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Transforms;
+namespace PinataLabs.ImagePastel.Tests.Processing.Transforms;
 
 [Trait("Category", "Processors")]
 public abstract class TransformBuilderTestBase<TBuilder>

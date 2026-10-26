@@ -7,19 +7,19 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 [Trait("Format", "Jxl")]
 public class JxlDecoderTests
@@ -494,7 +494,7 @@ public class JxlDecoderTests
         // and E6a (#331) the encoder and its effort. The encoder's options interface, the speed tier, the
         // test hooks and every codec type stay internal.
         string[] publicTypes = typeof(Image).Assembly.GetExportedTypes()
-            .Where(t => t.Namespace?.StartsWith("SixLabors.ImageSharp.Formats.Jxl", StringComparison.Ordinal) == true)
+            .Where(t => t.Namespace?.StartsWith("PinataLabs.ImagePastel.Formats.Jxl", StringComparison.Ordinal) == true)
             .Select(t => t.FullName)
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
@@ -502,22 +502,22 @@ public class JxlDecoderTests
         Assert.Equal(
             new[]
             {
-                "SixLabors.ImageSharp.Formats.Jxl.JxlColorEncoding",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlColorSpace",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlConfigurationModule",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlDecoder",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlEffort",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlEncoder",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannel",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlExtraChannelType",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlFormat",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlFrameMetadata",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlImageFormatDetector",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlMetadata",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlPrimaries",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlRenderingIntent",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlTransferFunction",
-                "SixLabors.ImageSharp.Formats.Jxl.JxlWhitePoint",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlColorEncoding",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlColorSpace",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlConfigurationModule",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlDecoder",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlEffort",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlEncoder",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlExtraChannel",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlExtraChannelType",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlFormat",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlFrameMetadata",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlImageFormatDetector",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlMetadata",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlPrimaries",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlRenderingIntent",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlTransferFunction",
+                "PinataLabs.ImagePastel.Formats.Jxl.JxlWhitePoint",
             },
             publicTypes);
     }

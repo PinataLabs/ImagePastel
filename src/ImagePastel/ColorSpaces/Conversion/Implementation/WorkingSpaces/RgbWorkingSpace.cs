@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// Base class for all implementations of <see cref="RgbWorkingSpace"/>.

@@ -10,11 +10,11 @@ using System.Text;
 using System.Threading;
 using CommandLine;
 using CommandLine.Text;
-using SixLabors.ImageSharp.Benchmarks.LoadResizeSave;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Memory.Internals;
+using PinataLabs.ImagePastel.Benchmarks.LoadResizeSave;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Memory.Internals;
 
-namespace SixLabors.ImageSharp.Tests.ProfilingSandbox;
+namespace PinataLabs.ImagePastel.Tests.ProfilingSandbox;
 
 // See ImagePastel.Benchmarks/LoadResizeSave/README.md
 internal class LoadResizeSaveParallelMemoryStress
@@ -330,7 +330,7 @@ internal class LoadResizeSaveParallelMemoryStress
             {
                 _ = Configuration.Default.MemoryAllocator.Allocate<byte>(1 << 16);
                 Size size = this.Benchmarks.LastProcessedImageSize;
-                _ = new Image<ImageSharp.PixelFormats.Rgba64>(size.Width, size.Height);
+                _ = new Image<ImagePastel.PixelFormats.Rgba64>(size.Width, size.Height);
             }
 
             if (this.gcFrequency > 0 && cnt % this.gcFrequency == 0)

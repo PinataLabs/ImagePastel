@@ -3,9 +3,9 @@
 
 using System.Buffers;
 using System.IO;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Extension methods for <see cref="MemoryAllocator"/>.

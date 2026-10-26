@@ -8,7 +8,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// The encoder's forward XYB: linear RGB through the opsin absorbance matrix and its bias, a cube root,

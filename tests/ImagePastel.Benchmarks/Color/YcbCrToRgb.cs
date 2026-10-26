@@ -4,7 +4,7 @@
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 public class YcbCrToRgb
 {

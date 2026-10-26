@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// The exception that is thrown when the library tries to load

@@ -6,10 +6,10 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// The 3x3 colour matrices that the JPEG XL codec shares: the primaries matrices through XYZ adapted to D50,

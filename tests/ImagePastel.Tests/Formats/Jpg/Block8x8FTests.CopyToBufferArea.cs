@@ -3,14 +3,14 @@
 
 // Uncomment this to turn unit tests into benchmarks:
 // #define BENCHMARKING
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public partial class Block8x8FTests

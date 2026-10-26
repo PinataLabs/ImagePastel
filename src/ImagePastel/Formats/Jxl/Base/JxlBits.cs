@@ -9,7 +9,7 @@ using System.Numerics;
 #endif
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// Bit helpers used throughout the codestream.

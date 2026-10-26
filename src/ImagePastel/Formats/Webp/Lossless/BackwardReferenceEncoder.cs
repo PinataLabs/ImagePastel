@@ -3,9 +3,9 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 internal static class BackwardReferenceEncoder
 {

@@ -3,9 +3,9 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Memory.Internals;
+using PinataLabs.ImagePastel.Memory.Internals;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Cached pointer or array data enabling fast <see cref="Span{T}"/> access from

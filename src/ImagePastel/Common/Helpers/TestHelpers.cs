@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Common.Helpers;
+namespace PinataLabs.ImagePastel.Common.Helpers;
 
 /// <summary>
 /// Internal utilities intended to be only used in tests.

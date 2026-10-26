@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.ColorManagement;
-using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.ColorManagement;
+namespace PinataLabs.ImagePastel.Tests.Processing.ColorManagement;
 
 [Trait("Category", "Processors")]
 [Trait("Profile", "Icc")]

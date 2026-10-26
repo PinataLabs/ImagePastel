@@ -3,7 +3,7 @@
 
   <PropertyGroup>
     <AssemblyName>PinataLabs.ImagePastel.SourceGenerators.Tests</AssemblyName>
-    <RootNamespace>SixLabors.ImageSharp.SourceGenerators.Tests</RootNamespace>
+    <RootNamespace>PinataLabs.ImagePastel.SourceGenerators.Tests</RootNamespace>
     <!-- xUnit.net v3 test projects are stand-alone executables. -->
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>

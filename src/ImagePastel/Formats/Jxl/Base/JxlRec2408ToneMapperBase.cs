@@ -5,9 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using static SixLabors.ImageSharp.Formats.Jxl.Base.JxlScalarMath;
+using static PinataLabs.ImagePastel.Formats.Jxl.Base.JxlScalarMath;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// The scalar Rec. ITU-R BT.2408 tone mapper (its Annex 5 EETF) that libjxl's ICC builder uses for the

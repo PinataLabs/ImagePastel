@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <summary>
 /// Defines the contract for an action that operates on a row with a temporary buffer.

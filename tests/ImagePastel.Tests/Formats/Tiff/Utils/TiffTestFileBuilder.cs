@@ -5,9 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.Utils;
 
 /// <summary>
 /// Builds little-endian TIFF files from explicit IFD entries, so tests can use tag combinations the encoder never writes.

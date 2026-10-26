@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Represents a value in relation to a value on the image.
