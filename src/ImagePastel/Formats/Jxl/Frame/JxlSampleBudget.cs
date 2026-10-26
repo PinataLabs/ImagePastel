@@ -28,6 +28,18 @@ internal static class JxlSampleBudget
     public const long MaxSamples = JxlFrameDecoder.MaxPixelsPerFrame * 4;
 
     /// <summary>
+    /// The most samples across the displayed frames of an animation (#316): 16 frames at
+    /// <see cref="MaxSamples"/>, or about 2,000 frames of 1920 x 1080 RGBA.
+    /// </summary>
+    /// <remarks>
+    /// A departure from libjxl, which has no such cap; its fuzzer caps the total at 5 x 2^21 pixels
+    /// (<c>tools/djxl_fuzzer.cc</c>). Each displayed frame gets a full canvas, and the frame count has no
+    /// limit, so a small file of many tiny frames over a large canvas could otherwise ask for far more
+    /// memory than any machine has.
+    /// </remarks>
+    public const long MaxTotalSamples = 1L << 34;
+
+    /// <summary>
     /// Checks a frame at its own size: the colour planes it decodes at the upsampled frame size, and each
     /// extra channel at that size divided by its upsampling, which includes its <c>dim_shift</c>.
     /// </summary>
@@ -55,7 +67,15 @@ internal static class JxlSampleBudget
     /// by its <c>dim_shift</c>. <see cref="CheckFrame"/> checks each frame again at its own size.
     /// </summary>
     /// <param name="metadata">The codec metadata, inside the pixel cap.</param>
-    public static void CheckImage(JxlCodecMetadata metadata)
+    public static void CheckImage(JxlCodecMetadata metadata) => ThrowIfOver(ImageSamples(metadata), "image");
+
+    /// <summary>
+    /// Gets the samples of a full-size frame from the image header, as <see cref="CheckImage"/> counts
+    /// them: the canvas of each displayed frame, which <see cref="CheckTotal"/> sums.
+    /// </summary>
+    /// <param name="metadata">The codec metadata, inside the pixel cap.</param>
+    /// <returns>The samples.</returns>
+    public static long ImageSamples(JxlCodecMetadata metadata)
     {
         long xsize = (long)metadata.XSize;
         long ysize = (long)metadata.YSize;
@@ -66,7 +86,24 @@ internal static class JxlSampleBudget
             samples += ExtraChannelSamples(xsize, ysize, 1u << (int)extraChannel.DimShift);
         }
 
-        ThrowIfOver(samples, "image");
+        return samples;
+    }
+
+    /// <summary>
+    /// Checks the canvases of the displayed frames, each of <paramref name="frameSamples"/>, before the
+    /// last of them is allocated.
+    /// </summary>
+    /// <param name="frames">The number of displayed frames, the next one included.</param>
+    /// <param name="frameSamples">The samples of one canvas, at most <see cref="MaxSamples"/>.</param>
+    /// <param name="maxTotalSamples">The limit; tests pass a lower one.</param>
+    public static void CheckTotal(long frames, long frameSamples, long maxTotalSamples = MaxTotalSamples)
+    {
+        // Within uint.MaxValue frames of at most 2^30 samples, the product fits a long.
+        long samples = frames * frameSamples;
+        if (samples > maxTotalSamples)
+        {
+            throw new InvalidMemoryOperationException($"The JPEG XL animation has {samples} samples in its first {frames} frames, more than the limit of {maxTotalSamples}.");
+        }
     }
 
     private static long ExtraChannelSamples(long xsize, long ysize, uint upsampling)
