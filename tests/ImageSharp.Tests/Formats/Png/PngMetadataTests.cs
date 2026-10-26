@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using SixLabors.ImageSharp.Compression.Zlib;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -447,5 +449,65 @@ public partial class PngMetadataTests
 
         using Image image = Image.Load(stream.ToArray());
         Assert.Equal(expected, image.Metadata.IccProfile?.ToByteArray());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Identify_Palette_SetsHasTransparency(bool transparent, bool makeTrnsOpaque)
+    {
+        using MemoryStream stream = EncodePalettePng(transparent, makeTrnsOpaque);
+
+        IImageInfo imageInfo = Image.Identify(stream);
+        PngMetadata meta = imageInfo.Metadata.GetPngMetadata();
+
+        Assert.Equal(PngColorType.Palette, meta.ColorType);
+        Assert.Equal(transparent && !makeTrnsOpaque, meta.HasTransparency);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Decode_Palette_SetsHasTransparency(bool transparent, bool makeTrnsOpaque)
+    {
+        using MemoryStream stream = EncodePalettePng(transparent, makeTrnsOpaque);
+
+        using Image image = Image.Load(stream);
+        PngMetadata meta = image.Metadata.GetPngMetadata();
+
+        Assert.Equal(PngColorType.Palette, meta.ColorType);
+        Assert.Equal(transparent && !makeTrnsOpaque, meta.HasTransparency);
+    }
+
+    private static MemoryStream EncodePalettePng(bool transparent, bool makeTrnsOpaque)
+    {
+        using Image<Rgba32> image = new(4, 4, Color.Red.ToPixel<Rgba32>());
+        if (transparent)
+        {
+            image[1, 1] = Color.Transparent.ToPixel<Rgba32>();
+        }
+
+        using MemoryStream encoded = new();
+        image.SaveAsPng(encoded, new PngEncoder { ColorType = PngColorType.Palette });
+        byte[] bytes = encoded.ToArray();
+
+        if (makeTrnsOpaque)
+        {
+            // Keep the tRNS chunk but mark every palette entry as fully opaque.
+            int typeIndex = bytes.AsSpan().IndexOf("tRNS"u8);
+            Assert.True(typeIndex >= 4);
+
+            int length = (int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(typeIndex - 4, 4));
+            Span<byte> data = bytes.AsSpan(typeIndex + 4, length);
+            data.Fill(byte.MaxValue);
+
+            uint crc = Crc32.Calculate(bytes.AsSpan(typeIndex, 4));
+            crc = Crc32.Calculate(crc, data);
+            BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(typeIndex + 4 + length, 4), crc);
+        }
+
+        return new MemoryStream(bytes, false);
     }
 }
