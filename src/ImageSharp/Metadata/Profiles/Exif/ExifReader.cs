@@ -211,7 +211,7 @@ internal abstract class BaseExifReader
 
         // Each entry is 20 bytes, and ReadValue64 reads nothing once fewer than that remain, so a count
         // beyond the entries the data holds would loop without advancing: up to 2^64 times.
-        count = Math.Min(count, (ulong)(this.data.Length - this.data.Position) / 20);
+        count = Math.Min(count, (ulong)Math.Max(0, this.data.Length - this.data.Position) / 20);
 
         Span<byte> offsetBuffer = stackalloc byte[8];
         for (ulong i = 0; i < count; i++)

@@ -46,6 +46,11 @@ internal sealed partial class IccDataReader
     public IccClut ReadClut(int inChannelCount, int outChannelCount, bool isFloat)
     {
         // Grid-points are always 16 bytes long but only 0-inChCount are used
+        if (inChannelCount > 16)
+        {
+            throw new InvalidIccProfileException($"A CLUT has a grid-point count for 16 input channels, not {inChannelCount}");
+        }
+
         var gridPointCount = new byte[inChannelCount];
         Buffer.BlockCopy(this.data, this.AddIndex(16), gridPointCount, 0, inChannelCount);
 
