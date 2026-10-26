@@ -27,9 +27,20 @@ internal static class ColorNumerics
     /// <param name="luminanceLevels">
     /// The number of luminance levels (256 for 8 bit, 65536 for 16 bit grayscale images).
     /// </param>
+    /// <returns>
+    /// The luminance level, from 0 to <paramref name="luminanceLevels"/> - 1. A pixel format can hold
+    /// components outside [0, 1], infinite or NaN, and callers index a histogram by the result, so a
+    /// luminance above the range answers the top level and a negative or NaN one answers 0.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetBT709Luminance(ref Vector4 vector, int luminanceLevels)
-        => (int)MathF.Round(Vector4.Dot(vector, Bt709) * (luminanceLevels - 1));
+    {
+        float maxLevel = luminanceLevels - 1;
+        float luminance = Vector4.Dot(vector, Bt709) * maxLevel;
+
+        // Written so that NaN fails the comparison and answers 0.
+        return luminance > 0 ? (int)MathF.Round(MathF.Min(luminance, maxLevel)) : 0;
+    }
 
     /// <summary>
     /// Gets the luminance from the rgb components using the formula

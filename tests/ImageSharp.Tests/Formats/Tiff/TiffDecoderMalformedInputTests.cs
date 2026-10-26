@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Tiff.Constants;
 using SixLabors.ImageSharp.Memory;
@@ -371,6 +372,24 @@ public class TiffDecoderMalformedInputTests
 
         ImageFormatException ex = Assert.Throws<ImageFormatException>(() => Decode<L8>(tiff).Dispose());
         Assert.Contains("circular", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory(Timeout = 10_000)]
+    [InlineData(1UL)]
+    [InlineData(5_000_000_000UL)]
+    public async Task Decode_BigTiffEntryCountBeyondEndOfFile_ThrowsPromptly(ulong entryCount)
+    {
+        // A BigTIFF header whose first directory, at offset 16, declares entryCount entries of 20 bytes
+        // each, and then ends: the file holds the count and none of the entries (GHSA-wmxv-xphr-5c9g).
+        byte[] tiff = new byte[24];
+        tiff[0] = (byte)'I';
+        tiff[1] = (byte)'I';
+        BinaryPrimitives.WriteUInt16LittleEndian(tiff.AsSpan(2), TiffConstants.BigTiffHeaderMagicNumber);
+        BinaryPrimitives.WriteUInt16LittleEndian(tiff.AsSpan(4), TiffConstants.BigTiffBytesize);
+        BinaryPrimitives.WriteUInt64LittleEndian(tiff.AsSpan(8), 16);
+        BinaryPrimitives.WriteUInt64LittleEndian(tiff.AsSpan(16), entryCount);
+
+        await Task.Run(() => Assert.ThrowsAny<ImageFormatException>(() => Decode<L8>(tiff).Dispose()), TestContext.Current.CancellationToken);
     }
 
     [Fact]
