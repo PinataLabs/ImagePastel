@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Buffers;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// The base class for planar color decoders.

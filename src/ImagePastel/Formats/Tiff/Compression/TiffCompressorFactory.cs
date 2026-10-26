@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression;
 
 internal static class TiffCompressorFactory
 {

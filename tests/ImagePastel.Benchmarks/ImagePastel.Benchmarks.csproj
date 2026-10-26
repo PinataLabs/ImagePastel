@@ -4,7 +4,7 @@
   <PropertyGroup>
     <AssemblyName>ImagePastel.Benchmarks</AssemblyName>
     <OutputType>Exe</OutputType>
-    <RootNamespace>SixLabors.ImageSharp.Benchmarks</RootNamespace>
+    <RootNamespace>PinataLabs.ImagePastel.Benchmarks</RootNamespace>
     <GenerateProgramFile>false</GenerateProgramFile>
     <!--Used to hide test project from dotnet test-->
     <IsTestProject>false</IsTestProject>

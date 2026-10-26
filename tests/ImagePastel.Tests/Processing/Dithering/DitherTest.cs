@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Dithering;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Dithering;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Dithering;
+namespace PinataLabs.ImagePastel.Tests.Processing.Dithering;
 
 [Trait("Category", "Processors")]
 public class DitherTest : BaseImageOperationsExtensionTest

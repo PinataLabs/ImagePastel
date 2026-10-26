@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Processing.Processors;
+using PinataLabs.ImagePastel.Processing.Processors;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// A pixel-agnostic interface to queue up image operations to apply to an image.

@@ -6,15 +6,15 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Lossy encoding at Fastest (libjxl effort 3): an 8-bit RGB image with no profile and no alpha becomes

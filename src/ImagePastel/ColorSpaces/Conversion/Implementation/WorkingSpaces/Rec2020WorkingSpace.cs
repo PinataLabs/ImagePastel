@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.ColorSpaces.Companding;
+using PinataLabs.ImagePastel.ColorSpaces.Companding;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// Rec. 2020 (ITU-R Recommendation BT.2020F) working space.

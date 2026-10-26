@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 
 [Trait("Format", "Jxl")]
 public class JxlConformanceVectorTests

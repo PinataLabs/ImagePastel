@@ -10,7 +10,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Png.Filters;
+namespace PinataLabs.ImagePastel.Formats.Png.Filters;
 
 /// <summary>
 /// The Average filter uses the average of the two neighboring pixels (left and above) to predict

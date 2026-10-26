@@ -4,7 +4,7 @@
 using System;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 internal static class ExifConstants
 {

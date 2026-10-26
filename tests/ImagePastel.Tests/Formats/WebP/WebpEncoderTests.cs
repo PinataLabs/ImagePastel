@@ -6,18 +6,18 @@ using System.Buffers;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Formats.Webp.Lossless;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Formats.Webp.Lossless;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Webp;
+using static PinataLabs.ImagePastel.Tests.TestImages.Webp;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Webp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 
 [Trait("Format", "Webp")]
 public class WebpEncoderTests

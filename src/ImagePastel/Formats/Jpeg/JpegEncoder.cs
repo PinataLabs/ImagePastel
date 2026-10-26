@@ -4,9 +4,9 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg;
+namespace PinataLabs.ImagePastel.Formats.Jpeg;
 
 /// <summary>
 /// Encoder for writing the data image to a stream in jpeg format.

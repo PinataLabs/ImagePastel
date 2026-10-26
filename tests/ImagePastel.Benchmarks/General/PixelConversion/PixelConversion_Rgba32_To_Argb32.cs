@@ -6,9 +6,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion;
+namespace PinataLabs.ImagePastel.Benchmarks.General.PixelConversion;
 
 public class PixelConversion_Rgba32_To_Argb32
 {

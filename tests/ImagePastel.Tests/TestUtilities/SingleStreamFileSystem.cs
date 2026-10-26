@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 internal class SingleStreamFileSystem : IFileSystem
 {

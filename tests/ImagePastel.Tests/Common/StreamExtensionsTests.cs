@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Common;
+namespace PinataLabs.ImagePastel.Tests.Common;
 
 public class StreamExtensionsTests
 {

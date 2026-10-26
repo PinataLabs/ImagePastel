@@ -3,9 +3,9 @@
 
 using System;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces.Bulk;
 
 [Config(typeof(Config.HwIntrinsics_SSE_AVX))]
 public class ShuffleFloat4Channel

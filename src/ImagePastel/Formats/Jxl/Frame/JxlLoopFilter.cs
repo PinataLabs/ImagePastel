@@ -5,9 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 /// <summary>The loop-filter fields of a frame: Gaborish and the edge-preserving filter (EPF).</summary>
 internal sealed class JxlLoopFilter : JxlFields

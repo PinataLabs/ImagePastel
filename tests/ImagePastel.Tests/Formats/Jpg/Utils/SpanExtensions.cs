@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 /// <summary>
 /// Span Extensions

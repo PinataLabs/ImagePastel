@@ -1,9 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
-namespace SixLabors.ImageSharp.Processing.Extensions.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Extensions.Transforms;
 
 /// <summary>
 /// Defines extensions that allow the application of swizzle operations on an <see cref="Image"/>

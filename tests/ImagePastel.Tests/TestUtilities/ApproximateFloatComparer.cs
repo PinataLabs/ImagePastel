@@ -3,9 +3,9 @@
 
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Allows the approximate comparison of single precision floating point values.

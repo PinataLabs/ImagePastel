@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
 /// <summary>
 /// Encapsulates the conversion of color channels from jpeg image to RGB channels.

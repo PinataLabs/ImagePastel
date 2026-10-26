@@ -4,13 +4,13 @@
 using System;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 /// <summary>
 /// Tests for streams written by imperfect producers, which libjpeg-based viewers still decode.

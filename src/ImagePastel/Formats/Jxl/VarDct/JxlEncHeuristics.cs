@@ -7,12 +7,12 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The encoder's choices for a lossy frame before the coefficients: the quantiser, the strategy of each

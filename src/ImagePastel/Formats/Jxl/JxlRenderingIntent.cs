@@ -6,7 +6,7 @@
 // lib/jxl/image_metadata.h and lib/jxl/color_encoding_internal.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Specifies the rendering intent of a JPEG XL colour encoding. The values are libjxl's, which match the

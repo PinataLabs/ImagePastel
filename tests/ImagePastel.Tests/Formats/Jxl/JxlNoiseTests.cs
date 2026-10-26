@@ -6,14 +6,14 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Noise (D12c): frames with the noise flag, whose noise the decoder makes from libjxl's generator,

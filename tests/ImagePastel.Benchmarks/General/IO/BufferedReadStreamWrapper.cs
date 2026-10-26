@@ -6,7 +6,7 @@ using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Benchmarks.IO;
+namespace PinataLabs.ImagePastel.Benchmarks.IO;
 
 /// <summary>
 /// A readonly stream wrapper that add a secondary level buffer in addition to native stream

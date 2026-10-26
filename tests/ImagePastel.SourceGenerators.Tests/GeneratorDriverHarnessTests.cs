@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis;
 using Xunit;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Tests;
+namespace PinataLabs.ImagePastel.SourceGenerators.Tests;
 
 /// <summary>
 /// The snapshot comparison must fail on every kind of difference, or a green snapshot run

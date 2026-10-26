@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <content>
 /// Contains the definition of <see cref="WernerPalette"/>.

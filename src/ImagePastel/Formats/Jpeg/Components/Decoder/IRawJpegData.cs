@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Represents decompressed, unprocessed jpeg data with spectral space <see cref="IJpegComponent" />-s.

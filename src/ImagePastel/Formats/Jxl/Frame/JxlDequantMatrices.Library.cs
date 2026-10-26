@@ -6,7 +6,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 /// <content>
 /// The library quantization tables: the encoding a table has when the frame codes it as library table 0,

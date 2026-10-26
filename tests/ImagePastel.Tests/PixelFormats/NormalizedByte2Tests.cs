@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.PixelFormats;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats;
 
 [Trait("Category", "PixelFormats")]
 public class NormalizedByte2Tests

@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Formats.Bmp;
 
 /// <summary>
 /// Enumerates the available bits per pixel the bitmap encoder supports.

@@ -9,4 +9,4 @@
         "CA2022:Avoid inexact read with 'Stream.Read'",
         Justification = "Decoders read through BufferedReadStream, which only returns short at end of stream.",
         Scope = "namespaceanddescendants",
-        Target = "~N:SixLabors.ImageSharp.Formats")]
+        Target = "~N:PinataLabs.ImagePastel.Formats")]

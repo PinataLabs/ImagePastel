@@ -3,7 +3,7 @@
 
 using System.Globalization;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 internal sealed class ExifEncodedString : ExifValue<EncodedString>
 {

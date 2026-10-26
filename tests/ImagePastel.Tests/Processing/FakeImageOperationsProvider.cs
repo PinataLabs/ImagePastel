@@ -4,11 +4,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors;
 
-namespace SixLabors.ImageSharp.Tests.Processing;
+namespace PinataLabs.ImagePastel.Tests.Processing;
 
 internal class FakeImageOperationsProvider : IImageProcessingContextFactory
 {

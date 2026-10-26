@@ -6,12 +6,12 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Helpers;
+namespace PinataLabs.ImagePastel.Tests.Helpers;
 
 public class ParallelRowIteratorTests
 {

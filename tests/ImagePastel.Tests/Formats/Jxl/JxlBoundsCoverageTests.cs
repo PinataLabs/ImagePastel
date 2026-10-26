@@ -5,20 +5,20 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.Icc;
-using SixLabors.ImageSharp.Formats.Jxl.Modular;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Tests.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The #112 bounds that <see cref="JxlBoundsTests"/> left untested (D14f), each through a crafted stream

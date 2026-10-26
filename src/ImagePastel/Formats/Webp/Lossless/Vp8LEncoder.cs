@@ -8,12 +8,12 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats.Webp.BitWriter;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Webp.BitWriter;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 /// <summary>
 /// Encoder for lossless webp images.

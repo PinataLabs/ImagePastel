@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// A 3x3 matrix with an offset, in double precision: <c>out = M * in + offset</c>, with column vectors.

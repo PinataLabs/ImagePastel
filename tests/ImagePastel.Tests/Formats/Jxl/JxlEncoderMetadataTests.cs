@@ -7,15 +7,15 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The Exif and XMP boxes the encoder writes in a JPEG XL container (E6b, #332), checked through

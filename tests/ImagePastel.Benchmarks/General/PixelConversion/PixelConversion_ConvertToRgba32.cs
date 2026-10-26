@@ -4,9 +4,9 @@
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion;
+namespace PinataLabs.ImagePastel.Benchmarks.General.PixelConversion;
 
 /// <summary>
 /// When implementing TPixel --> Rgba32 style conversions on IPixel, should which API should we prefer?

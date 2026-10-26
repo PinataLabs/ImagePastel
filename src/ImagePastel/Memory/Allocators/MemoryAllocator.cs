@@ -6,7 +6,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Memory managers are used to allocate memory for image processing operations.

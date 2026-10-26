@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 internal sealed class ExifSignedShortArray : ExifArrayValue<short>
 {

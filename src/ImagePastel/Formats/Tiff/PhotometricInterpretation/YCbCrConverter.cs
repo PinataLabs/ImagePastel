@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Converts YCbCr data to rgb data.

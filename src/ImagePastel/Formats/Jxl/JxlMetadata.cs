@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Provides JPEG XL specific metadata information for the image.

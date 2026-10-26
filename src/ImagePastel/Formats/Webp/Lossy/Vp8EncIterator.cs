@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossy;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 /// <summary>
 /// Iterator structure to iterate through macroblocks, pointing to the

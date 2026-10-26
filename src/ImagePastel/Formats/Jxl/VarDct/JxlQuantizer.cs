@@ -7,13 +7,13 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Memory;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Memory;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The quantiser of a VarDCT frame: the global scale and the DC quantisation, from which the DC and AC

@@ -3,12 +3,12 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.ColorManagement;
+namespace PinataLabs.ImagePastel.Tests.ColorManagement;
 
 /// <summary>
 /// Uses <see cref="IccColorTransform"/> directly, on rows of scaled colors, against Little CMS references.

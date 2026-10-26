@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// What every profile <see cref="IccProfileBuilder"/> builds needs besides its colour transform: the white

@@ -3,10 +3,10 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.IO;
+namespace PinataLabs.ImagePastel.Tests.IO;
 
 public class BufferedReadStreamTests
 {

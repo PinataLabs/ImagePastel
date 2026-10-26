@@ -4,12 +4,12 @@
 using System;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Lossy encoding of an image with alpha at Fastest (libjxl effort 3, slice E3c): the colour is an XYB

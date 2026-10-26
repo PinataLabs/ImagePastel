@@ -5,7 +5,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <RootNamespace>SixLabors.ImageSharp.SourceGenerators</RootNamespace>
+    <RootNamespace>PinataLabs.ImagePastel.SourceGenerators</RootNamespace>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
 

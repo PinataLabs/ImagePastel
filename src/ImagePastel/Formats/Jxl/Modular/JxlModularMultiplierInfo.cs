@@ -4,7 +4,7 @@
 // lib/jxl/modular/options.h (ModularMultiplierInfo).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// The residual multiplier of the channels and streams in <see cref="Range"/>, which quantised (lossy)

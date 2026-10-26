@@ -3,12 +3,12 @@
 
 using System.IO;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public partial class ImageTests
 {

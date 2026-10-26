@@ -1,12 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.Quantization;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.Quantization;
 
 [Trait("Category", "Processors")]
 public class WuQuantizerTests

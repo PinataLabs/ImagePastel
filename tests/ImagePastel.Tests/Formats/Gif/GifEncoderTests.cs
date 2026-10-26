@@ -3,16 +3,16 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Gif;
+namespace PinataLabs.ImagePastel.Tests.Formats.Gif;
 
 [Trait("Format", "Gif")]
 public class GifEncoderTests

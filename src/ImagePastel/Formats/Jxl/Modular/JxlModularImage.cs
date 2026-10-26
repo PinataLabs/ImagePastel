@@ -7,10 +7,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// A Modular image: a list of channels, the first <see cref="NbMetaChannels"/> of which hold

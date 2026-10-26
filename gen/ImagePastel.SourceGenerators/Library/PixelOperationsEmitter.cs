@@ -3,9 +3,9 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.SourceGenerators.Names;
+using PinataLabs.ImagePastel.SourceGenerators.Names;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Library;
+namespace PinataLabs.ImagePastel.SourceGenerators.Library;
 
 /// <summary>
 /// Writes the pixel operations: <c>&lt;Pixel&gt;.PixelOperations.Generated.cs</c>, the optimized bulk
@@ -36,9 +36,9 @@ internal sealed class PixelOperationsEmitter : IEmitter
             using System.Numerics;
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
-            using SixLabors.ImageSharp.PixelFormats.Utils;
+            using PinataLabs.ImagePastel.PixelFormats.Utils;
 
-            namespace SixLabors.ImageSharp.PixelFormats;
+            namespace PinataLabs.ImagePastel.PixelFormats;
 
             /// <content>
             /// Provides optimized overrides for bulk operations.
@@ -233,7 +233,7 @@ internal sealed class PixelOperationsEmitter : IEmitter
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
 
-            namespace SixLabors.ImageSharp.PixelFormats;
+            namespace PinataLabs.ImagePastel.PixelFormats;
 
             public partial class PixelOperations<TPixel>
             {

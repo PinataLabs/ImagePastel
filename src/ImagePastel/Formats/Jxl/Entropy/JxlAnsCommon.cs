@@ -7,7 +7,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>The histogram helpers the ANS reader and writer share.</summary>
 internal static class JxlAnsCommon

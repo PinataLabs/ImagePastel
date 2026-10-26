@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Smoke tests of the VarDCT building blocks that the generated files cannot single out: the DCT8

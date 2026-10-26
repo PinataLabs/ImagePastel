@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// The parametricCurveType describes a one-dimensional curve by

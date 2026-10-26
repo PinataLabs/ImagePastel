@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Formats.Bmp;
 
 internal static class BmpThrowHelper
 {

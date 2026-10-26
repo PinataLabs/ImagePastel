@@ -4,14 +4,14 @@
 using System;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder's reconstruction of its own frame from its coefficients (libjxl's <c>ReconstructImage</c>,

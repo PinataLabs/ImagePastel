@@ -4,10 +4,10 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Compression.Zlib;
+namespace PinataLabs.ImagePastel.Compression.Zlib;
 
 /// <summary>
 /// Provides methods and properties for compressing streams by using the Zlib Deflate algorithm.

@@ -6,7 +6,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// libjxl's scalar double-precision Hybrid Log-Gamma curve (ITU-R BT.2100), which its ICC code uses: the

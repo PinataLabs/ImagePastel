@@ -6,10 +6,10 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using static SixLabors.ImageSharp.SimdUtils;
+using static PinataLabs.ImagePastel.SimdUtils;
 
 // ReSharper disable ImpureMethodCallOnReadonlyValueField
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
 internal abstract partial class JpegColorConverterBase
 {

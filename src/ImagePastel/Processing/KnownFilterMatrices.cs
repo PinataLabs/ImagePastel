@@ -12,7 +12,7 @@ using System;
 // |10|11|12|13|14| = |2|7|12|17| = |M31|M32|M33|M34|
 // |15|16|17|18|19|   |3|8|13|18|   |M41|M42|M43|M44|
 //                    |4|9|14|19|   |M51|M52|M53|M54|
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// A collection of known <see cref="ColorMatrix"/> values for composing filters

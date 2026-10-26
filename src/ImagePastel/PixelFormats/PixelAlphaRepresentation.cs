@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Provides enumeration of the alpha value transparency behavior of a pixel format.

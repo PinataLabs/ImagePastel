@@ -7,7 +7,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <content>
 /// The AFV strategies: an 8x8 block whose 4x4 corner has a basis of its own, beside a 4x4 DCT and above

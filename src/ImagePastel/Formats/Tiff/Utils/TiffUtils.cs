@@ -5,9 +5,9 @@ using System;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Utils;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Utils;
 
 /// <summary>
 /// Helper methods for TIFF decoding.

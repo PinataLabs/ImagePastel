@@ -5,11 +5,11 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// The stages of a frame that upsample its channels, which libjxl's <c>PreparePipeline</c> adds around the

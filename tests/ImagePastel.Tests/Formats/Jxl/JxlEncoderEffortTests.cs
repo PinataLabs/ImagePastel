@@ -5,13 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Modular;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The effort levels: each maps to a libjxl speed tier, and the encoder's choices at each tier are read

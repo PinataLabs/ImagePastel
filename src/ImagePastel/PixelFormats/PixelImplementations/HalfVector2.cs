@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Packed pixel type containing two 16-bit floating-point values.

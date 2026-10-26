@@ -8,9 +8,9 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>
 /// The entropy codes of one stream, as the writer builds them: the context map, the hybrid uint

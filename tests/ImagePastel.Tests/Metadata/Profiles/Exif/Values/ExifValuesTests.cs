@@ -3,10 +3,10 @@
 
 using System;
 using System.Text;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Exif.Values;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Exif.Values;
 
 [Trait("Profile", "Exif")]
 public class ExifValuesTests

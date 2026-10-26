@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// This structure represents a color transform using tables

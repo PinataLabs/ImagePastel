@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Quantization;
+namespace PinataLabs.ImagePastel.Tests.Quantization;
 
 public class WuQuantizerTests
 {

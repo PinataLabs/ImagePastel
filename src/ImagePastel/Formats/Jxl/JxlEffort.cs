@@ -1,7 +1,7 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// How much search the JPEG XL encoder spends to reach a given <see cref="JxlEncoder.Distance"/>. It

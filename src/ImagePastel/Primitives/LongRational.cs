@@ -5,7 +5,7 @@ using System;
 using System.Globalization;
 using System.Text;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Represents a number that can be expressed as a fraction.

@@ -6,9 +6,9 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Tests.Memory;
+namespace PinataLabs.ImagePastel.Tests.Memory;
 
 internal class TestMemoryAllocator : MemoryAllocator
 {

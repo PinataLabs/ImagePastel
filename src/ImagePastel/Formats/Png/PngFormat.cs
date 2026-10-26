@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Png;
+namespace PinataLabs.ImagePastel.Formats.Png;
 
 /// <summary>
 /// Registers the image encoders, decoders and mime type detectors for the png format.

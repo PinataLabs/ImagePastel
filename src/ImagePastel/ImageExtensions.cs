@@ -7,10 +7,10 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Extension methods for the <see cref="Image"/> type.

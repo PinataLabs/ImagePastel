@@ -4,12 +4,12 @@
 using System;
 using System.Linq;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 internal static partial class LibJpegTools
 {

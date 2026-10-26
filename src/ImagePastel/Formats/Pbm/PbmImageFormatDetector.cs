@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Formats.Pbm;
 
 /// <summary>
 /// Detects Pbm file headers.

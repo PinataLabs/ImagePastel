@@ -6,15 +6,15 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Png;
+namespace PinataLabs.ImagePastel.Tests.Formats.Png;
 
 [Trait("Format", "Png")]
 public partial class PngMetadataTests

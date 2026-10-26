@@ -4,18 +4,18 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public partial class JpegDecoderTests

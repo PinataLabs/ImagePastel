@@ -4,12 +4,12 @@
 using System;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The sample budget (issue #292): a frame's pixels times its colour and extra channels must not pass

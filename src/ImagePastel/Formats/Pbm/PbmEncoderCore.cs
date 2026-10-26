@@ -5,10 +5,10 @@ using System;
 using System.Buffers.Text;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Formats.Pbm;
 
 /// <summary>
 /// Image encoder for writing an image to a stream as a PGM, PBM, PPM or PAM bitmap.

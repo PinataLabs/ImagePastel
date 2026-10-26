@@ -3,7 +3,7 @@
 
 using System.Diagnostics;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 /// <summary>
 /// Represents the Huffman tree.

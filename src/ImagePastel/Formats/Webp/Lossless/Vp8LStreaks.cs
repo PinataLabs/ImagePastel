@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 internal class Vp8LStreaks
 {

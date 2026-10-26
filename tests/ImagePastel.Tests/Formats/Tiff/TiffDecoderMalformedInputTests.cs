@@ -7,14 +7,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff;
 
 /// <summary>
 /// Decodes hand-built TIFF files with unusual layouts, very large strips and malformed data.

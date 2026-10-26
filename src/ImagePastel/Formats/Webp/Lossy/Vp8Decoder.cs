@@ -3,10 +3,10 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Formats.Webp.BitReader;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Webp.BitReader;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossy;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 /// <summary>
 /// Holds information for decoding a lossy webp image.

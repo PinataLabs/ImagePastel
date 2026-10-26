@@ -9,13 +9,13 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
-using SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Patches in Mul and the four blend modes that use alpha. <c>cjxl</c> cannot write these modes, so the

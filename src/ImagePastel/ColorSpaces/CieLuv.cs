@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.ColorSpaces;
+namespace PinataLabs.ImagePastel.ColorSpaces;
 
 /// <summary>
 /// The CIE 1976 (L*, u*, v*) color space, commonly known by its abbreviation CIELUV, is a color space adopted by the International

@@ -7,7 +7,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 /// <summary>
 /// The four reference slots a frame can be saved to (<c>save_as_reference</c>) and later frames

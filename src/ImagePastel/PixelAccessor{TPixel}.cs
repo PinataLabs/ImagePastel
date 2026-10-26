@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// A delegate to be executed on a <see cref="PixelAccessor{TPixel}"/>.

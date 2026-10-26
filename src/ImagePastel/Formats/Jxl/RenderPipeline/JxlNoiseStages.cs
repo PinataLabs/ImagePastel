@@ -4,9 +4,9 @@
 // of PassesDecoderState::PreparePipeline in lib/jxl/dec_cache.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// The two noise stages of a frame with the noise flag, which run after the upsampling and before the

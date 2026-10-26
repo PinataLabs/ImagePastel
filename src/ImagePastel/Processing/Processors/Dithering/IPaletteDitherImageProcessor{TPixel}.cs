@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Dithering;
+namespace PinataLabs.ImagePastel.Processing.Processors.Dithering;
 
 /// <summary>
 /// Implements an algorithm to alter the pixels of an image via palette dithering.

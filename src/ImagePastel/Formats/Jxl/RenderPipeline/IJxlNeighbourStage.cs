@@ -7,9 +7,9 @@
 // lib/jxl/dec_cache.cc adds around the patches.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// A neighbour stage of the render pipeline: a loop filter (Gaborish or one EPF pass), or a stage that

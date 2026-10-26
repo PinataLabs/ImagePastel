@@ -6,7 +6,7 @@ using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Tests;
+namespace PinataLabs.ImagePastel.SourceGenerators.Tests;
 
 /// <summary>
 /// The <c>ImageSharpGeneratedSources</c> property picks the outputs of each consuming project.

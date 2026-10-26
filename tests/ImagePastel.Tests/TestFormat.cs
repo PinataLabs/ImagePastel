@@ -8,12 +8,12 @@ using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// A test image file.

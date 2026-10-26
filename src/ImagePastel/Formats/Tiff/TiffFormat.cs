@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
 
-namespace SixLabors.ImageSharp.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Formats.Tiff;
 
 /// <summary>
 /// Encapsulates the means to encode and decode Tiff images.

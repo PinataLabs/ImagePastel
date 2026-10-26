@@ -5,10 +5,10 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg.BlockOperations;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg.BlockOperations;
 
 /// <summary>
 /// The goal of this benchmark is to measure the following Jpeg-related scenario:

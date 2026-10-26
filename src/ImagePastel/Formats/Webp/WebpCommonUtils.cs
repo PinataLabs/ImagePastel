@@ -3,13 +3,13 @@
 
 using System;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 #if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Utility methods for lossy and lossless webp format.

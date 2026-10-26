@@ -4,7 +4,7 @@
 // lib/jxl/field_encodings.h (U32Distr, U32Enc, Val, Bits, BitsOffset).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Fields;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
 /// <summary>
 /// A 32-bit field encoding: a 2-bit selector picks one of four distributions.

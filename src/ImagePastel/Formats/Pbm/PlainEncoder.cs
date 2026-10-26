@@ -5,10 +5,10 @@ using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Formats.Pbm;
 
 /// <summary>
 /// Pixel encoding methods for the PBM plain encoding.

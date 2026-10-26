@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>
 /// The squeeze transform: a Haar-like wavelet that halves a channel in one direction into an

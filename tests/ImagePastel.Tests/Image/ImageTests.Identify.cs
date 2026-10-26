@@ -4,12 +4,12 @@
 using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public partial class ImageTests
 {

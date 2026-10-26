@@ -3,13 +3,13 @@
 
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats.Webp.Lossless;
-using SixLabors.ImageSharp.Formats.Webp.Lossy;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats.Webp.Lossless;
+using PinataLabs.ImagePastel.Formats.Webp.Lossy;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Image encoder for writing an image to a stream in the Webp format.

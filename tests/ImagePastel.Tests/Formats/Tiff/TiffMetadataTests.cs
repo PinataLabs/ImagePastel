@@ -7,20 +7,20 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using SixLabors.ImageSharp.Common.Helpers;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Common.Helpers;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Tiff.Utils;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Tiff;
+using static PinataLabs.ImagePastel.Tests.TestImages.Tiff;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff;
 
 [Trait("Format", "Tiff")]
 public class TiffMetadataTests

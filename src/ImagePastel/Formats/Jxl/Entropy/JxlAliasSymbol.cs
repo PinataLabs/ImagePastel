@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>One symbol looked up in an alias table.</summary>
 internal struct JxlAliasSymbol

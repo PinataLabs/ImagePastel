@@ -3,10 +3,10 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.SourceGenerators.Library;
-using SixLabors.ImageSharp.SourceGenerators.Tests;
+using PinataLabs.ImagePastel.SourceGenerators.Library;
+using PinataLabs.ImagePastel.SourceGenerators.Tests;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// The project that the generator writes sources for, set by the consuming project's

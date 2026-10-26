@@ -8,13 +8,13 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// Decodes the VarDCT coefficients of one AC group, dequantises them and transforms them into the

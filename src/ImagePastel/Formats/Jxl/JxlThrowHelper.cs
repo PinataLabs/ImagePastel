@@ -5,7 +5,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Throws the exceptions the JPEG XL decoder and encoder may raise. libjxl returns a <c>Status</c> from every call

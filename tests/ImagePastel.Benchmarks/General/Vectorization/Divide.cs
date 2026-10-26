@@ -4,7 +4,7 @@
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
 
-namespace ImageSharp.Benchmarks.General.Vectorization;
+namespace ImagePastel.Benchmarks.General.Vectorization;
 
 #pragma warning disable SA1649 // File name should match first type name
 public class DivFloat : SIMDBenchmarkBase<float>.Divide

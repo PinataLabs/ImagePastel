@@ -6,7 +6,7 @@ using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Represents an ordered pair of single precision floating point x- and y-coordinates that defines a point in

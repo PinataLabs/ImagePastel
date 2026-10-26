@@ -3,10 +3,10 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Issues;
+namespace PinataLabs.ImagePastel.Tests.Issues;
 
 public class Issue594
 {

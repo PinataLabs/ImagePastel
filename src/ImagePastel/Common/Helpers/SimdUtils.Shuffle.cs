@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 internal static partial class SimdUtils
 {

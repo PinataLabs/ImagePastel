@@ -5,15 +5,15 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class TestImageProviderTests
 {

@@ -6,7 +6,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Extension methods for <see cref="IMemoryOwner{T}"/>

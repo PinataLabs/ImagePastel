@@ -3,10 +3,10 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Icc;
 
 [Trait("Profile", "Icc")]
 public class IccReaderTests

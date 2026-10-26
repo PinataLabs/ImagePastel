@@ -6,12 +6,12 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.ColorManagement;
+namespace PinataLabs.ImagePastel.ColorManagement;
 
 /// <summary>
 /// Runs an <see cref="IccColorTransform"/> over a buffer of pixels, for the

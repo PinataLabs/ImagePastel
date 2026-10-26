@@ -4,14 +4,14 @@
 using System;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder's 5x5 symmetric convolution (libjxl's <c>Symmetric5</c>) and the inverse Gaborish filter

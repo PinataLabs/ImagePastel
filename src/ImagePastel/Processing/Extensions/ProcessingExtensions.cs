@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Adds extensions that allow the processing of images to the <see cref="Image{TPixel}"/> type.

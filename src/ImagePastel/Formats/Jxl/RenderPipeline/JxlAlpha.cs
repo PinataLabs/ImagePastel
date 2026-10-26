@@ -6,7 +6,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// The per-row blend operations of libjxl's <c>alpha.cc</c>. Each writes <c>output</c>, which must

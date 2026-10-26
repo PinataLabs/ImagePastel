@@ -6,11 +6,11 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.PixelFormats.Utils;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats.Utils;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.General.PixelConversion;
+namespace PinataLabs.ImagePastel.Benchmarks.General.PixelConversion;
 
 public abstract class PixelConversion_ConvertFromRgba32
 {

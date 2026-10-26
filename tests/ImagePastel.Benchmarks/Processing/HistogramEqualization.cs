@@ -3,12 +3,12 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Normalization;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Normalization;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.Processing;
+namespace PinataLabs.ImagePastel.Benchmarks.Processing;
 
 [Config(typeof(Config.MultiFramework))]
 public class HistogramEqualization

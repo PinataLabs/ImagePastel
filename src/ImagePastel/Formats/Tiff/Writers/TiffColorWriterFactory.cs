@@ -1,12 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Writers;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Writers;
 
 internal static class TiffColorWriterFactory
 {

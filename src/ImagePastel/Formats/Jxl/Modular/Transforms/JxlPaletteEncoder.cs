@@ -8,9 +8,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms.JxlTransform;
+using static PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms.JxlTransform;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>
 /// Applies the palette transform; the inverse is <see cref="JxlPalette.InvPalette"/>. Only libjxl's

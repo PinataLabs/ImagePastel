@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Flags that are mapped to PackedPixel types.

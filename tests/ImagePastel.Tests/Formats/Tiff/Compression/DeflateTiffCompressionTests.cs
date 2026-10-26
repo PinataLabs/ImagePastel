@@ -2,15 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
+using PinataLabs.ImagePastel.IO;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.Compression;
 
 [Trait("Format", "Tiff")]
 public class DeflateTiffCompressionTests

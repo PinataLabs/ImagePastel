@@ -7,11 +7,11 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// Turns the quantised coefficients of a group into AC tokens, as <see cref="JxlVarDctGroup"/> reads them:

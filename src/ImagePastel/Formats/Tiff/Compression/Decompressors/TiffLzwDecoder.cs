@@ -4,7 +4,7 @@
 using System;
 using System.IO;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
 
 /*
    This implementation is based on a port of a java tiff decoder by Harald Kuhr: https://github.com/haraldk/TwelveMonkeys

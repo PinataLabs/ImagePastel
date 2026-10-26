@@ -7,7 +7,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class PointFTests
 {

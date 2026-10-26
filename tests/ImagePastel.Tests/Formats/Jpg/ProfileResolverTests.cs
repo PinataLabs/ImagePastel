@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Text;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public class ProfileResolverTests

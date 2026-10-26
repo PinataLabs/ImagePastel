@@ -1,18 +1,18 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Formats.Jxl.Modular;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 using Xunit;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Writes header bundles through <see cref="JxlBundle.Write"/> and reads them back through the decoder's

@@ -4,9 +4,9 @@
 using System.Collections.Generic;
 using System.Drawing.Imaging;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Bmp;
+using PinataLabs.ImagePastel.Formats.Bmp;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class EncodeBmpMultiple : MultiImageBenchmarkBase.WithImagesPreloaded

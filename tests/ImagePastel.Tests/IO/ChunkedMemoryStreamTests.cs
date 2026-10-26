@@ -5,13 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.IO;
+namespace PinataLabs.ImagePastel.Tests.IO;
 
 /// <summary>
 /// Tests for the <see cref="ChunkedMemoryStream"/> class.

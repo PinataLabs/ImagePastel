@@ -4,7 +4,7 @@
 using System;
 using System.Buffers.Binary;
 
-namespace SixLabors.ImageSharp.Formats.Png;
+namespace PinataLabs.ImagePastel.Formats.Png;
 
 /// <summary>
 /// Represents the png header chunk.

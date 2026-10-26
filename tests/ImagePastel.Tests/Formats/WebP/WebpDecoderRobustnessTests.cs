@@ -6,16 +6,16 @@ using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.Text;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Webp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 
 /// <summary>
 /// Decodes WebP files with container-level oddities: non-zero reserved fields, bytes after the RIFF payload,

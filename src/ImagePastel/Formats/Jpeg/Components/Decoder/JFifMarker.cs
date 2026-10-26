@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Metadata;
+using PinataLabs.ImagePastel.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Provides information about the JFIF marker segment.

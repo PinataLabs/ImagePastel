@@ -4,10 +4,10 @@
 // lib/jxl/headers.h and lib/jxl/headers.cc (SizeHeader, PreviewHeader, AnimationHeader).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
 /// <summary>Timing of an animation.</summary>
 internal sealed class JxlAnimationHeader : JxlFields

@@ -4,7 +4,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Helper methods for packing and unpacking floating point values

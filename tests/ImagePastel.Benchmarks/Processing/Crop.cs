@@ -4,12 +4,12 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 using SDRectangle = System.Drawing.Rectangle;
 using SDSize = System.Drawing.Size;
 
-namespace SixLabors.ImageSharp.Benchmarks.Processing;
+namespace PinataLabs.ImagePastel.Benchmarks.Processing;
 
 [Config(typeof(Config.MultiFramework))]
 public class Crop

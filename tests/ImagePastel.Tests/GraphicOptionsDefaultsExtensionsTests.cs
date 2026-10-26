@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.Processing;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests.Processing;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class GraphicOptionsDefaultsExtensionsTests
 {

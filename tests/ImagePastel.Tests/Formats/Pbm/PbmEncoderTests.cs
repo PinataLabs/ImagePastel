@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats.Pbm;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Pbm;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Pbm;
+using static PinataLabs.ImagePastel.Tests.TestImages.Pbm;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Tests.Formats.Pbm;
 
 [Collection("RunSerial")]
 [Trait("Format", "Pbm")]

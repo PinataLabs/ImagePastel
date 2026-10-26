@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// This interface exists for ensuring signature compatibility to MonoGame and XNA packed color types.

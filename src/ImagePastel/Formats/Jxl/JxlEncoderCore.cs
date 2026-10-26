@@ -11,17 +11,17 @@
 using System;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Formats.Jxl.Icc;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Writes an image as a JPEG XL codestream, in a container when it has Exif or XMP to store or needs level 10.

@@ -5,11 +5,11 @@ using System;
 using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Effects;
+namespace PinataLabs.ImagePastel.Processing.Processors.Effects;
 
 /// <summary>
 /// Applies oil painting effect processing to the image.

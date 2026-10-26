@@ -8,12 +8,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using ImageMagick;
 using ImageMagick.Formats;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 public class MagickReferenceDecoder : IImageDecoder
 {
@@ -66,7 +66,7 @@ public class MagickReferenceDecoder : IImageDecoder
     public static MagickReferenceDecoder CmykToSrgbInstance { get; } = new MagickReferenceDecoder(true, false, true);
 
     private static void FromRgba32Bytes<TPixel>(Configuration configuration, Span<byte> rgbaBytes, IMemoryGroup<TPixel> destinationGroup)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         Span<Rgba32> sourcePixels = MemoryMarshal.Cast<byte, Rgba32>(rgbaBytes);
         foreach (Memory<TPixel> m in destinationGroup)
@@ -81,7 +81,7 @@ public class MagickReferenceDecoder : IImageDecoder
     }
 
     private static void FromRgba64Bytes<TPixel>(Configuration configuration, Span<byte> rgbaBytes, IMemoryGroup<TPixel> destinationGroup)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         foreach (Memory<TPixel> m in destinationGroup)
         {
@@ -96,7 +96,7 @@ public class MagickReferenceDecoder : IImageDecoder
     }
 
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         var bmpReadDefines = new BmpReadDefines
         {

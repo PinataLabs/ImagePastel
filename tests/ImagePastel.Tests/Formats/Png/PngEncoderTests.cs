@@ -7,16 +7,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Png;
+namespace PinataLabs.ImagePastel.Tests.Formats.Png;
 
 [Trait("Format", "Png")]
 public partial class PngEncoderTests

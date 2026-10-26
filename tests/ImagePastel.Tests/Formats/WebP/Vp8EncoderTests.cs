@@ -3,12 +3,12 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Formats.Webp.Lossy;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Formats.Webp.Lossy;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Webp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 
 [Trait("Format", "Webp")]
 public class Vp8EncoderTests

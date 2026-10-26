@@ -3,12 +3,12 @@
 
 using System.IO;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Gif;
+namespace PinataLabs.ImagePastel.Tests.Formats.Gif;
 
 public class ImageExtensionsTest
 {

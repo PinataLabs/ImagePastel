@@ -3,13 +3,13 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Tests;
 using SDSize = System.Drawing.Size;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class DecodeJpegParseStreamOnly

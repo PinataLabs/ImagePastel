@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Metadata;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Metadata;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Extension methods for the <see cref="ImageMetadata"/> type.

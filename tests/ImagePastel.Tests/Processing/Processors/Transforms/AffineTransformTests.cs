@@ -4,15 +4,15 @@
 using System;
 using System.Numerics;
 using System.Reflection;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Transforms;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Transforms;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Transforms;
+namespace PinataLabs.ImagePastel.Tests.Processing.Transforms;
 
 [Trait("Category", "Processors")]
 public class AffineTransformTests

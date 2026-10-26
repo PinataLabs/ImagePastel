@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg;
+namespace PinataLabs.ImagePastel.Formats.Jpeg;
 
 /// <summary>
 /// Registers the image encoders, decoders and mime type detectors for the jpeg format.

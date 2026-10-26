@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 internal static partial class ZigZag
 {

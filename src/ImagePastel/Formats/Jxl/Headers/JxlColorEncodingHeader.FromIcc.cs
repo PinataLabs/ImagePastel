@@ -13,11 +13,11 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Headers;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Headers;
 
 /// <content>
 /// Recognition of an ICC profile as a colour encoding, which the lossy encoder writes in place of the

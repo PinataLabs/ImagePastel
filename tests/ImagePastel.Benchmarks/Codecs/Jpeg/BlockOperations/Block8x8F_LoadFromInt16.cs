@@ -5,10 +5,10 @@ using System;
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg.BlockOperations;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg.BlockOperations;
 
 public class Block8x8F_LoadFromInt16
 {

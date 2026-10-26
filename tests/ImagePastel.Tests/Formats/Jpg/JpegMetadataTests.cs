@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Jpeg;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public class JpegMetadataTests
@@ -27,7 +27,7 @@ public class JpegMetadataTests
     {
         var meta = new JpegMetadata();
 
-        Assert.Equal(ImageSharp.Formats.Jpeg.Components.Quantization.DefaultQualityFactor, meta.Quality);
+        Assert.Equal(ImagePastel.Formats.Jpeg.Components.Quantization.DefaultQualityFactor, meta.Quality);
     }
 
     [Fact]

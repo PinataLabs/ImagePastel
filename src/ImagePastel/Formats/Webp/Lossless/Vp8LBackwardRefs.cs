@@ -4,10 +4,10 @@
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Memory.Internals;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Memory.Internals;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossless;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossless;
 
 internal class Vp8LBackwardRefs : IDisposable
 {

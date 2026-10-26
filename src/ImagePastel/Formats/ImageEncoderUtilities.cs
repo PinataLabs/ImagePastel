@@ -5,10 +5,10 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 internal static class ImageEncoderUtilities
 {

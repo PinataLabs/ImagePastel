@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tga;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Tga;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Tga;
+using static PinataLabs.ImagePastel.Tests.TestImages.Tga;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Tga;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tga;
 
 [Trait("Format", "Tga")]
 public class TgaEncoderTests

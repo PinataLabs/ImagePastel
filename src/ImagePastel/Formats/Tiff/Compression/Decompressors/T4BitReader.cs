@@ -6,10 +6,10 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
 
 /// <summary>
 /// Bitreader for reading compressed CCITT T4 1D data.

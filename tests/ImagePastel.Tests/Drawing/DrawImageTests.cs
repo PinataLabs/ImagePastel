@@ -2,15 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Drawing;
+namespace PinataLabs.ImagePastel.Tests.Drawing;
 
 [GroupOutput("Drawing")]
 public class DrawImageTests

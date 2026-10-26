@@ -4,7 +4,7 @@
 using System;
 using System.Globalization;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// The TextDescriptionType contains three types of text description.

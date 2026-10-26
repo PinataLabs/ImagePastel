@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Filters;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Filters;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
 /// <summary>
 /// Defines a processor that detects edges within an image using two one-dimensional matrices.

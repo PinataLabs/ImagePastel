@@ -5,9 +5,9 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Decodes the Huffman encoded spectral scan.

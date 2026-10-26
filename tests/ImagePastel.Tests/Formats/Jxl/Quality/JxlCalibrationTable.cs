@@ -6,11 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Quality;
 
 /// <summary>
 /// The cjxl calibration table, <c>tests/Images/Input/Jxl/Calibration/calibration.json</c>: for each

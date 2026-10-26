@@ -7,9 +7,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// Builds the loop-filter stages of a frame, for the loop-filter slot of <see cref="JxlRenderPipeline.Finish"/>.

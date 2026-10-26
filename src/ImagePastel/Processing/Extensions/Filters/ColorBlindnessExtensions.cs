@@ -1,10 +1,10 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing.Processors;
-using SixLabors.ImageSharp.Processing.Processors.Filters;
+using PinataLabs.ImagePastel.Processing.Processors;
+using PinataLabs.ImagePastel.Processing.Processors.Filters;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines extensions that simulate the effects of various color blindness disorders on an <see cref="Image"/>

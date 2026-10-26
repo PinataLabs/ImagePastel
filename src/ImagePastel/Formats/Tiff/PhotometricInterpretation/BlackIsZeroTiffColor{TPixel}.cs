@@ -3,11 +3,11 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Implements the 'BlackIsZero' photometric interpretation (for all bit depths).

@@ -7,9 +7,9 @@ using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 /// <summary>
 /// Utilities to read raw libjpeg data for reference conversion.

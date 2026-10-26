@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.DotNet.RemoteExecutor;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 
 /// <summary>
 /// Runs <see cref="RemoteExecutor"/> child processes with their standard output and error captured.

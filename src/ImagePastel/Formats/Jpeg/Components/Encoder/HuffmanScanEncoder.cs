@@ -7,10 +7,10 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
 
 internal class HuffmanScanEncoder
 {

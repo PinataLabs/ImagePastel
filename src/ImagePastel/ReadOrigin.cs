@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Specifies the position in a stream to use for reading.

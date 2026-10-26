@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement;
+namespace PinataLabs.ImagePastel.ColorManagement;
 
 /// <summary>
 /// A tone reproduction curve (TRC) for a profile built by <see cref="IccProfileFactory"/>: the function

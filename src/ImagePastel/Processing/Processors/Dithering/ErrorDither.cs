@@ -5,11 +5,11 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Dithering;
+namespace PinataLabs.ImagePastel.Processing.Processors.Dithering;
 
 /// <summary>
 /// An error diffusion dithering implementation.

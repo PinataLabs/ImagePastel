@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Memory.Internals;
+namespace PinataLabs.ImagePastel.Memory.Internals;
 
 internal partial class UniformUnmanagedMemoryPool
 {

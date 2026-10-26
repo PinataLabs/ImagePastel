@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// The purpose of this tag is to identify the colorants used in

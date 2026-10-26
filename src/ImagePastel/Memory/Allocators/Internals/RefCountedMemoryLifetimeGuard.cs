@@ -4,9 +4,9 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
-using SixLabors.ImageSharp.Diagnostics;
+using PinataLabs.ImagePastel.Diagnostics;
 
-namespace SixLabors.ImageSharp.Memory.Internals;
+namespace PinataLabs.ImagePastel.Memory.Internals;
 
 /// <summary>
 /// Implements reference counting lifetime guard mechanism for memory resources

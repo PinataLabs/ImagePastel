@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// This type is a representation of the time and date.

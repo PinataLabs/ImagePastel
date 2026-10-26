@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Processing.Processors.Normalization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Normalization;
 
 /// <summary>
 /// Data container providing the different options for the histogram equalization.

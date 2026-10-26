@@ -3,11 +3,11 @@
 
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Formats.Bmp;
 
 /// <summary>
 /// Image decoder for generating an image out of a Windows bitmap stream.

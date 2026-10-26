@@ -5,15 +5,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Tests.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Tests.ColorManagement;
 using Xunit;
-using B = SixLabors.ImageSharp.Tests.Formats.Png.PngTestFileBuilder;
+using B = PinataLabs.ImagePastel.Tests.Formats.Png.PngTestFileBuilder;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Png;
+namespace PinataLabs.ImagePastel.Tests.Formats.Png;
 
 /// <summary>
 /// The pixel profile of PNG files that describe their colour with <c>cICP</c>, <c>sRGB</c>, <c>cHRM</c> and

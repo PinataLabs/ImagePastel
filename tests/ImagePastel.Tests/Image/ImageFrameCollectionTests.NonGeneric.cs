@@ -3,13 +3,13 @@
 
 using System;
 using System.Linq;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public abstract partial class ImageFrameCollectionTests
 {

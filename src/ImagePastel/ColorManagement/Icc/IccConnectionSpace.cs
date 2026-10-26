@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// The ICC profile connection space (PCS). Pipelines carry PCS values unencoded: XYZ relative to

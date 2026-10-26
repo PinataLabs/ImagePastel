@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
 /// Compares decoded output with a conformance reference the way libjxl's <c>conformance.py</c> does

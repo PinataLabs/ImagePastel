@@ -8,12 +8,12 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// Turns Modular images into tokens with an MA tree, and the tree itself into tokens. It is the

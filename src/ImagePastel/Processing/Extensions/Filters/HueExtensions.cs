@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing.Processors.Filters;
+using PinataLabs.ImagePastel.Processing.Processors.Filters;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines extensions that allow the alteration of the hue component of an <see cref="Image"/>

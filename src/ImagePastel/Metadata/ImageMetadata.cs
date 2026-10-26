@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
 
-namespace SixLabors.ImageSharp.Metadata;
+namespace PinataLabs.ImagePastel.Metadata;
 
 /// <summary>
 /// Encapsulates the metadata of an image.

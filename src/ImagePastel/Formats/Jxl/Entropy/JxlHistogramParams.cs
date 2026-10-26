@@ -8,9 +8,9 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Modular;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>How the encoder builds the histograms of an entropy-coded stream.</summary>
 internal sealed class JxlHistogramParams

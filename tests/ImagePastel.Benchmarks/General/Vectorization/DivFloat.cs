@@ -4,7 +4,7 @@
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.Vectorization;
+namespace PinataLabs.ImagePastel.Benchmarks.General.Vectorization;
 
 public class DivFloat
 {

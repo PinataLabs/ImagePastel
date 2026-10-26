@@ -5,12 +5,12 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats.Webp.BitWriter;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Webp.BitWriter;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Webp.Lossy;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 /// <summary>
 /// Encoder for lossy webp images.

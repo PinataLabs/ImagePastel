@@ -4,9 +4,9 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Represents a color value that is convertible to any <see cref="IPixel{TSelf}"/> type.

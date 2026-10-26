@@ -4,11 +4,11 @@
 using System;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 internal static class ImageDecoderUtilities
 {

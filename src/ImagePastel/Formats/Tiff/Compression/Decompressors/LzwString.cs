@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
 
 /// <summary>
 /// Represents a lzw string with a code word and a code length.

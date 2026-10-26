@@ -4,9 +4,9 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 /// <summary>
 /// Cache 8 pixel rows on the stack, which may originate from different buffers of a <see cref="MemoryGroup{T}"/>.

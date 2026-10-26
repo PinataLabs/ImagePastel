@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 /// <summary>
 /// The function implements the triangle (bilinear) algorithm.

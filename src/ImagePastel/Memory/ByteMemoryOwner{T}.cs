@@ -4,7 +4,7 @@
 using System;
 using System.Buffers;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// A custom <see cref="IMemoryOwner{T}"/> that can wrap <see cref="IMemoryOwner{T}"/> of <see cref="byte"/> instances

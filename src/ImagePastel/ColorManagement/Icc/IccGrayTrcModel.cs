@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// A monochrome profile (ICC.1:2022 section 8.3.3): one tone curve, <c>kTRC</c>. With an XYZ PCS

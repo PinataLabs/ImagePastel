@@ -5,9 +5,9 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
 
 /// <summary>
 /// Common functionality for CCITT T4 and T6 Compression

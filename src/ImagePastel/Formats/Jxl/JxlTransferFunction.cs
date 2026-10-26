@@ -7,7 +7,7 @@
 // lib/include/jxl/color_encoding.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Specifies the transfer function of a JPEG XL colour encoding. The values are libjxl's.

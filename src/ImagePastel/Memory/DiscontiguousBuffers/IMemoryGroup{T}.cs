@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// Represents discontiguous group of multiple uniformly-sized memory segments.

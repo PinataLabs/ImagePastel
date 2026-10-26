@@ -5,10 +5,10 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>
 /// Writes entropy-coded streams: the histograms of a set of token streams, then the tokens. It is the

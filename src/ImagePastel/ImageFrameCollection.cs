@@ -6,7 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Encapsulates a pixel-agnostic collection of <see cref="ImageFrame"/> instances

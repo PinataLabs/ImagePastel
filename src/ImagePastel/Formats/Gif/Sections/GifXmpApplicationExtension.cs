@@ -3,10 +3,10 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 internal readonly struct GifXmpApplicationExtension : IGifExtension
 {

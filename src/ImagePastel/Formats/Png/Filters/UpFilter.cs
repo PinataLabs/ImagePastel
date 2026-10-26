@@ -11,7 +11,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Png.Filters;
+namespace PinataLabs.ImagePastel.Formats.Png.Filters;
 
 /// <summary>
 /// The Up filter is just like the Sub filter except that the pixel immediately above the current pixel,

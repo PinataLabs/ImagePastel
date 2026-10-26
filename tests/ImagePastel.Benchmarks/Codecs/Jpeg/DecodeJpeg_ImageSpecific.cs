@@ -3,14 +3,14 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests;
 using SDImage = System.Drawing.Image;
 using SDSize = System.Drawing.Size;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg;
 
 /// <summary>
 /// Image-specific Jpeg benchmarks

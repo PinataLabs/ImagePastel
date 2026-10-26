@@ -5,9 +5,9 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <content>
 /// Utility methods for batched processing of pixel row intervals.

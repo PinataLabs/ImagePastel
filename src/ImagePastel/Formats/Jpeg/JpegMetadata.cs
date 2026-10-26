@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg;
+namespace PinataLabs.ImagePastel.Formats.Jpeg;
 
 /// <summary>
 /// Provides Jpeg specific metadata information for the image.

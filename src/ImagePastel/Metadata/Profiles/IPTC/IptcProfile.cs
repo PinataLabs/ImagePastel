@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Iptc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
 
 /// <summary>
 /// Represents an IPTC profile providing access to the collection of values.

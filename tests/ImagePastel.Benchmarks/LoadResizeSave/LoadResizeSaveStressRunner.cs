@@ -14,17 +14,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using ImageMagick;
 using PhotoSauce.MagicScaler;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests;
 using SkiaSharp;
-using ImageSharpImage = SixLabors.ImageSharp.Image;
-using ImageSharpSize = SixLabors.ImageSharp.Size;
+using ImageSharpImage = PinataLabs.ImagePastel.Image;
+using ImageSharpSize = PinataLabs.ImagePastel.Size;
 using NetVipsImage = NetVips.Image;
 using SystemDrawingImage = System.Drawing.Image;
 
-namespace SixLabors.ImageSharp.Benchmarks.LoadResizeSave;
+namespace PinataLabs.ImagePastel.Benchmarks.LoadResizeSave;
 
 public enum JpegKind
 {

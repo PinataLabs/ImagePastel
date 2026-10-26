@@ -5,11 +5,11 @@ using System;
 using System.Buffers;
 using System.Numerics;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.PixelFormats.PixelBlenders;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats.PixelBlenders;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 public class PorterDuffBulkVsPixel
 {

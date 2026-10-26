@@ -1,12 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Binarization;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Binarization;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Binarization;
+namespace PinataLabs.ImagePastel.Tests.Processing.Binarization;
 
 [Trait("Category", "Processors")]
 public class BinaryThresholdTest : BaseImageOperationsExtensionTest

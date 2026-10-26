@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
 [Trait("Format", "Jpg")]
 public class HuffmanScanEncoderTests

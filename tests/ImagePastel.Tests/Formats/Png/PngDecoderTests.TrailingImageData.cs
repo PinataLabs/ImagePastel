@@ -3,12 +3,12 @@
 
 using System.Linq;
 using System.Text;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Png;
+namespace PinataLabs.ImagePastel.Tests.Formats.Png;
 
 public partial class PngDecoderTests
 {

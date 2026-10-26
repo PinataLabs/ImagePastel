@@ -1,12 +1,12 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Quality;
 
 [Trait("Format", "Jxl")]
 public class JxlQualityComparerTests

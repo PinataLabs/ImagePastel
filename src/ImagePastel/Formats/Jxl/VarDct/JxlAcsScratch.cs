@@ -7,7 +7,7 @@
 // block (enc_ac_strategy.cc:843) and EstimateEntropy's mem and scratch space (:370-371).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The working memory of the AC-strategy search, allocated once per frame (libjxl's per-thread

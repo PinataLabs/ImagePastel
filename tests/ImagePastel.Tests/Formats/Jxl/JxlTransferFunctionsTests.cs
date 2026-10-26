@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Checks the render pipeline's transfer functions: the sRGB curve against IEC 61966-2-1 in double

@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Formats.Jxl.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Checks libjxl's <c>ToneMapPixel</c>, which gives the PCS Lab bytes of the 3D LUT in the profile of a PQ

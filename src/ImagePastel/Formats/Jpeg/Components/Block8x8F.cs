@@ -12,7 +12,7 @@ using System.Runtime.Intrinsics.X86;
 using System.Text;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 /// <summary>
 /// 8x8 matrix of <see cref="float"/> coefficients.

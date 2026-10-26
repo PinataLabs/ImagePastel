@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.PixelFormats;
+namespace PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// An interface that represents a generic pixel type.

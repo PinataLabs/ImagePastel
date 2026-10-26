@@ -6,7 +6,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>Applies Modular transforms on the encoder side; <see cref="JxlTransform.Inverse"/> undoes them.</summary>
 internal static class JxlTransformEncoder

@@ -4,7 +4,7 @@
 // SplineSegment in lib/jxl/splines.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// A single "drawable unit" of a spline, i.e. a line of the region in which we render each Gaussian.

@@ -4,7 +4,7 @@
   <PropertyGroup>
     <AssemblyName>PinataLabs.ImagePastel</AssemblyName>
     <AssemblyTitle>PinataLabs.ImagePastel</AssemblyTitle>
-    <RootNamespace>SixLabors.ImageSharp</RootNamespace>
+    <RootNamespace>PinataLabs.ImagePastel</RootNamespace>
     <PackageId>PinataLabs.ImagePastel</PackageId>
     <PackageIcon>pinatalabs.imagepastel.128.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -12,7 +12,7 @@
     <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/PinataLabs/ImagePastel/</RepositoryUrl>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <PackageTags>ImagePastel Image Resize Crop Gif Jpg Jpeg Jxl JpegXL Bitmap Pbm Png Tga Tiff WebP NetCore</PackageTags>
-    <Description>A fully managed, cross-platform 2D graphics library for .NET. A community fork of SixLabors.ImageSharp 2.1.x under the Apache License 2.0. Not affiliated with Six Labors.</Description>
+    <Description>A fully managed, cross-platform 2D graphics library for .NET. A community fork of PinataLabs.ImagePastel 2.1.x under the Apache License 2.0. Not affiliated with Six Labors.</Description>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
 

@@ -5,17 +5,17 @@ using System;
 using System.IO;
 using Microsoft.DotNet.RemoteExecutor;
 
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class TestEnvironmentTests
 {

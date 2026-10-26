@@ -4,7 +4,7 @@
 using System;
 using System.Buffers;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class TestMemoryManager<T> : MemoryManager<T>
     where T : struct

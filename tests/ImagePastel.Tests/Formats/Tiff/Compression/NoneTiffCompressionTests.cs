@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
+using PinataLabs.ImagePastel.IO;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.Compression;
 
 [Trait("Format", "Tiff")]
 public class NoneTiffCompressionTests

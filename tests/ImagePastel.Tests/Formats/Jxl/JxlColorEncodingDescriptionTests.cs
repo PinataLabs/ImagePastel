@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Formats.Jxl;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Formats.Jxl;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// D15a (#308): <see cref="JxlMetadata.ColorEncoding"/> is the public description of the colour encoding

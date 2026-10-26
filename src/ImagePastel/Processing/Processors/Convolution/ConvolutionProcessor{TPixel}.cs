@@ -5,11 +5,11 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
 /// <summary>
 /// Defines a processor that uses a 2 dimensional matrix to perform convolution against an image.

@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // ReSharper disable MemberHidesStaticFromOuterClass
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 internal static partial class SimdUtils
 {

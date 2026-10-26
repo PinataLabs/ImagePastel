@@ -8,7 +8,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// Evaluates ICC one-dimensional curves (<c>curveType</c> and <c>parametricCurveType</c>), as

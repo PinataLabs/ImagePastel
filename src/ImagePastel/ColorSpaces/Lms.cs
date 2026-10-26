@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.ColorSpaces;
+namespace PinataLabs.ImagePastel.ColorSpaces;
 
 /// <summary>
 /// LMS is a color space represented by the response of the three types of cones of the human eye,

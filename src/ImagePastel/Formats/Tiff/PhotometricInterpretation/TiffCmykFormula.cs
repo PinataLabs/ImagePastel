@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Converts ink amounts to RGB with the simple CMYK-to-RGB formula that the JPEG decoder also uses:

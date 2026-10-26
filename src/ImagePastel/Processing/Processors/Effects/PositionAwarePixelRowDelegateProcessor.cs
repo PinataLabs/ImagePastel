@@ -4,9 +4,9 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Effects;
+namespace PinataLabs.ImagePastel.Processing.Processors.Effects;
 
 /// <summary>
 /// Applies a user defined, position aware, row processing delegate to the image.

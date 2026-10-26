@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// Implementation of the von Kries chromatic adaptation model.

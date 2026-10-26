@@ -3,10 +3,10 @@
 
 using System;
 using System.Buffers.Binary;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.Icc;
 
 /// <summary>
 /// Tag sizes from crafted bytes. Every ICC tag starts with an 8-byte header: a 4-byte type signature

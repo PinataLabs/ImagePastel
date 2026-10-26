@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Numerics;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public class PointTests
 {

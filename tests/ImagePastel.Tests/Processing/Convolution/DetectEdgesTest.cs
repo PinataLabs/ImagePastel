@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Diagnostics.CodeAnalysis;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Convolution;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Convolution;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Convolution;
+namespace PinataLabs.ImagePastel.Tests.Processing.Convolution;
 
 [Trait("Category", "Processors")]
 [SuppressMessage("StyleCop.CSharp.NamingRules", "SA1313:Parameter names should begin with lower-case letter", Justification = "OK. Used for TheoryData compatibility.")]

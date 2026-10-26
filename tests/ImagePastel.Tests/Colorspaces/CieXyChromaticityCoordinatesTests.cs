@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Colorspaces;
+namespace PinataLabs.ImagePastel.Tests.Colorspaces;
 
 /// <summary>
 /// Tests the <see cref="CieXyChromaticityCoordinates"/> struct.

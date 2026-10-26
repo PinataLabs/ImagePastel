@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Dithering;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Dithering;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.Dithering;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.Dithering;
 
 [Trait("Category", "Processors")]
 public class DitherTests

@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder's chroma-from-luma fit (libjxl's <c>FindBestMultiplier</c>): with <c>fast = true</c> the

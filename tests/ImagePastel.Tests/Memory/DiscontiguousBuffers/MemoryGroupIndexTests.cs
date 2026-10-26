@@ -3,7 +3,7 @@
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.DiscontiguousBuffers;
+namespace PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
 
 public class MemoryGroupIndexTests
 {

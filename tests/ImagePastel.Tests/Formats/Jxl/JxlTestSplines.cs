@@ -5,9 +5,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// A spline dictionary for a <see cref="JxlTestFrame"/>: splines, each a starting point, control points

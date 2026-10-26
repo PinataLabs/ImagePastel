@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Formats.Png;
+namespace PinataLabs.ImagePastel.Formats.Png;
 
 /// <summary>
 /// The helper methods for <see cref="PngEncoderCore"/> class.

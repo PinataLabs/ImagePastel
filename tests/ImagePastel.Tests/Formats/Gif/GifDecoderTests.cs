@@ -7,18 +7,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Gif;
+namespace PinataLabs.ImagePastel.Tests.Formats.Gif;
 
 [Trait("Format", "Gif")]
 [ValidateDisposedMemoryAllocations]

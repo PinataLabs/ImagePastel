@@ -4,9 +4,9 @@
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg;
 
-using SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+using PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 public partial class ReferenceImplementationsTests : JpegFixture
 {

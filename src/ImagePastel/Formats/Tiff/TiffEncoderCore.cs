@@ -5,19 +5,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Tiff.Compression;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Formats.Tiff.Writers;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Formats.Tiff.Writers;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Formats.Tiff;
 
 /// <summary>
 /// Performs the TIFF encoding operation.

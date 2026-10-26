@@ -1,12 +1,12 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing;
+namespace PinataLabs.ImagePastel.Tests.Processing;
 
 public class IntegralImageTests : BaseImageOperationsExtensionTest
 {

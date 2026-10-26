@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// One step of an <see cref="IccPipeline"/>. A stage transforms a row of values in place. Each

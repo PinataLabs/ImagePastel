@@ -4,7 +4,7 @@
 using System.Linq;
 using Microsoft.CodeAnalysis;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// The diagnostics that the generator reports. Each new ID must also be listed in

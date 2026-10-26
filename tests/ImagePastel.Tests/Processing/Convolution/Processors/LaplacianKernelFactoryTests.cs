@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Processing.Processors.Convolution;
+using PinataLabs.ImagePastel.Processing.Processors.Convolution;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Convolution.Processors;
+namespace PinataLabs.ImagePastel.Tests.Processing.Convolution.Processors;
 
 public class LaplacianKernelFactoryTests
 {

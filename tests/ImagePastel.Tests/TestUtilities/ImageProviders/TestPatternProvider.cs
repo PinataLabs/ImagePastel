@@ -3,11 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public abstract partial class TestImageProvider<TPixel> : IXunitSerializable
     where TPixel : unmanaged, IPixel<TPixel>

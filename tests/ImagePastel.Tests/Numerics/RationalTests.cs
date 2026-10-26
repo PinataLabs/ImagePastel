@@ -3,7 +3,7 @@
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Tests the <see cref="Rational"/> struct.

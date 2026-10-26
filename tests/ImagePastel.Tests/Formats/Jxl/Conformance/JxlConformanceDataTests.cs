@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Conformance;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Conformance;
 
 /// <summary>
 /// The download into the conformance cache, which tests share: several tests may need the same file at

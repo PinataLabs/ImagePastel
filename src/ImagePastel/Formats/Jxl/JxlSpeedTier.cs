@@ -4,7 +4,7 @@
 // lib/jxl/common.h (SpeedTier).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// libjxl's encoder speed tiers, which its code branches on. libjxl's effort <c>e</c> is tier

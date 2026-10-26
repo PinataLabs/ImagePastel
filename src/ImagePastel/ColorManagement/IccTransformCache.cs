@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.ColorManagement;
+namespace PinataLabs.ImagePastel.ColorManagement;
 
 /// <summary>
 /// Keeps the transforms built during one decode or one processor run, by the bytes of their source

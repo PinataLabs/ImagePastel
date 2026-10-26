@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Memory.Internals;
+namespace PinataLabs.ImagePastel.Memory.Internals;
 
 /// <summary>
 /// Encapsulates the functionality around allocating and releasing unmanaged memory. NOT a <see cref="SafeHandle"/>.

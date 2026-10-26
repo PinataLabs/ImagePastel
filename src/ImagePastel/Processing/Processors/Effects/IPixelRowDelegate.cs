@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Effects;
+namespace PinataLabs.ImagePastel.Processing.Processors.Effects;
 
 /// <summary>
 /// An <see langword="interface"/> used by the row delegates for a given <see cref="PixelRowDelegateProcessor{TPixel,TDelegate}"/> instance

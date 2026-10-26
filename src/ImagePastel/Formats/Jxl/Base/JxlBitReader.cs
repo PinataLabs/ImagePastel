@@ -8,7 +8,7 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// Reads bits from a byte range, least-significant bit first.

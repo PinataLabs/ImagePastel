@@ -4,11 +4,11 @@
 using System;
 using System.IO;
 using ImageMagick;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
 
 public static class ImageComparingUtils
 {
@@ -17,7 +17,7 @@ public static class ImageComparingUtils
         Image<TPixel> image,
         bool useExactComparer = true,
         float compareTolerance = 0.01f)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         string path = TestImageProvider<TPixel>.GetFilePathOrNull(provider);
         if (path == null)
@@ -38,7 +38,7 @@ public static class ImageComparingUtils
     }
 
     public static Image<TPixel> DecodeWithMagick<TPixel>(FileInfo fileInfo)
-        where TPixel : unmanaged, ImageSharp.PixelFormats.IPixel<TPixel>
+        where TPixel : unmanaged, ImagePastel.PixelFormats.IPixel<TPixel>
     {
         Configuration configuration = Configuration.Default.Clone();
         configuration.PreferContiguousImageBuffers = true;

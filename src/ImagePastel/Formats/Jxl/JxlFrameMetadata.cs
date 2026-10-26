@@ -4,7 +4,7 @@
 // and JxlDecoderGetFrameName in lib/jxl/decode.cc.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// Provides JPEG XL specific metadata information for one displayed frame.

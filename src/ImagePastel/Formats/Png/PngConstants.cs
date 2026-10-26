@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Formats.Png;
+namespace PinataLabs.ImagePastel.Formats.Png;
 
 /// <summary>
 /// Defines Png constants defined in the specification.

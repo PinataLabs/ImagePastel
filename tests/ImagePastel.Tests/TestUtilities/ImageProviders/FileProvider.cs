@@ -7,14 +7,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Diagnostics;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Diagnostics;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 public abstract partial class TestImageProvider<TPixel> : IXunitSerializable
     where TPixel : unmanaged, IPixel<TPixel>

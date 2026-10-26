@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
-namespace SixLabors.ImageSharp.Benchmarks.General.BasicMath;
+namespace PinataLabs.ImagePastel.Benchmarks.General.BasicMath;
 
 public class ClampInt32IntoByte
 {

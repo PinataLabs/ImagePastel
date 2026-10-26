@@ -5,9 +5,9 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.IO;
+namespace PinataLabs.ImagePastel.IO;
 
 /// <summary>
 /// Provides an in-memory stream composed of non-contiguous chunks that doesn't need to be resized.

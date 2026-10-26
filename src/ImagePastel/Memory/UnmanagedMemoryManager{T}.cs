@@ -4,7 +4,7 @@
 using System;
 using System.Buffers;
 
-namespace SixLabors.ImageSharp.Memory;
+namespace PinataLabs.ImagePastel.Memory;
 
 /// <summary>
 /// A custom <see cref="MemoryManager{T}"/> that can wrap a rawpointer to a buffer of a specified type.

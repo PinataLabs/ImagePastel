@@ -5,11 +5,11 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Filters;
+namespace PinataLabs.ImagePastel.Processing.Processors.Filters;
 
 internal sealed class OpaqueProcessor<TPixel> : ImageProcessor<TPixel>
       where TPixel : unmanaged, IPixel<TPixel>

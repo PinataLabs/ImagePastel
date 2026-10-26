@@ -4,10 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement;
+namespace PinataLabs.ImagePastel.ColorManagement;
 
 /// <summary>
 /// Converts colors from one ICC profile to another: from the source profile's device values to the

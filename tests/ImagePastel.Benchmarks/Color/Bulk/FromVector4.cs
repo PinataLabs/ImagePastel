@@ -9,11 +9,11 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces.Bulk;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces.Bulk;
 
 [Config(typeof(Config.ShortCore31))]
 public abstract class FromVector4<TPixel>

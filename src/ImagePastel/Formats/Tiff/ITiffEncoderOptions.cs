@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Compression.Zlib;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Compression.Zlib;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Formats.Tiff;
 
 /// <summary>
 /// Encapsulates the options for the <see cref="TiffEncoder"/>.

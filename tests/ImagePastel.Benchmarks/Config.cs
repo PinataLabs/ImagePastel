@@ -11,7 +11,7 @@ using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Reports;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 public partial class Config : ManualConfig
 {

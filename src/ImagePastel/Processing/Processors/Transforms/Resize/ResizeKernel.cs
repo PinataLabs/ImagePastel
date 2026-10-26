@@ -10,7 +10,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Processing.Processors.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 /// <summary>
 /// Points to a collection of weights allocated in <see cref="ResizeKernelMap"/>.

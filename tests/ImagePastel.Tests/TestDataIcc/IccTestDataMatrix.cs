@@ -3,9 +3,9 @@
 
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
-using SixLabors.ImageSharp;
+using PinataLabs.ImagePastel;
 
 internal static class IccTestDataMatrix
 {

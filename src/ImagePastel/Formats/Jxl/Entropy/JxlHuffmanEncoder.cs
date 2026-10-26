@@ -6,9 +6,9 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>
 /// Writes a prefix code, as <see cref="JxlHuffmanDecodingData.ReadFromBitStream"/> reads it: a simple

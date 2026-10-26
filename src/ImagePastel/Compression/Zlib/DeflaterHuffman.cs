@@ -5,9 +5,9 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Compression.Zlib;
+namespace PinataLabs.ImagePastel.Compression.Zlib;
 
 /// <summary>
 /// Performs Deflate Huffman encoding.

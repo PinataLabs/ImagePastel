@@ -1,10 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 /// <summary>
 /// The decoder options that <see cref="DecoderColorProfileConversion"/> reads. A format's decoder

@@ -1,9 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Overlays;
+namespace PinataLabs.ImagePastel.Processing.Processors.Overlays;
 
 /// <summary>
 /// Defines a processing operation to replace the background color of an <see cref="Image"/>.

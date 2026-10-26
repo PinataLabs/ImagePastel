@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 
-namespace SixLabors.ImageSharp.Benchmarks.Samplers;
+namespace PinataLabs.ImagePastel.Benchmarks.Samplers;
 
 [Config(typeof(Config.MultiFramework))]
 public class GaussianBlur

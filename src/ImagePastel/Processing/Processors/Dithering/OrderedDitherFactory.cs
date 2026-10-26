@@ -3,7 +3,7 @@
 
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Dithering;
+namespace PinataLabs.ImagePastel.Processing.Processors.Dithering;
 
 /// <summary>
 /// A factory for creating ordered dither matrices.

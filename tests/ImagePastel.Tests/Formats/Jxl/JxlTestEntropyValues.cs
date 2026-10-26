@@ -7,9 +7,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Entropy codes a short list of values for the dictionaries of a <see cref="JxlTestFrame"/> (patches and

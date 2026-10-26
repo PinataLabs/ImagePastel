@@ -3,12 +3,12 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
 
 internal class TiffJpegCompressor : TiffBaseCompressor
 {

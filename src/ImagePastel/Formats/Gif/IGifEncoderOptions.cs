@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 /// <summary>
 /// The configuration options used for encoding gifs.

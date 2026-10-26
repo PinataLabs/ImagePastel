@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 /// <summary>
 /// Used for detecting mime types from a file header

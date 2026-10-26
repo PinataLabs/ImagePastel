@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Companding;
+namespace PinataLabs.ImagePastel.ColorSpaces.Companding;
 
 /// <summary>
 /// Implements L* companding.

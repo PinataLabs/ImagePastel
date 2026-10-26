@@ -11,7 +11,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The inverse transforms of the AC strategies: for the DCTs, libjxl's "Lowest Complexity Self Recursive

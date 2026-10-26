@@ -3,14 +3,14 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors;
-using SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression.Compressors;
+using PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff.Compression;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff.Compression;
 
 [Trait("Format", "Tiff")]
 public class PackBitsTiffCompressionTests

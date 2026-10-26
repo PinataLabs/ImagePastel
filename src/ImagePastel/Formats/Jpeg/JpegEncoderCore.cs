@@ -6,18 +6,18 @@ using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using SixLabors.ImageSharp.Common.Helpers;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Common.Helpers;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg;
+namespace PinataLabs.ImagePastel.Formats.Jpeg;
 
 /// <summary>
 /// Image encoder for writing an image to a stream as a jpeg.

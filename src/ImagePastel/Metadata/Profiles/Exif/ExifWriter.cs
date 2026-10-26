@@ -5,7 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Exif;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Exif;
 
 /// <summary>
 /// Contains methods for writing EXIF metadata.

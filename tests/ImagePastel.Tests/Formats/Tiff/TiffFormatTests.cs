@@ -1,10 +1,10 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff;
 
 [Trait("Format", "Tiff")]
 public class TiffFormatTests

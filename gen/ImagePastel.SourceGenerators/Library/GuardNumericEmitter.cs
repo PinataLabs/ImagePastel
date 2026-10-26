@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.SourceGenerators.Library;
+namespace PinataLabs.ImagePastel.SourceGenerators.Library;
 
 /// <summary>
 /// Writes <c>Guard.Numeric.cs</c>: the range checks of <c>Guard</c> for each primitive numeric type.
@@ -25,7 +25,7 @@ internal sealed class GuardNumericEmitter : IEmitter
             using System;
             using System.Runtime.CompilerServices;
 
-            namespace SixLabors;
+            namespace PinataLabs;
 
             /// <summary>
             /// Provides methods to protect against invalid parameters.

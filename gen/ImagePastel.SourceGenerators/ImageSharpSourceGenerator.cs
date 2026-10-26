@@ -5,7 +5,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// Generates ImageSharp source files with the emitters of the selected target.

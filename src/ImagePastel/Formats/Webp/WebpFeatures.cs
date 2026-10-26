@@ -4,7 +4,7 @@
 using System;
 using System.Buffers;
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Image features of a VP8X image.

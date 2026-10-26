@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.PixelFormats.Utils;
+namespace PinataLabs.ImagePastel.PixelFormats.Utils;
 
 /// <summary>
 /// Contains optimized implementations for conversion between pixel formats.

@@ -4,7 +4,7 @@
 // lib/jxl/enc_ans.h (SizeWriter).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// Takes bits. libjxl writes histograms through a <c>Writer</c> template parameter that is either its

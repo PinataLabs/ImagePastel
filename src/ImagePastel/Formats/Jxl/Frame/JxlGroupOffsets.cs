@@ -4,7 +4,7 @@
 // lib/jxl/toc.cc (the offsets and sizes of ReadGroupOffsets).
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Frame;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 /// <summary>Where each section of a frame is, from <see cref="JxlToc.ReadGroupOffsets"/>.</summary>
 internal sealed class JxlGroupOffsets

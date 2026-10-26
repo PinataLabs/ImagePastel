@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.PixelFormats.Utils;
+namespace PinataLabs.ImagePastel.PixelFormats.Utils;
 
 /// <summary>
 /// Helper class for (bulk) conversion of <see cref="Vector4"/> buffers to/from other buffer types.

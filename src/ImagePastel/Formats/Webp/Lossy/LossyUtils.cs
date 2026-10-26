@@ -11,7 +11,7 @@ using System.Runtime.Intrinsics.X86;
 #endif
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Formats.Webp.Lossy;
+namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 internal static class LossyUtils
 {

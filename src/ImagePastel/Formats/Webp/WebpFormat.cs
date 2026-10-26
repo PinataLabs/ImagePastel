@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Registers the image encoders, decoders and mime type detectors for the Webp format

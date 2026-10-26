@@ -4,7 +4,7 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Formats.Bmp;
 
 /// <summary>
 /// This block of bytes tells the application detailed information

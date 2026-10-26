@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 /// <summary>
 /// Defines the contract for an image format.

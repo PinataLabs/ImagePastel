@@ -4,7 +4,7 @@
 using System;
 using System.Threading;
 
-namespace SixLabors.ImageSharp.Diagnostics;
+namespace PinataLabs.ImagePastel.Diagnostics;
 
 /// <summary>
 /// Represents the method to handle <see cref="MemoryDiagnostics.UndisposedAllocation"/>.

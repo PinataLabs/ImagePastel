@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Advanced;
+namespace PinataLabs.ImagePastel.Advanced;
 
 /// <summary>
 /// Defines the contract for an action that operates on a row.

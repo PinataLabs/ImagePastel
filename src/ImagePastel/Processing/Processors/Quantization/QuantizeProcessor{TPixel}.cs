@@ -3,11 +3,11 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Quantization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
 /// <summary>
 /// Enables the quantization of images to reduce the number of colors used in the image palette.

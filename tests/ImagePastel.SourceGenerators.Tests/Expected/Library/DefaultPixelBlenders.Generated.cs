@@ -5,7 +5,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.PixelFormats.PixelBlenders;
+namespace PinataLabs.ImagePastel.PixelFormats.PixelBlenders;
 
 /// <summary>
 /// Collection of Porter Duff alpha blending functions applying different composition models.

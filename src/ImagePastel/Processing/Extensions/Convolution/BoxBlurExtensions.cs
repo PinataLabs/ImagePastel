@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Processing.Processors.Convolution;
+using PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
-namespace SixLabors.ImageSharp.Processing;
+namespace PinataLabs.ImagePastel.Processing;
 
 /// <summary>
 /// Defines extensions methods to apply box blurring to an <see cref="Image"/>

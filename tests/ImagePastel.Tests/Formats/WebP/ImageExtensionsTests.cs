@@ -3,12 +3,12 @@
 
 using System.IO;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Webp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 
 [Trait("Format", "Webp")]
 public class ImageExtensionsTests

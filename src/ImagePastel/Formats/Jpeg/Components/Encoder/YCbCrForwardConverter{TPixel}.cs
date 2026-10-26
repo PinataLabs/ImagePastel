@@ -4,9 +4,9 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
 
 internal static class YCbCrForwardConverter<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>

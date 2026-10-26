@@ -4,10 +4,10 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Provides <see cref="Image{TPixel}" /> instances for parametric unit tests.

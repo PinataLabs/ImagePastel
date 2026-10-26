@@ -4,9 +4,9 @@
 using System;
 using System.Reflection;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
 /// <summary>
 /// Triggers passing <see cref="TestImageProvider{TPixel}"/> instances which produce an image of size width * height filled with the requested color.

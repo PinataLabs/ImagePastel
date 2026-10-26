@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Encapsulates the properties and methods that describe an image.

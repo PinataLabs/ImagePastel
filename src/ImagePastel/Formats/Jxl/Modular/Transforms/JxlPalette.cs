@@ -6,9 +6,9 @@
 
 using System;
 using System.Collections.Generic;
-using static SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms.JxlTransform;
+using static PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms.JxlTransform;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
 
 /// <summary>
 /// Undoes the palette transform. Indices below zero select delta palette entries; indices past the

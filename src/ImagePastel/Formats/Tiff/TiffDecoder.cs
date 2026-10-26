@@ -3,13 +3,13 @@
 
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Formats.Tiff;
 
 /// <summary>
 /// Image decoder for generating an image out of a TIFF stream.

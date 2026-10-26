@@ -8,9 +8,9 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.ColorManagement.Icc;
+namespace PinataLabs.ImagePastel.ColorManagement.Icc;
 
 /// <summary>
 /// Links a source and a target profile for a rendering intent: the source's device-to-PCS stages,

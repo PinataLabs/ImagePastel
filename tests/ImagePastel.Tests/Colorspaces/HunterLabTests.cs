@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.ColorSpaces;
+using PinataLabs.ImagePastel.ColorSpaces;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Colorspaces;
+namespace PinataLabs.ImagePastel.Tests.Colorspaces;
 
 /// <summary>
 /// Tests the <see cref="HunterLab"/> struct.

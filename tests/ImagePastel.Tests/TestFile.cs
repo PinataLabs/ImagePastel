@@ -4,11 +4,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// A test image file.
@@ -68,7 +68,7 @@ public class TestFile
     /// <summary>
     /// Gets the image with lazy initialization.
     /// </summary>
-    private Image<Rgba32> Image => this.image ?? (this.image = ImageSharp.Image.Load<Rgba32>(this.Bytes));
+    private Image<Rgba32> Image => this.image ?? (this.image = ImagePastel.Image.Load<Rgba32>(this.Bytes));
 
     /// <summary>
     /// Gets the input image directory.
@@ -129,7 +129,7 @@ public class TestFile
     /// Creates a new image.
     /// </summary>
     /// <returns>
-    /// The <see cref="ImageSharp.Image"/>.
+    /// The <see cref="ImagePastel.Image"/>.
     /// </returns>
     public Image<Rgba32> CreateRgba32Image()
     {
@@ -140,12 +140,12 @@ public class TestFile
     /// Creates a new image.
     /// </summary>
     /// <returns>
-    /// The <see cref="ImageSharp.Image"/>.
+    /// The <see cref="ImagePastel.Image"/>.
     /// </returns>
     public Image<Rgba32> CreateRgba32Image(IImageDecoder decoder)
     {
         // Use Configuration.Default directly: reading this.Image here would decode and cache an
         // undisposed image, which ValidateDisposedMemoryAllocations charges to whichever test runs first.
-        return ImageSharp.Image.Load<Rgba32>(Configuration.Default, this.Bytes, decoder);
+        return ImagePastel.Image.Load<Rgba32>(Configuration.Default, this.Bytes, decoder);
     }
 }

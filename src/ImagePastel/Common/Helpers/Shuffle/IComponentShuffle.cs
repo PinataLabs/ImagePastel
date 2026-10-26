@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 // The JIT can detect and optimize rotation idioms ROTL (Rotate Left)
 // and ROTR (Rotate Right) emitting efficient CPU instructions:
 // https://github.com/dotnet/coreclr/pull/1830
-namespace SixLabors.ImageSharp;
+namespace PinataLabs.ImagePastel;
 
 /// <summary>
 /// Defines the contract for methods that allow the shuffling of pixel components.

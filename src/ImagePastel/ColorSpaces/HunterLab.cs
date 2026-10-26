@@ -5,7 +5,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.ColorSpaces;
+namespace PinataLabs.ImagePastel.ColorSpaces;
 
 /// <summary>
 /// Represents an Hunter LAB color.

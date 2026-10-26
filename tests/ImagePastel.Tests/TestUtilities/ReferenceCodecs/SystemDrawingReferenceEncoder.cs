@@ -6,10 +6,10 @@ using System.IO;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 [SupportedOSPlatform("windows6.1")]
 public class SystemDrawingReferenceEncoder : IImageEncoder

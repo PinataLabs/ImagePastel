@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
 
 /// <summary>
 /// Provides 8-bit lookup tables for converting from Rgb to YCbCr colorspace.

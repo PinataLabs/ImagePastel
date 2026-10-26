@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg.BlockOperations;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg.BlockOperations;
 
 [Config(typeof(Config.HwIntrinsics_SSE_AVX))]
 public class Block8x8F_MultiplyInPlaceBlock

@@ -5,18 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Dithering;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests.Memory;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Dithering;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests.Memory;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Processing.Processors.Quantization;
+namespace PinataLabs.ImagePastel.Tests.Processing.Processors.Quantization;
 
 [Trait("Category", "Processors")]
 public class PaletteQuantizerTests

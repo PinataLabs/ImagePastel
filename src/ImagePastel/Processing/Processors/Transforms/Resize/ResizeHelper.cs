@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Transforms;
+namespace PinataLabs.ImagePastel.Processing.Processors.Transforms;
 
 /// <summary>
 /// Provides methods to help calculate the target rectangle when resizing using the

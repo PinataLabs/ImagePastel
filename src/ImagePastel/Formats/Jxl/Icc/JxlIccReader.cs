@@ -7,12 +7,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using static SixLabors.ImageSharp.Formats.Jxl.Icc.JxlIccCodecCommon;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using static PinataLabs.ImagePastel.Formats.Jxl.Icc.JxlIccCodecCommon;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Icc;
 
 /// <summary>
 /// Reads the ICC profile that the codestream embeds after its headers: an entropy-coded stream of

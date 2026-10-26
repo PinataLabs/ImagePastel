@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
 
 /// <summary>
 /// Bit reader for data encoded with the modified huffman rle method.

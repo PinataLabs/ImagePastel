@@ -4,14 +4,14 @@
 using System.Drawing.Imaging;
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Processing.Processors.Quantization;
+using PinataLabs.ImagePastel.Tests;
 using SDImage = System.Drawing.Image;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [Config(typeof(Config.ShortMultiFramework))]
 public class EncodeGif

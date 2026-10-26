@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 /// <summary>
 /// Constants that define specific points within a Gif.

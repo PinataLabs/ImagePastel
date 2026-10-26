@@ -6,15 +6,15 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.Formats.Webp.BitReader;
-using SixLabors.ImageSharp.Formats.Webp.Lossless;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Webp.BitReader;
+using PinataLabs.ImagePastel.Formats.Webp.Lossless;
+using PinataLabs.ImagePastel.Memory;
 #if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Implements decoding for lossy alpha chunks which may be compressed.

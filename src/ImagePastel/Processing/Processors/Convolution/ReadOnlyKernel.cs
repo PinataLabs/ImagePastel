@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Convolution;
+namespace PinataLabs.ImagePastel.Processing.Processors.Convolution;
 
 /// <summary>
 /// A stack only, readonly, kernel matrix that can be indexed without

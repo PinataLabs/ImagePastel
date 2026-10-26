@@ -5,7 +5,7 @@ using System.Runtime.Intrinsics.X86;
 using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Jobs;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 public partial class Config
 {

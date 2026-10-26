@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// The 8 float lanes of AVX2, as Highway gives them to libjxl's encoder on x64, which is where cjxl runs.

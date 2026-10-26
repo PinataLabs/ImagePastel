@@ -3,16 +3,16 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Formats.Webp.Lossy;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Formats.Webp.Lossy;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Webp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 
 [Trait("Format", "Webp")]
 public class YuvConversionTests

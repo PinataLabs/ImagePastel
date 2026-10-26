@@ -3,12 +3,12 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.PixelFormats;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 internal static class VerifyJpeg
 {

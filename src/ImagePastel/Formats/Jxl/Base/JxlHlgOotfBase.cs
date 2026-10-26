@@ -6,7 +6,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// BT.2100's HLG OOTF as libjxl's ICC builder applies it to tone-map an HLG profile, and the state that

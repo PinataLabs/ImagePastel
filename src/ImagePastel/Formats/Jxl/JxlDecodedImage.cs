@@ -3,9 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Formats.Jxl;
 
 /// <summary>
 /// A decoded JPEG XL image as float planes, for the conformance tests: every frame holds one plane per

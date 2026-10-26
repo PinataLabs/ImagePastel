@@ -4,7 +4,7 @@
 using System;
 using System.Text;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// Builds the text of one generated file. Line breaks are always <c>"\n"</c>, whatever the

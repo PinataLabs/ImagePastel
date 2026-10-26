@@ -3,11 +3,11 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks;
+namespace PinataLabs.ImagePastel.Benchmarks;
 
 [Config(typeof(Config.MultiFramework))]
 public class DetectEdges

@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 /// <summary>
 /// Provides methods and properties related to jpeg quantization.

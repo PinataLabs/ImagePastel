@@ -3,10 +3,10 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.PixelFormats;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats;
 
 /// <summary>
 /// Tests the <see cref="Rgba32"/> struct.

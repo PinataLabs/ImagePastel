@@ -3,10 +3,10 @@
 
 using System;
 using System.Threading;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats;
+namespace PinataLabs.ImagePastel.Formats;
 
 /// <summary>
 /// Abstraction for shared internals for ***DecoderCore implementations to be used with <see cref="ImageDecoderUtilities"/>.

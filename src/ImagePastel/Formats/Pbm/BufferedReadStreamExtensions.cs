@@ -3,9 +3,9 @@
 
 using System;
 using System.IO;
-using SixLabors.ImageSharp.IO;
+using PinataLabs.ImagePastel.IO;
 
-namespace SixLabors.ImageSharp.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Formats.Pbm;
 
 /// <summary>
 /// Extensions methods for <see cref="BufferedReadStream"/>.

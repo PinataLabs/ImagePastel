@@ -3,10 +3,10 @@
 
 using System;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorSpaces.Companding;
+using PinataLabs.ImagePastel.ColorSpaces.Companding;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Colorspaces.Companding;
+namespace PinataLabs.ImagePastel.Tests.Colorspaces.Companding;
 
 /// <summary>
 /// Tests various companding algorithms. Expanded numbers are hand calculated from formulas online.

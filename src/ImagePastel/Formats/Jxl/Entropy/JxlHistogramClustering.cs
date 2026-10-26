@@ -8,7 +8,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Entropy;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
 /// <summary>Clusters similar histograms so that their contexts can share one entropy code.</summary>
 internal static class JxlHistogramClustering

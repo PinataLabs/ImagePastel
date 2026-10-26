@@ -5,12 +5,12 @@ using System.Drawing.Imaging;
 using System.IO;
 using BenchmarkDotNet.Attributes;
 
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs;
 
 [MarkdownExporter]
 [HtmlExporter]

@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Processing.Processors.Quantization;
+namespace PinataLabs.ImagePastel.Processing.Processors.Quantization;
 
 /// <summary>
 /// Provides methods to allow the execution of the quantization process on an image frame.

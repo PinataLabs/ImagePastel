@@ -4,11 +4,11 @@
 using System;
 using System.Buffers;
 using System.Linq;
-using SixLabors.ImageSharp.Memory.Internals;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Memory.Internals;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory.Allocators;
+namespace PinataLabs.ImagePastel.Tests.Memory.Allocators;
 
 public class SharedArrayPoolBufferTests
 {

@@ -4,7 +4,7 @@
 using System;
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 /// <summary>
 /// Extension methods for <see cref="Size"/>
@@ -13,13 +13,13 @@ internal static class SizeExtensions
 {
     /// <summary>
     /// Multiplies 'a.Width' with 'b.Width' and 'a.Height' with 'b.Height'.
-    /// TODO: Shouldn't we expose this as operator in SixLabors.Core?
+    /// TODO: Shouldn't we expose this as operator in PinataLabs.Core?
     /// </summary>
     public static Size MultiplyBy(this Size a, Size b) => new Size(a.Width * b.Width, a.Height * b.Height);
 
     /// <summary>
     /// Divides 'a.Width' with 'b.Width' and 'a.Height' with 'b.Height'.
-    /// TODO: Shouldn't we expose this as operator in SixLabors.Core?
+    /// TODO: Shouldn't we expose this as operator in PinataLabs.Core?
     /// </summary>
     public static Size DivideBy(this Size a, Size b) => new Size(a.Width / b.Width, a.Height / b.Height);
 

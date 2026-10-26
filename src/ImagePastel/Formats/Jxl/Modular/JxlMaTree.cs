@@ -6,10 +6,10 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>Decodes MA trees.</summary>
 internal static class JxlMaTree

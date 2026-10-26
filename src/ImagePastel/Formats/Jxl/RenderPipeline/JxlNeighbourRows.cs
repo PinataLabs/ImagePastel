@@ -7,9 +7,9 @@
 
 using System;
 using System.Buffers;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// The input of a neighbour stage (<see cref="IJxlNeighbourStage"/>) for one output row: for each

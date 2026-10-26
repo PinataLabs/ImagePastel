@@ -9,7 +9,7 @@ using System.Runtime.Intrinsics.X86;
 using Xunit;
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.Tests;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.Tests;
 
 public class FeatureTestRunnerTests
 {

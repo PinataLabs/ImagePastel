@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Represents a single frame component.

@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Processing.Processors.Dithering;
+namespace PinataLabs.ImagePastel.Processing.Processors.Dithering;
 
 /// <summary>
 /// An error diffusion dithering implementation.

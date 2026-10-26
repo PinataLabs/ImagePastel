@@ -3,7 +3,7 @@
 
 using System.Numerics;
 
-namespace SixLabors.ImageSharp.ColorSpaces.Conversion;
+namespace PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
 /// <summary>
 /// Matrices used for transformation from <see cref="CieXyz"/> to <see cref="Lms"/>, defining the cone response domain.

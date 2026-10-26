@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg;
+namespace PinataLabs.ImagePastel.Formats.Jpeg;
 
 /// <summary>
 /// Contains jpeg constant values defined in the specification.

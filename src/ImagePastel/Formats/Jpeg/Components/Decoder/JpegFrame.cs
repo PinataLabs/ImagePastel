@@ -3,7 +3,7 @@
 
 using System;
 
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
 
 /// <summary>
 /// Represent a single jpeg frame

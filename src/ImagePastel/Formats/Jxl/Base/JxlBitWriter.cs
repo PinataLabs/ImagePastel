@@ -8,7 +8,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Base;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 /// <summary>
 /// Writes bits into bytes in increasing addresses, and within a byte least-significant bit first,

@@ -12,9 +12,9 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl.Quality;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl.Quality;
 
 /// <summary>
 /// SSIMULACRA2, the perceptual metric of libjxl's <c>ssimulacra2</c> tool: 100 for identical images,

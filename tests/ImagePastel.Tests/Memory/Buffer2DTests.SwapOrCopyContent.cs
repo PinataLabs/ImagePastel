@@ -3,11 +3,11 @@
 
 using System;
 using System.Linq;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Memory;
+namespace PinataLabs.ImagePastel.Tests.Memory;
 
 public partial class Buffer2DTests
 {

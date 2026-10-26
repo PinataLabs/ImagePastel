@@ -4,20 +4,20 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Memory;
-using SixLabors.ImageSharp.Tests.TestUtilities;
-using SixLabors.ImageSharp.Tests.TestUtilities.ImageComparison;
-using SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Memory;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ImageComparison;
+using PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Bmp;
+using static PinataLabs.ImagePastel.Tests.TestImages.Bmp;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Tests.Formats.Bmp;
 
 [Trait("Format", "Bmp")]
 [ValidateDisposedMemoryAllocations]

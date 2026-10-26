@@ -4,7 +4,7 @@
 // PatchBlending in lib/jxl/dec_patch_dictionary.h.
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
-namespace SixLabors.ImageSharp.Formats.Jxl.RenderPipeline;
+namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 
 /// <summary>
 /// How one channel group blends: the colour planes, or one extra channel. Patches and frame blending

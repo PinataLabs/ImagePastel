@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace SixLabors.ImageSharp.Formats.Png.Filters;
+namespace PinataLabs.ImagePastel.Formats.Png.Filters;
 
 /// <summary>
 /// The None filter, the scanline is transmitted unmodified; it is only necessary to

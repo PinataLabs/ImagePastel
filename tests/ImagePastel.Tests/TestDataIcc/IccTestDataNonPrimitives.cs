@@ -4,9 +4,9 @@
 using System;
 using System.Globalization;
 using System.Numerics;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 internal static class IccTestDataNonPrimitives
 {

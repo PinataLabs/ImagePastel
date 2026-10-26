@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using SixLabors;
+using PinataLabs;
 using Xunit;
 
 namespace SharedInfrastructure.Tests;

@@ -6,10 +6,10 @@
 
 using System;
 using System.Collections.Generic;
-using SixLabors.ImageSharp.Formats.Jxl.Modular.Transforms;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular.Transforms;
+using PinataLabs.ImagePastel.Memory;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// One channel of a Modular image: a plane of 32-bit samples, possibly downsampled.

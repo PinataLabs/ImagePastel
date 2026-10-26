@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Formats.Tiff.Utils;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Tiff.Utils;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.PhotometricInterpretation;
+namespace PinataLabs.ImagePastel.Formats.Tiff.PhotometricInterpretation;
 
 /// <summary>
 /// Implements the 'WhiteIsZero' photometric interpretation for 32-bit grayscale images.

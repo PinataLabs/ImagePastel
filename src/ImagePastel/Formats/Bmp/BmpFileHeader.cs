@@ -5,7 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Formats.Bmp;
+namespace PinataLabs.ImagePastel.Formats.Bmp;
 
 /// <summary>
 /// Stores general information about the Bitmap file.

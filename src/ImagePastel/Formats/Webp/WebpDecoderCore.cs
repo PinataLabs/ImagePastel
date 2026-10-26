@@ -5,18 +5,18 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 using System.Threading;
-using SixLabors.ImageSharp.Formats.Webp.BitReader;
-using SixLabors.ImageSharp.Formats.Webp.Lossless;
-using SixLabors.ImageSharp.Formats.Webp.Lossy;
-using SixLabors.ImageSharp.IO;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.Metadata;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Webp.BitReader;
+using PinataLabs.ImagePastel.Formats.Webp.Lossless;
+using PinataLabs.ImagePastel.Formats.Webp.Lossy;
+using PinataLabs.ImagePastel.IO;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.Metadata;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Webp;
+namespace PinataLabs.ImagePastel.Formats.Webp;
 
 /// <summary>
 /// Performs the webp decoding operation.

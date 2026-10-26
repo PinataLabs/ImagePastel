@@ -1,9 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Metadata;
+using PinataLabs.ImagePastel.Metadata;
 
-namespace SixLabors.ImageSharp.Formats.Gif;
+namespace PinataLabs.ImagePastel.Formats.Gif;
 
 /// <summary>
 /// Decoder for generating an image out of a gif encoded stream.

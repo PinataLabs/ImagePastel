@@ -6,7 +6,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Modular;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Modular;
 
 /// <summary>
 /// The options of a Modular stream: the limits on the channels it codes, used to encode and decode,

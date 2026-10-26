@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Processing;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.ProfilingBenchmarks;
+namespace PinataLabs.ImagePastel.Tests.ProfilingBenchmarks;
 
 public class LoadResizeSaveProfilingBenchmarks : MeasureFixture
 {

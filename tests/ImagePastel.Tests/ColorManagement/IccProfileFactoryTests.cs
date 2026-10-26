@@ -4,14 +4,14 @@
 using System;
 using System.IO;
 using System.Numerics;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.ColorManagement;
+namespace PinataLabs.ImagePastel.Tests.ColorManagement;
 
 /// <summary>
 /// Checks the profiles <see cref="IccProfileFactory"/> builds against the profiles Little CMS builds for the

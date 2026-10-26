@@ -5,10 +5,10 @@ using BenchmarkDotNet.Attributes;
 
 using Colourful;
 
-using SixLabors.ImageSharp.ColorSpaces;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.ColorSpaces;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
 
-namespace SixLabors.ImageSharp.Benchmarks.ColorSpaces;
+namespace PinataLabs.ImagePastel.Benchmarks.ColorSpaces;
 
 public class RgbWorkingSpaceAdapt
 {

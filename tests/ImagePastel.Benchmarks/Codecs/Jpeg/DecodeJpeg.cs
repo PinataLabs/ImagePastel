@@ -3,10 +3,10 @@
 
 using System.IO;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Tests;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Tests;
 
-namespace SixLabors.ImageSharp.Benchmarks.Codecs.Jpeg;
+namespace PinataLabs.ImagePastel.Benchmarks.Codecs.Jpeg;
 
 public class DecodeJpeg
 {

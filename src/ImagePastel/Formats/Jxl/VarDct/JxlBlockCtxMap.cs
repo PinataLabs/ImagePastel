@@ -8,12 +8,12 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Entropy;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
-using static SixLabors.ImageSharp.Formats.Jxl.Fields.JxlU32Distr;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
+using static PinataLabs.ImagePastel.Formats.Jxl.Fields.JxlU32Distr;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.VarDct;
+namespace PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 
 /// <summary>
 /// The block context map: which context the coefficients of a block use, from its channel, its

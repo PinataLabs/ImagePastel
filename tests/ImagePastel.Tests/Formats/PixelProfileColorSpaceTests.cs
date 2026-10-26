@@ -4,21 +4,21 @@
 using System;
 using System.IO;
 using System.Text;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.Formats.Gif;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Constants;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.Formats.Png;
-using SixLabors.ImageSharp.Tests.Processing.Processors.ColorManagement;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.Formats.Bmp;
+using PinataLabs.ImagePastel.Formats.Gif;
+using PinataLabs.ImagePastel.Formats.Jpeg;
+using PinataLabs.ImagePastel.Formats.Png;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Constants;
+using PinataLabs.ImagePastel.Formats.Webp;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.Formats.Png;
+using PinataLabs.ImagePastel.Tests.Processing.Processors.ColorManagement;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats;
+namespace PinataLabs.ImagePastel.Tests.Formats;
 
 /// <summary>
 /// An embedded profile is the pixel profile only when its data color space can describe the decoded

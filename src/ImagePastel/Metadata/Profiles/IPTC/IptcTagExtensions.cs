@@ -1,7 +1,7 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Iptc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Iptc;
 
 /// <summary>
 /// Extension methods for IPTC tags.

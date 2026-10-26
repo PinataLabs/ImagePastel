@@ -4,11 +4,11 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
+using PinataLabs.ImagePastel.Metadata.Profiles.Exif;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Xmp;
 
-namespace SixLabors.ImageSharp.Formats.Webp.BitWriter;
+namespace PinataLabs.ImagePastel.Formats.Webp.BitWriter;
 
 internal abstract class BitWriterBase
 {

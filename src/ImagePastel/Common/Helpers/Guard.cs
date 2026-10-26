@@ -3,9 +3,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp;
+using PinataLabs.ImagePastel;
 
-namespace SixLabors;
+namespace PinataLabs;
 
 internal static partial class Guard
 {

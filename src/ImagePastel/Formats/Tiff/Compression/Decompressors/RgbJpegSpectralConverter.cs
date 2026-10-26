@@ -1,11 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Decoder.ColorConverters;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors;
+namespace PinataLabs.ImagePastel.Formats.Tiff.Compression.Decompressors;
 
 /// <summary>
 /// Spectral converter for YCbCr and RGB TIFF's which use the JPEG compression.

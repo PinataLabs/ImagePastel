@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace SixLabors.ImageSharp.Metadata.Profiles.Icc;
+namespace PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
 /// <summary>
 /// A single channel of a <see cref="IccScreeningTagDataEntry"/>

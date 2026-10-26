@@ -9,7 +9,7 @@ using System.Runtime.Intrinsics.X86;
 #endif
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Formats.Jpeg.Components;
+namespace PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 /// <summary>
 /// Contains inaccurate, but fast forward and inverse DCT implementations.

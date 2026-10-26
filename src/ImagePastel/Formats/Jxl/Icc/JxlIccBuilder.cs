@@ -8,13 +8,13 @@
 
 using System;
 using System.Globalization;
-using SixLabors.ImageSharp.ColorManagement;
-using SixLabors.ImageSharp.ColorManagement.Icc;
-using SixLabors.ImageSharp.Formats.Jxl.Base;
-using SixLabors.ImageSharp.Formats.Jxl.Headers;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.ColorManagement;
+using PinataLabs.ImagePastel.ColorManagement.Icc;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Icc;
 
 /// <summary>
 /// Builds the ICC profile that describes an enumerated colour encoding, with the tags libjxl's

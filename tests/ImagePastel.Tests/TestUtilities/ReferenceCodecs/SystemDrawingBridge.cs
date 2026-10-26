@@ -6,11 +6,11 @@ using System.Buffers;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.Versioning;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Tests.TestUtilities.ReferenceCodecs;
+namespace PinataLabs.ImagePastel.Tests.TestUtilities.ReferenceCodecs;
 
 /// <summary>
 /// Provides methods to convert to/from System.Drawing bitmaps.

@@ -4,10 +4,10 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.ColorSpaces.Conversion;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.ColorSpaces.Conversion;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.ColorSpaces;
+namespace PinataLabs.ImagePastel.ColorSpaces;
 
 /// <summary>
 /// Represents an RGB color with specified <see cref="RgbWorkingSpace"/> working space.

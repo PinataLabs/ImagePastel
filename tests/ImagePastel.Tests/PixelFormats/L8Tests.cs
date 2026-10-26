@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Numerics;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.PixelFormats;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.PixelFormats;
+namespace PinataLabs.ImagePastel.Tests.PixelFormats;
 
 [Trait("Category", "PixelFormats")]
 public class L8Tests

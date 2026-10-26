@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using PinataLabs.ImagePastel.Metadata.Profiles.Icc;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Metadata.Profiles.ICC.DataReader;
+namespace PinataLabs.ImagePastel.Tests.Metadata.Profiles.ICC.DataReader;
 
 [Trait("Profile", "Icc")]
 public class IccDataReaderTests

@@ -5,15 +5,15 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
-using SixLabors.ImageSharp.Formats.Pbm;
-using SixLabors.ImageSharp.Memory;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Tests.TestUtilities;
+using PinataLabs.ImagePastel.Formats.Pbm;
+using PinataLabs.ImagePastel.Memory;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
-using static SixLabors.ImageSharp.Tests.TestImages.Pbm;
+using static PinataLabs.ImagePastel.Tests.TestImages.Pbm;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Pbm;
+namespace PinataLabs.ImagePastel.Tests.Formats.Pbm;
 
 [Trait("Format", "Pbm")]
 [ValidateDisposedMemoryAllocations]

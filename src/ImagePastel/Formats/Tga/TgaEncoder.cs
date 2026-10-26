@@ -4,10 +4,10 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Advanced;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Formats.Tga;
+namespace PinataLabs.ImagePastel.Formats.Tga;
 
 /// <summary>
 /// Image encoder for writing an image to a stream as a targa truevision image.

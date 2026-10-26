@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.IO;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.Formats.Tiff.Writers;
-using SixLabors.ImageSharp.Memory;
+using PinataLabs.ImagePastel.Formats.Tiff;
+using PinataLabs.ImagePastel.Formats.Tiff.Writers;
+using PinataLabs.ImagePastel.Memory;
 
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Tiff;
+namespace PinataLabs.ImagePastel.Tests.Formats.Tiff;
 
 [Trait("Format", "Tiff")]
 public class TiffEncoderHeaderTests

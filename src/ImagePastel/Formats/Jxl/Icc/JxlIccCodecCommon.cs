@@ -8,7 +8,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.Formats.Jxl.Icc;
+namespace PinataLabs.ImagePastel.Formats.Jxl.Icc;
 
 /// <summary>
 /// The tags, commands and predictors shared by the compressed representation of ICC profiles.

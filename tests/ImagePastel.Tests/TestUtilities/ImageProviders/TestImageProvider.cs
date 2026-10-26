@@ -6,13 +6,13 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Castle.Core.Internal;
 
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using PinataLabs.ImagePastel.Formats;
+using PinataLabs.ImagePastel.PixelFormats;
+using PinataLabs.ImagePastel.Processing;
 
 using Xunit.Sdk;
 
-namespace SixLabors.ImageSharp.Tests;
+namespace PinataLabs.ImagePastel.Tests;
 
 /// <summary>
 /// Provides <see cref="Image{TPixel}" /> instances for parametric unit tests.

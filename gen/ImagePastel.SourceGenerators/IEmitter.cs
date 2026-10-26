@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace SixLabors.ImageSharp.SourceGenerators;
+namespace PinataLabs.ImagePastel.SourceGenerators;
 
 /// <summary>
 /// Writes the generated files of one template family.

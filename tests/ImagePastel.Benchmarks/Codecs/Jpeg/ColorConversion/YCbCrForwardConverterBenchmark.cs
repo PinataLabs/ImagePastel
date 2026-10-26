@@ -3,11 +3,11 @@
 
 using System;
 using BenchmarkDotNet.Attributes;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
-using SixLabors.ImageSharp.Formats.Jpeg.Components.Encoder;
-using SixLabors.ImageSharp.PixelFormats;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components.Encoder;
+using PinataLabs.ImagePastel.PixelFormats;
 
-namespace SixLabors.ImageSharp.Benchmarks.Format.Jpeg.Components.Encoder;
+namespace PinataLabs.ImagePastel.Benchmarks.Format.Jpeg.Components.Encoder;
 
 public class YCbCrForwardConverterBenchmark
 {

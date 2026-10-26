@@ -1,10 +1,10 @@
 // Copyright (c) PinataLabs.
 // Licensed under the Apache License, Version 2.0.
 
-using SixLabors.ImageSharp.Formats.Jxl.VarDct;
+using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using Xunit;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// The encoder's <c>Set</c> of the AC strategy image, which overwrites what is there, as the AC strategy

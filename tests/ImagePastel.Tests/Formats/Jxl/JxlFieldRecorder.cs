@@ -3,9 +3,9 @@
 
 using System.Collections.Generic;
 using System.Globalization;
-using SixLabors.ImageSharp.Formats.Jxl.Fields;
+using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
-namespace SixLabors.ImageSharp.Tests.Formats.Jxl;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
 /// <summary>
 /// Lists every serialized field of a bundle, in visit order, so two bundles can be compared field by

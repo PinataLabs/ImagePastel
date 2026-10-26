@@ -4,12 +4,12 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SixLabors.ImageSharp.Formats.Jpeg.Components;
+using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 
 using Xunit;
 
 // ReSharper disable InconsistentNaming
-namespace SixLabors.ImageSharp.Tests.Formats.Jpg.Utils;
+namespace PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
 
 internal static partial class ReferenceImplementations
 {
