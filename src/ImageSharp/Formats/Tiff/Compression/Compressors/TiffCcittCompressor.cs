@@ -469,6 +469,15 @@ internal abstract class TiffCcittCompressor : TiffBaseCompressor
     {
         while (codeLength > 0)
         {
+            // The codes for a strip can take more bytes than the buffer holds: a narrow strip of
+            // alternating pixels does. A full buffer holds only whole bytes, so write it out and reuse it.
+            if (this.bytePosition == compressedData.Length)
+            {
+                this.Output.Write(compressedData);
+                compressedData.Clear();
+                this.bytePosition = 0;
+            }
+
             int bitNumber = (int)codeLength;
             bool bit = (code & (1 << (bitNumber - 1))) != 0;
             if (bit)
@@ -528,7 +537,7 @@ internal abstract class TiffCcittCompressor : TiffBaseCompressor
     /// <inheritdoc/>
     public override void Initialize(int rowsPerStrip)
     {
-        // This is too much memory allocated, but just 1 bit per pixel will not do, if the compression rate is not good.
+        // One byte per pixel holds most strips whole. WriteCode writes the buffer out when a strip needs more.
         int maxNeededBytes = this.Width * rowsPerStrip;
         this.compressedDataBuffer = this.Allocator.Allocate<byte>(maxNeededBytes);
     }

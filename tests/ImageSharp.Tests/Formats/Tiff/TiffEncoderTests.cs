@@ -371,6 +371,51 @@ public class TiffEncoderTests : TiffEncoderBaseTester
         ImageComparer.Exact.VerifySimilarity(expected, actual);
     }
 
+    // The CCITT encoders wrote into a buffer of one byte per pixel, which a narrow image outgrows: the codes
+    // for one row cost more than the row's width in bytes (GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w).
+    [Theory]
+    [InlineData(TiffCompression.CcittGroup3Fax, 1, 2000, false)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 1, 1, false)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 1, 1, true)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 2, 1000, true)]
+    [InlineData(TiffCompression.CcittGroup3Fax, 3, 700, false)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 1, 2000, false)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 1, 1, false)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 1, 1, true)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 2, 1000, true)]
+    [InlineData(TiffCompression.CcittGroup4Fax, 3, 700, false)]
+    [InlineData(TiffCompression.Ccitt1D, 1, 2000, false)]
+    [InlineData(TiffCompression.Ccitt1D, 1, 1, false)]
+    [InlineData(TiffCompression.Ccitt1D, 2, 1000, true)]
+    public void TiffEncoder_CcittCompression_NarrowImage_RoundTrips(TiffCompression compression, int width, int height, bool startBlack)
+    {
+        // Alternate black and white along every row and every column, the most codes an image can need.
+        using var input = new Image<L8>(width, height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                bool black = ((x + y) % 2 == 0) == startBlack;
+                input[x, y] = new L8(black ? (byte)0 : (byte)255);
+            }
+        }
+
+        using var encoded = new MemoryStream();
+        input.Save(encoded, new TiffEncoder { BitsPerPixel = TiffBitsPerPixel.Bit1, Compression = compression });
+        encoded.Position = 0;
+        using var decoded = Image.Load<L8>(encoded);
+        Assert.Equal(compression, decoded.Frames.RootFrame.Metadata.GetTiffMetadata().Compression);
+        ImageComparer.Exact.VerifySimilarity(input, decoded);
+
+        // Saving a decoded image with the default encoder keeps its compression and bit depth.
+        using var reencoded = new MemoryStream();
+        decoded.Save(reencoded, new TiffEncoder());
+        reencoded.Position = 0;
+        using var redecoded = Image.Load<L8>(reencoded);
+        Assert.Equal(compression, redecoded.Frames.RootFrame.Metadata.GetTiffMetadata().Compression);
+        ImageComparer.Exact.VerifySimilarity(input, redecoded);
+    }
+
     [Theory]
     [InlineData(TiffCompression.Ccitt1D, TiffBitsPerPixel.Bit4, null)]
     [InlineData(TiffCompression.Ccitt1D, TiffBitsPerPixel.Bit8, null)]
