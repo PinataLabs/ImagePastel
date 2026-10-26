@@ -51,7 +51,8 @@ public sealed class JxlDecoder : IImageDecoder, IImageInfoDetector, IJxlDecoderO
     /// <inheritdoc/>
     /// <remarks>
     /// An image larger than 2^28 pixels, or than 2^30 samples (pixels times colour and extra channels),
-    /// throws <see cref="InvalidMemoryOperationException"/>.
+    /// throws <see cref="InvalidMemoryOperationException"/>. So does an animation whose displayed frames
+    /// pass 2^34 samples in total, or a decode that runs out of memory.
     /// </remarks>
     public Image<TPixel> Decode<TPixel>(Configuration configuration, Stream stream, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
