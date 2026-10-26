@@ -64,6 +64,12 @@ internal sealed class JxlEpfSigma
         return new JxlEpfSigma(row, xsizeBlocks, 0);
     }
 
+    /// <summary>Returns a sigma image with the given inverse sigma for each block, for the tests of the passes.</summary>
+    /// <param name="invSigma">The inverse sigma of each block, row after row.</param>
+    /// <param name="xsizeBlocks">The width of the frame in blocks.</param>
+    /// <returns>The sigma image.</returns>
+    internal static JxlEpfSigma FromBlocks(float[] invSigma, int xsizeBlocks) => new(invSigma, xsizeBlocks, xsizeBlocks);
+
     /// <summary>
     /// Computes the sigma of every block of a VarDCT frame from its quant field, quantiser, strategies
     /// and EPF sharpness, as libjxl's <c>ComputeSigma</c> does for each DC group.
