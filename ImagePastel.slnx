@@ -7,20 +7,20 @@
   </Configurations>
   <Folder Name="/gen/">
     <File Path="gen/Directory.Build.props" />
-    <File Path="gen/ImageSharp.SourceGenerators.props" />
-    <Project Path="gen/ImageSharp.SourceGenerators/ImageSharp.SourceGenerators.csproj" />
+    <File Path="gen/ImagePastel.SourceGenerators.props" />
+    <Project Path="gen/ImagePastel.SourceGenerators/ImagePastel.SourceGenerators.csproj" />
   </Folder>
   <Folder Name="/src/">
     <File Path="src/Directory.Build.props" />
     <File Path="src/README.md" />
-    <Project Path="src/ImageSharp/ImageSharp.csproj" />
+    <Project Path="src/ImagePastel/ImagePastel.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <File Path="tests/Directory.Build.props" />
-    <Project Path="tests/ImageSharp.Benchmarks/ImageSharp.Benchmarks.csproj" />
-    <Project Path="tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj" />
-    <Project Path="tests/ImageSharp.Tests.ProfilingSandbox/ImageSharp.Tests.ProfilingSandbox.csproj" />
-    <Project Path="tests/ImageSharp.Tests/ImageSharp.Tests.csproj" />
+    <Project Path="tests/ImagePastel.Benchmarks/ImagePastel.Benchmarks.csproj" />
+    <Project Path="tests/ImagePastel.SourceGenerators.Tests/ImagePastel.SourceGenerators.Tests.csproj" />
+    <Project Path="tests/ImagePastel.Tests.ProfilingSandbox/ImagePastel.Tests.ProfilingSandbox.csproj" />
+    <Project Path="tests/ImagePastel.Tests/ImagePastel.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Images/" />
   <Folder Name="/tests/Images/Input/" />

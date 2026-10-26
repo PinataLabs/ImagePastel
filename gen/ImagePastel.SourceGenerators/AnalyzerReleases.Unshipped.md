@@ -5,4 +5,4 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-ISG001 | ImageSharp.SourceGenerators | Error | Unknown ImageSharpGeneratedSources value
+ISG001 | ImagePastel.SourceGenerators | Error | Unknown ImageSharpGeneratedSources value

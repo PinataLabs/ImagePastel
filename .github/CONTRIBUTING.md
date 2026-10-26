@@ -28,35 +28,35 @@ You need the .NET 10 SDK and [Git LFS](https://git-lfs.com/).
 Install Git LFS before you clone the repository. If you do not, the test images are missing.
 
 1. Get the test images: `git lfs pull`.
-2. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
-3. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
-4. Run the source generator tests: `dotnet test tests/ImageSharp.SourceGenerators.Tests -c Release --no-build`.
+2. Build the solution: `dotnet build ImagePastel.slnx -c Release`.
+3. Run the tests: `dotnet test tests/ImagePastel.Tests -c Release --no-build`.
+4. Run the source generator tests: `dotnet test tests/ImagePastel.SourceGenerators.Tests -c Release --no-build`.
 5. Compare the public API with the baseline: `pwsh ./ci-apicompat.ps1`.
 
-The expected output of `ImageSharp.Tests` is in `tests/Images/External`, in Git LFS.
+The expected output of `ImagePastel.Tests` is in `tests/Images/External`, in Git LFS.
 
 The build treats all warnings as errors. A suppression of an analyzer rule must give its reason.
 
 ## Edit generated code
 
-Some code is written at build time by the source generator in `gen/ImageSharp.SourceGenerators`.
+Some code is written at build time by the source generator in `gen/ImagePastel.SourceGenerators`.
 This code is not in the repository.
 After a build, you can read it in `artifacts/obj/<category>/<project>/<configuration>/<framework>/generated/`.
 
 Each project selects its generated files with the `ImageSharpGeneratedSources` property: `Library` or `Tests`.
 An unknown value causes error `ISG001`. A project without the property gets no generated files.
 
-Each generated file comes from an emitter: a class in `gen/ImageSharp.SourceGenerators/Library/` or `Tests/` that implements `IEmitter`.
+Each generated file comes from an emitter: a class in `gen/ImagePastel.SourceGenerators/Library/` or `Tests/` that implements `IEmitter`.
 An emitter writes C# raw string literals (`$$"""…"""`) to a `SourceWriter`. In these strings, `{{name}}` inserts a value.
 
-The expected output of each emitter is in `tests/ImageSharp.SourceGenerators.Tests/Expected/<Target>/`, one file for each generated file.
+The expected output of each emitter is in `tests/ImagePastel.SourceGenerators.Tests/Expected/<Target>/`, one file for each generated file.
 The tests fail if the output is different from these files, if a file is missing or extra, or if the generator reports a diagnostic.
 
 To change generated code:
 
 1. Edit the emitter.
-2. Refresh the expected files. In Bash: `IMAGESHARP_UPDATE_SNAPSHOTS=1 dotnet test tests/ImageSharp.SourceGenerators.Tests`.
-   In PowerShell: `$env:IMAGESHARP_UPDATE_SNAPSHOTS = '1'; dotnet test tests/ImageSharp.SourceGenerators.Tests; Remove-Item env:IMAGESHARP_UPDATE_SNAPSHOTS`.
+2. Refresh the expected files. In Bash: `IMAGESHARP_UPDATE_SNAPSHOTS=1 dotnet test tests/ImagePastel.SourceGenerators.Tests`.
+   In PowerShell: `$env:IMAGESHARP_UPDATE_SNAPSHOTS = '1'; dotnet test tests/ImagePastel.SourceGenerators.Tests; Remove-Item env:IMAGESHARP_UPDATE_SNAPSHOTS`.
    This run writes the expected files and then fails, so that a refresh cannot pass by accident.
 3. Read the diff of the expected files. It shows the change to the generated code.
 4. Run the tests again without the variable. They must pass.

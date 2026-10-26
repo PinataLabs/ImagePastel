@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>SixLabors.ImageSharp.SourceGenerators.Tests</AssemblyName>
+    <AssemblyName>PinataLabs.ImagePastel.SourceGenerators.Tests</AssemblyName>
     <RootNamespace>SixLabors.ImageSharp.SourceGenerators.Tests</RootNamespace>
     <!-- xUnit.net v3 test projects are stand-alone executables. -->
     <OutputType>Exe</OutputType>
@@ -12,8 +12,8 @@
 
   <ItemGroup>
     <!-- tests/Directory.Build.props references the library. These tests only need the generator. -->
-    <ProjectReference Remove="$(MSBuildThisFileDirectory)..\..\src\ImageSharp\ImageSharp.csproj" />
-    <ProjectReference Include="..\..\gen\ImageSharp.SourceGenerators\ImageSharp.SourceGenerators.csproj" />
+    <ProjectReference Remove="$(MSBuildThisFileDirectory)..\..\src\ImagePastel\ImagePastel.csproj" />
+    <ProjectReference Include="..\..\gen\ImagePastel.SourceGenerators\ImagePastel.SourceGenerators.csproj" />
   </ItemGroup>
 
   <ItemGroup>

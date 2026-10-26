@@ -108,14 +108,14 @@ jobs:
             /d:sonar.test.exclusions="**/*.pdf,**/*.pptx,**/*.ttf,**/*.woff,**/*.jpg,**/*.png"
 
       - name: Build
-        run: dotnet build ImageSharp.slnx -c Release -p:codecov=true
+        run: dotnet build ImagePastel.slnx -c Release -p:codecov=true
 
       # CI is what gates on the tests. Here a failure only means partial coverage,
       # so the analysis still runs.
       - name: Test source generator with coverage
         continue-on-error: true
         run: >
-          dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+          dotnet test tests/ImagePastel.SourceGenerators.Tests/ImagePastel.SourceGenerators.Tests.csproj -c Release --no-build
           -p:codecov=true
           --collect "XPlat Code Coverage"
           --settings tests/coverlet.runsettings
@@ -124,7 +124,7 @@ jobs:
       - name: Test with coverage
         continue-on-error: true
         run: >
-          dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build
+          dotnet test tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release --no-build
           -p:codecov=true
           --collect "XPlat Code Coverage"
           --settings tests/coverlet.runsettings

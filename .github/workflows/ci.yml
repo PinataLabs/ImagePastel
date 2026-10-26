@@ -84,18 +84,18 @@ jobs:
 
       # Builds net10.0 and netstandard2.1 for the library; tests run on net10.0.
       - name: Build
-        run: dotnet build ImageSharp.slnx -c Release -p:codecov=${{ matrix.coverage == true }}
+        run: dotnet build ImagePastel.slnx -c Release -p:codecov=${{ matrix.coverage == true }}
 
       # Compares the generator output with the expected files, so it runs on every OS.
       - name: Test source generator
         if: ${{ !matrix.coverage }}
-        run: dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+        run: dotnet test tests/ImagePastel.SourceGenerators.Tests/ImagePastel.SourceGenerators.Tests.csproj -c Release --no-build
 
       # The generator's coverage goes into the same report as the library's.
       - name: Test source generator with coverage
         if: ${{ matrix.coverage }}
         run: >
-          dotnet test tests/ImageSharp.SourceGenerators.Tests/ImageSharp.SourceGenerators.Tests.csproj -c Release --no-build
+          dotnet test tests/ImagePastel.SourceGenerators.Tests/ImagePastel.SourceGenerators.Tests.csproj -c Release --no-build
           -p:codecov=true
           --collect "XPlat Code Coverage"
           --settings tests/coverlet.runsettings
@@ -103,13 +103,13 @@ jobs:
 
       - name: Test
         if: ${{ !matrix.coverage }}
-        run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build
+        run: dotnet test tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release --no-build
 
       - name: Test with coverage
         id: test-coverage
         if: ${{ matrix.coverage }}
         run: >
-          dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build
+          dotnet test tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release --no-build
           -p:codecov=true
           --collect "XPlat Code Coverage"
           --settings tests/coverlet.runsettings
@@ -215,10 +215,10 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-net11-
 
       - name: Build
-        run: dotnet build tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release -f net11.0
+        run: dotnet build tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release -f net11.0
 
       - name: Test
-        run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build -f net11.0
+        run: dotnet test tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release --no-build -f net11.0
 
       - name: Upload failed test output
         if: failure()
@@ -306,13 +306,13 @@ jobs:
           "$djxl" --version
 
       - name: Build
-        run: dotnet build tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release
+        run: dotnet build tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release
 
       # JXL_CONFORMANCE=1 downloads missing data and turns a skip into a failure.
       - name: Test
         env:
           JXL_CONFORMANCE: '1'
-        run: dotnet test tests/ImageSharp.Tests/ImageSharp.Tests.csproj -c Release --no-build --filter "Format=Jxl"
+        run: dotnet test tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release --no-build --filter "Format=Jxl"
 
   apicompat:
     name: Public API matches SixLabors.ImageSharp 2.1.13
@@ -356,7 +356,7 @@ jobs:
           global-json-file: global.json
 
       - name: Pack
-        run: dotnet pack src/ImageSharp/ImageSharp.csproj -c Release -o artifacts/packages
+        run: dotnet pack src/ImagePastel/ImagePastel.csproj -c Release -o artifacts/packages
 
       - name: Upload packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

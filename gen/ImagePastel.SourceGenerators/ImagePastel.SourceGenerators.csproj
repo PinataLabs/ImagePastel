@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <!-- The tests reuse the generator's constants, such as the gate property name. -->
-    <InternalsVisibleTo Include="SixLabors.ImageSharp.SourceGenerators.Tests" Key="$(PinataLabsPublicKey)" />
+    <InternalsVisibleTo Include="PinataLabs.ImagePastel.SourceGenerators.Tests" Key="$(PinataLabsPublicKey)" />
   </ItemGroup>
 
   <ItemGroup>

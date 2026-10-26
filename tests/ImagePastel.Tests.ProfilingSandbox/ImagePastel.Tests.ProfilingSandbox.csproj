@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>ImageSharp.Tests.ProfilingSandbox</AssemblyName>
+    <AssemblyName>ImagePastel.Tests.ProfilingSandbox</AssemblyName>
     <Description>A cross-platform library for processing of image files written in C#</Description>
     <OutputType>Exe</OutputType>
     <Prefer32Bit>false</Prefer32Bit>
@@ -25,8 +25,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="..\ImageSharp.Tests\IO\LocalFileSystem.cs" />
-    <Compile Include="..\ImageSharp.Benchmarks\LoadResizeSave\LoadResizeSaveStressRunner.cs" Link="LoadResizeSaveStressRunner.cs" />
+    <Compile Remove="..\ImagePastel.Tests\IO\LocalFileSystem.cs" />
+    <Compile Include="..\ImagePastel.Benchmarks\LoadResizeSave\LoadResizeSaveStressRunner.cs" Link="LoadResizeSaveStressRunner.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ImageSharp.Tests\ImageSharp.Tests.csproj" />
+    <ProjectReference Include="..\ImagePastel.Tests\ImagePastel.Tests.csproj" />
   </ItemGroup>
 
 </Project>

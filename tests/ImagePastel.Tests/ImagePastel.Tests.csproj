@@ -3,7 +3,7 @@
 
   <PropertyGroup>
     <DebugSymbols>True</DebugSymbols>
-    <AssemblyName>SixLabors.ImageSharp.Tests</AssemblyName>
+    <AssemblyName>PinataLabs.ImagePastel.Tests</AssemblyName>
     <!-- xUnit.net v3 test projects are stand-alone executables. -->
     <OutputType>Exe</OutputType>
     <Platforms>AnyCPU;x64;x86</Platforms>
@@ -16,18 +16,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ImageSharp.Tests.ProfilingSandbox" Key="$(PinataLabsPublicKey)" />
+    <InternalsVisibleTo Include="ImagePastel.Tests.ProfilingSandbox" Key="$(PinataLabsPublicKey)" />
   </ItemGroup>
 
   <!--
-    The specialized pixel operation tests are written by gen/ImageSharp.SourceGenerators.
-    The generated files are under artifacts/obj/tests/ImageSharp.Tests/<configuration>/<tfm>/generated/.
+    The specialized pixel operation tests are written by gen/ImagePastel.SourceGenerators.
+    The generated files are under artifacts/obj/tests/ImagePastel.Tests/<configuration>/<tfm>/generated/.
   -->
   <PropertyGroup>
     <ImageSharpGeneratedSources>Tests</ImageSharpGeneratedSources>
   </PropertyGroup>
 
-  <Import Project="..\..\gen\ImageSharp.SourceGenerators.props" />
+  <Import Project="..\..\gen\ImagePastel.SourceGenerators.props" />
 
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />

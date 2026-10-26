@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\ImageSharp\ImageSharp.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\ImagePastel\ImagePastel.csproj" />
   </ItemGroup>
 
 </Project>

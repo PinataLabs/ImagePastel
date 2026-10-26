@@ -16,7 +16,7 @@ using SixLabors.ImageSharp.Memory.Internals;
 
 namespace SixLabors.ImageSharp.Tests.ProfilingSandbox;
 
-// See ImageSharp.Benchmarks/LoadResizeSave/README.md
+// See ImagePastel.Benchmarks/LoadResizeSave/README.md
 internal class LoadResizeSaveParallelMemoryStress
 {
     private LoadResizeSaveParallelMemoryStress()

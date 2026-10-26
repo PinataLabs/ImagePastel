@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>ImageSharp.Benchmarks</AssemblyName>
+    <AssemblyName>ImagePastel.Benchmarks</AssemblyName>
     <OutputType>Exe</OutputType>
     <RootNamespace>SixLabors.ImageSharp.Benchmarks</RootNamespace>
     <GenerateProgramFile>false</GenerateProgramFile>
@@ -23,9 +23,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\ImageSharp.Tests\TestImages.cs" Link="Tests\TestImages.cs" />
-    <Compile Include="..\ImageSharp.Tests\TestUtilities\TestEnvironment.cs" Link="Tests\TestEnvironment.cs" />
-    <Compile Include="..\ImageSharp.Tests\TestUtilities\TestDataGenerator.cs" Link="Tests\TestDataGenerator.cs" />
+    <Compile Include="..\ImagePastel.Tests\TestImages.cs" Link="Tests\TestImages.cs" />
+    <Compile Include="..\ImagePastel.Tests\TestUtilities\TestEnvironment.cs" Link="Tests\TestEnvironment.cs" />
+    <Compile Include="..\ImagePastel.Tests\TestUtilities\TestDataGenerator.cs" Link="Tests\TestDataGenerator.cs" />
   </ItemGroup>
 
   <ItemGroup>

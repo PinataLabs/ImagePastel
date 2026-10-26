@@ -92,8 +92,8 @@ The test images are in Git LFS.
 1. On Windows, enable long file paths in Git: `git config --system core.longpaths true`.
 2. Clone the repository: `git clone https://github.com/PinataLabs/ImagePastel`.
 3. Get the test images: `git lfs pull`.
-4. Build the solution: `dotnet build ImageSharp.slnx -c Release`.
-5. Run the tests: `dotnet test tests/ImageSharp.Tests -c Release --no-build`.
+4. Build the solution: `dotnet build ImagePastel.slnx -c Release`.
+5. Run the tests: `dotnet test tests/ImagePastel.Tests -c Release --no-build`.
 
 The build treats all warnings as errors.
 
