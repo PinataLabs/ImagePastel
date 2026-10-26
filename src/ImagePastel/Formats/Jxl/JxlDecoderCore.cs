@@ -238,9 +238,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         // djxl orients its output, so the planes are oriented too.
         JxlPlanesSink planesSink = new();
-        IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
+            IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
             this.DecodeFrames(data, frameOffset, sink, skipColorTransform, cancellationToken);
             return planesSink.Image;
         }
@@ -258,8 +258,9 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
     // As in the GIF decoder: each displayed frame gets a full canvas, and the frame planes are allocated
     // per frame, so the machine can run out of memory below the budgets and the allocator's limits. #112
-    // does not allow OutOfMemoryException to escape, so it becomes InvalidMemoryOperationException, which
-    // has no inner exception.
+    // does not allow OutOfMemoryException to escape, so where the output and the frames are allocated it
+    // becomes InvalidMemoryOperationException, which has no inner exception. The codestream and header
+    // reads before that are bounded by the file and the metadata caps.
     private InvalidMemoryOperationException OutOfMemory(OutOfMemoryException ex)
         => new($"Not enough memory to decode the frames of a {this.metadata.XSize}x{this.metadata.YSize} JPEG XL image: {ex.Message}");
 
