@@ -165,11 +165,17 @@ public class JxlEpfTests
         {
             float[] scalar = RunPass(pass, lf, sigma, planes, xsize, ysize, scalarOnly: true);
             float[] vector = RunPass(pass, lf, sigma, planes, xsize, ysize, scalarOnly: false);
+
+            // Two NaNs count as equal: .NET keeps no NaN's sign or payload stable, and on net11.0 they
+            // change from run to run, in either path. Nothing downstream reads them, only whether a
+            // sample is NaN.
             for (int i = 0; i < scalar.Length; i++)
             {
+                int scalarBits = BitConverter.SingleToInt32Bits(scalar[i]);
+                int vectorBits = BitConverter.SingleToInt32Bits(vector[i]);
                 Assert.True(
-                    BitConverter.SingleToInt32Bits(scalar[i]) == BitConverter.SingleToInt32Bits(vector[i]),
-                    $"Sample {i}: scalar {scalar[i]:R}, vector {vector[i]:R}");
+                    scalarBits == vectorBits || (float.IsNaN(scalar[i]) && float.IsNaN(vector[i])),
+                    $"Sample {i}: scalar {scalar[i]:R} (0x{scalarBits:X8}), vector {vector[i]:R} (0x{vectorBits:X8})");
             }
         }
         finally
