@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Numerics;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
@@ -42,6 +43,22 @@ internal sealed class JxlEpf2Stage : JxlEpfStage
         sum.Normalize(out outX, out outY, out outB);
     }
 
+    /// <inheritdoc/>
+    protected override void FilterVector(Rows rows, int x, Vector<float> invSigma, out Vector<float> outX, out Vector<float> outY, out Vector<float> outB)
+    {
+        Vector<float> rx = rows.Load(0, 0, x);
+        Vector<float> ry = rows.Load(1, 0, x);
+        Vector<float> rb = rows.Load(2, 0, x);
+        VectorWeightedSum sum = new(rx, ry, rb);
+
+        this.AddPixel(ref sum, rows, -1, x, rx, ry, rb, invSigma);
+        this.AddPixel(ref sum, rows, 0, x - 1, rx, ry, rb, invSigma);
+        this.AddPixel(ref sum, rows, 0, x + 1, rx, ry, rb, invSigma);
+        this.AddPixel(ref sum, rows, 1, x, rx, ry, rb, invSigma);
+
+        sum.Normalize(out outX, out outY, out outB);
+    }
+
     // AddPixel: the SAD of one pixel against the centre, over the three channels.
     private void AddPixel(ref WeightedSum sum, Rows rows, int dy, int x, float rx, float ry, float rb, float invSigma)
     {
@@ -53,6 +70,21 @@ internal sealed class JxlEpf2Stage : JxlEpfStage
         float sad = MathF.Abs(cx - rx) * scale[0];
         sad = (MathF.Abs(cy - ry) * scale[1]) + sad;
         sad = (MathF.Abs(cb - rb) * scale[2]) + sad;
+
+        sum.Add(Weight(sad, invSigma), cx, cy, cb);
+    }
+
+    // The same for a vector of pixels.
+    private void AddPixel(ref VectorWeightedSum sum, Rows rows, int dy, int x, Vector<float> rx, Vector<float> ry, Vector<float> rb, Vector<float> invSigma)
+    {
+        Vector<float> cx = rows.Load(0, dy, x);
+        Vector<float> cy = rows.Load(1, dy, x);
+        Vector<float> cb = rows.Load(2, dy, x);
+
+        float[] scale = this.LoopFilter.EpfChannelScale;
+        Vector<float> sad = Vector.Abs(cx - rx) * scale[0];
+        sad = (Vector.Abs(cy - ry) * scale[1]) + sad;
+        sad = (Vector.Abs(cb - rb) * scale[2]) + sad;
 
         sum.Add(Weight(sad, invSigma), cx, cy, cb);
     }

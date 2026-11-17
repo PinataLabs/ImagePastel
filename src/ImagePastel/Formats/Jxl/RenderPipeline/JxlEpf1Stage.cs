@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Numerics;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
@@ -103,6 +104,87 @@ internal sealed class JxlEpf1Stage : JxlEpfStage
         sum.Normalize(out outX, out outY, out outB);
     }
 
+    /// <inheritdoc/>
+    protected override void FilterVector(Rows rows, int x, Vector<float> invSigma, out Vector<float> outX, out Vector<float> outY, out Vector<float> outB)
+    {
+        Vector<float> sad0 = Vector<float>.Zero;
+        Vector<float> sad1 = Vector<float>.Zero;
+        Vector<float> sad2 = Vector<float>.Zero;
+        Vector<float> sad3 = Vector<float>.Zero;
+
+        // FilterPixel's SADs, in its order.
+        for (int c = 0; c < 3; c++)
+        {
+            Vector<float> t;
+
+            Vector<float> p20 = rows.Load(c, -2, x);
+            Vector<float> p21 = rows.Load(c, -1, x);
+            Vector<float> sad0c = Vector.Abs(p20 - p21); // SAD 2, 1
+
+            Vector<float> p11 = rows.Load(c, -1, x - 1);
+            Vector<float> sad1c = Vector.Abs(p11 - p21); // SAD 1, 2
+
+            Vector<float> p31 = rows.Load(c, -1, x + 1);
+            Vector<float> sad2c = Vector.Abs(p31 - p21); // SAD 3, 2
+
+            Vector<float> p02 = rows.Load(c, 0, x - 2);
+            Vector<float> p12 = rows.Load(c, 0, x - 1);
+            sad1c += Vector.Abs(p02 - p12); // SAD 1, 2
+            sad0c += Vector.Abs(p11 - p12); // SAD 2, 1
+
+            Vector<float> p22 = rows.Load(c, 0, x);
+            t = Vector.Abs(p12 - p22);
+            sad1c += t; // SAD 1, 2
+            sad2c += t; // SAD 3, 2
+            t = Vector.Abs(p22 - p21);
+            Vector<float> sad3c = t; // SAD 2, 3
+            sad0c += t; // SAD 2, 1
+
+            Vector<float> p32 = rows.Load(c, 0, x + 1);
+            sad0c += Vector.Abs(p31 - p32); // SAD 2, 1
+            t = Vector.Abs(p22 - p32);
+            sad1c += t; // SAD 1, 2
+            sad2c += t; // SAD 3, 2
+
+            Vector<float> p42 = rows.Load(c, 0, x + 2);
+            sad2c += Vector.Abs(p42 - p32); // SAD 3, 2
+
+            Vector<float> p13 = rows.Load(c, 1, x - 1);
+            sad3c += Vector.Abs(p13 - p12); // SAD 2, 3
+
+            Vector<float> p23 = rows.Load(c, 1, x);
+            t = Vector.Abs(p22 - p23);
+            sad0c += t; // SAD 2, 1
+            sad3c += t; // SAD 2, 3
+            sad1c += Vector.Abs(p13 - p23); // SAD 1, 2
+
+            Vector<float> p33 = rows.Load(c, 1, x + 1);
+            sad2c += Vector.Abs(p33 - p23); // SAD 3, 2
+            sad3c += Vector.Abs(p33 - p32); // SAD 2, 3
+
+            Vector<float> p24 = rows.Load(c, 2, x);
+            sad3c += Vector.Abs(p24 - p23); // SAD 2, 3
+
+            float scale = this.LoopFilter.EpfChannelScale[c];
+            sad0 = (sad0c * scale) + sad0;
+            sad1 = (sad1c * scale) + sad1;
+            sad2 = (sad2c * scale) + sad2;
+            sad3 = (sad3c * scale) + sad3;
+        }
+
+        VectorWeightedSum sum = new(rows.Load(0, 0, x), rows.Load(1, 0, x), rows.Load(2, 0, x));
+
+        AddPixel(ref sum, rows, -1, x, sad0, invSigma);
+        AddPixel(ref sum, rows, 0, x - 1, sad1, invSigma);
+        AddPixel(ref sum, rows, 0, x + 1, sad2, invSigma);
+        AddPixel(ref sum, rows, 1, x, sad3, invSigma);
+
+        sum.Normalize(out outX, out outY, out outB);
+    }
+
     private static void AddPixel(ref WeightedSum sum, Rows rows, int dy, int x, float sad, float invSigma)
         => sum.Add(Weight(sad, invSigma), rows[0, dy, x], rows[1, dy, x], rows[2, dy, x]);
+
+    private static void AddPixel(ref VectorWeightedSum sum, Rows rows, int dy, int x, Vector<float> sad, Vector<float> invSigma)
+        => sum.Add(Weight(sad, invSigma), rows.Load(0, dy, x), rows.Load(1, dy, x), rows.Load(2, dy, x));
 }

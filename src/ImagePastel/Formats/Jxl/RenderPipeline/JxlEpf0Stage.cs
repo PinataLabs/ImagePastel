@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Numerics;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
@@ -62,6 +63,46 @@ internal sealed class JxlEpf0Stage : JxlEpfStage
         {
             (int dy, int dx) = SadsOff[i];
             sum.Add(Weight(sads[i], invSigma), rows[0, dy, x + dx], rows[1, dy, x + dx], rows[2, dy, x + dx]);
+        }
+
+        sum.Normalize(out outX, out outY, out outB);
+    }
+
+    /// <inheritdoc/>
+    protected override void FilterVector(Rows rows, int x, Vector<float> invSigma, out Vector<float> outX, out Vector<float> outY, out Vector<float> outB)
+    {
+        // FilterPixel's SADs, in its order. The patch around the centre is loaded once per channel.
+        Span<Vector<float>> sads = stackalloc Vector<float>[12];
+        sads.Clear();
+        Span<Vector<float>> center = stackalloc Vector<float>[PlusOff.Length];
+        for (int c = 0; c < 3; c++)
+        {
+            for (int j = 0; j < PlusOff.Length; j++)
+            {
+                (int dy, int dx) = PlusOff[j];
+                center[j] = rows.Load(c, dy, x + dx);
+            }
+
+            float scale = this.LoopFilter.EpfChannelScale[c];
+            for (int i = 0; i < 12; i++)
+            {
+                (int sy, int sx) = SadsOff[i];
+                Vector<float> sad = Vector<float>.Zero;
+                for (int j = 0; j < PlusOff.Length; j++)
+                {
+                    (int dy, int dx) = PlusOff[j];
+                    sad += Vector.Abs(center[j] - rows.Load(c, sy + dy, x + sx + dx));
+                }
+
+                sads[i] = (sad * scale) + sads[i];
+            }
+        }
+
+        VectorWeightedSum sum = new(rows.Load(0, 0, x), rows.Load(1, 0, x), rows.Load(2, 0, x));
+        for (int i = 0; i < 12; i++)
+        {
+            (int dy, int dx) = SadsOff[i];
+            sum.Add(Weight(sads[i], invSigma), rows.Load(0, dy, x + dx), rows.Load(1, dy, x + dx), rows.Load(2, dy, x + dx));
         }
 
         sum.Normalize(out outX, out outY, out outB);
