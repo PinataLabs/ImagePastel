@@ -58,7 +58,8 @@ The two assemblies contain the same types, and the compiler cannot select betwee
 
 | Target | For |
 |---|---|
-| `net10.0` | .NET 10 and later. This build uses hardware intrinsics (SSE, AVX, AVX2). |
+| `net11.0` | .NET 11 and later. This build uses hardware intrinsics (SSE, AVX, AVX2). |
+| `net10.0` | .NET 10. This build uses hardware intrinsics (SSE, AVX, AVX2). |
 | `netstandard2.1` | Other .NET runtimes, for example .NET 8, .NET 9, Mono, and Unity. This build does not use hardware intrinsics. |
 
 The package does not support .NET Framework.
@@ -67,7 +68,7 @@ The package does not support .NET Framework.
 
 - The package ID and the assembly name are `PinataLabs.ImagePastel`.
 - The strong-name key is different. The public key token is `4ebeb91ace1f6a56`.
-- The package targets `net10.0` and `netstandard2.1` only.
+- The package targets `net11.0`, `net10.0` and `netstandard2.1` only.
 - The dependencies are current versions.
 - The public API is the same. CI compares it with SixLabors.ImageSharp 2.1.13 in strict mode on each change.
 
@@ -86,8 +87,8 @@ Later Six Labors versions have a different API, so their documentation does not 
 
 ## Build from source
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Git LFS](https://git-lfs.com/).
-The test images are in Git LFS.
+You need the [.NET 11 SDK](https://dotnet.microsoft.com/download), the .NET 10 runtime, and [Git LFS](https://git-lfs.com/).
+The tests run on `net10.0` and `net11.0`. The test images are in Git LFS.
 
 1. On Windows, enable long file paths in Git: `git config --system core.longpaths true`.
 2. Clone the repository: `git clone https://github.com/PinataLabs/ImagePastel`.
@@ -96,9 +97,6 @@ The test images are in Git LFS.
 5. Run the tests: `dotnet test tests/ImagePastel.Tests -c Release --no-build`.
 
 The build treats all warnings as errors.
-
-To also build and test `net11.0`, select a .NET 11 SDK in `global.json` (CI uses 11.0.100-rc.2.26504.105).
-The package does not include `net11.0` yet, because releases use the .NET 10 SDK.
 
 ## Contributing
 

@@ -6,7 +6,7 @@
     <RootNamespace>PinataLabs.ImagePastel.SourceGenerators.Tests</RootNamespace>
     <!-- xUnit.net v3 test projects are stand-alone executables. -->
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
   </PropertyGroup>
 

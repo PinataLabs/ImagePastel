@@ -24,23 +24,18 @@
     <DefineConstants Condition="'$(IsWindows)' == 'true'">$(DefineConstants);OS_WINDOWS</DefineConstants>
   </PropertyGroup>
 
-  <!--
-    The .NET target frameworks of the library and its tests. global.json selects the .NET 10 SDK,
-    so net11.0 builds only when a .NET 11 SDK is selected instead (the net11 CI job does this).
-    Releases use global.json, so the package does not get a net11.0 build from a preview SDK.
-  -->
+  <!-- The .NET target frameworks of the library and its tests. They need the .NET 11 SDK. -->
   <PropertyGroup>
-    <ImageSharpNetTargetFrameworks>net10.0</ImageSharpNetTargetFrameworks>
-    <ImageSharpNetTargetFrameworks Condition="'$(BundledNETCoreAppTargetFrameworkVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(BundledNETCoreAppTargetFrameworkVersion)', '11.0'))">net10.0;net11.0</ImageSharpNetTargetFrameworks>
+    <ImageSharpNetTargetFrameworks>net10.0;net11.0</ImageSharpNetTargetFrameworks>
   </PropertyGroup>
 
   <!-- Compilation settings that differ from the SDK defaults. -->
   <PropertyGroup>
     <!--
-      An explicit version, not "latest", so the netstandard2.1 build uses the same language
-      as net10.0 and an SDK update does not change it.
+      Every target framework, netstandard2.1 included, uses the newest language that the SDK
+      in global.json supports, not each framework's default.
     -->
-    <LangVersion>14.0</LangVersion>
+    <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Features>strict;IOperation</Features>
     <NeutralLanguage>en</NeutralLanguage>
