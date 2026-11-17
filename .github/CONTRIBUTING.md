@@ -24,7 +24,7 @@ To send a fix:
 
 ## Build and test
 
-You need the .NET 10 SDK and [Git LFS](https://git-lfs.com/).
+You need the .NET 11 SDK, the .NET 10 runtime, and [Git LFS](https://git-lfs.com/).
 Install Git LFS before you clone the repository. If you do not, the test images are missing.
 
 1. Get the test images: `git lfs pull`.
