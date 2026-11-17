@@ -833,7 +833,7 @@ internal static unsafe class QuantEnc
             for (nint i = 1; i < 16; i++)
             {
                 // omit DC, we're only interested in AC
-                score += Unsafe.Add(ref levelsRef, offset) != 0 ? 1 : 0;
+                score += Unsafe.Add(ref levelsRef, offset + i) != 0 ? 1 : 0;
                 if (score > thresh)
                 {
                     return false;
