@@ -5,6 +5,8 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using PinataLabs.ImagePastel.Advanced;
 using PinataLabs.ImagePastel.Formats.Webp.BitWriter;
 using PinataLabs.ImagePastel.Memory;
 using PinataLabs.ImagePastel.Metadata;
@@ -325,9 +327,8 @@ internal class Vp8Encoder : IDisposable
         int yStride = width;
         int uvStride = (yStride + 1) >> 1;
 
-        var it = new Vp8EncIterator(this.YTop, this.UvTop, this.Nz, this.MbInfo, this.Preds, this.TopDerr, this.Mbw, this.Mbh);
         int[] alphas = new int[WebpConstants.MaxAlpha + 1];
-        this.alpha = this.MacroBlockAnalysis(width, height, it, y, u, v, yStride, uvStride, alphas, out this.uvAlpha);
+        this.MacroBlockAnalysis(width, height, alphas);
         int totalMb = this.Mbw * this.Mbh;
         this.alpha /= totalMb;
         this.uvAlpha /= totalMb;
@@ -365,7 +366,7 @@ internal class Vp8Encoder : IDisposable
             if (this.rdOptLevel == Vp8RdLevel.RdOptNone)
             {
                 this.StatLoop(width, height, yStride, uvStride);
-                this.CodeLoop(it, y, u, v, yStride, uvStride, width, height);
+                this.CodeLoop(y, u, v, yStride, uvStride, width, height);
             }
             else
             {
@@ -520,8 +521,9 @@ internal class Vp8Encoder : IDisposable
         return sizeP0;
     }
 
-    private void CodeLoop(Vp8EncIterator it, Span<byte> y, Span<byte> u, Span<byte> v, int yStride, int uvStride, int width, int height)
+    private void CodeLoop(Span<byte> y, Span<byte> u, Span<byte> v, int yStride, int uvStride, int width, int height)
     {
+        var it = new Vp8EncIterator(this.YTop, this.UvTop, this.Nz, this.MbInfo, this.Preds, this.TopDerr, this.Mbw, this.Mbh);
         it.Init();
         var info = new Vp8ModeScore();
         var residual = new Vp8Residual();
@@ -1008,25 +1010,18 @@ internal class Vp8Encoder : IDisposable
         }
     }
 
-    private int MacroBlockAnalysis(int width, int height, Vp8EncIterator it, Span<byte> y, Span<byte> u, Span<byte> v, int yStride, int uvStride, int[] alphas, out int uvAlpha)
+    /// <summary>
+    /// Analyzes every macroblock from the source samples alone, adding its susceptibility to
+    /// <paramref name="alphas"/>, <see cref="alpha"/> and <see cref="uvAlpha"/>.
+    /// </summary>
+    private void MacroBlockAnalysis(int width, int height, int[] alphas)
     {
-        int alpha = 0;
-        uvAlpha = 0;
-        if (!it.IsDone())
-        {
-            do
-            {
-                it.Import(y, u, v, yStride, uvStride, width, height, true);
-                int bestAlpha = this.MbAnalyze(it, alphas, out int bestUvAlpha);
+        this.alpha = 0;
+        this.uvAlpha = 0;
+        var operation = new MacroBlockAnalysisOperation(this, width, height, alphas);
 
-                // Accumulate for later complexity analysis.
-                alpha += bestAlpha;
-                uvAlpha += bestUvAlpha;
-            }
-            while (it.Next());
-        }
-
-        return alpha;
+        // A row here is a row of macroblocks, which covers 16 rows of pixels.
+        ParallelRowIterator.IterateRowIntervals(this.configuration, new Rectangle(0, 0, width * 16, this.Mbh), in operation);
     }
 
     private int MbAnalyze(Vp8EncIterator it, int[] alphas, out int bestUvAlpha)
@@ -1260,5 +1255,59 @@ internal class Vp8Encoder : IDisposable
         int total = a + b;
         return total == 0 ? 255 // that's the default probability.
             : ((255 * a) + (total / 2)) / total;  // rounded proba
+    }
+
+    private readonly struct MacroBlockAnalysisOperation : IRowIntervalOperation
+    {
+        private readonly Vp8Encoder encoder;
+        private readonly int width;
+        private readonly int height;
+        private readonly int[] alphas;
+
+        public MacroBlockAnalysisOperation(Vp8Encoder encoder, int width, int height, int[] alphas)
+        {
+            this.encoder = encoder;
+            this.width = width;
+            this.height = height;
+            this.alphas = alphas;
+        }
+
+        public void Invoke(in RowInterval rows)
+        {
+            Vp8Encoder encoder = this.encoder;
+            Span<byte> y = encoder.Y.GetSpan();
+            Span<byte> u = encoder.U.GetSpan();
+            Span<byte> v = encoder.V.GetSpan();
+            int yStride = this.width;
+            int uvStride = (yStride + 1) >> 1;
+            int mbw = encoder.Mbw;
+
+            // Each worker gets its own top rows, and writes the shared MbInfo and Preds only at its own macroblocks.
+            // Its first row sees 127 instead of the row above's samples as the top-right of each macroblock,
+            // but analysis scores only the DC and TM intra4 modes, which do not read the top-right.
+            var it = new Vp8EncIterator(new byte[mbw * 16], new byte[mbw * 16 * 2], new uint[mbw + 1], encoder.MbInfo, encoder.Preds, new sbyte[mbw * 4], mbw, encoder.Mbh);
+            int[] alphas = new int[WebpConstants.MaxAlpha + 1];
+            int alpha = 0;
+            int uvAlpha = 0;
+            it.InitRows(rows.Min, rows.Max);
+            do
+            {
+                it.Import(y, u, v, yStride, uvStride, this.width, this.height, true);
+                alpha += encoder.MbAnalyze(it, alphas, out int bestUvAlpha);
+                uvAlpha += bestUvAlpha;
+            }
+            while (it.Next());
+
+            for (int i = 0; i < alphas.Length; i++)
+            {
+                if (alphas[i] != 0)
+                {
+                    Interlocked.Add(ref this.alphas[i], alphas[i]);
+                }
+            }
+
+            Interlocked.Add(ref encoder.alpha, alpha);
+            Interlocked.Add(ref encoder.uvAlpha, uvAlpha);
+        }
     }
 }
