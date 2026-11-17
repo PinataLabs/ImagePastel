@@ -544,8 +544,7 @@ internal class Vp8EncIterator
 
         // DC
         res.Init(0, 1, proba);
-        res.SetCoeffs(rd.YDcLevels);
-        r += res.GetResidualCost(this.TopNz[8] + this.LeftNz[8]);
+        r += res.GetResidualCost(this.TopNz[8] + this.LeftNz[8], rd.YDcLevels, out _);
 
         // AC
         res.Init(1, 0, proba);
@@ -554,9 +553,8 @@ internal class Vp8EncIterator
             for (int x = 0; x < 4; x++)
             {
                 int ctx = this.TopNz[x] + this.LeftNz[y];
-                res.SetCoeffs(rd.YAcLevels.AsSpan((x + (y * 4)) * 16, 16));
-                r += res.GetResidualCost(ctx);
-                this.TopNz[x] = this.LeftNz[y] = res.Last >= 0 ? 1 : 0;
+                r += res.GetResidualCost(ctx, rd.YAcLevels.AsSpan((x + (y * 4)) * 16, 16), out bool nonZero);
+                this.TopNz[x] = this.LeftNz[y] = nonZero ? 1 : 0;
             }
         }
 
@@ -574,19 +572,6 @@ internal class Vp8EncIterator
         return WebpLookupTables.Vp8FixedCostsI4[top, left];
     }
 
-    public int GetCostLuma4(Span<short> levels, Vp8EncProba proba, Vp8Residual res)
-    {
-        int x = this.I4 & 3;
-        int y = this.I4 >> 2;
-        int r = 0;
-
-        res.Init(0, 3, proba);
-        int ctx = this.TopNz[x] + this.LeftNz[y];
-        res.SetCoeffs(levels);
-        r += res.GetResidualCost(ctx);
-        return r;
-    }
-
     public int GetCostUv(Vp8ModeScore rd, Vp8EncProba proba, Vp8Residual res)
     {
         int r = 0;
@@ -602,9 +587,8 @@ internal class Vp8EncIterator
                 for (int x = 0; x < 2; x++)
                 {
                     int ctx = this.TopNz[4 + ch + x] + this.LeftNz[4 + ch + y];
-                    res.SetCoeffs(rd.UvLevels.AsSpan(((ch * 2) + x + (y * 2)) * 16, 16));
-                    r += res.GetResidualCost(ctx);
-                    this.TopNz[4 + ch + x] = this.LeftNz[4 + ch + y] = res.Last >= 0 ? 1 : 0;
+                    r += res.GetResidualCost(ctx, rd.UvLevels.AsSpan(((ch * 2) + x + (y * 2)) * 16, 16), out bool nonZero);
+                    this.TopNz[4 + ch + x] = this.LeftNz[4 + ch + y] = nonZero ? 1 : 0;
                 }
             }
         }

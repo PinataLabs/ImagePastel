@@ -47,42 +47,7 @@ internal class Vp8Residual
 
     public void SetCoeffs(Span<short> coeffs)
     {
-#if NETCOREAPP3_0_OR_GREATER
-        if (Sse2.IsSupported)
-        {
-            ref short coeffsRef = ref MemoryMarshal.GetReference(coeffs);
-            Vector128<byte> c0 = Unsafe.As<short, Vector128<byte>>(ref coeffsRef);
-            Vector128<byte> c1 = Unsafe.As<short, Vector128<byte>>(ref Unsafe.Add(ref coeffsRef, 8));
-
-            // Use SSE2 to compare 16 values with a single instruction.
-            Vector128<sbyte> m0 = Sse2.PackSignedSaturate(c0.AsInt16(), c1.AsInt16());
-            Vector128<sbyte> m1 = Sse2.CompareEqual(m0, Vector128<sbyte>.Zero);
-
-            // Get the comparison results as a bitmask into 16bits. Negate the mask to get
-            // the position of entries that are not equal to zero. We don't need to mask
-            // out least significant bits according to res->first, since coeffs[0] is 0
-            // if res->first > 0.
-            uint mask = 0x0000ffffu ^ (uint)Sse2.MoveMask(m1);
-
-            // The position of the most significant non-zero bit indicates the position of
-            // the last non-zero value.
-            this.Last = mask != 0 ? Numerics.Log2(mask) : -1;
-        }
-        else
-#endif
-        {
-            int n;
-            this.Last = -1;
-            for (n = 15; n >= 0; --n)
-            {
-                if (coeffs[n] != 0)
-                {
-                    this.Last = n;
-                    break;
-                }
-            }
-        }
-
+        this.Last = FindLast(coeffs);
         coeffs.Slice(0, 16).CopyTo(this.Coeffs);
     }
 
@@ -147,10 +112,16 @@ internal class Vp8Residual
         return 1;
     }
 
-    public int GetResidualCost(int ctx0)
+    /// <summary>
+    /// Returns the cost of coding <paramref name="coeffs"/> as the type set by <see cref="Init"/>.
+    /// Reads the levels in place; <see cref="Coeffs"/> and <see cref="Last"/> are neither read nor changed.
+    /// </summary>
+    public int GetResidualCost(int ctx0, ReadOnlySpan<short> coeffs, out bool nonZero)
     {
+        coeffs = coeffs.Slice(0, 16);
         int n = this.First;
-        int last = this.Last;
+        int last = FindLast(coeffs);
+        nonZero = last >= 0;
         int p0 = this.Prob[n].Probabilities[ctx0].Probabilities[0];
         if (last < 0)
         {
@@ -163,13 +134,13 @@ internal class Vp8Residual
         int cost = ctx0 == 0 ? LossyUtils.Vp8BitCost(1, (byte)p0) : 0;
 
         ref ushort typeCosts = ref MemoryMarshal.GetReference(this.levelCosts.AsSpan(this.CoeffType * Vp8EncProba.LevelCostsPerType, Vp8EncProba.LevelCostsPerType));
-        ref short coeffs = ref MemoryMarshal.GetReference(this.Coeffs.AsSpan());
+        ref short coeffsRef = ref MemoryMarshal.GetReference(coeffs);
         int ctx = ctx0;
         int v;
 #if NETCOREAPP3_0_OR_GREATER
         if (Avx2.IsSupported)
         {
-            Vector256<short> c = Unsafe.As<short, Vector256<short>>(ref coeffs);
+            Vector256<short> c = Unsafe.As<short, Vector256<short>>(ref coeffsRef);
             Vector256<short> abs = Avx2.Max(c, Avx2.Subtract(Vector256<short>.Zero, c));
 
             // Avx2.PackSignedSaturate packs within each 128-bit lane, so pack the two halves together instead.
@@ -192,12 +163,12 @@ internal class Vp8Residual
         {
             for (; n < last; ++n)
             {
-                v = Abs(Unsafe.Add(ref coeffs, n));
+                v = Abs(Unsafe.Add(ref coeffsRef, n));
                 cost += LevelCost(ref typeCosts, n, ctx, v);
                 ctx = v >= 2 ? 2 : v;
             }
 
-            v = Abs(Unsafe.Add(ref coeffs, n));
+            v = Abs(Unsafe.Add(ref coeffsRef, n));
         }
 
         // Last coefficient is always non-zero
@@ -230,6 +201,42 @@ internal class Vp8Residual
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int CostIndex(int n, int ctx, int clampedLevel)
         => (n * Vp8EncProba.LevelCostsPerPosition) + (ctx * Vp8EncProba.LevelCostsPerCtx) + clampedLevel;
+
+    private static int FindLast(ReadOnlySpan<short> coeffs)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Sse2.IsSupported)
+        {
+            ref short coeffsRef = ref MemoryMarshal.GetReference(coeffs.Slice(0, 16));
+            Vector128<byte> c0 = Unsafe.As<short, Vector128<byte>>(ref coeffsRef);
+            Vector128<byte> c1 = Unsafe.As<short, Vector128<byte>>(ref Unsafe.Add(ref coeffsRef, 8));
+
+            // Use SSE2 to compare 16 values with a single instruction.
+            Vector128<sbyte> m0 = Sse2.PackSignedSaturate(c0.AsInt16(), c1.AsInt16());
+            Vector128<sbyte> m1 = Sse2.CompareEqual(m0, Vector128<sbyte>.Zero);
+
+            // Get the comparison results as a bitmask into 16bits. Negate the mask to get
+            // the position of entries that are not equal to zero. We don't need to mask
+            // out least significant bits according to res->first, since coeffs[0] is 0
+            // if res->first > 0.
+            uint mask = 0x0000ffffu ^ (uint)Sse2.MoveMask(m1);
+
+            // The position of the most significant non-zero bit indicates the position of
+            // the last non-zero value.
+            return mask != 0 ? Numerics.Log2(mask) : -1;
+        }
+#endif
+
+        for (int n = 15; n >= 0; --n)
+        {
+            if (coeffs[n] != 0)
+            {
+                return n;
+            }
+        }
+
+        return -1;
+    }
 
     private int RecordStats(int bit, Vp8StatsArray statsArr, int idx)
     {

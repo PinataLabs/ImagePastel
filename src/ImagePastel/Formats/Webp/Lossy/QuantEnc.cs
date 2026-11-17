@@ -150,10 +150,12 @@ internal static unsafe class QuantEnc
         Vp8ModeScore rdi4 = it.ModeScoreScratch2;
         Vp8ModeScore rdTmp = it.ModeScoreScratch3;
         Vp8Residual res = it.ResidualScratch;
+        res.Init(0, 3, proba);
         Span<short> tmpLevels = stackalloc short[16];
         do
         {
             int numBlocks = 1;
+            int ctx = it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2];
             int mode;
             int bestMode = -1;
             Span<byte> src = src0.Slice(WebpLookupTables.Vp8Scan[it.I4]);
@@ -193,7 +195,7 @@ internal static unsafe class QuantEnc
                 }
 
                 // Finish computing score.
-                rdTmp.R += it.GetCostLuma4(tmpLevels, proba, res);
+                rdTmp.R += res.GetResidualCost(ctx, tmpLevels, out _);
                 rdTmp.SetRdScore(lambda);
 
                 if (bestMode < 0 || rdTmp.Score < rdi4.Score)
