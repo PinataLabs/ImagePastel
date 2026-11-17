@@ -823,7 +823,7 @@ internal static unsafe class QuantEnc
     }
 
     [MethodImpl(InliningOptions.ShortMethod)]
-    private static bool IsFlat(Span<short> levels, int numBlocks, int thresh)
+    internal static bool IsFlat(Span<short> levels, int numBlocks, int thresh)
     {
         int score = 0;
         ref short levelsRef = ref MemoryMarshal.GetReference(levels);
