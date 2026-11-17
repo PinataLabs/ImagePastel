@@ -111,4 +111,37 @@ public class QuantEncTests
 
     [Fact]
     public void ReconstructIntra4Pair_WithoutHardwareIntrinsics_MatchesReconstructIntra4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunReconstructIntra4PairTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Fact]
+    public void IsFlat_CountsNonZeroAcLevels()
+    {
+        short[] levels = new short[16];
+        levels[1] = 5;
+        levels[2] = -3;
+        levels[5] = 1;
+        levels[15] = 2;
+
+        Assert.False(QuantEnc.IsFlat(levels, 1, WebpConstants.FlatnessLimitI4));
+    }
+
+    [Fact]
+    public void IsFlat_IgnoresDcLevel()
+    {
+        short[] levels = new short[16];
+        levels[0] = 40;
+
+        Assert.True(QuantEnc.IsFlat(levels, 1, WebpConstants.FlatnessLimitI16));
+    }
+
+    [Fact]
+    public void IsFlat_SumsAcLevelsAcrossBlocks()
+    {
+        short[] levels = new short[32];
+        levels[3] = 1;
+        levels[4] = 1;
+        levels[16 + 7] = 1;
+
+        Assert.True(QuantEnc.IsFlat(levels, 2, WebpConstants.FlatnessLimitI4));
+        Assert.False(QuantEnc.IsFlat(levels, 2, WebpConstants.FlatnessLimitIUv));
+    }
 }
