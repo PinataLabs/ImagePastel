@@ -1,7 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Linq;
+using PinataLabs.ImagePastel.Formats.Webp;
 using PinataLabs.ImagePastel.Formats.Webp.Lossy;
 using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
@@ -274,10 +276,54 @@ public class LossyUtilsTests
         int expected = 2;
 
         // act
-        int actual = LossyUtils.Vp8Disto4X4(a, b, w, new int[16]);
+        int[] scratch = new int[16];
+        int actual = LossyUtils.Vp8Disto4X4(LossyUtils.TTransform(a, w, scratch), b, w, scratch);
 
         // assert
         Assert.Equal(expected, actual);
+    }
+
+    private static void RunDisto16X16Test()
+    {
+        ushort[] w = { 38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2 };
+        int[] expected = { 77520, 77520, 0, 6103, 8068, 9819, 7051, 8837 };
+        int[] scratch = new int[16];
+        int[] sourceTransforms = new int[16];
+        byte[] a = new byte[16 * WebpConstants.Bps];
+        byte[] b = new byte[16 * WebpConstants.Bps];
+        Random random = new(42);
+
+        for (int i = 0; i < expected.Length; i++)
+        {
+            switch (i)
+            {
+                case 0:
+                    Array.Fill(a, (byte)0);
+                    Array.Fill(b, (byte)255);
+                    break;
+                case 1:
+                    Array.Fill(a, (byte)255);
+                    Array.Fill(b, (byte)0);
+                    break;
+                case 2:
+                    for (int k = 0; k < a.Length; k++)
+                    {
+                        a[k] = (byte)(((k + (k / WebpConstants.Bps)) & 1) * 255);
+                        b[k] = (byte)(255 - a[k]);
+                    }
+
+                    break;
+                default:
+                    random.NextBytes(a);
+                    random.NextBytes(b);
+                    break;
+            }
+
+            LossyUtils.TTransform16X16(a, w, sourceTransforms, scratch);
+            int actual = LossyUtils.Vp8Disto16X16(sourceTransforms, b, w, scratch);
+
+            Assert.Equal(expected[i], actual);
+        }
     }
 
     [Fact]
@@ -351,4 +397,16 @@ public class LossyUtilsTests
 
     [Fact]
     public void HadamardTransform_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunHadamardTransformTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Fact]
+    public void Disto16X16_Works() => RunDisto16X16Test();
+
+    [Fact]
+    public void Disto16X16_WithHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void Disto16X16_WithoutSSE41_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.DisableSSE41);
+
+    [Fact]
+    public void Disto16X16_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.DisableHWIntrinsic);
 }

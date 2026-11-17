@@ -32,6 +32,13 @@ public class Vp8ResidualTests
         AssertResidualCost(new short[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5 }, 8433);
         AssertResidualCost(new short[] { 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 1 }, 7817);
         AssertResidualCost(new short[] { 1, 1, 1, 1, 1, 1, 1, 1, 9, 9, 9, 9, 9, 9, 9, 9 }, 32216);
+
+        var proba = new Vp8EncProba();
+        proba.CalculateLevelCosts();
+        var residual = new Vp8Residual();
+        residual.Init(0, 3, proba);
+        residual.GetResidualCost(0, new short[16], out bool nonZero);
+        Assert.False(nonZero);
     }
 
     private static void AssertResidualCost(short[] coeffs, int expectedCost)
@@ -41,13 +48,13 @@ public class Vp8ResidualTests
         proba.CalculateLevelCosts();
         var residual = new Vp8Residual();
         residual.Init(0, 3, proba);
-        residual.SetCoeffs(coeffs);
 
         // act
-        int cost = residual.GetResidualCost(0);
+        int cost = residual.GetResidualCost(0, coeffs, out bool nonZero);
 
         // assert
         Assert.Equal(expectedCost, cost);
+        Assert.True(nonZero);
     }
 
     [Fact]

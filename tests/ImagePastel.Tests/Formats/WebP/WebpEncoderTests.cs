@@ -283,6 +283,35 @@ public class WebpEncoderTests
     }
 
     [Theory]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level0)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level1)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level2)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level3)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level4)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level5)]
+    [WithFile(Lossy.Bike, PixelTypes.Rgba32, WebpEncodingMethod.Level6)]
+    public void Encode_Lossy_IsTheSameForAnyDegreeOfParallelism<TPixel>(TestImageProvider<TPixel> provider, WebpEncodingMethod method)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using Image<TPixel> image = provider.GetImage();
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Method = method };
+
+        byte[] Encode(int maxDegreeOfParallelism)
+        {
+            Configuration configuration = Configuration.Default.Clone();
+            configuration.MaxDegreeOfParallelism = maxDegreeOfParallelism;
+            using Image<TPixel> clone = image.Clone(configuration);
+            using var memStream = new MemoryStream();
+            clone.SaveAsWebp(memStream, encoder);
+            return memStream.ToArray();
+        }
+
+        byte[] expected = Encode(1);
+        Assert.Equal(expected, Encode(3));
+        Assert.Equal(expected, Encode(Configuration.Default.MaxDegreeOfParallelism));
+    }
+
+    [Theory]
     [InlineData(WebpEncodingMethod.Level0)]
     [InlineData(WebpEncodingMethod.Level3)]
     [InlineData(WebpEncodingMethod.Level4)]

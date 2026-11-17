@@ -95,6 +95,34 @@ internal static unsafe class Vp8Encoding
 
     private static readonly Vector128<int> K51000 = Vector128.Create(51000);
 
+    private static readonly Vector256<short> K1Vec256 = Vector256.Create(K1, K1);
+
+    private static readonly Vector256<short> K2Vec256 = Vector256.Create(K2, K2);
+
+    private static readonly Vector256<short> FourVec256 = Vector256.Create(Four, Four);
+
+    private static readonly Vector256<short> SevenVec256 = Vector256.Create(Seven, Seven);
+
+    private static readonly Vector256<short> K88pVec256 = Vector256.Create(K88p, K88p);
+
+    private static readonly Vector256<short> K88mVec256 = Vector256.Create(K88m, K88m);
+
+    private static readonly Vector256<short> K5352_2217pVec256 = Vector256.Create(K5352_2217p, K5352_2217p);
+
+    private static readonly Vector256<short> K5352_2217mVec256 = Vector256.Create(K5352_2217m, K5352_2217m);
+
+    private static readonly Vector256<int> K937Vec256 = Vector256.Create(937);
+
+    private static readonly Vector256<int> K1812Vec256 = Vector256.Create(1812);
+
+    private static readonly Vector256<short> K5352_2217Vec256 = Vector256.Create(K5352_2217, K5352_2217);
+
+    private static readonly Vector256<short> K2217_5352Vec256 = Vector256.Create(K2217_5352, K2217_5352);
+
+    private static readonly Vector256<int> K12000PlusOneVec256 = Vector256.Create(12000 + (1 << 16));
+
+    private static readonly Vector256<int> K51000Vec256 = Vector256.Create(51000);
+
     private const byte MmShuffle2301 = (2 << 6) | (3 << 4) | (0 << 2) | 1;
 
     private const byte MmShuffle1032 = (1 << 6) | (0 << 4) | (3 << 2) | 2;
@@ -161,59 +189,7 @@ internal static unsafe class Vp8Encoding
             // a01 a11 a21 a31   b01 b11 b21 b31
             // a02 a12 a22 a32   b02 b12 b22 b32
             // a03 a13 a23 a33   b03 b13 b23 b33
-
-            // Vertical pass and subsequent transpose.
-            // First pass, c and d calculations are longer because of the "trick" multiplications.
-            InverseTransformVerticalPass(in0, in2, in1, in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3);
-
-            // Transpose the two 4x4.
-            LossyUtils.Vp8Transpose_2_4x4_16b(tmp0, tmp1, tmp2, tmp3, out Vector128<long> t0, out Vector128<long> t1, out Vector128<long> t2, out Vector128<long> t3);
-
-            // Horizontal pass and subsequent transpose.
-            // First pass, c and d calculations are longer because of the "trick" multiplications.
-            InverseTransformHorizontalPass(t0, t2, t1, t3, out Vector128<short> shifted0, out Vector128<short> shifted1, out Vector128<short> shifted2, out Vector128<short> shifted3);
-
-            // Transpose the two 4x4.
-            LossyUtils.Vp8Transpose_2_4x4_16b(shifted0, shifted1, shifted2, shifted3, out t0, out t1, out t2, out t3);
-
-            // Add inverse transform to 'ref' and store.
-            // Load the reference(s).
-            Vector128<byte> ref0 = Vector128<byte>.Zero;
-            Vector128<byte> ref1 = Vector128<byte>.Zero;
-            Vector128<byte> ref2 = Vector128<byte>.Zero;
-            Vector128<byte> ref3 = Vector128<byte>.Zero;
-            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
-
-            // Load eight bytes/pixels per line.
-            ref0 = Vector128.Create(Unsafe.As<byte, long>(ref referenceRef), 0).AsByte();
-            ref1 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps)), 0).AsByte();
-            ref2 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2)), 0).AsByte();
-            ref3 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3)), 0).AsByte();
-
-            // Convert to 16b.
-            ref0 = Sse2.UnpackLow(ref0, Vector128<byte>.Zero);
-            ref1 = Sse2.UnpackLow(ref1, Vector128<byte>.Zero);
-            ref2 = Sse2.UnpackLow(ref2, Vector128<byte>.Zero);
-            ref3 = Sse2.UnpackLow(ref3, Vector128<byte>.Zero);
-
-            // Add the inverse transform(s).
-            Vector128<short> ref0InvAdded = Sse2.Add(ref0.AsInt16(), t0.AsInt16());
-            Vector128<short> ref1InvAdded = Sse2.Add(ref1.AsInt16(), t1.AsInt16());
-            Vector128<short> ref2InvAdded = Sse2.Add(ref2.AsInt16(), t2.AsInt16());
-            Vector128<short> ref3InvAdded = Sse2.Add(ref3.AsInt16(), t3.AsInt16());
-
-            // Unsigned saturate to 8b.
-            ref0 = Sse2.PackUnsignedSaturate(ref0InvAdded, ref0InvAdded);
-            ref1 = Sse2.PackUnsignedSaturate(ref1InvAdded, ref1InvAdded);
-            ref2 = Sse2.PackUnsignedSaturate(ref2InvAdded, ref2InvAdded);
-            ref3 = Sse2.PackUnsignedSaturate(ref3InvAdded, ref3InvAdded);
-
-            // Store eight bytes/pixels per line.
-            ref byte outputRef = ref MemoryMarshal.GetReference(dst);
-            Unsafe.As<byte, Vector64<byte>>(ref outputRef) = ref0.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps)) = ref1.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2)) = ref2.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3)) = ref3.GetLower();
+            InverseTransformTwo(in0, in1, in2, in3, ref MemoryMarshal.GetReference(reference), ref MemoryMarshal.GetReference(dst));
         }
         else
 #endif
@@ -222,6 +198,104 @@ internal static unsafe class Vp8Encoding
             ITransformOne(reference.Slice(4), input.Slice(16), dst.Slice(4), scratch);
         }
     }
+
+    public static void ITransformFour(Span<byte> reference, Span<short> input01, Span<short> input23, Span<byte> dst, Span<int> scratch)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            ref short input01Ref = ref MemoryMarshal.GetReference(input01);
+            ref short input23Ref = ref MemoryMarshal.GetReference(input23);
+            Vector256<long> a = Unsafe.As<short, Vector256<long>>(ref input01Ref);
+            Vector256<long> b = Unsafe.As<short, Vector256<long>>(ref Unsafe.Add(ref input01Ref, 16));
+            Vector256<long> c = Unsafe.As<short, Vector256<long>>(ref input23Ref);
+            Vector256<long> d = Unsafe.As<short, Vector256<long>>(ref Unsafe.Add(ref input23Ref, 16));
+
+            Vector256<long> abLow = Avx2.UnpackLow(a, b);
+            Vector256<long> abHigh = Avx2.UnpackHigh(a, b);
+            Vector256<long> cdLow = Avx2.UnpackLow(c, d);
+            Vector256<long> cdHigh = Avx2.UnpackHigh(c, d);
+            Vector256<short> in0 = Avx2.Permute2x128(abLow, cdLow, 0x20).AsInt16();
+            Vector256<short> in1 = Avx2.Permute2x128(abHigh, cdHigh, 0x20).AsInt16();
+            Vector256<short> in2 = Avx2.Permute2x128(abLow, cdLow, 0x31).AsInt16();
+            Vector256<short> in3 = Avx2.Permute2x128(abHigh, cdHigh, 0x31).AsInt16();
+
+            InverseTransformPassAvx2(in0, in2, in1, in3, Vector256<short>.Zero, out Vector256<short> tmp0, out Vector256<short> tmp1, out Vector256<short> tmp2, out Vector256<short> tmp3);
+            Transpose2x4x4Avx2(ref tmp0, ref tmp1, ref tmp2, ref tmp3);
+            InverseTransformPassAvx2(tmp0, tmp2, tmp1, tmp3, FourVec256, out tmp0, out tmp1, out tmp2, out tmp3);
+            tmp0 = Avx2.ShiftRightArithmetic(tmp0, 3);
+            tmp1 = Avx2.ShiftRightArithmetic(tmp1, 3);
+            tmp2 = Avx2.ShiftRightArithmetic(tmp2, 3);
+            tmp3 = Avx2.ShiftRightArithmetic(tmp3, 3);
+            Transpose2x4x4Avx2(ref tmp0, ref tmp1, ref tmp2, ref tmp3);
+
+            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+            ref byte outputRef = ref MemoryMarshal.GetReference(dst);
+            AddToReferenceRowAvx2(ref referenceRef, ref outputRef, tmp0);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps), ref Unsafe.Add(ref outputRef, WebpConstants.Bps), tmp1);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2), tmp2);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3), tmp3);
+        }
+        else
+#endif
+        {
+            ITransformTwo(reference, input01, dst, scratch);
+            ITransformTwo(reference.Slice(8), input23, dst.Slice(8), scratch);
+        }
+    }
+
+#if NETCOREAPP3_0_OR_GREATER
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void InverseTransformPassAvx2(Vector256<short> in0, Vector256<short> in2, Vector256<short> in1, Vector256<short> in3, Vector256<short> rounder, out Vector256<short> tmp0, out Vector256<short> tmp1, out Vector256<short> tmp2, out Vector256<short> tmp3)
+    {
+        Vector256<short> dc = Avx2.Add(in0, rounder);
+        Vector256<short> a = Avx2.Add(dc, in2);
+        Vector256<short> b = Avx2.Subtract(dc, in2);
+
+        Vector256<short> c1 = Avx2.MultiplyHigh(in1, K2Vec256);
+        Vector256<short> c2 = Avx2.MultiplyHigh(in3, K1Vec256);
+        Vector256<short> c3 = Avx2.Subtract(in1, in3);
+        Vector256<short> c4 = Avx2.Subtract(c1, c2);
+        Vector256<short> c = Avx2.Add(c3, c4);
+
+        Vector256<short> d1 = Avx2.MultiplyHigh(in1, K1Vec256);
+        Vector256<short> d2 = Avx2.MultiplyHigh(in3, K2Vec256);
+        Vector256<short> d3 = Avx2.Add(in1, in3);
+        Vector256<short> d4 = Avx2.Add(d1, d2);
+        Vector256<short> d = Avx2.Add(d3, d4);
+
+        tmp0 = Avx2.Add(a, d);
+        tmp1 = Avx2.Add(b, c);
+        tmp2 = Avx2.Subtract(b, c);
+        tmp3 = Avx2.Subtract(a, d);
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void Transpose2x4x4Avx2(ref Vector256<short> b0, ref Vector256<short> b1, ref Vector256<short> b2, ref Vector256<short> b3)
+    {
+        Vector256<short> transpose00 = Avx2.UnpackLow(b0, b1);
+        Vector256<short> transpose01 = Avx2.UnpackLow(b2, b3);
+        Vector256<short> transpose02 = Avx2.UnpackHigh(b0, b1);
+        Vector256<short> transpose03 = Avx2.UnpackHigh(b2, b3);
+
+        Vector256<int> transpose10 = Avx2.UnpackLow(transpose00.AsInt32(), transpose01.AsInt32());
+        Vector256<int> transpose11 = Avx2.UnpackLow(transpose02.AsInt32(), transpose03.AsInt32());
+        Vector256<int> transpose12 = Avx2.UnpackHigh(transpose00.AsInt32(), transpose01.AsInt32());
+        Vector256<int> transpose13 = Avx2.UnpackHigh(transpose02.AsInt32(), transpose03.AsInt32());
+
+        b0 = Avx2.UnpackLow(transpose10.AsInt64(), transpose11.AsInt64()).AsInt16();
+        b1 = Avx2.UnpackHigh(transpose10.AsInt64(), transpose11.AsInt64()).AsInt16();
+        b2 = Avx2.UnpackLow(transpose12.AsInt64(), transpose13.AsInt64()).AsInt16();
+        b3 = Avx2.UnpackHigh(transpose12.AsInt64(), transpose13.AsInt64()).AsInt16();
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void AddToReferenceRowAvx2(ref byte reference, ref byte dst, Vector256<short> residual)
+    {
+        Vector256<short> sum = Avx2.Add(Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref reference)), residual);
+        Unsafe.WriteUnaligned(ref dst, Sse2.PackUnsignedSaturate(sum.GetLower(), sum.GetUpper()));
+    }
+#endif
 
     public static void ITransformOne(Span<byte> reference, Span<short> input, Span<byte> dst, Span<int> scratch)
     {
@@ -342,6 +416,60 @@ internal static unsafe class Vp8Encoding
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    public static void ITransformPair(Vector128<short> a0, Vector128<short> a8, Vector128<short> b0, Vector128<short> b8, Span<byte> reference, Span<byte> dst)
+    {
+        _ = reference[(3 * WebpConstants.Bps) + 7];
+        _ = dst[(3 * WebpConstants.Bps) + 7];
+        InverseTransformTwo(
+            Sse2.UnpackLow(a0.AsInt64(), b0.AsInt64()),
+            Sse2.UnpackHigh(a0.AsInt64(), b0.AsInt64()),
+            Sse2.UnpackLow(a8.AsInt64(), b8.AsInt64()),
+            Sse2.UnpackHigh(a8.AsInt64(), b8.AsInt64()),
+            ref MemoryMarshal.GetReference(reference),
+            ref MemoryMarshal.GetReference(dst));
+    }
+
+    private static void InverseTransformTwo(Vector128<long> in0, Vector128<long> in1, Vector128<long> in2, Vector128<long> in3, ref byte referenceRef, ref byte outputRef)
+    {
+        InverseTransformVerticalPass(in0, in2, in1, in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3);
+
+        LossyUtils.Vp8Transpose_2_4x4_16b(tmp0, tmp1, tmp2, tmp3, out Vector128<long> t0, out Vector128<long> t1, out Vector128<long> t2, out Vector128<long> t3);
+
+        InverseTransformHorizontalPass(t0, t2, t1, t3, out Vector128<short> shifted0, out Vector128<short> shifted1, out Vector128<short> shifted2, out Vector128<short> shifted3);
+
+        LossyUtils.Vp8Transpose_2_4x4_16b(shifted0, shifted1, shifted2, shifted3, out t0, out t1, out t2, out t3);
+
+        Vector128<byte> ref0 = Vector128<byte>.Zero;
+        Vector128<byte> ref1 = Vector128<byte>.Zero;
+        Vector128<byte> ref2 = Vector128<byte>.Zero;
+        Vector128<byte> ref3 = Vector128<byte>.Zero;
+
+        ref0 = Vector128.Create(Unsafe.As<byte, long>(ref referenceRef), 0).AsByte();
+        ref1 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps)), 0).AsByte();
+        ref2 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2)), 0).AsByte();
+        ref3 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3)), 0).AsByte();
+
+        ref0 = Sse2.UnpackLow(ref0, Vector128<byte>.Zero);
+        ref1 = Sse2.UnpackLow(ref1, Vector128<byte>.Zero);
+        ref2 = Sse2.UnpackLow(ref2, Vector128<byte>.Zero);
+        ref3 = Sse2.UnpackLow(ref3, Vector128<byte>.Zero);
+
+        Vector128<short> ref0InvAdded = Sse2.Add(ref0.AsInt16(), t0.AsInt16());
+        Vector128<short> ref1InvAdded = Sse2.Add(ref1.AsInt16(), t1.AsInt16());
+        Vector128<short> ref2InvAdded = Sse2.Add(ref2.AsInt16(), t2.AsInt16());
+        Vector128<short> ref3InvAdded = Sse2.Add(ref3.AsInt16(), t3.AsInt16());
+
+        ref0 = Sse2.PackUnsignedSaturate(ref0InvAdded, ref0InvAdded);
+        ref1 = Sse2.PackUnsignedSaturate(ref1InvAdded, ref1InvAdded);
+        ref2 = Sse2.PackUnsignedSaturate(ref2InvAdded, ref2InvAdded);
+        ref3 = Sse2.PackUnsignedSaturate(ref3InvAdded, ref3InvAdded);
+
+        Unsafe.As<byte, Vector64<byte>>(ref outputRef) = ref0.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps)) = ref1.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2)) = ref2.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3)) = ref3.GetLower();
+    }
+
     private static void InverseTransformVerticalPass(Vector128<long> in0, Vector128<long> in2, Vector128<long> in1, Vector128<long> in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3)
     {
         Vector128<short> a = Sse2.Add(in0.AsInt16(), in2.AsInt16());
@@ -462,6 +590,44 @@ internal static unsafe class Vp8Encoding
         }
     }
 
+    public static void FTransform4(Span<byte> src, Span<byte> reference, Span<short> output01, Span<short> output23, Span<int> scratch)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            ref byte srcRef = ref MemoryMarshal.GetReference(src);
+            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+            Vector256<int> diff0 = LoadDifferenceRowAvx2(ref srcRef, ref referenceRef);
+            Vector256<int> diff1 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps));
+            Vector256<int> diff2 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2));
+            Vector256<int> diff3 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3));
+
+            Vector256<int> shuf01l = Avx2.UnpackLow(diff0, diff1);
+            Vector256<int> shuf23l = Avx2.UnpackLow(diff2, diff3);
+            Vector256<int> shuf01h = Avx2.UnpackHigh(diff0, diff1);
+            Vector256<int> shuf23h = Avx2.UnpackHigh(diff2, diff3);
+
+            FTransformPass1Avx2(shuf01l.AsInt16(), shuf23l.AsInt16(), out Vector256<int> v01l, out Vector256<int> v32l);
+            FTransformPass1Avx2(shuf01h.AsInt16(), shuf23h.AsInt16(), out Vector256<int> v01h, out Vector256<int> v32h);
+
+            FTransformPass2Avx2(v01l, v32l, out Vector256<short> d0g1Left, out Vector256<short> d2f3Left);
+            FTransformPass2Avx2(v01h, v32h, out Vector256<short> d0g1Right, out Vector256<short> d2f3Right);
+
+            ref short output01Ref = ref MemoryMarshal.GetReference(output01);
+            ref short output23Ref = ref MemoryMarshal.GetReference(output23);
+            Unsafe.As<short, Vector256<short>>(ref output01Ref) = Avx2.Permute2x128(d0g1Left, d2f3Left, 0x20);
+            Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref output01Ref, 16)) = Avx2.Permute2x128(d0g1Right, d2f3Right, 0x20);
+            Unsafe.As<short, Vector256<short>>(ref output23Ref) = Avx2.Permute2x128(d0g1Left, d2f3Left, 0x31);
+            Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref output23Ref, 16)) = Avx2.Permute2x128(d0g1Right, d2f3Right, 0x31);
+        }
+        else
+#endif
+        {
+            FTransform2(src, reference, output01, output01.Slice(16), scratch);
+            FTransform2(src.Slice(8), reference.Slice(8), output23, output23.Slice(16), scratch);
+        }
+    }
+
     public static void FTransform(Span<byte> src, Span<byte> reference, Span<short> output, Span<int> scratch)
     {
 #if NETCOREAPP3_0_OR_GREATER
@@ -557,6 +723,40 @@ internal static unsafe class Vp8Encoding
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    public static void FTransformPair(Span<byte> src, Span<byte> reference, out Vector128<short> a0, out Vector128<short> a8, out Vector128<short> b0, out Vector128<short> b8)
+    {
+        _ = src[(3 * WebpConstants.Bps) + 3];
+        _ = reference[(3 * WebpConstants.Bps) + 7];
+        ref byte srcRef = ref MemoryMarshal.GetReference(src);
+        ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+
+        Vector128<short> diff0 = FTransformPairDiff(ref srcRef, ref referenceRef);
+        Vector128<short> diff1 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps));
+        Vector128<short> diff2 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2));
+        Vector128<short> diff3 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3));
+
+        Vector128<int> shuf01l = Sse2.UnpackLow(diff0.AsInt32(), diff1.AsInt32());
+        Vector128<int> shuf23l = Sse2.UnpackLow(diff2.AsInt32(), diff3.AsInt32());
+        Vector128<int> shuf01h = Sse2.UnpackHigh(diff0.AsInt32(), diff1.AsInt32());
+        Vector128<int> shuf23h = Sse2.UnpackHigh(diff2.AsInt32(), diff3.AsInt32());
+
+        FTransformPass1SSE2(shuf01l.AsInt16(), shuf23l.AsInt16(), out Vector128<int> v01l, out Vector128<int> v32l);
+        FTransformPass1SSE2(shuf01h.AsInt16(), shuf23h.AsInt16(), out Vector128<int> v01h, out Vector128<int> v32h);
+
+        FTransformPass2SSE2(v01l, v32l, out a0, out a8);
+        FTransformPass2SSE2(v01h, v32h, out b0, out b8);
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector128<short> FTransformPairDiff(ref byte srcRef, ref byte referenceRef)
+    {
+        Vector128<byte> src = Vector128.Create(Unsafe.ReadUnaligned<uint>(ref srcRef)).AsByte();
+        Vector128<byte> reference = Vector128.CreateScalarUnsafe(Unsafe.ReadUnaligned<ulong>(ref referenceRef)).AsByte();
+        return Sse2.Subtract(
+            Sse2.UnpackLow(src, Vector128<byte>.Zero).AsInt16(),
+            Sse2.UnpackLow(reference, Vector128<byte>.Zero).AsInt16());
+    }
+
     public static void FTransformPass1SSE2(Vector128<short> row01, Vector128<short> row23, out Vector128<int> out01, out Vector128<int> out32)
     {
         // *in01 = 00 01 10 11 02 03 12 13
@@ -594,6 +794,15 @@ internal static unsafe class Vp8Encoding
     }
 
     public static void FTransformPass2SSE2(Vector128<int> v01, Vector128<int> v32, Span<short> output)
+    {
+        FTransformPass2SSE2(v01, v32, out Vector128<short> out0, out Vector128<short> out8);
+
+        ref short outputRef = ref MemoryMarshal.GetReference(output);
+        Unsafe.As<short, Vector128<short>>(ref outputRef) = out0;
+        Unsafe.As<short, Vector128<short>>(ref Unsafe.Add(ref outputRef, 8)) = out8;
+    }
+
+    public static void FTransformPass2SSE2(Vector128<int> v01, Vector128<int> v32, out Vector128<short> out0, out Vector128<short> out8)
     {
         // Same operations are done on the (0,3) and (1,2) pairs.
         // a3 = v0 - v3
@@ -633,12 +842,77 @@ internal static unsafe class Vp8Encoding
         Vector128<short> d0 = Sse2.ShiftRightArithmetic(c0, 4);
         Vector128<short> d2 = Sse2.ShiftRightArithmetic(c2, 4);
 
-        Vector128<long> d0g1 = Sse2.UnpackLow(d0.AsInt64(), g1.AsInt64());
-        Vector128<long> d2f3 = Sse2.UnpackLow(d2.AsInt64(), f3.AsInt64());
+        out0 = Sse2.UnpackLow(d0.AsInt64(), g1.AsInt64()).AsInt16();
+        out8 = Sse2.UnpackLow(d2.AsInt64(), f3.AsInt64()).AsInt16();
+    }
 
-        ref short outputRef = ref MemoryMarshal.GetReference(output);
-        Unsafe.As<short, Vector128<short>>(ref outputRef) = d0g1.AsInt16();
-        Unsafe.As<short, Vector128<short>>(ref Unsafe.Add(ref outputRef, 8)) = d2f3.AsInt16();
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector256<int> LoadDifferenceRowAvx2(ref byte src, ref byte reference)
+    {
+        Vector256<short> src16 = Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref src));
+        Vector256<short> ref16 = Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref reference));
+        return Avx2.Subtract(src16, ref16).AsInt32();
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void FTransformPass1Avx2(Vector256<short> row01, Vector256<short> row23, out Vector256<int> out01, out Vector256<int> out32)
+    {
+        Vector256<short> shuf01_p = Avx2.ShuffleHigh(row01, MmShuffle2301);
+        Vector256<short> shuf32_p = Avx2.ShuffleHigh(row23, MmShuffle2301);
+
+        Vector256<long> s01 = Avx2.UnpackLow(shuf01_p.AsInt64(), shuf32_p.AsInt64());
+        Vector256<long> s32 = Avx2.UnpackHigh(shuf01_p.AsInt64(), shuf32_p.AsInt64());
+
+        Vector256<short> a01 = Avx2.Add(s01.AsInt16(), s32.AsInt16());
+        Vector256<short> a32 = Avx2.Subtract(s01.AsInt16(), s32.AsInt16());
+
+        Vector256<int> tmp0 = Avx2.MultiplyAddAdjacent(a01, K88pVec256);
+        Vector256<int> tmp2 = Avx2.MultiplyAddAdjacent(a01, K88mVec256);
+        Vector256<int> tmp11 = Avx2.MultiplyAddAdjacent(a32, K5352_2217pVec256);
+        Vector256<int> tmp31 = Avx2.MultiplyAddAdjacent(a32, K5352_2217mVec256);
+        Vector256<int> tmp12 = Avx2.Add(tmp11, K1812Vec256);
+        Vector256<int> tmp32 = Avx2.Add(tmp31, K937Vec256);
+        Vector256<int> tmp1 = Avx2.ShiftRightArithmetic(tmp12, 9);
+        Vector256<int> tmp3 = Avx2.ShiftRightArithmetic(tmp32, 9);
+        Vector256<short> s03 = Avx2.PackSignedSaturate(tmp0, tmp2);
+        Vector256<short> s12 = Avx2.PackSignedSaturate(tmp1, tmp3);
+        Vector256<short> slo = Avx2.UnpackLow(s03, s12);
+        Vector256<short> shi = Avx2.UnpackHigh(s03, s12);
+        Vector256<int> v23 = Avx2.UnpackHigh(slo.AsInt32(), shi.AsInt32());
+        out01 = Avx2.UnpackLow(slo.AsInt32(), shi.AsInt32());
+        out32 = Avx2.Shuffle(v23, MmShuffle1032);
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void FTransformPass2Avx2(Vector256<int> v01, Vector256<int> v32, out Vector256<short> d0g1, out Vector256<short> d2f3)
+    {
+        Vector256<short> a32 = Avx2.Subtract(v01.AsInt16(), v32.AsInt16());
+        Vector256<long> a22 = Avx2.UnpackHigh(a32.AsInt64(), a32.AsInt64());
+
+        Vector256<short> b23 = Avx2.UnpackLow(a22.AsInt16(), a32);
+        Vector256<int> c1 = Avx2.MultiplyAddAdjacent(b23, K5352_2217Vec256);
+        Vector256<int> c3 = Avx2.MultiplyAddAdjacent(b23, K2217_5352Vec256);
+        Vector256<int> d1 = Avx2.Add(c1, K12000PlusOneVec256);
+        Vector256<int> d3 = Avx2.Add(c3, K51000Vec256);
+        Vector256<int> e1 = Avx2.ShiftRightArithmetic(d1, 16);
+        Vector256<int> e3 = Avx2.ShiftRightArithmetic(d3, 16);
+
+        Vector256<short> f1 = Avx2.PackSignedSaturate(e1, e1);
+        Vector256<short> f3 = Avx2.PackSignedSaturate(e3, e3);
+
+        Vector256<short> g1 = Avx2.Add(f1, Avx2.CompareEqual(a32, Vector256<short>.Zero));
+
+        Vector256<short> a01 = Avx2.Add(v01.AsInt16(), v32.AsInt16());
+        Vector256<short> a01Plus7 = Avx2.Add(a01, SevenVec256);
+        Vector256<short> a11 = Avx2.UnpackHigh(a01.AsInt64(), a01.AsInt64()).AsInt16();
+        Vector256<short> c0 = Avx2.Add(a01Plus7, a11);
+        Vector256<short> c2 = Avx2.Subtract(a01Plus7, a11);
+
+        Vector256<short> d0 = Avx2.ShiftRightArithmetic(c0, 4);
+        Vector256<short> d2 = Avx2.ShiftRightArithmetic(c2, 4);
+
+        d0g1 = Avx2.UnpackLow(d0.AsInt64(), g1.AsInt64()).AsInt16();
+        d2f3 = Avx2.UnpackLow(d2.AsInt64(), f3.AsInt64()).AsInt16();
     }
 #endif
 
@@ -720,21 +994,88 @@ internal static unsafe class Vp8Encoding
         TrueMotion(dst.Slice(C8TM8), left, top, 8);
     }
 
-    // Left samples are top[-5 .. -2], top_left is top[-1], top are
-    // located at top[0..3], and top right is top[4..7]
-    public static void EncPredLuma4(Span<byte> dst, Span<byte> top, int topOffset, Span<byte> vals)
+    public static void EncPredLuma4(Span<byte> dst, Span<byte> top, int topOffset)
     {
-        Dc4(dst.Slice(I4DC4), top, topOffset);
-        Tm4(dst.Slice(I4TM4), top, topOffset);
-        Ve4(dst.Slice(I4VE4), top, topOffset, vals);
-        He4(dst.Slice(I4HE4), top, topOffset);
-        Rd4(dst.Slice(I4RD4), top, topOffset);
-        Vr4(dst.Slice(I4VR4), top, topOffset);
-        Ld4(dst.Slice(I4LD4), top, topOffset);
-        Vl4(dst.Slice(I4VL4), top, topOffset);
-        Hd4(dst.Slice(I4HD4), top, topOffset);
-        Hu4(dst.Slice(I4HU4), top, topOffset);
+        ReadOnlySpan<byte> edge = top.Slice(topOffset - 5, 13);
+        byte h = edge[12];
+        byte g = edge[11];
+        byte f = edge[10];
+        byte e = edge[9];
+        byte d = edge[8];
+        byte c = edge[7];
+        byte b = edge[6];
+        byte a = edge[5];
+        byte x = edge[4];
+        byte i = edge[3];
+        byte j = edge[2];
+        byte k = edge[1];
+        byte l = edge[0];
+
+        byte l3 = LossyUtils.Avg3(k, l, l);
+        byte k3 = LossyUtils.Avg3(j, k, l);
+        byte j3 = LossyUtils.Avg3(i, j, k);
+        byte i3 = LossyUtils.Avg3(x, i, j);
+        byte x3 = LossyUtils.Avg3(a, x, i);
+        byte a3 = LossyUtils.Avg3(b, a, x);
+        byte b3 = LossyUtils.Avg3(c, b, a);
+        byte c3 = LossyUtils.Avg3(d, c, b);
+        byte d3 = LossyUtils.Avg3(e, d, c);
+        byte e3 = LossyUtils.Avg3(f, e, d);
+        byte f3 = LossyUtils.Avg3(g, f, e);
+        byte g3 = LossyUtils.Avg3(h, g, f);
+        byte h3 = LossyUtils.Avg3(h, h, g);
+
+        byte lk = LossyUtils.Avg2(l, k);
+        byte kj = LossyUtils.Avg2(k, j);
+        byte ji = LossyUtils.Avg2(j, i);
+        byte ix = LossyUtils.Avg2(i, x);
+        byte xa = LossyUtils.Avg2(x, a);
+        byte ab = LossyUtils.Avg2(a, b);
+        byte bc = LossyUtils.Avg2(b, c);
+        byte cd = LossyUtils.Avg2(c, d);
+        byte de = LossyUtils.Avg2(d, e);
+
+        ref byte p = ref MemoryMarshal.GetReference(dst.Slice(0, I4HU4 + (3 * WebpConstants.Bps) + 4));
+
+        uint dc = 0x01010101U * (uint)((a + b + c + d + l + k + j + i + 4) >> 3);
+        Put4(ref p, I4DC4, dc, dc, dc, dc);
+
+        Put4(
+            ref p,
+            I4TM4,
+            Pack(Clip8b(i + a - x), Clip8b(i + b - x), Clip8b(i + c - x), Clip8b(i + d - x)),
+            Pack(Clip8b(j + a - x), Clip8b(j + b - x), Clip8b(j + c - x), Clip8b(j + d - x)),
+            Pack(Clip8b(k + a - x), Clip8b(k + b - x), Clip8b(k + c - x), Clip8b(k + d - x)),
+            Pack(Clip8b(l + a - x), Clip8b(l + b - x), Clip8b(l + c - x), Clip8b(l + d - x)));
+
+        uint ve = Pack(a3, b3, c3, d3);
+        Put4(ref p, I4VE4, ve, ve, ve, ve);
+
+        Put4(ref p, I4HE4, 0x01010101U * i3, 0x01010101U * j3, 0x01010101U * k3, 0x01010101U * l3);
+        Put4(ref p, I4RD4, Pack(x3, a3, b3, c3), Pack(i3, x3, a3, b3), Pack(j3, i3, x3, a3), Pack(k3, j3, i3, x3));
+        Put4(ref p, I4VR4, Pack(xa, ab, bc, cd), Pack(x3, a3, b3, c3), Pack(i3, xa, ab, bc), Pack(j3, x3, a3, b3));
+        Put4(ref p, I4LD4, Pack(b3, c3, d3, e3), Pack(c3, d3, e3, f3), Pack(d3, e3, f3, g3), Pack(e3, f3, g3, h3));
+        Put4(ref p, I4VL4, Pack(ab, bc, cd, de), Pack(b3, c3, d3, e3), Pack(bc, cd, de, f3), Pack(c3, d3, e3, g3));
+        Put4(ref p, I4HD4, Pack(ix, x3, a3, b3), Pack(ji, i3, ix, x3), Pack(kj, j3, ji, i3), Pack(lk, k3, kj, j3));
+        Put4(ref p, I4HU4, Pack(ji, j3, kj, k3), Pack(kj, k3, lk, l3), Pack(lk, l3, l, l), 0x01010101U * l);
     }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static uint Pack(byte p0, byte p1, byte p2, byte p3) => p0 | ((uint)p1 << 8) | ((uint)p2 << 16) | ((uint)p3 << 24);
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void Put4(ref byte dst, int offset, uint row0, uint row1, uint row2, uint row3)
+    {
+        ref byte block = ref Unsafe.Add(ref dst, offset);
+        PutRow(ref block, row0);
+        PutRow(ref Unsafe.Add(ref block, WebpConstants.Bps), row1);
+        PutRow(ref Unsafe.Add(ref block, 2 * WebpConstants.Bps), row2);
+        PutRow(ref Unsafe.Add(ref block, 3 * WebpConstants.Bps), row3);
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void PutRow(ref byte dst, uint row) =>
+        Unsafe.WriteUnaligned(ref dst, BitConverter.IsLittleEndian ? row : BinaryPrimitives.ReverseEndianness(row));
 
     private static void VerticalPred(Span<byte> dst, Span<byte> top, int size)
     {
@@ -854,268 +1195,6 @@ internal static unsafe class Vp8Encoding
         }
 
         Fill(dst, dc, size);
-    }
-
-    private static void Dc4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        uint dc = 4;
-        int i;
-        for (i = 0; i < 4; i++)
-        {
-            dc += (uint)(top[topOffset + i] + top[topOffset - 5 + i]);
-        }
-
-        Fill(dst, (int)(dc >> 3), 4);
-    }
-
-    private static void Tm4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        Span<byte> clip = Clip1.AsSpan(255 - top[topOffset - 1]);
-        for (int y = 0; y < 4; y++)
-        {
-            Span<byte> clipTable = clip.Slice(top[topOffset - 2 - y]);
-            for (int x = 0; x < 4; x++)
-            {
-                dst[x] = clipTable[top[topOffset + x]];
-            }
-
-            dst = dst.Slice(WebpConstants.Bps);
-        }
-    }
-
-    private static void Ve4(Span<byte> dst, Span<byte> top, int topOffset, Span<byte> vals)
-    {
-        // vertical
-        vals[0] = LossyUtils.Avg3(top[topOffset - 1], top[topOffset], top[topOffset + 1]);
-        vals[1] = LossyUtils.Avg3(top[topOffset], top[topOffset + 1], top[topOffset + 2]);
-        vals[2] = LossyUtils.Avg3(top[topOffset + 1], top[topOffset + 2], top[topOffset + 3]);
-        vals[3] = LossyUtils.Avg3(top[topOffset + 2], top[topOffset + 3], top[topOffset + 4]);
-        for (int i = 0; i < 4; i++)
-        {
-            vals.CopyTo(dst.Slice(i * WebpConstants.Bps));
-        }
-    }
-
-    private static void He4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        // horizontal
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-
-        uint val = 0x01010101U * LossyUtils.Avg3(x, i, j);
-        BinaryPrimitives.WriteUInt32BigEndian(dst, val);
-        val = 0x01010101U * LossyUtils.Avg3(i, j, k);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(1 * WebpConstants.Bps), val);
-        val = 0x01010101U * LossyUtils.Avg3(j, k, l);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(2 * WebpConstants.Bps), val);
-        val = 0x01010101U * LossyUtils.Avg3(k, l, l);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(3 * WebpConstants.Bps), val);
-    }
-
-    private static void Rd4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg3(j, k, l));
-        byte ijk = LossyUtils.Avg3(i, j, k);
-        LossyUtils.Dst(dst, 0, 2, ijk);
-        LossyUtils.Dst(dst, 1, 3, ijk);
-        byte xij = LossyUtils.Avg3(x, i, j);
-        LossyUtils.Dst(dst, 0, 1, xij);
-        LossyUtils.Dst(dst, 1, 2, xij);
-        LossyUtils.Dst(dst, 2, 3, xij);
-        byte axi = LossyUtils.Avg3(a, x, i);
-        LossyUtils.Dst(dst, 0, 0, axi);
-        LossyUtils.Dst(dst, 1, 1, axi);
-        LossyUtils.Dst(dst, 2, 2, axi);
-        LossyUtils.Dst(dst, 3, 3, axi);
-        byte bax = LossyUtils.Avg3(b, a, x);
-        LossyUtils.Dst(dst, 1, 0, bax);
-        LossyUtils.Dst(dst, 2, 1, bax);
-        LossyUtils.Dst(dst, 3, 2, bax);
-        byte cba = LossyUtils.Avg3(c, b, a);
-        LossyUtils.Dst(dst, 2, 0, cba);
-        LossyUtils.Dst(dst, 3, 1, cba);
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg3(d, c, b));
-    }
-
-    private static void Vr4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-
-        byte xa = LossyUtils.Avg2(x, a);
-        LossyUtils.Dst(dst, 0, 0, xa);
-        LossyUtils.Dst(dst, 1, 2, xa);
-        byte ab = LossyUtils.Avg2(a, b);
-        LossyUtils.Dst(dst, 1, 0, ab);
-        LossyUtils.Dst(dst, 2, 2, ab);
-        byte bc = LossyUtils.Avg2(b, c);
-        LossyUtils.Dst(dst, 2, 0, bc);
-        LossyUtils.Dst(dst, 3, 2, bc);
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg2(c, d));
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg3(k, j, i));
-        LossyUtils.Dst(dst, 0, 2, LossyUtils.Avg3(j, i, x));
-        byte ixa = LossyUtils.Avg3(i, x, a);
-        LossyUtils.Dst(dst, 0, 1, ixa);
-        LossyUtils.Dst(dst, 1, 3, ixa);
-        byte xab = LossyUtils.Avg3(x, a, b);
-        LossyUtils.Dst(dst, 1, 1, xab);
-        LossyUtils.Dst(dst, 2, 3, xab);
-        byte abc = LossyUtils.Avg3(a, b, c);
-        LossyUtils.Dst(dst, 2, 1, abc);
-        LossyUtils.Dst(dst, 3, 3, abc);
-        LossyUtils.Dst(dst, 3, 1, LossyUtils.Avg3(b, c, d));
-    }
-
-    private static void Ld4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte a = top[topOffset + 0];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-        byte e = top[topOffset + 4];
-        byte f = top[topOffset + 5];
-        byte g = top[topOffset + 6];
-        byte h = top[topOffset + 7];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg3(a, b, c));
-        byte bcd = LossyUtils.Avg3(b, c, d);
-        LossyUtils.Dst(dst, 1, 0, bcd);
-        LossyUtils.Dst(dst, 0, 1, bcd);
-        byte cde = LossyUtils.Avg3(c, d, e);
-        LossyUtils.Dst(dst, 2, 0, cde);
-        LossyUtils.Dst(dst, 1, 1, cde);
-        LossyUtils.Dst(dst, 0, 2, cde);
-        byte def = LossyUtils.Avg3(d, e, f);
-        LossyUtils.Dst(dst, 3, 0, def);
-        LossyUtils.Dst(dst, 2, 1, def);
-        LossyUtils.Dst(dst, 1, 2, def);
-        LossyUtils.Dst(dst, 0, 3, def);
-        byte efg = LossyUtils.Avg3(e, f, g);
-        LossyUtils.Dst(dst, 3, 1, efg);
-        LossyUtils.Dst(dst, 2, 2, efg);
-        LossyUtils.Dst(dst, 1, 3, efg);
-        byte fgh = LossyUtils.Avg3(f, g, h);
-        LossyUtils.Dst(dst, 3, 2, fgh);
-        LossyUtils.Dst(dst, 2, 3, fgh);
-        LossyUtils.Dst(dst, 3, 3, LossyUtils.Avg3(g, h, h));
-    }
-
-    private static void Vl4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte a = top[topOffset + 0];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-        byte e = top[topOffset + 4];
-        byte f = top[topOffset + 5];
-        byte g = top[topOffset + 6];
-        byte h = top[topOffset + 7];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg2(a, b));
-        byte bc = LossyUtils.Avg2(b, c);
-        LossyUtils.Dst(dst, 1, 0, bc);
-        LossyUtils.Dst(dst, 0, 2, bc);
-        byte cd = LossyUtils.Avg2(c, d);
-        LossyUtils.Dst(dst, 2, 0, cd);
-        LossyUtils.Dst(dst, 1, 2, cd);
-        byte de = LossyUtils.Avg2(d, e);
-        LossyUtils.Dst(dst, 3, 0, de);
-        LossyUtils.Dst(dst, 2, 2, de);
-        LossyUtils.Dst(dst, 0, 1, LossyUtils.Avg3(a, b, c));
-        byte bcd = LossyUtils.Avg3(b, c, d);
-        LossyUtils.Dst(dst, 1, 1, bcd);
-        LossyUtils.Dst(dst, 0, 3, bcd);
-        byte cde = LossyUtils.Avg3(c, d, e);
-        LossyUtils.Dst(dst, 2, 1, cde);
-        LossyUtils.Dst(dst, 1, 3, cde);
-        byte def = LossyUtils.Avg3(d, e, f);
-        LossyUtils.Dst(dst, 3, 1, def);
-        LossyUtils.Dst(dst, 2, 3, def);
-        LossyUtils.Dst(dst, 3, 2, LossyUtils.Avg3(e, f, g));
-        LossyUtils.Dst(dst, 3, 3, LossyUtils.Avg3(f, g, h));
-    }
-
-    private static void Hd4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-
-        byte ix = LossyUtils.Avg2(i, x);
-        LossyUtils.Dst(dst, 0, 0, ix);
-        LossyUtils.Dst(dst, 2, 1, ix);
-        byte ji = LossyUtils.Avg2(j, i);
-        LossyUtils.Dst(dst, 0, 1, ji);
-        LossyUtils.Dst(dst, 2, 2, ji);
-        byte kj = LossyUtils.Avg2(k, j);
-        LossyUtils.Dst(dst, 0, 2, kj);
-        LossyUtils.Dst(dst, 2, 3, kj);
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg2(l, k));
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg3(a, b, c));
-        LossyUtils.Dst(dst, 2, 0, LossyUtils.Avg3(x, a, b));
-        byte ixa = LossyUtils.Avg3(i, x, a);
-        LossyUtils.Dst(dst, 1, 0, ixa);
-        LossyUtils.Dst(dst, 3, 1, ixa);
-        byte jix = LossyUtils.Avg3(j, i, x);
-        LossyUtils.Dst(dst, 1, 1, jix);
-        LossyUtils.Dst(dst, 3, 2, jix);
-        byte kji = LossyUtils.Avg3(k, j, i);
-        LossyUtils.Dst(dst, 1, 2, kji);
-        LossyUtils.Dst(dst, 3, 3, kji);
-        LossyUtils.Dst(dst, 1, 3, LossyUtils.Avg3(l, k, j));
-    }
-
-    private static void Hu4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg2(i, j));
-        byte jk = LossyUtils.Avg2(j, k);
-        LossyUtils.Dst(dst, 2, 0, jk);
-        LossyUtils.Dst(dst, 0, 1, jk);
-        byte kl = LossyUtils.Avg2(k, l);
-        LossyUtils.Dst(dst, 2, 1, kl);
-        LossyUtils.Dst(dst, 0, 2, kl);
-        LossyUtils.Dst(dst, 1, 0, LossyUtils.Avg3(i, j, k));
-        byte jkl = LossyUtils.Avg3(j, k, l);
-        LossyUtils.Dst(dst, 3, 0, jkl);
-        LossyUtils.Dst(dst, 1, 1, jkl);
-        byte kll = LossyUtils.Avg3(k, l, l);
-        LossyUtils.Dst(dst, 3, 1, kll);
-        LossyUtils.Dst(dst, 1, 2, kll);
-        LossyUtils.Dst(dst, 3, 2, l);
-        LossyUtils.Dst(dst, 2, 2, l);
-        LossyUtils.Dst(dst, 0, 3, l);
-        LossyUtils.Dst(dst, 1, 3, l);
-        LossyUtils.Dst(dst, 2, 3, l);
-        LossyUtils.Dst(dst, 3, 3, l);
     }
 
     [MethodImpl(InliningOptions.ShortMethod)]

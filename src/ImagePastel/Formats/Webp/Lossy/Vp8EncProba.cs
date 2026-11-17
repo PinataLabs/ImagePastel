@@ -7,6 +7,12 @@ namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 
 internal class Vp8EncProba
 {
+    public const int LevelCostsPerCtx = WebpConstants.MaxVariableLevel + 1;
+
+    public const int LevelCostsPerPosition = WebpConstants.NumCtx * LevelCostsPerCtx;
+
+    public const int LevelCostsPerType = 16 * LevelCostsPerPosition;
+
     /// <summary>
     /// Last (inclusive) level with variable cost.
     /// </summary>
@@ -45,25 +51,7 @@ internal class Vp8EncProba
             }
         }
 
-        this.LevelCost = new Vp8Costs[WebpConstants.NumTypes][];
-        for (int i = 0; i < this.LevelCost.Length; i++)
-        {
-            this.LevelCost[i] = new Vp8Costs[WebpConstants.NumBands];
-            for (int j = 0; j < this.LevelCost[i].Length; j++)
-            {
-                this.LevelCost[i][j] = new Vp8Costs();
-            }
-        }
-
-        this.RemappedCosts = new Vp8Costs[WebpConstants.NumTypes][];
-        for (int i = 0; i < this.RemappedCosts.Length; i++)
-        {
-            this.RemappedCosts[i] = new Vp8Costs[16];
-            for (int j = 0; j < this.RemappedCosts[i].Length; j++)
-            {
-                this.RemappedCosts[i][j] = new Vp8Costs();
-            }
-        }
+        this.LevelCosts = new ushort[WebpConstants.NumTypes * LevelCostsPerType];
 
         // Initialize with default probabilities.
         this.Segments.AsSpan().Fill(255);
@@ -102,9 +90,11 @@ internal class Vp8EncProba
 
     public Vp8Stats[][] Stats { get; }
 
-    public Vp8Costs[][] LevelCost { get; }
-
-    public Vp8Costs[][] RemappedCosts { get; }
+    /// <summary>
+    /// Gets the level costs. The costs for ctx 1 and 2 include the cost of the not-end-of-block bit,
+    /// which RFC 6386 section 13.3 omits after a zero coefficient (ctx 0).
+    /// </summary>
+    public ushort[] LevelCosts { get; }
 
     /// <summary>
     /// Gets or sets the number of skipped blocks.
@@ -125,32 +115,31 @@ internal class Vp8EncProba
 
         for (int ctype = 0; ctype < WebpConstants.NumTypes; ++ctype)
         {
-            for (int band = 0; band < WebpConstants.NumBands; ++band)
+            Span<ushort> typeCosts = this.LevelCosts.AsSpan(ctype * LevelCostsPerType, LevelCostsPerType);
+            for (int n = 0; n < 16; ++n)
             {
+                int band = WebpConstants.Vp8EncBands[n];
+                Span<ushort> positionCosts = typeCosts.Slice(n * LevelCostsPerPosition, LevelCostsPerPosition);
+                int firstPositionInBand = Array.IndexOf(WebpConstants.Vp8EncBands, band);
+                if (firstPositionInBand < n)
+                {
+                    typeCosts.Slice(firstPositionInBand * LevelCostsPerPosition, LevelCostsPerPosition).CopyTo(positionCosts);
+                    continue;
+                }
+
                 for (int ctx = 0; ctx < WebpConstants.NumCtx; ++ctx)
                 {
                     Vp8ProbaArray p = this.Coeffs[ctype][band].Probabilities[ctx];
-                    Vp8CostArray table = this.LevelCost[ctype][band].Costs[ctx];
+                    Span<ushort> table = positionCosts.Slice(ctx * LevelCostsPerCtx, LevelCostsPerCtx);
                     int cost0 = ctx > 0 ? LossyUtils.Vp8BitCost(1, p.Probabilities[0]) : 0;
                     int costBase = LossyUtils.Vp8BitCost(1, p.Probabilities[1]) + cost0;
-                    int v;
-                    table.Costs[0] = (ushort)(LossyUtils.Vp8BitCost(0, p.Probabilities[1]) + cost0);
-                    for (v = 1; v <= MaxVariableLevel; ++v)
+                    table[0] = (ushort)(LossyUtils.Vp8BitCost(0, p.Probabilities[1]) + cost0);
+                    for (int v = 1; v <= MaxVariableLevel; ++v)
                     {
-                        table.Costs[v] = (ushort)(costBase + VariableLevelCost(v, p.Probabilities));
+                        table[v] = (ushort)(costBase + VariableLevelCost(v, p.Probabilities));
                     }
 
                     // Starting at level 67 and up, the variable part of the cost is actually constant
-                }
-            }
-
-            for (int n = 0; n < 16; ++n)
-            {
-                for (int ctx = 0; ctx < WebpConstants.NumCtx; ++ctx)
-                {
-                    Vp8CostArray dst = this.RemappedCosts[ctype][n].Costs[ctx];
-                    Vp8CostArray src = this.LevelCost[ctype][WebpConstants.Vp8EncBands[n]].Costs[ctx];
-                    src.Costs.CopyTo(dst.Costs.AsSpan());
                 }
             }
         }

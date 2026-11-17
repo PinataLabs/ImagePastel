@@ -1,7 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Linq;
+using PinataLabs.ImagePastel.Formats.Webp;
 using PinataLabs.ImagePastel.Formats.Webp.Lossy;
 using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
@@ -50,4 +52,63 @@ public class QuantEncTests
 
     [Fact]
     public void QuantizeBlock_WithoutAVX2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunQuantizeBlockTest, HwIntrinsics.DisableAVX2);
+
+    // Compares within one instruction set: the paths differ from each other across sets (issue #354).
+    private static unsafe void RunReconstructIntra4PairTest()
+    {
+        var rng = new Random(354);
+        var it = new Vp8EncIterator(new byte[32], new byte[32], new uint[2], new[] { new Vp8MacroBlockInfo() }, new byte[16], new sbyte[8], 1, 1);
+        var dqm = new Vp8SegmentInfo();
+        byte[] src = new byte[WebpConstants.Bps * 4];
+        byte[] pair = new byte[WebpConstants.Bps * 4];
+        byte[] single = new byte[WebpConstants.Bps * 4];
+        short[] pairLevels = new short[32];
+        short[] singleLevels = new short[16];
+
+        for (int i = 0; i < 4000; i++)
+        {
+            rng.NextBytes(src);
+            rng.NextBytes(it.YuvP);
+            if ((i & 3) == 0)
+            {
+                for (int j = 0; j < it.YuvP.Length; j++)
+                {
+                    it.YuvP[j] = (byte)Math.Clamp(src[j % src.Length] + rng.Next(-3, 4), 0, 255);
+                }
+            }
+
+            dqm.Y1.Q[0] = (ushort)rng.Next(4, 158);
+            dqm.Y1.Q[1] = (ushort)rng.Next(4, 158);
+            dqm.Y1.Expand(0);
+
+            for (int mode = 0; mode < WebpConstants.NumBModes; mode += 2)
+            {
+                int nz = QuantEnc.ReconstructIntra4Pair(it, dqm, pairLevels, src, pair, mode);
+
+                for (int k = 0; k < 2; k++)
+                {
+                    int expectedNz = QuantEnc.ReconstructIntra4(it, dqm, singleLevels, src, single, mode + k);
+
+                    Assert.Equal(expectedNz, (nz >> k) & 1);
+                    Assert.True(singleLevels.AsSpan().SequenceEqual(pairLevels.AsSpan(16 * k, 16)));
+                    for (int y = 0; y < 4; y++)
+                    {
+                        Assert.True(single.AsSpan(y * WebpConstants.Bps, 4).SequenceEqual(pair.AsSpan((y * WebpConstants.Bps) + (4 * k), 4)));
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void ReconstructIntra4Pair_MatchesReconstructIntra4() => RunReconstructIntra4PairTest();
+
+    [Fact]
+    public void ReconstructIntra4Pair_WithHardwareIntrinsics_MatchesReconstructIntra4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunReconstructIntra4PairTest, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void ReconstructIntra4Pair_WithoutAVX2_MatchesReconstructIntra4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunReconstructIntra4PairTest, HwIntrinsics.DisableAVX2);
+
+    [Fact]
+    public void ReconstructIntra4Pair_WithoutHardwareIntrinsics_MatchesReconstructIntra4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunReconstructIntra4PairTest, HwIntrinsics.DisableHWIntrinsic);
 }
