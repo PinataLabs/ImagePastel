@@ -20,6 +20,10 @@ internal static class LossyUtils
 
     private static readonly Vector128<byte> SignBit = Vector128.Create((byte)0x80);
 
+    private static readonly Vector128<byte> TTransformWeightMask01 = Vector128.Create((byte)0, 1, 6, 7, 2, 3, 4, 5, 8, 9, 14, 15, 10, 11, 12, 13);
+
+    private static readonly Vector128<byte> TTransformWeightMask32 = Vector128.Create((byte)8, 9, 14, 15, 10, 11, 12, 13, 0, 1, 6, 7, 2, 3, 4, 5);
+
     private static readonly Vector128<sbyte> Three = Vector128.Create((byte)3).AsSByte();
 
     private static readonly Vector128<short> FourShort = Vector128.Create((short)4);
@@ -321,11 +325,19 @@ internal static class LossyUtils
         else
 #endif
         {
-            int sum1 = TTransform(a, w, scratch);
-            int sum2 = TTransform(b, w, scratch);
+            int sum1 = TTransformScalar(a, w, scratch);
+            int sum2 = TTransformScalar(b, w, scratch);
             return Math.Abs(sum2 - sum1) >> 5;
         }
     }
+
+    /// <summary>
+    /// Same as <see cref="Vp8Disto4X4(Span{byte}, Span{byte}, Span{ushort}, Span{int})"/> with <paramref name="aSum"/> = <see cref="TTransform"/> of the first block,
+    /// so a block compared against many candidates is transformed once.
+    /// </summary>
+    [MethodImpl(InliningOptions.ShortMethod)]
+    public static int Vp8Disto4X4(int aSum, Span<byte> b, Span<ushort> w, Span<int> scratch)
+        => Math.Abs(TTransform(b, w, scratch) - aSum) >> 5;
 
     public static void DC16(Span<byte> dst, Span<byte> yuv, int offset)
     {
@@ -788,7 +800,20 @@ internal static class LossyUtils
     /// Returns the weighted sum of the absolute value of transformed coefficients.
     /// w[] contains a row-major 4 by 4 symmetric matrix.
     /// </summary>
+    [MethodImpl(InliningOptions.ShortMethod)]
     public static int TTransform(Span<byte> input, Span<ushort> w, Span<int> scratch)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Sse41.IsSupported)
+        {
+            return TTransformSse41(input, w);
+        }
+#endif
+
+        return TTransformScalar(input, w, scratch);
+    }
+
+    private static int TTransformScalar(Span<byte> input, Span<ushort> w, Span<int> scratch)
     {
         int sum = 0;
         Span<int> tmp = scratch.Slice(0, 16);
@@ -837,6 +862,56 @@ internal static class LossyUtils
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    /// <summary>
+    /// Single-block form of <see cref="TTransformSse41(Span{byte}, Span{byte}, Span{ushort})"/>: returns the weighted sum for one 4x4 block.
+    /// The block is held as two rows per register, so the coefficients come out with rows in the order 0, 3, 1, 2
+    /// and columns in the order 0, 1 | 3, 2; the weights are permuted to match, relying on w being symmetric.
+    /// </summary>
+    public static int TTransformSse41(Span<byte> input, Span<ushort> w)
+    {
+        _ = input[(3 * WebpConstants.Bps) + 3];
+        _ = w[15];
+        ref byte inputRef = ref MemoryMarshal.GetReference(input);
+        Vector128<byte> rows = Vector128.Create(
+            Unsafe.ReadUnaligned<uint>(ref inputRef),
+            Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref inputRef, WebpConstants.Bps)),
+            Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref inputRef, WebpConstants.Bps * 2)),
+            Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref inputRef, WebpConstants.Bps * 3))).AsByte();
+        Vector128<short> r01 = Sse41.ConvertToVector128Int16(rows);
+        Vector128<short> r23 = Sse2.UnpackHigh(rows, Vector128<byte>.Zero).AsInt16();
+
+        Vp8Hadamard4(r01, r23, out Vector128<short> v01, out Vector128<short> v32);
+
+        // Transpose into columns 0|1 and 2|3, each with rows in the order 0, 3, 1, 2.
+        Vector128<int> t0 = Sse2.UnpackLow(v01, v32).AsInt32();
+        Vector128<int> t1 = Sse2.UnpackHigh(v01, v32).AsInt32();
+        Vector128<short> c01 = Sse2.UnpackLow(t0, t1).AsInt16();
+        Vector128<short> c23 = Sse2.UnpackHigh(t0, t1).AsInt16();
+
+        Vp8Hadamard4(c01, c23, out Vector128<short> h01, out Vector128<short> h32);
+
+        ref ushort wRef = ref MemoryMarshal.GetReference(w);
+        Vector128<short> w01 = Ssse3.Shuffle(Unsafe.As<ushort, Vector128<byte>>(ref wRef), TTransformWeightMask01).AsInt16();
+        Vector128<short> w32 = Ssse3.Shuffle(Unsafe.As<ushort, Vector128<byte>>(ref Unsafe.Add(ref wRef, 8)), TTransformWeightMask32).AsInt16();
+
+        Vector128<int> sum01 = Sse2.MultiplyAddAdjacent(Ssse3.Abs(h01).AsInt16(), w01);
+        Vector128<int> sum32 = Sse2.MultiplyAddAdjacent(Ssse3.Abs(h32).AsInt16(), w32);
+        return Numerics.ReduceSum(Sse2.Add(sum01, sum32));
+    }
+
+    // One 4-point Hadamard pass over four 4-lane groups x0..x3, given as x01 = [x0 | x1] and x23 = [x2 | x3].
+    // Returns y01 = [y0 | y1] and y32 = [y3 | y2].
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void Vp8Hadamard4(Vector128<short> x01, Vector128<short> x23, out Vector128<short> y01, out Vector128<short> y32)
+    {
+        Vector128<long> a01 = Sse2.Add(x01, x23).AsInt64();
+        Vector128<long> a32 = Sse2.Subtract(x01, x23).AsInt64();
+        Vector128<short> a03 = Sse2.UnpackLow(a01, a32).AsInt16();
+        Vector128<short> a12 = Sse2.UnpackHigh(a01, a32).AsInt16();
+        y01 = Sse2.Add(a03, a12);
+        y32 = Sse2.Subtract(a03, a12);
+    }
+
     /// <summary>
     /// Hadamard transform
     /// Returns the weighted sum of the absolute value of transformed coefficients.

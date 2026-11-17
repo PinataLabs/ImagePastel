@@ -1,7 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Linq;
+using PinataLabs.ImagePastel.Formats.Webp;
 using PinataLabs.ImagePastel.Formats.Webp.Lossy;
 using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
@@ -280,6 +282,47 @@ public class LossyUtilsTests
         Assert.Equal(expected, actual);
     }
 
+    private static void RunDisto4X4WithTransformedSourceTest()
+    {
+        ushort[] w = { 38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2 };
+        int[] scratch = new int[16];
+        byte[] a = new byte[4 * WebpConstants.Bps];
+        byte[] b = new byte[4 * WebpConstants.Bps];
+        Random random = new(42);
+
+        for (int i = 0; i < 2000; i++)
+        {
+            switch (i)
+            {
+                case 0:
+                    Array.Fill(a, (byte)0);
+                    Array.Fill(b, (byte)255);
+                    break;
+                case 1:
+                    Array.Fill(a, (byte)255);
+                    Array.Fill(b, (byte)0);
+                    break;
+                case 2:
+                    for (int k = 0; k < a.Length; k++)
+                    {
+                        a[k] = (byte)(((k + (k / WebpConstants.Bps)) & 1) * 255);
+                        b[k] = (byte)(255 - a[k]);
+                    }
+
+                    break;
+                default:
+                    random.NextBytes(a);
+                    random.NextBytes(b);
+                    break;
+            }
+
+            int expected = LossyUtils.Vp8Disto4X4(a, b, w, scratch);
+            int actual = LossyUtils.Vp8Disto4X4(LossyUtils.TTransform(a, w, scratch), b, w, scratch);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
     [Fact]
     public void RunTransformTwo_Works() => RunTransformTwoTest();
 
@@ -351,4 +394,16 @@ public class LossyUtilsTests
 
     [Fact]
     public void HadamardTransform_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunHadamardTransformTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Fact]
+    public void Disto4X4_WithTransformedSource_MatchesDisto4X4() => RunDisto4X4WithTransformedSourceTest();
+
+    [Fact]
+    public void Disto4X4_WithTransformedSource_WithHardwareIntrinsics_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void Disto4X4_WithTransformedSource_WithoutSSE41_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.DisableSSE41);
+
+    [Fact]
+    public void Disto4X4_WithTransformedSource_WithoutHardwareIntrinsics_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.DisableHWIntrinsic);
 }

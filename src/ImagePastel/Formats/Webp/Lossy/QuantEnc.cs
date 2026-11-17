@@ -155,6 +155,8 @@ internal static unsafe class QuantEnc
             Span<byte> bestBlock = bestBlocks.Slice(WebpLookupTables.Vp8Scan[it.I4]);
             Span<byte> tmpDst = it.Scratch.AsSpan();
 
+            int srcTransform = tlambda != 0 ? LossyUtils.TTransform(src, WeightY, scratch) : 0;
+
             rdi4.InitScore();
             it.MakeIntra4Preds();
             for (mode = 0; mode < WebpConstants.NumBModes; ++mode)
@@ -164,7 +166,7 @@ internal static unsafe class QuantEnc
 
                 // Compute RD-score.
                 rdTmp.D = LossyUtils.Vp8_Sse4X4(src, tmpDst);
-                rdTmp.SD = tlambda != 0 ? Mult8B(tlambda, LossyUtils.Vp8Disto4X4(src, tmpDst, WeightY, scratch)) : 0;
+                rdTmp.SD = tlambda != 0 ? Mult8B(tlambda, LossyUtils.Vp8Disto4X4(srcTransform, tmpDst, WeightY, scratch)) : 0;
                 rdTmp.H = modeCosts[mode];
 
                 // Add flatness penalty, to avoid flat area to be mispredicted by a complex mode.
