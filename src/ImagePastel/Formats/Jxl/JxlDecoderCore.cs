@@ -70,6 +70,12 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     /// <inheritdoc/>
     public Configuration Configuration { get; }
 
+    /// <summary>
+    /// Gets or sets the most samples across the canvases of the displayed frames
+    /// (<see cref="JxlSampleBudget.MaxTotalSamples"/>). Tests set a lower limit.
+    /// </summary>
+    internal long MaxTotalSamples { get; set; } = JxlSampleBudget.MaxTotalSamples;
+
     /// <inheritdoc/>
     public Size Dimensions => this.metadata == null ? default : this.OrientedSize;
 
@@ -164,9 +170,10 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         // The image has the oriented size, as libjxl's output buffer when it undoes the orientation.
         Size size = this.OrientedSize;
-        Image<TPixel> image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
+        Image<TPixel> image = null;
         try
         {
+            image = new(this.Configuration, size.Width, size.Height, this.imageMetadata);
             JxlImageFrameSink<TPixel> imageSink = new(this.Configuration, image, this.metadata.M, this.isCmyk);
             IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), imageSink);
             List<JxlFrameHeader> displayed = this.DecodeFrames(data, frameOffset, sink, skipColorTransform: false, cancellationToken);
@@ -183,9 +190,14 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
             return image;
         }
+        catch (OutOfMemoryException ex)
+        {
+            image?.Dispose();
+            throw this.OutOfMemory(ex);
+        }
         catch
         {
-            image.Dispose();
+            image?.Dispose();
             throw;
         }
     }
@@ -226,11 +238,16 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
 
         // djxl orients its output, so the planes are oriented too.
         JxlPlanesSink planesSink = new();
-        IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
         try
         {
+            IJxlRenderSink sink = JxlOrientingSink.Create(this.Configuration.MemoryAllocator, this.metadata.M.GetOrientation(), planesSink);
             this.DecodeFrames(data, frameOffset, sink, skipColorTransform, cancellationToken);
             return planesSink.Image;
+        }
+        catch (OutOfMemoryException ex)
+        {
+            planesSink.Image.Dispose();
+            throw this.OutOfMemory(ex);
         }
         catch
         {
@@ -238,6 +255,14 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
             throw;
         }
     }
+
+    // As in the GIF decoder: each displayed frame gets a full canvas, and the frame planes are allocated
+    // per frame, so the machine can run out of memory below the budgets and the allocator's limits. #112
+    // does not allow OutOfMemoryException to escape, so where the output and the frames are allocated it
+    // becomes InvalidMemoryOperationException, which has no inner exception. The codestream and header
+    // reads before that are bounded by the file and the metadata caps.
+    private InvalidMemoryOperationException OutOfMemory(OutOfMemoryException ex)
+        => new($"Not enough memory to decode the frames of a {this.metadata.XSize}x{this.metadata.YSize} JPEG XL image: {ex.Message}");
 
     // The frame loop of JxlDecoderProcessCodestream: frame after frame, each from where the previous
     // frame's sections end, until the last one. Frames are coalesced, as djxl does by default, so only
@@ -247,8 +272,14 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
     // MaxFrames has no libjxl counterpart. As in the GIF decoder, the loop stops once that many frames
     // are displayed, so a value of 0 never matches and every frame is decoded. The frames after the
     // last one decoded are not read at all.
+    //
+    // The total sample budget, a departure from libjxl (see JxlSampleBudget), is checked before each
+    // frame as if that frame were displayed. The last frame always is, so any frame after the budget's
+    // last canvas leads to one more canvas, and the decode fails before it does the work. MaxFrames,
+    // when it is lower, stops the loop before the check.
     private List<JxlFrameHeader> DecodeFrames(byte[] data, int offset, IJxlRenderSink sink, bool skipColorTransform, CancellationToken cancellationToken)
     {
+        long canvasSamples = JxlSampleBudget.ImageSamples(this.metadata);
         using JxlReferenceFrames references = new();
         JxlFrameDecoder frameDecoder = new(this.Configuration, this.metadata, references) { SkipColorTransform = skipColorTransform };
         List<JxlFrameHeader> displayed = new();
@@ -266,6 +297,7 @@ internal sealed class JxlDecoderCore : IImageDecoderInternals
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
+            JxlSampleBudget.CheckTotal(displayed.Count + 1, canvasSamples, this.MaxTotalSamples);
             frameHeader = frameDecoder.DecodeFrame(data, offset, sink, cancellationToken, out offset);
             if (JxlFrameDecoder.IsLastOfStill(frameHeader))
             {
