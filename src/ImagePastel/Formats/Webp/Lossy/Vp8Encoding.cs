@@ -720,21 +720,92 @@ internal static unsafe class Vp8Encoding
         TrueMotion(dst.Slice(C8TM8), left, top, 8);
     }
 
-    // Left samples are top[-5 .. -2], top_left is top[-1], top are
-    // located at top[0..3], and top right is top[4..7]
-    public static void EncPredLuma4(Span<byte> dst, Span<byte> top, int topOffset, Span<byte> vals)
+    // The 13 edge samples sit contiguously in top[topOffset - 5 .. topOffset + 7]:
+    // left L K J I (bottom to top), top-left X, top A B C D, top-right E F G H.
+    // Every predictor pixel is one of: an edge sample, Avg2 of two neighbours, or Avg3 centred on a
+    // sample (Avg2 and Avg3 are symmetric, so each value is computed once and shared).
+    public static void EncPredLuma4(Span<byte> dst, Span<byte> top, int topOffset)
     {
-        Dc4(dst.Slice(I4DC4), top, topOffset);
-        Tm4(dst.Slice(I4TM4), top, topOffset);
-        Ve4(dst.Slice(I4VE4), top, topOffset, vals);
-        He4(dst.Slice(I4HE4), top, topOffset);
-        Rd4(dst.Slice(I4RD4), top, topOffset);
-        Vr4(dst.Slice(I4VR4), top, topOffset);
-        Ld4(dst.Slice(I4LD4), top, topOffset);
-        Vl4(dst.Slice(I4VL4), top, topOffset);
-        Hd4(dst.Slice(I4HD4), top, topOffset);
-        Hu4(dst.Slice(I4HU4), top, topOffset);
+        ReadOnlySpan<byte> edge = top.Slice(topOffset - 5, 13);
+        byte h = edge[12];
+        byte g = edge[11];
+        byte f = edge[10];
+        byte e = edge[9];
+        byte d = edge[8];
+        byte c = edge[7];
+        byte b = edge[6];
+        byte a = edge[5];
+        byte x = edge[4];
+        byte i = edge[3];
+        byte j = edge[2];
+        byte k = edge[1];
+        byte l = edge[0];
+
+        byte l3 = LossyUtils.Avg3(k, l, l);
+        byte k3 = LossyUtils.Avg3(j, k, l);
+        byte j3 = LossyUtils.Avg3(i, j, k);
+        byte i3 = LossyUtils.Avg3(x, i, j);
+        byte x3 = LossyUtils.Avg3(a, x, i);
+        byte a3 = LossyUtils.Avg3(b, a, x);
+        byte b3 = LossyUtils.Avg3(c, b, a);
+        byte c3 = LossyUtils.Avg3(d, c, b);
+        byte d3 = LossyUtils.Avg3(e, d, c);
+        byte e3 = LossyUtils.Avg3(f, e, d);
+        byte f3 = LossyUtils.Avg3(g, f, e);
+        byte g3 = LossyUtils.Avg3(h, g, f);
+        byte h3 = LossyUtils.Avg3(h, h, g);
+
+        byte lk = LossyUtils.Avg2(l, k);
+        byte kj = LossyUtils.Avg2(k, j);
+        byte ji = LossyUtils.Avg2(j, i);
+        byte ix = LossyUtils.Avg2(i, x);
+        byte xa = LossyUtils.Avg2(x, a);
+        byte ab = LossyUtils.Avg2(a, b);
+        byte bc = LossyUtils.Avg2(b, c);
+        byte cd = LossyUtils.Avg2(c, d);
+        byte de = LossyUtils.Avg2(d, e);
+
+        ref byte p = ref MemoryMarshal.GetReference(dst.Slice(0, I4HU4 + (3 * WebpConstants.Bps) + 4));
+
+        uint dc = 0x01010101U * (uint)((a + b + c + d + l + k + j + i + 4) >> 3);
+        Put4(ref p, I4DC4, dc, dc, dc, dc);
+
+        Put4(
+            ref p,
+            I4TM4,
+            Pack(Clip8b(i + a - x), Clip8b(i + b - x), Clip8b(i + c - x), Clip8b(i + d - x)),
+            Pack(Clip8b(j + a - x), Clip8b(j + b - x), Clip8b(j + c - x), Clip8b(j + d - x)),
+            Pack(Clip8b(k + a - x), Clip8b(k + b - x), Clip8b(k + c - x), Clip8b(k + d - x)),
+            Pack(Clip8b(l + a - x), Clip8b(l + b - x), Clip8b(l + c - x), Clip8b(l + d - x)));
+
+        uint ve = Pack(a3, b3, c3, d3);
+        Put4(ref p, I4VE4, ve, ve, ve, ve);
+
+        Put4(ref p, I4HE4, 0x01010101U * i3, 0x01010101U * j3, 0x01010101U * k3, 0x01010101U * l3);
+        Put4(ref p, I4RD4, Pack(x3, a3, b3, c3), Pack(i3, x3, a3, b3), Pack(j3, i3, x3, a3), Pack(k3, j3, i3, x3));
+        Put4(ref p, I4VR4, Pack(xa, ab, bc, cd), Pack(x3, a3, b3, c3), Pack(i3, xa, ab, bc), Pack(j3, x3, a3, b3));
+        Put4(ref p, I4LD4, Pack(b3, c3, d3, e3), Pack(c3, d3, e3, f3), Pack(d3, e3, f3, g3), Pack(e3, f3, g3, h3));
+        Put4(ref p, I4VL4, Pack(ab, bc, cd, de), Pack(b3, c3, d3, e3), Pack(bc, cd, de, f3), Pack(c3, d3, e3, g3));
+        Put4(ref p, I4HD4, Pack(ix, x3, a3, b3), Pack(ji, i3, ix, x3), Pack(kj, j3, ji, i3), Pack(lk, k3, kj, j3));
+        Put4(ref p, I4HU4, Pack(ji, j3, kj, k3), Pack(kj, k3, lk, l3), Pack(lk, l3, l, l), 0x01010101U * l);
     }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static uint Pack(byte p0, byte p1, byte p2, byte p3) => p0 | ((uint)p1 << 8) | ((uint)p2 << 16) | ((uint)p3 << 24);
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void Put4(ref byte dst, int offset, uint row0, uint row1, uint row2, uint row3)
+    {
+        ref byte block = ref Unsafe.Add(ref dst, offset);
+        PutRow(ref block, row0);
+        PutRow(ref Unsafe.Add(ref block, WebpConstants.Bps), row1);
+        PutRow(ref Unsafe.Add(ref block, 2 * WebpConstants.Bps), row2);
+        PutRow(ref Unsafe.Add(ref block, 3 * WebpConstants.Bps), row3);
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void PutRow(ref byte dst, uint row) =>
+        Unsafe.WriteUnaligned(ref dst, BitConverter.IsLittleEndian ? row : BinaryPrimitives.ReverseEndianness(row));
 
     private static void VerticalPred(Span<byte> dst, Span<byte> top, int size)
     {
@@ -854,268 +925,6 @@ internal static unsafe class Vp8Encoding
         }
 
         Fill(dst, dc, size);
-    }
-
-    private static void Dc4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        uint dc = 4;
-        int i;
-        for (i = 0; i < 4; i++)
-        {
-            dc += (uint)(top[topOffset + i] + top[topOffset - 5 + i]);
-        }
-
-        Fill(dst, (int)(dc >> 3), 4);
-    }
-
-    private static void Tm4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        Span<byte> clip = Clip1.AsSpan(255 - top[topOffset - 1]);
-        for (int y = 0; y < 4; y++)
-        {
-            Span<byte> clipTable = clip.Slice(top[topOffset - 2 - y]);
-            for (int x = 0; x < 4; x++)
-            {
-                dst[x] = clipTable[top[topOffset + x]];
-            }
-
-            dst = dst.Slice(WebpConstants.Bps);
-        }
-    }
-
-    private static void Ve4(Span<byte> dst, Span<byte> top, int topOffset, Span<byte> vals)
-    {
-        // vertical
-        vals[0] = LossyUtils.Avg3(top[topOffset - 1], top[topOffset], top[topOffset + 1]);
-        vals[1] = LossyUtils.Avg3(top[topOffset], top[topOffset + 1], top[topOffset + 2]);
-        vals[2] = LossyUtils.Avg3(top[topOffset + 1], top[topOffset + 2], top[topOffset + 3]);
-        vals[3] = LossyUtils.Avg3(top[topOffset + 2], top[topOffset + 3], top[topOffset + 4]);
-        for (int i = 0; i < 4; i++)
-        {
-            vals.CopyTo(dst.Slice(i * WebpConstants.Bps));
-        }
-    }
-
-    private static void He4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        // horizontal
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-
-        uint val = 0x01010101U * LossyUtils.Avg3(x, i, j);
-        BinaryPrimitives.WriteUInt32BigEndian(dst, val);
-        val = 0x01010101U * LossyUtils.Avg3(i, j, k);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(1 * WebpConstants.Bps), val);
-        val = 0x01010101U * LossyUtils.Avg3(j, k, l);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(2 * WebpConstants.Bps), val);
-        val = 0x01010101U * LossyUtils.Avg3(k, l, l);
-        BinaryPrimitives.WriteUInt32BigEndian(dst.Slice(3 * WebpConstants.Bps), val);
-    }
-
-    private static void Rd4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg3(j, k, l));
-        byte ijk = LossyUtils.Avg3(i, j, k);
-        LossyUtils.Dst(dst, 0, 2, ijk);
-        LossyUtils.Dst(dst, 1, 3, ijk);
-        byte xij = LossyUtils.Avg3(x, i, j);
-        LossyUtils.Dst(dst, 0, 1, xij);
-        LossyUtils.Dst(dst, 1, 2, xij);
-        LossyUtils.Dst(dst, 2, 3, xij);
-        byte axi = LossyUtils.Avg3(a, x, i);
-        LossyUtils.Dst(dst, 0, 0, axi);
-        LossyUtils.Dst(dst, 1, 1, axi);
-        LossyUtils.Dst(dst, 2, 2, axi);
-        LossyUtils.Dst(dst, 3, 3, axi);
-        byte bax = LossyUtils.Avg3(b, a, x);
-        LossyUtils.Dst(dst, 1, 0, bax);
-        LossyUtils.Dst(dst, 2, 1, bax);
-        LossyUtils.Dst(dst, 3, 2, bax);
-        byte cba = LossyUtils.Avg3(c, b, a);
-        LossyUtils.Dst(dst, 2, 0, cba);
-        LossyUtils.Dst(dst, 3, 1, cba);
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg3(d, c, b));
-    }
-
-    private static void Vr4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-
-        byte xa = LossyUtils.Avg2(x, a);
-        LossyUtils.Dst(dst, 0, 0, xa);
-        LossyUtils.Dst(dst, 1, 2, xa);
-        byte ab = LossyUtils.Avg2(a, b);
-        LossyUtils.Dst(dst, 1, 0, ab);
-        LossyUtils.Dst(dst, 2, 2, ab);
-        byte bc = LossyUtils.Avg2(b, c);
-        LossyUtils.Dst(dst, 2, 0, bc);
-        LossyUtils.Dst(dst, 3, 2, bc);
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg2(c, d));
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg3(k, j, i));
-        LossyUtils.Dst(dst, 0, 2, LossyUtils.Avg3(j, i, x));
-        byte ixa = LossyUtils.Avg3(i, x, a);
-        LossyUtils.Dst(dst, 0, 1, ixa);
-        LossyUtils.Dst(dst, 1, 3, ixa);
-        byte xab = LossyUtils.Avg3(x, a, b);
-        LossyUtils.Dst(dst, 1, 1, xab);
-        LossyUtils.Dst(dst, 2, 3, xab);
-        byte abc = LossyUtils.Avg3(a, b, c);
-        LossyUtils.Dst(dst, 2, 1, abc);
-        LossyUtils.Dst(dst, 3, 3, abc);
-        LossyUtils.Dst(dst, 3, 1, LossyUtils.Avg3(b, c, d));
-    }
-
-    private static void Ld4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte a = top[topOffset + 0];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-        byte e = top[topOffset + 4];
-        byte f = top[topOffset + 5];
-        byte g = top[topOffset + 6];
-        byte h = top[topOffset + 7];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg3(a, b, c));
-        byte bcd = LossyUtils.Avg3(b, c, d);
-        LossyUtils.Dst(dst, 1, 0, bcd);
-        LossyUtils.Dst(dst, 0, 1, bcd);
-        byte cde = LossyUtils.Avg3(c, d, e);
-        LossyUtils.Dst(dst, 2, 0, cde);
-        LossyUtils.Dst(dst, 1, 1, cde);
-        LossyUtils.Dst(dst, 0, 2, cde);
-        byte def = LossyUtils.Avg3(d, e, f);
-        LossyUtils.Dst(dst, 3, 0, def);
-        LossyUtils.Dst(dst, 2, 1, def);
-        LossyUtils.Dst(dst, 1, 2, def);
-        LossyUtils.Dst(dst, 0, 3, def);
-        byte efg = LossyUtils.Avg3(e, f, g);
-        LossyUtils.Dst(dst, 3, 1, efg);
-        LossyUtils.Dst(dst, 2, 2, efg);
-        LossyUtils.Dst(dst, 1, 3, efg);
-        byte fgh = LossyUtils.Avg3(f, g, h);
-        LossyUtils.Dst(dst, 3, 2, fgh);
-        LossyUtils.Dst(dst, 2, 3, fgh);
-        LossyUtils.Dst(dst, 3, 3, LossyUtils.Avg3(g, h, h));
-    }
-
-    private static void Vl4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte a = top[topOffset + 0];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-        byte d = top[topOffset + 3];
-        byte e = top[topOffset + 4];
-        byte f = top[topOffset + 5];
-        byte g = top[topOffset + 6];
-        byte h = top[topOffset + 7];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg2(a, b));
-        byte bc = LossyUtils.Avg2(b, c);
-        LossyUtils.Dst(dst, 1, 0, bc);
-        LossyUtils.Dst(dst, 0, 2, bc);
-        byte cd = LossyUtils.Avg2(c, d);
-        LossyUtils.Dst(dst, 2, 0, cd);
-        LossyUtils.Dst(dst, 1, 2, cd);
-        byte de = LossyUtils.Avg2(d, e);
-        LossyUtils.Dst(dst, 3, 0, de);
-        LossyUtils.Dst(dst, 2, 2, de);
-        LossyUtils.Dst(dst, 0, 1, LossyUtils.Avg3(a, b, c));
-        byte bcd = LossyUtils.Avg3(b, c, d);
-        LossyUtils.Dst(dst, 1, 1, bcd);
-        LossyUtils.Dst(dst, 0, 3, bcd);
-        byte cde = LossyUtils.Avg3(c, d, e);
-        LossyUtils.Dst(dst, 2, 1, cde);
-        LossyUtils.Dst(dst, 1, 3, cde);
-        byte def = LossyUtils.Avg3(d, e, f);
-        LossyUtils.Dst(dst, 3, 1, def);
-        LossyUtils.Dst(dst, 2, 3, def);
-        LossyUtils.Dst(dst, 3, 2, LossyUtils.Avg3(e, f, g));
-        LossyUtils.Dst(dst, 3, 3, LossyUtils.Avg3(f, g, h));
-    }
-
-    private static void Hd4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte x = top[topOffset - 1];
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-        byte a = top[topOffset];
-        byte b = top[topOffset + 1];
-        byte c = top[topOffset + 2];
-
-        byte ix = LossyUtils.Avg2(i, x);
-        LossyUtils.Dst(dst, 0, 0, ix);
-        LossyUtils.Dst(dst, 2, 1, ix);
-        byte ji = LossyUtils.Avg2(j, i);
-        LossyUtils.Dst(dst, 0, 1, ji);
-        LossyUtils.Dst(dst, 2, 2, ji);
-        byte kj = LossyUtils.Avg2(k, j);
-        LossyUtils.Dst(dst, 0, 2, kj);
-        LossyUtils.Dst(dst, 2, 3, kj);
-        LossyUtils.Dst(dst, 0, 3, LossyUtils.Avg2(l, k));
-        LossyUtils.Dst(dst, 3, 0, LossyUtils.Avg3(a, b, c));
-        LossyUtils.Dst(dst, 2, 0, LossyUtils.Avg3(x, a, b));
-        byte ixa = LossyUtils.Avg3(i, x, a);
-        LossyUtils.Dst(dst, 1, 0, ixa);
-        LossyUtils.Dst(dst, 3, 1, ixa);
-        byte jix = LossyUtils.Avg3(j, i, x);
-        LossyUtils.Dst(dst, 1, 1, jix);
-        LossyUtils.Dst(dst, 3, 2, jix);
-        byte kji = LossyUtils.Avg3(k, j, i);
-        LossyUtils.Dst(dst, 1, 2, kji);
-        LossyUtils.Dst(dst, 3, 3, kji);
-        LossyUtils.Dst(dst, 1, 3, LossyUtils.Avg3(l, k, j));
-    }
-
-    private static void Hu4(Span<byte> dst, Span<byte> top, int topOffset)
-    {
-        byte i = top[topOffset - 2];
-        byte j = top[topOffset - 3];
-        byte k = top[topOffset - 4];
-        byte l = top[topOffset - 5];
-
-        LossyUtils.Dst(dst, 0, 0, LossyUtils.Avg2(i, j));
-        byte jk = LossyUtils.Avg2(j, k);
-        LossyUtils.Dst(dst, 2, 0, jk);
-        LossyUtils.Dst(dst, 0, 1, jk);
-        byte kl = LossyUtils.Avg2(k, l);
-        LossyUtils.Dst(dst, 2, 1, kl);
-        LossyUtils.Dst(dst, 0, 2, kl);
-        LossyUtils.Dst(dst, 1, 0, LossyUtils.Avg3(i, j, k));
-        byte jkl = LossyUtils.Avg3(j, k, l);
-        LossyUtils.Dst(dst, 3, 0, jkl);
-        LossyUtils.Dst(dst, 1, 1, jkl);
-        byte kll = LossyUtils.Avg3(k, l, l);
-        LossyUtils.Dst(dst, 3, 1, kll);
-        LossyUtils.Dst(dst, 1, 2, kll);
-        LossyUtils.Dst(dst, 3, 2, l);
-        LossyUtils.Dst(dst, 2, 2, l);
-        LossyUtils.Dst(dst, 0, 3, l);
-        LossyUtils.Dst(dst, 1, 3, l);
-        LossyUtils.Dst(dst, 2, 3, l);
-        LossyUtils.Dst(dst, 3, 3, l);
     }
 
     [MethodImpl(InliningOptions.ShortMethod)]

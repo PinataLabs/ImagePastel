@@ -774,7 +774,7 @@ internal class Vp8EncIterator
         Vp8Encoding.EncPredChroma8(this.YuvP, left, top);
     }
 
-    public void MakeIntra4Preds() => Vp8Encoding.EncPredLuma4(this.YuvP, this.I4Boundary, this.I4BoundaryIdx, this.Scratch.AsSpan(0, 4));
+    public void MakeIntra4Preds() => Vp8Encoding.EncPredLuma4(this.YuvP, this.I4Boundary, this.I4BoundaryIdx);
 
     public void SwapOut()
     {
