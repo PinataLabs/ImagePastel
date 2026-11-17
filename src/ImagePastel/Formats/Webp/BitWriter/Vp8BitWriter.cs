@@ -78,29 +78,29 @@ internal class Vp8BitWriter : BitWriterBase
     /// <inheritdoc/>
     public override int NumBytes() => (int)this.pos;
 
-    public int PutCoeffs(int ctx, Vp8Residual residual)
+    public int PutCoeffs(int ctx, ReadOnlySpan<short> levels, int first, Vp8BandProbas[] probas)
     {
-        int n = residual.First;
-        Vp8ProbaArray p = residual.Prob[n].Probabilities[ctx];
-        if (!this.PutBit(residual.Last >= 0, p.Probabilities[0]))
+        int n = first;
+        Vp8ProbaArray p = probas[n].Probabilities[ctx];
+        if (!this.PutBit(levels.Length > 0, p.Probabilities[0]))
         {
             return 0;
         }
 
         while (n < 16)
         {
-            int c = residual.Coeffs[n++];
+            int c = levels[n++];
             bool sign = c < 0;
             int v = sign ? -c : c;
             if (!this.PutBit(v != 0, p.Probabilities[1]))
             {
-                p = residual.Prob[WebpConstants.Vp8EncBands[n]].Probabilities[0];
+                p = probas[WebpConstants.Vp8EncBands[n]].Probabilities[0];
                 continue;
             }
 
             if (!this.PutBit(v > 1, p.Probabilities[2]))
             {
-                p = residual.Prob[WebpConstants.Vp8EncBands[n]].Probabilities[1];
+                p = probas[WebpConstants.Vp8EncBands[n]].Probabilities[1];
             }
             else
             {
@@ -172,11 +172,11 @@ internal class Vp8BitWriter : BitWriterBase
                     }
                 }
 
-                p = residual.Prob[WebpConstants.Vp8EncBands[n]].Probabilities[2];
+                p = probas[WebpConstants.Vp8EncBands[n]].Probabilities[2];
             }
 
             this.PutBitUniform(sign ? 1 : 0);
-            if (n == 16 || !this.PutBit(n <= residual.Last, p.Probabilities[0]))
+            if (n == 16 || !this.PutBit(n < levels.Length, p.Probabilities[0]))
             {
                 return 1;   // EOB
             }

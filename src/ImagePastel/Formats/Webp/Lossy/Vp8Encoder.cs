@@ -88,6 +88,10 @@ internal class Vp8Encoder : IDisposable
 
     private const int QMax = 100;
 
+    private const int MinMacroblocksPerCostRefresh = 96;
+
+    private const int CostRefreshesPerPass = 8;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Vp8Encoder" /> class.
     /// </summary>
@@ -358,34 +362,18 @@ internal class Vp8Encoder : IDisposable
                 }
             }
 
-            // Stats-collection loop.
-            this.StatLoop(width, height, yStride, uvStride);
-            it.Init();
-            it.InitFilter();
-            var info = new Vp8ModeScore();
-            var residual = new Vp8Residual();
-            do
+            if (this.rdOptLevel == Vp8RdLevel.RdOptNone)
             {
-                bool dontUseSkip = !this.Proba.UseSkipProba;
-                info.Clear();
-                it.Import(y, u, v, yStride, uvStride, width, height, false);
-
-                // Warning! order is important: first call VP8Decimate() and
-                // *then* decide how to code the skip decision if there's one.
-                if (!this.Decimate(it, ref info, this.rdOptLevel) || dontUseSkip)
-                {
-                    this.CodeResiduals(it, info, residual);
-                }
-                else
-                {
-                    it.ResetAfterSkip();
-                }
-
-                it.SaveBoundary();
+                this.StatLoop(width, height, yStride, uvStride);
+                this.CodeLoop(it, y, u, v, yStride, uvStride, width, height);
             }
-            while (it.Next());
+            else
+            {
+                using Vp8ResidualBuffer residuals = new(this.memoryAllocator, this.Mbw * this.Mbh);
+                this.DecideLoop(width, height, yStride, uvStride, residuals);
+                this.EmitResiduals(residuals);
+            }
 
-            // Store filter stats.
             this.AdjustFilterStrength();
 
             // Write bytes from the bitwriter buffer to the stream.
@@ -426,9 +414,9 @@ internal class Vp8Encoder : IDisposable
         int targetSize = 0; // TODO: target size is hardcoded.
         float targetPsnr = 0.0f; // TODO: targetPsnr is hardcoded.
         bool doSearch = targetSize > 0 || targetPsnr > 0;
-        bool fastProbe = (this.method == 0 || this.method == WebpEncodingMethod.Level3) && !doSearch;
+        bool fastProbe = this.method == 0 && !doSearch;
         int numPassLeft = this.entropyPasses;
-        Vp8RdLevel rdOpt = this.method >= WebpEncodingMethod.Level3 || doSearch ? Vp8RdLevel.RdOptBasic : Vp8RdLevel.RdOptNone;
+        Vp8RdLevel rdOpt = doSearch ? Vp8RdLevel.RdOptBasic : Vp8RdLevel.RdOptNone;
         int nbMbs = this.Mbw * this.Mbh;
 
         var stats = new PassStats(targetSize, targetPsnr, QMin, QMax, this.quality);
@@ -437,15 +425,7 @@ internal class Vp8Encoder : IDisposable
         // Fast mode: quick analysis pass over few mbs. Better than nothing.
         if (fastProbe)
         {
-            if (this.method == WebpEncodingMethod.Level3)
-            {
-                // We need more stats for method 3 to be reliable.
-                nbMbs = nbMbs > 200 ? nbMbs >> 1 : 100;
-            }
-            else
-            {
-                nbMbs = nbMbs > 200 ? nbMbs >> 2 : 50;
-            }
+            nbMbs = nbMbs > 200 ? nbMbs >> 2 : 50;
         }
 
         while (numPassLeft-- > 0)
@@ -508,7 +488,6 @@ internal class Vp8Encoder : IDisposable
         var residual = new Vp8Residual();
         do
         {
-            info.Clear();
             it.Import(y, u, v, yStride, uvStride, width, height, false);
             if (this.Decimate(it, ref info, rdOpt))
             {
@@ -516,7 +495,7 @@ internal class Vp8Encoder : IDisposable
                 ++this.Proba.NbSkip;
             }
 
-            this.RecordResiduals(it, info, residual);
+            this.RecordResiduals(it, info, residual, null);
             size += info.R + info.H;
             sizeP0 += info.H;
             distortion += info.D;
@@ -539,6 +518,138 @@ internal class Vp8Encoder : IDisposable
         }
 
         return sizeP0;
+    }
+
+    private void CodeLoop(Vp8EncIterator it, Span<byte> y, Span<byte> u, Span<byte> v, int yStride, int uvStride, int width, int height)
+    {
+        it.Init();
+        var info = new Vp8ModeScore();
+        var residual = new Vp8Residual();
+        do
+        {
+            bool dontUseSkip = !this.Proba.UseSkipProba;
+            it.Import(y, u, v, yStride, uvStride, width, height, false);
+
+            bool isSkipped = this.Decimate(it, ref info, this.rdOptLevel);
+            if (!isSkipped || dontUseSkip)
+            {
+                this.CodeResiduals(it, info, residual);
+            }
+            else
+            {
+                it.ResetAfterSkip();
+            }
+
+            it.SaveBoundary();
+        }
+        while (it.Next());
+    }
+
+    private void DecideLoop(int width, int height, int yStride, int uvStride, Vp8ResidualBuffer residuals)
+    {
+        int passesLeft = this.entropyPasses;
+        while (true)
+        {
+            bool isLastPass = passesLeft == 1 || this.maxI4HeaderBits == 0;
+            long sizeP0 = this.DecidePass(width, height, yStride, uvStride, isLastPass ? residuals : null);
+            if (this.maxI4HeaderBits > 0 && sizeP0 > (long)Partition0SizeLimit)
+            {
+                this.maxI4HeaderBits >>= 1;
+                continue;
+            }
+
+            if (isLastPass)
+            {
+                break;
+            }
+
+            passesLeft--;
+            this.Proba.FinalizeTokenProbas();
+        }
+
+        this.Proba.FinalizeSkipProba(this.Mbw, this.Mbh);
+        this.Proba.FinalizeTokenProbas();
+    }
+
+    private long DecidePass(int width, int height, int yStride, int uvStride, Vp8ResidualBuffer sink)
+    {
+        Span<byte> y = this.Y.GetSpan();
+        Span<byte> u = this.U.GetSpan();
+        Span<byte> v = this.V.GetSpan();
+        var it = new Vp8EncIterator(this.YTop, this.UvTop, this.Nz, this.MbInfo, this.Preds, this.TopDerr, this.Mbw, this.Mbh);
+
+        it.Init();
+        this.SetLoopParams(this.quality);
+        this.Proba.ResetTokenStats();
+        sink?.Clear();
+
+        int refreshInterval = Math.Max(MinMacroblocksPerCostRefresh, this.Mbw * this.Mbh / CostRefreshesPerPass);
+        int untilRefresh = refreshInterval;
+        long sizeP0 = 0;
+        var info = new Vp8ModeScore();
+        var residual = new Vp8Residual();
+        do
+        {
+            if (--untilRefresh == 0)
+            {
+                this.Proba.FinalizeTokenProbas();
+                this.Proba.CalculateLevelCosts();
+                untilRefresh = refreshInterval;
+            }
+
+            it.Import(y, u, v, yStride, uvStride, width, height, false);
+            if (this.Decimate(it, ref info, this.rdOptLevel))
+            {
+                ++this.Proba.NbSkip;
+            }
+
+            this.RecordResiduals(it, info, residual, sink);
+            sizeP0 += info.H;
+            it.SaveBoundary();
+        }
+        while (it.Next());
+
+        return sizeP0 + this.SegmentHeader.Size;
+    }
+
+    private void EmitResiduals(Vp8ResidualBuffer residuals)
+    {
+        Vp8EncProba proba = this.Proba;
+        bool useSkip = proba.UseSkipProba;
+        Vp8ResidualBuffer.Reader reader = residuals.GetReader();
+        foreach (Vp8MacroBlockInfo mb in this.MbInfo)
+        {
+            bool i16 = mb.MacroBlockType == Vp8MacroBlockType.I16X16;
+            if (useSkip && mb.Skip)
+            {
+                // Partition 0 carries the skip flag, so the decoder reads no coefficients for this macroblock.
+                reader.SkipBlocks(i16 ? Vp8ResidualBuffer.BlocksPerI16Macroblock : Vp8ResidualBuffer.BlocksPerI4Macroblock);
+                continue;
+            }
+
+            if (i16)
+            {
+                this.EmitBlock(ref reader, 0, proba.Coeffs[1]);
+            }
+
+            int lumaFirst = i16 ? 1 : 0;
+            Vp8BandProbas[] lumaProbas = proba.Coeffs[i16 ? 0 : 3];
+            for (int i = 0; i < 16; i++)
+            {
+                this.EmitBlock(ref reader, lumaFirst, lumaProbas);
+            }
+
+            for (int i = 0; i < 8; i++)
+            {
+                this.EmitBlock(ref reader, 0, proba.Coeffs[2]);
+            }
+        }
+    }
+
+    private void EmitBlock(ref Vp8ResidualBuffer.Reader reader, int first, Vp8BandProbas[] probas)
+    {
+        reader.ReadBlock(out int ctx, out ReadOnlySpan<short> levels);
+        this.bitWriter.PutCoeffs(ctx, levels, first, probas);
     }
 
     private void SetLoopParams(float q)
@@ -989,16 +1100,14 @@ internal class Vp8Encoder : IDisposable
     {
         int x, y, ch;
         bool i16 = it.CurrentMacroBlockInfo.MacroBlockType == Vp8MacroBlockType.I16X16;
-        int segment = it.CurrentMacroBlockInfo.Segment;
 
         it.NzToBytes();
 
-        int pos1 = this.bitWriter.NumBytes();
         if (i16)
         {
             residual.Init(0, 1, this.Proba);
             residual.SetCoeffs(rd.YDcLevels);
-            int res = this.bitWriter.PutCoeffs(it.TopNz[8] + it.LeftNz[8], residual);
+            int res = this.PutCoeffs(it.TopNz[8] + it.LeftNz[8], residual);
             it.TopNz[8] = it.LeftNz[8] = res;
             residual.Init(1, 0, this.Proba);
         }
@@ -1015,12 +1124,10 @@ internal class Vp8Encoder : IDisposable
                 int ctx = it.TopNz[x] + it.LeftNz[y];
                 Span<short> coeffs = rd.YAcLevels.AsSpan(16 * (x + (y * 4)), 16);
                 residual.SetCoeffs(coeffs);
-                int res = this.bitWriter.PutCoeffs(ctx, residual);
+                int res = this.PutCoeffs(ctx, residual);
                 it.TopNz[x] = it.LeftNz[y] = res;
             }
         }
-
-        int pos2 = this.bitWriter.NumBytes();
 
         // U/V
         residual.Init(0, 2, this.Proba);
@@ -1032,25 +1139,24 @@ internal class Vp8Encoder : IDisposable
                 {
                     int ctx = it.TopNz[4 + ch + x] + it.LeftNz[4 + ch + y];
                     residual.SetCoeffs(rd.UvLevels.AsSpan(16 * ((ch * 2) + x + (y * 2)), 16));
-                    int res = this.bitWriter.PutCoeffs(ctx, residual);
+                    int res = this.PutCoeffs(ctx, residual);
                     it.TopNz[4 + ch + x] = it.LeftNz[4 + ch + y] = res;
                 }
             }
         }
 
-        int pos3 = this.bitWriter.NumBytes();
-        it.LumaBits = pos2 - pos1;
-        it.UvBits = pos3 - pos2;
-        it.BitCount[segment, i16 ? 1 : 0] += it.LumaBits;
-        it.BitCount[segment, 2] += it.UvBits;
         it.BytesToNz();
     }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private int PutCoeffs(int ctx, Vp8Residual residual)
+        => this.bitWriter.PutCoeffs(ctx, residual.Coeffs.AsSpan(0, residual.Last + 1), residual.First, residual.Prob);
 
     /// <summary>
     /// Same as CodeResiduals, but doesn't actually write anything.
     /// Instead, it just records the event distribution.
     /// </summary>
-    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd, Vp8Residual residual)
+    private void RecordResiduals(Vp8EncIterator it, Vp8ModeScore rd, Vp8Residual residual, Vp8ResidualBuffer sink)
     {
         int x, y, ch;
         bool i16 = it.CurrentMacroBlockInfo.MacroBlockType == Vp8MacroBlockType.I16X16;
@@ -1062,7 +1168,9 @@ internal class Vp8Encoder : IDisposable
             // i16x16
             residual.Init(0, 1, this.Proba);
             residual.SetCoeffs(rd.YDcLevels);
-            int res = residual.RecordCoeffs(it.TopNz[8] + it.LeftNz[8]);
+            int ctx = it.TopNz[8] + it.LeftNz[8];
+            int res = residual.RecordCoeffs(ctx);
+            sink?.AppendBlock(ctx, residual.Coeffs.AsSpan(0, residual.Last + 1));
             it.TopNz[8] = res;
             it.LeftNz[8] = res;
             residual.Init(1, 0, this.Proba);
@@ -1081,6 +1189,7 @@ internal class Vp8Encoder : IDisposable
                 Span<short> coeffs = rd.YAcLevels.AsSpan(16 * (x + (y * 4)), 16);
                 residual.SetCoeffs(coeffs);
                 int res = residual.RecordCoeffs(ctx);
+                sink?.AppendBlock(ctx, residual.Coeffs.AsSpan(0, residual.Last + 1));
                 it.TopNz[x] = res;
                 it.LeftNz[y] = res;
             }
@@ -1097,6 +1206,7 @@ internal class Vp8Encoder : IDisposable
                     int ctx = it.TopNz[4 + ch + x] + it.LeftNz[4 + ch + y];
                     residual.SetCoeffs(rd.UvLevels.AsSpan(16 * ((ch * 2) + x + (y * 2)), 16));
                     int res = residual.RecordCoeffs(ctx);
+                    sink?.AppendBlock(ctx, residual.Coeffs.AsSpan(0, residual.Last + 1));
                     it.TopNz[4 + ch + x] = res;
                     it.LeftNz[4 + ch + y] = res;
                 }

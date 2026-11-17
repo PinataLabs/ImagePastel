@@ -56,7 +56,6 @@ internal static unsafe class QuantEnc
         Span<byte> src = it.YuvIn.AsSpan(Vp8EncIterator.YOffEnc);
         Span<int> scratch = it.Scratch3;
         Vp8ModeScore rdTmp = it.ModeScoreScratch;
-        rdTmp.Clear();
         Vp8Residual res = it.ResidualScratch;
         Vp8ModeScore rdCur = rdTmp;
         Vp8ModeScore rdBest = rd;
@@ -149,22 +148,17 @@ internal static unsafe class QuantEnc
         do
         {
             int numBlocks = 1;
-            rdi4.Clear();
             int mode;
             int bestMode = -1;
             Span<byte> src = src0.Slice(WebpLookupTables.Vp8Scan[it.I4]);
             short[] modeCosts = it.GetCostModeI4(rd.ModesI4);
             Span<byte> bestBlock = bestBlocks.Slice(WebpLookupTables.Vp8Scan[it.I4]);
             Span<byte> tmpDst = it.Scratch.AsSpan();
-            tmpDst.Clear();
 
             rdi4.InitScore();
             it.MakeIntra4Preds();
             for (mode = 0; mode < WebpConstants.NumBModes; ++mode)
             {
-                rdTmp.Clear();
-                tmpLevels.Clear();
-
                 // Reconstruct.
                 rdTmp.Nz = (uint)ReconstructIntra4(it, dqm, tmpLevels, src, tmpDst, mode);
 
@@ -254,8 +248,6 @@ internal static unsafe class QuantEnc
         rdBest.InitScore();
         for (mode = 0; mode < WebpConstants.NumPredModes; ++mode)
         {
-            rdUv.Clear();
-
             // Reconstruct
             rdUv.Nz = (uint)ReconstructUv(it, dqm, rdUv, tmpDst, mode);
 
@@ -308,8 +300,6 @@ internal static unsafe class QuantEnc
         int n;
         Span<short> shortScratchSpan = it.Scratch2.AsSpan();
         Span<int> scratch = it.Scratch3.AsSpan(0, 16);
-        shortScratchSpan.Clear();
-        scratch.Clear();
         Span<short> dcTmp = shortScratchSpan.Slice(0, 16);
         Span<short> tmp = shortScratchSpan.Slice(16, 16 * 16);
 

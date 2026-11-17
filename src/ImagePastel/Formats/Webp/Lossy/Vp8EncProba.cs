@@ -160,7 +160,6 @@ internal class Vp8EncProba
 
     public int FinalizeTokenProbas()
     {
-        bool hasChanged = false;
         int size = 0;
         for (int t = 0; t < WebpConstants.NumTypes; ++t)
         {
@@ -183,20 +182,18 @@ internal class Vp8EncProba
                         if (useNewP)
                         {
                             // Only use proba that seem meaningful enough.
-                            this.Coeffs[t][b].Probabilities[c].Probabilities[p] = (byte)newP;
-                            hasChanged |= newP != oldP;
                             size += 8 * 256;
                         }
-                        else
-                        {
-                            this.Coeffs[t][b].Probabilities[c].Probabilities[p] = (byte)oldP;
-                        }
+
+                        byte chosen = (byte)(useNewP ? newP : oldP);
+                        ref byte slot = ref this.Coeffs[t][b].Probabilities[c].Probabilities[p];
+                        this.Dirty |= slot != chosen;
+                        slot = chosen;
                     }
                 }
             }
         }
 
-        this.Dirty = hasChanged;
         return size;
     }
 
