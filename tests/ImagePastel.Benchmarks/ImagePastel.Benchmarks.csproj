@@ -6,8 +6,6 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>PinataLabs.ImagePastel.Benchmarks</RootNamespace>
     <GenerateProgramFile>false</GenerateProgramFile>
-    <!--Used to hide test project from dotnet test-->
-    <IsTestProject>false</IsTestProject>
     <Configurations>Debug;Release;Debug-InnerLoop;Release-InnerLoop</Configurations>
     <!--
       CA1416: the System.Drawing comparison benchmarks only run on Windows, and their shared
