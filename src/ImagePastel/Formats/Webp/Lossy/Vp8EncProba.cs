@@ -91,9 +91,8 @@ internal class Vp8EncProba
     public Vp8Stats[][] Stats { get; }
 
     /// <summary>
-    /// Gets the cost of each coefficient level, indexed by [type][position][ctx][level] with
-    /// <see cref="LevelCostsPerType"/>, <see cref="LevelCostsPerPosition"/> and <see cref="LevelCostsPerCtx"/> strides.
-    /// The costs for ctx 1 and 2 include the cost of the not-end-of-block bit.
+    /// Gets the level costs. The costs for ctx 1 and 2 include the cost of the not-end-of-block bit,
+    /// which RFC 6386 section 13.3 omits after a zero coefficient (ctx 0).
     /// </summary>
     public ushort[] LevelCosts { get; }
 

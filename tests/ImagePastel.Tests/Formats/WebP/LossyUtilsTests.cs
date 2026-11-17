@@ -288,7 +288,7 @@ public class LossyUtilsTests
         ushort[] w = { 38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2 };
         int[] expected = { 77520, 77520, 0, 6103, 8068, 9819, 7051, 8837 };
         int[] scratch = new int[16];
-        int[] aSums = new int[16];
+        int[] sourceTransforms = new int[16];
         byte[] a = new byte[16 * WebpConstants.Bps];
         byte[] b = new byte[16 * WebpConstants.Bps];
         Random random = new(42);
@@ -319,8 +319,8 @@ public class LossyUtilsTests
                     break;
             }
 
-            LossyUtils.TTransform16X16(a, w, aSums, scratch);
-            int actual = LossyUtils.Vp8Disto16X16(aSums, b, w, scratch);
+            LossyUtils.TTransform16X16(a, w, sourceTransforms, scratch);
+            int actual = LossyUtils.Vp8Disto16X16(sourceTransforms, b, w, scratch);
 
             Assert.Equal(expected[i], actual);
         }

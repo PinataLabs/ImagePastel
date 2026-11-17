@@ -112,10 +112,6 @@ internal class Vp8Residual
         return 1;
     }
 
-    /// <summary>
-    /// Returns the cost of coding <paramref name="coeffs"/> as the type set by <see cref="Init"/>.
-    /// Reads the levels in place; <see cref="Coeffs"/> and <see cref="Last"/> are neither read nor changed.
-    /// </summary>
     public int GetResidualCost(int ctx0, ReadOnlySpan<short> coeffs, out bool nonZero)
     {
         coeffs = coeffs.Slice(0, 16);
@@ -129,7 +125,7 @@ internal class Vp8Residual
         }
 
         // bitCost(1, p0) is already incorporated in the level costs, but only if ctx != 0
-        // (as required by the syntax). For ctx0 == 0, we need to add it here or it'll
+        // (RFC 6386 section 13.3). For ctx0 == 0, we need to add it here or it'll
         // be missing during the loop.
         int cost = ctx0 == 0 ? LossyUtils.Vp8BitCost(1, (byte)p0) : 0;
 
@@ -171,7 +167,6 @@ internal class Vp8Residual
             v = Abs(Unsafe.Add(ref coeffsRef, n));
         }
 
-        // Last coefficient is always non-zero
         cost += LevelCost(ref typeCosts, n, ctx, v);
         if (n < 15)
         {
@@ -184,7 +179,6 @@ internal class Vp8Residual
         return cost;
     }
 
-    // Coefficient signs are unpredictable, so avoid the branch in Math.Abs.
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int Abs(int v)
     {
@@ -192,7 +186,6 @@ internal class Vp8Residual
         return (v ^ sign) - sign;
     }
 
-    // n < 16 and ctx < NumCtx keep the cost index inside the type's table.
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int LevelCost(ref ushort typeCosts, int n, int ctx, int level)
         => WebpLookupTables.Vp8LevelFixedCosts[level]
@@ -211,18 +204,11 @@ internal class Vp8Residual
             Vector128<byte> c0 = Unsafe.As<short, Vector128<byte>>(ref coeffsRef);
             Vector128<byte> c1 = Unsafe.As<short, Vector128<byte>>(ref Unsafe.Add(ref coeffsRef, 8));
 
-            // Use SSE2 to compare 16 values with a single instruction.
             Vector128<sbyte> m0 = Sse2.PackSignedSaturate(c0.AsInt16(), c1.AsInt16());
             Vector128<sbyte> m1 = Sse2.CompareEqual(m0, Vector128<sbyte>.Zero);
 
-            // Get the comparison results as a bitmask into 16bits. Negate the mask to get
-            // the position of entries that are not equal to zero. We don't need to mask
-            // out least significant bits according to res->first, since coeffs[0] is 0
-            // if res->first > 0.
             uint mask = 0x0000ffffu ^ (uint)Sse2.MoveMask(m1);
 
-            // The position of the most significant non-zero bit indicates the position of
-            // the last non-zero value.
             return mask != 0 ? Numerics.Log2(mask) : -1;
         }
 #endif

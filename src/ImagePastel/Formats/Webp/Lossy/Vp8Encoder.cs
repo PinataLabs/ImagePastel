@@ -1010,17 +1010,12 @@ internal class Vp8Encoder : IDisposable
         }
     }
 
-    /// <summary>
-    /// Analyzes every macroblock from the source samples alone, adding its susceptibility to
-    /// <paramref name="alphas"/>, <see cref="alpha"/> and <see cref="uvAlpha"/>.
-    /// </summary>
     private void MacroBlockAnalysis(int width, int height, int[] alphas)
     {
         this.alpha = 0;
         this.uvAlpha = 0;
         var operation = new MacroBlockAnalysisOperation(this, width, height, alphas);
 
-        // A row here is a row of macroblocks, which covers 16 rows of pixels.
         ParallelRowIterator.IterateRowIntervals(this.configuration, new Rectangle(0, 0, width * 16, this.Mbh), in operation);
     }
 
@@ -1282,9 +1277,6 @@ internal class Vp8Encoder : IDisposable
             int uvStride = (yStride + 1) >> 1;
             int mbw = encoder.Mbw;
 
-            // Each worker gets its own top rows, and writes the shared MbInfo and Preds only at its own macroblocks.
-            // Its first row sees 127 instead of the row above's samples as the top-right of each macroblock,
-            // but analysis scores only the DC and TM intra4 modes, which do not read the top-right.
             var it = new Vp8EncIterator(new byte[mbw * 16], new byte[mbw * 16 * 2], new uint[mbw + 1], encoder.MbInfo, encoder.Preds, new sbyte[mbw * 4], mbw, encoder.Mbh);
             int[] alphas = new int[WebpConstants.MaxAlpha + 1];
             int alpha = 0;

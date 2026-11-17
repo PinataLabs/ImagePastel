@@ -257,11 +257,6 @@ internal class Vp8EncIterator
 
     public void Init() => this.Reset();
 
-    /// <summary>
-    /// Restricts the scan to the macroblock rows from <paramref name="startRow"/> up to, but not including, <paramref name="endRow"/>.
-    /// </summary>
-    /// <param name="startRow">The first row to visit.</param>
-    /// <param name="endRow">The row after the last row to visit.</param>
     public void InitRows(int startRow, int endRow)
     {
         this.SetRow(startRow);

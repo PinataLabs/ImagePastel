@@ -67,7 +67,6 @@ public class QuantEncTests
 
         for (int i = 0; i < 4000; i++)
         {
-            // Every fourth block is near its predictors, so small and zero coefficients get covered too.
             rng.NextBytes(src);
             rng.NextBytes(it.YuvP);
             if ((i & 3) == 0)

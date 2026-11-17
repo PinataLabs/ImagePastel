@@ -297,9 +297,6 @@ internal static class LossyUtils
         }
     }
 
-    /// <summary>
-    /// Stores the <see cref="TTransform"/> of each 4x4 block of a 16x16 block in <paramref name="sums"/>, in <see cref="WebpLookupTables.Vp8Scan"/> order.
-    /// </summary>
     public static void TTransform16X16(Span<byte> input, Span<ushort> w, Span<int> sums, Span<int> scratch)
     {
         for (int i = 0; i < 16; i++)
@@ -308,28 +305,20 @@ internal static class LossyUtils
         }
     }
 
-    /// <summary>
-    /// Sums <see cref="Vp8Disto4X4"/> over the 4x4 blocks of a 16x16 block, with <paramref name="aSums"/> = <see cref="TTransform16X16"/> of the first block,
-    /// so a block compared against many candidates is transformed once.
-    /// </summary>
-    public static int Vp8Disto16X16(ReadOnlySpan<int> aSums, Span<byte> b, Span<ushort> w, Span<int> scratch)
+    public static int Vp8Disto16X16(ReadOnlySpan<int> sourceTransforms, Span<byte> b, Span<ushort> w, Span<int> scratch)
     {
         int d = 0;
         for (int i = 0; i < 16; i++)
         {
-            d += Vp8Disto4X4(aSums[i], b.Slice(WebpLookupTables.Vp8Scan[i]), w, scratch);
+            d += Vp8Disto4X4(sourceTransforms[i], b.Slice(WebpLookupTables.Vp8Scan[i]), w, scratch);
         }
 
         return d;
     }
 
-    /// <summary>
-    /// Returns the spectral distortion between two 4x4 blocks, with <paramref name="aSum"/> = <see cref="TTransform"/> of the first block,
-    /// so a block compared against many candidates is transformed once.
-    /// </summary>
     [MethodImpl(InliningOptions.ShortMethod)]
-    public static int Vp8Disto4X4(int aSum, Span<byte> b, Span<ushort> w, Span<int> scratch)
-        => Math.Abs(TTransform(b, w, scratch) - aSum) >> 5;
+    public static int Vp8Disto4X4(int sourceTransform, Span<byte> b, Span<ushort> w, Span<int> scratch)
+        => Math.Abs(TTransform(b, w, scratch) - sourceTransform) >> 5;
 
     public static void DC16(Span<byte> dst, Span<byte> yuv, int offset)
     {
@@ -853,11 +842,6 @@ internal static class LossyUtils
     }
 
 #if NETCOREAPP3_0_OR_GREATER
-    /// <summary>
-    /// SSE4.1 form of <see cref="TTransform"/>.
-    /// The block is held as two rows per register, so the coefficients come out with rows in the order 0, 3, 1, 2
-    /// and columns in the order 0, 1 | 3, 2; the weights are permuted to match, relying on w being symmetric.
-    /// </summary>
     public static int TTransformSse41(Span<byte> input, Span<ushort> w)
     {
         _ = input[(3 * WebpConstants.Bps) + 3];
@@ -873,7 +857,6 @@ internal static class LossyUtils
 
         Vp8Hadamard4(r01, r23, out Vector128<short> v01, out Vector128<short> v32);
 
-        // Transpose into columns 0|1 and 2|3, each with rows in the order 0, 3, 1, 2.
         Vector128<int> t0 = Sse2.UnpackLow(v01, v32).AsInt32();
         Vector128<int> t1 = Sse2.UnpackHigh(v01, v32).AsInt32();
         Vector128<short> c01 = Sse2.UnpackLow(t0, t1).AsInt16();
@@ -890,8 +873,6 @@ internal static class LossyUtils
         return Numerics.ReduceSum(Sse2.Add(sum01, sum32));
     }
 
-    // One 4-point Hadamard pass over four 4-lane groups x0..x3, given as x01 = [x0 | x1] and x23 = [x2 | x3].
-    // Returns y01 = [y0 | y1] and y32 = [y3 | y2].
     [MethodImpl(InliningOptions.ShortMethod)]
     private static void Vp8Hadamard4(Vector128<short> x01, Vector128<short> x23, out Vector128<short> y01, out Vector128<short> y32)
     {
