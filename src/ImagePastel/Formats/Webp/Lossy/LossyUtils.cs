@@ -754,7 +754,6 @@ internal static class LossyUtils
     public static void TransformWht(Span<short> input, Span<short> output, Span<int> scratch)
     {
         Span<int> tmp = scratch.Slice(0, 16);
-        tmp.Clear();
         for (int i = 0; i < 4; i++)
         {
             int iPlus4 = 4 + i;

@@ -313,14 +313,10 @@ internal static unsafe class QuantEnc
         Span<short> dcTmp = shortScratchSpan.Slice(0, 16);
         Span<short> tmp = shortScratchSpan.Slice(16, 16 * 16);
 
-        for (n = 0; n < 16; n += 2)
+        for (n = 0; n < 16; n += 4)
         {
-            Vp8Encoding.FTransform2(
-                src.Slice(WebpLookupTables.Vp8Scan[n]),
-                reference.Slice(WebpLookupTables.Vp8Scan[n]),
-                tmp.Slice(n * 16, 16),
-                tmp.Slice((n + 1) * 16, 16),
-                scratch);
+            int offset = n * WebpConstants.Bps;
+            Vp8Encoding.FTransform4(src.Slice(offset), reference.Slice(offset), tmp.Slice(n * 16, 32), tmp.Slice((n + 2) * 16, 32), scratch);
         }
 
         Vp8Encoding.FTransformWht(tmp, dcTmp, scratch);
@@ -336,9 +332,10 @@ internal static unsafe class QuantEnc
 
         // Transform back.
         LossyUtils.TransformWht(dcTmp, tmp, scratch);
-        for (n = 0; n < 16; n += 2)
+        for (n = 0; n < 16; n += 4)
         {
-            Vp8Encoding.ITransformTwo(reference.Slice(WebpLookupTables.Vp8Scan[n]), tmp.Slice(n * 16, 32), yuvOut.Slice(WebpLookupTables.Vp8Scan[n]), scratch);
+            int offset = n * WebpConstants.Bps;
+            Vp8Encoding.ITransformFour(reference.Slice(offset), tmp.Slice(n * 16, 32), tmp.Slice((n + 2) * 16, 32), yuvOut.Slice(offset), scratch);
         }
 
         return nz;
@@ -365,14 +362,11 @@ internal static unsafe class QuantEnc
         Span<short> tmp = it.Scratch2.AsSpan(0, 8 * 16);
         Span<int> scratch = it.Scratch3.AsSpan(0, 16);
 
-        for (n = 0; n < 8; n += 2)
+        // Each 16x4 strip holds U blocks n, n + 1 on the left and V blocks n + 4, n + 5 on the right.
+        for (n = 0; n < 4; n += 2)
         {
-            Vp8Encoding.FTransform2(
-                src.Slice(WebpLookupTables.Vp8ScanUv[n]),
-                reference.Slice(WebpLookupTables.Vp8ScanUv[n]),
-                tmp.Slice(n * 16, 16),
-                tmp.Slice((n + 1) * 16, 16),
-                scratch);
+            int offset = n * 2 * WebpConstants.Bps;
+            Vp8Encoding.FTransform4(src.Slice(offset), reference.Slice(offset), tmp.Slice(n * 16, 32), tmp.Slice((n + 4) * 16, 32), scratch);
         }
 
         CorrectDcValues(it, ref dqm.Uv, tmp, rd);
@@ -382,9 +376,10 @@ internal static unsafe class QuantEnc
             nz |= Quantize2Blocks(tmp.Slice(n * 16, 32), rd.UvLevels.AsSpan(n * 16, 32), ref dqm.Uv) << n;
         }
 
-        for (n = 0; n < 8; n += 2)
+        for (n = 0; n < 4; n += 2)
         {
-            Vp8Encoding.ITransformTwo(reference.Slice(WebpLookupTables.Vp8ScanUv[n]), tmp.Slice(n * 16, 32), yuvOut.Slice(WebpLookupTables.Vp8ScanUv[n]), scratch);
+            int offset = n * 2 * WebpConstants.Bps;
+            Vp8Encoding.ITransformFour(reference.Slice(offset), tmp.Slice(n * 16, 32), tmp.Slice((n + 4) * 16, 32), yuvOut.Slice(offset), scratch);
         }
 
         return nz << 16;

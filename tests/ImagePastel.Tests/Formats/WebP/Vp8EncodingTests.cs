@@ -1,7 +1,9 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Linq;
+using PinataLabs.ImagePastel.Formats.Webp;
 using PinataLabs.ImagePastel.Formats.Webp.Lossy;
 using PinataLabs.ImagePastel.Tests.TestUtilities;
 using Xunit;
@@ -126,6 +128,51 @@ public class Vp8EncodingTests
         Assert.True(dst.SequenceEqual(expected));
     }
 
+    private static void RunFTransform4MatchesTwoFTransform2Test()
+    {
+        Random random = new(42);
+        byte[] src = new byte[(3 * WebpConstants.Bps) + 16];
+        byte[] reference = new byte[src.Length];
+        for (int iteration = 0; iteration < 500; iteration++)
+        {
+            random.NextBytes(src);
+            random.NextBytes(reference);
+            short[] expected = new short[64];
+            short[] actual = new short[64];
+
+            Vp8Encoding.FTransform2(src, reference, expected.AsSpan(0, 16), expected.AsSpan(16, 16), new int[16]);
+            Vp8Encoding.FTransform2(src.AsSpan(8), reference.AsSpan(8), expected.AsSpan(32, 16), expected.AsSpan(48, 16), new int[16]);
+            Vp8Encoding.FTransform4(src, reference, actual.AsSpan(0, 32), actual.AsSpan(32, 32), new int[16]);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
+    private static void RunITransformFourMatchesTwoITransformTwoTest()
+    {
+        Random random = new(42);
+        byte[] reference = new byte[(3 * WebpConstants.Bps) + 16];
+        short[] input = new short[64];
+        for (int iteration = 0; iteration < 500; iteration++)
+        {
+            random.NextBytes(reference);
+            int range = iteration % 2 == 0 ? 256 : 4096;
+            for (int i = 0; i < input.Length; i++)
+            {
+                input[i] = (short)random.Next(-range, range);
+            }
+
+            byte[] expected = new byte[reference.Length];
+            byte[] actual = new byte[reference.Length];
+
+            Vp8Encoding.ITransformTwo(reference, input.AsSpan(0, 32), expected, new int[16]);
+            Vp8Encoding.ITransformTwo(reference.AsSpan(8), input.AsSpan(32, 32), expected.AsSpan(8), new int[16]);
+            Vp8Encoding.ITransformFour(reference, input.AsSpan(0, 32), input.AsSpan(32, 32), actual, new int[16]);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
     [Fact]
     public void FTransform2_Works() => RunFTransform2Test();
 
@@ -161,4 +208,16 @@ public class Vp8EncodingTests
 
     [Fact]
     public void TwoInverseTransform_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunTwoInverseTransformTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Theory]
+    [InlineData(HwIntrinsics.AllowAll)]
+    [InlineData(HwIntrinsics.DisableAVX2)]
+    [InlineData(HwIntrinsics.DisableHWIntrinsic)]
+    public void FTransform4_MatchesTwoFTransform2(HwIntrinsics intrinsics) => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunFTransform4MatchesTwoFTransform2Test, intrinsics);
+
+    [Theory]
+    [InlineData(HwIntrinsics.AllowAll)]
+    [InlineData(HwIntrinsics.DisableAVX2)]
+    [InlineData(HwIntrinsics.DisableHWIntrinsic)]
+    public void ITransformFour_MatchesTwoITransformTwo(HwIntrinsics intrinsics) => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunITransformFourMatchesTwoITransformTwoTest, intrinsics);
 }

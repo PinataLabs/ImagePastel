@@ -95,6 +95,34 @@ internal static unsafe class Vp8Encoding
 
     private static readonly Vector128<int> K51000 = Vector128.Create(51000);
 
+    private static readonly Vector256<short> K1Vec256 = Vector256.Create(K1, K1);
+
+    private static readonly Vector256<short> K2Vec256 = Vector256.Create(K2, K2);
+
+    private static readonly Vector256<short> FourVec256 = Vector256.Create(Four, Four);
+
+    private static readonly Vector256<short> SevenVec256 = Vector256.Create(Seven, Seven);
+
+    private static readonly Vector256<short> K88pVec256 = Vector256.Create(K88p, K88p);
+
+    private static readonly Vector256<short> K88mVec256 = Vector256.Create(K88m, K88m);
+
+    private static readonly Vector256<short> K5352_2217pVec256 = Vector256.Create(K5352_2217p, K5352_2217p);
+
+    private static readonly Vector256<short> K5352_2217mVec256 = Vector256.Create(K5352_2217m, K5352_2217m);
+
+    private static readonly Vector256<int> K937Vec256 = Vector256.Create(937);
+
+    private static readonly Vector256<int> K1812Vec256 = Vector256.Create(1812);
+
+    private static readonly Vector256<short> K5352_2217Vec256 = Vector256.Create(K5352_2217, K5352_2217);
+
+    private static readonly Vector256<short> K2217_5352Vec256 = Vector256.Create(K2217_5352, K2217_5352);
+
+    private static readonly Vector256<int> K12000PlusOneVec256 = Vector256.Create(12000 + (1 << 16));
+
+    private static readonly Vector256<int> K51000Vec256 = Vector256.Create(51000);
+
     private const byte MmShuffle2301 = (2 << 6) | (3 << 4) | (0 << 2) | 1;
 
     private const byte MmShuffle1032 = (1 << 6) | (0 << 4) | (3 << 2) | 2;
@@ -222,6 +250,114 @@ internal static unsafe class Vp8Encoding
             ITransformOne(reference.Slice(4), input.Slice(16), dst.Slice(4), scratch);
         }
     }
+
+    /// <summary>
+    /// Does four inverse transforms over a 16x4 strip: the two blocks in <paramref name="input01"/> fill
+    /// columns 0-7 and the two blocks in <paramref name="input23"/> fill columns 8-15.
+    /// Gives the same result as two <see cref="ITransformTwo"/> calls.
+    /// </summary>
+    public static void ITransformFour(Span<byte> reference, Span<short> input01, Span<short> input23, Span<byte> dst, Span<int> scratch)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            // Each 128-bit lane holds the operands ITransformTwo holds for one block pair,
+            // and every operation below stays within its lane.
+            ref short input01Ref = ref MemoryMarshal.GetReference(input01);
+            ref short input23Ref = ref MemoryMarshal.GetReference(input23);
+            Vector256<long> a = Unsafe.As<short, Vector256<long>>(ref input01Ref);
+            Vector256<long> b = Unsafe.As<short, Vector256<long>>(ref Unsafe.Add(ref input01Ref, 16));
+            Vector256<long> c = Unsafe.As<short, Vector256<long>>(ref input23Ref);
+            Vector256<long> d = Unsafe.As<short, Vector256<long>>(ref Unsafe.Add(ref input23Ref, 16));
+
+            Vector256<long> abLow = Avx2.UnpackLow(a, b);
+            Vector256<long> abHigh = Avx2.UnpackHigh(a, b);
+            Vector256<long> cdLow = Avx2.UnpackLow(c, d);
+            Vector256<long> cdHigh = Avx2.UnpackHigh(c, d);
+            Vector256<short> in0 = Avx2.Permute2x128(abLow, cdLow, 0x20).AsInt16();
+            Vector256<short> in1 = Avx2.Permute2x128(abHigh, cdHigh, 0x20).AsInt16();
+            Vector256<short> in2 = Avx2.Permute2x128(abLow, cdLow, 0x31).AsInt16();
+            Vector256<short> in3 = Avx2.Permute2x128(abHigh, cdHigh, 0x31).AsInt16();
+
+            InverseTransformPassAvx2(in0, in2, in1, in3, Vector256<short>.Zero, out Vector256<short> tmp0, out Vector256<short> tmp1, out Vector256<short> tmp2, out Vector256<short> tmp3);
+            Transpose2x4x4Avx2(ref tmp0, ref tmp1, ref tmp2, ref tmp3);
+            InverseTransformPassAvx2(tmp0, tmp2, tmp1, tmp3, FourVec256, out tmp0, out tmp1, out tmp2, out tmp3);
+            tmp0 = Avx2.ShiftRightArithmetic(tmp0, 3);
+            tmp1 = Avx2.ShiftRightArithmetic(tmp1, 3);
+            tmp2 = Avx2.ShiftRightArithmetic(tmp2, 3);
+            tmp3 = Avx2.ShiftRightArithmetic(tmp3, 3);
+            Transpose2x4x4Avx2(ref tmp0, ref tmp1, ref tmp2, ref tmp3);
+
+            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+            ref byte outputRef = ref MemoryMarshal.GetReference(dst);
+            AddToReferenceRowAvx2(ref referenceRef, ref outputRef, tmp0);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps), ref Unsafe.Add(ref outputRef, WebpConstants.Bps), tmp1);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2), tmp2);
+            AddToReferenceRowAvx2(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3), tmp3);
+        }
+        else
+#endif
+        {
+            ITransformTwo(reference, input01, dst, scratch);
+            ITransformTwo(reference.Slice(8), input23, dst.Slice(8), scratch);
+        }
+    }
+
+#if NETCOREAPP3_0_OR_GREATER
+    // One pass of the inverse transform, as in InverseTransformVerticalPass/InverseTransformHorizontalPass
+    // (the horizontal pass adds four to the DC term before the final shift).
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void InverseTransformPassAvx2(Vector256<short> in0, Vector256<short> in2, Vector256<short> in1, Vector256<short> in3, Vector256<short> rounder, out Vector256<short> tmp0, out Vector256<short> tmp1, out Vector256<short> tmp2, out Vector256<short> tmp3)
+    {
+        Vector256<short> dc = Avx2.Add(in0, rounder);
+        Vector256<short> a = Avx2.Add(dc, in2);
+        Vector256<short> b = Avx2.Subtract(dc, in2);
+
+        Vector256<short> c1 = Avx2.MultiplyHigh(in1, K2Vec256);
+        Vector256<short> c2 = Avx2.MultiplyHigh(in3, K1Vec256);
+        Vector256<short> c3 = Avx2.Subtract(in1, in3);
+        Vector256<short> c4 = Avx2.Subtract(c1, c2);
+        Vector256<short> c = Avx2.Add(c3, c4);
+
+        Vector256<short> d1 = Avx2.MultiplyHigh(in1, K1Vec256);
+        Vector256<short> d2 = Avx2.MultiplyHigh(in3, K2Vec256);
+        Vector256<short> d3 = Avx2.Add(in1, in3);
+        Vector256<short> d4 = Avx2.Add(d1, d2);
+        Vector256<short> d = Avx2.Add(d3, d4);
+
+        tmp0 = Avx2.Add(a, d);
+        tmp1 = Avx2.Add(b, c);
+        tmp2 = Avx2.Subtract(b, c);
+        tmp3 = Avx2.Subtract(a, d);
+    }
+
+    // LossyUtils.Vp8Transpose_2_4x4_16b applied to each 128-bit lane.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void Transpose2x4x4Avx2(ref Vector256<short> b0, ref Vector256<short> b1, ref Vector256<short> b2, ref Vector256<short> b3)
+    {
+        Vector256<short> transpose00 = Avx2.UnpackLow(b0, b1);
+        Vector256<short> transpose01 = Avx2.UnpackLow(b2, b3);
+        Vector256<short> transpose02 = Avx2.UnpackHigh(b0, b1);
+        Vector256<short> transpose03 = Avx2.UnpackHigh(b2, b3);
+
+        Vector256<int> transpose10 = Avx2.UnpackLow(transpose00.AsInt32(), transpose01.AsInt32());
+        Vector256<int> transpose11 = Avx2.UnpackLow(transpose02.AsInt32(), transpose03.AsInt32());
+        Vector256<int> transpose12 = Avx2.UnpackHigh(transpose00.AsInt32(), transpose01.AsInt32());
+        Vector256<int> transpose13 = Avx2.UnpackHigh(transpose02.AsInt32(), transpose03.AsInt32());
+
+        b0 = Avx2.UnpackLow(transpose10.AsInt64(), transpose11.AsInt64()).AsInt16();
+        b1 = Avx2.UnpackHigh(transpose10.AsInt64(), transpose11.AsInt64()).AsInt16();
+        b2 = Avx2.UnpackLow(transpose12.AsInt64(), transpose13.AsInt64()).AsInt16();
+        b3 = Avx2.UnpackHigh(transpose12.AsInt64(), transpose13.AsInt64()).AsInt16();
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void AddToReferenceRowAvx2(ref byte reference, ref byte dst, Vector256<short> residual)
+    {
+        Vector256<short> sum = Avx2.Add(Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref reference)), residual);
+        Unsafe.WriteUnaligned(ref dst, Sse2.PackUnsignedSaturate(sum.GetLower(), sum.GetUpper()));
+    }
+#endif
 
     public static void ITransformOne(Span<byte> reference, Span<short> input, Span<byte> dst, Span<int> scratch)
     {
@@ -462,6 +598,51 @@ internal static unsafe class Vp8Encoding
         }
     }
 
+    /// <summary>
+    /// Does four forward transforms over a 16x4 strip: columns 0-7 go to the two blocks in <paramref name="output01"/>
+    /// and columns 8-15 to the two blocks in <paramref name="output23"/>.
+    /// Gives the same result as two <see cref="FTransform2"/> calls.
+    /// </summary>
+    public static void FTransform4(Span<byte> src, Span<byte> reference, Span<short> output01, Span<short> output23, Span<int> scratch)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            // Each 128-bit lane holds the operands FTransform2 holds for one block pair,
+            // and every operation below stays within its lane.
+            ref byte srcRef = ref MemoryMarshal.GetReference(src);
+            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+            Vector256<int> diff0 = LoadDifferenceRowAvx2(ref srcRef, ref referenceRef);
+            Vector256<int> diff1 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps));
+            Vector256<int> diff2 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2));
+            Vector256<int> diff3 = LoadDifferenceRowAvx2(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3));
+
+            Vector256<int> shuf01l = Avx2.UnpackLow(diff0, diff1);
+            Vector256<int> shuf23l = Avx2.UnpackLow(diff2, diff3);
+            Vector256<int> shuf01h = Avx2.UnpackHigh(diff0, diff1);
+            Vector256<int> shuf23h = Avx2.UnpackHigh(diff2, diff3);
+
+            FTransformPass1Avx2(shuf01l.AsInt16(), shuf23l.AsInt16(), out Vector256<int> v01l, out Vector256<int> v32l);
+            FTransformPass1Avx2(shuf01h.AsInt16(), shuf23h.AsInt16(), out Vector256<int> v01h, out Vector256<int> v32h);
+
+            FTransformPass2Avx2(v01l, v32l, out Vector256<short> d0g1Left, out Vector256<short> d2f3Left);
+            FTransformPass2Avx2(v01h, v32h, out Vector256<short> d0g1Right, out Vector256<short> d2f3Right);
+
+            ref short output01Ref = ref MemoryMarshal.GetReference(output01);
+            ref short output23Ref = ref MemoryMarshal.GetReference(output23);
+            Unsafe.As<short, Vector256<short>>(ref output01Ref) = Avx2.Permute2x128(d0g1Left, d2f3Left, 0x20);
+            Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref output01Ref, 16)) = Avx2.Permute2x128(d0g1Right, d2f3Right, 0x20);
+            Unsafe.As<short, Vector256<short>>(ref output23Ref) = Avx2.Permute2x128(d0g1Left, d2f3Left, 0x31);
+            Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref output23Ref, 16)) = Avx2.Permute2x128(d0g1Right, d2f3Right, 0x31);
+        }
+        else
+#endif
+        {
+            FTransform2(src, reference, output01, output01.Slice(16), scratch);
+            FTransform2(src.Slice(8), reference.Slice(8), output23, output23.Slice(16), scratch);
+        }
+    }
+
     public static void FTransform(Span<byte> src, Span<byte> reference, Span<short> output, Span<int> scratch)
     {
 #if NETCOREAPP3_0_OR_GREATER
@@ -639,6 +820,77 @@ internal static unsafe class Vp8Encoding
         ref short outputRef = ref MemoryMarshal.GetReference(output);
         Unsafe.As<short, Vector128<short>>(ref outputRef) = d0g1.AsInt16();
         Unsafe.As<short, Vector128<short>>(ref Unsafe.Add(ref outputRef, 8)) = d2f3.AsInt16();
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector256<int> LoadDifferenceRowAvx2(ref byte src, ref byte reference)
+    {
+        Vector256<short> src16 = Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref src));
+        Vector256<short> ref16 = Avx2.ConvertToVector256Int16(Unsafe.ReadUnaligned<Vector128<byte>>(ref reference));
+        return Avx2.Subtract(src16, ref16).AsInt32();
+    }
+
+    // FTransformPass1SSE2 applied to each 128-bit lane.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void FTransformPass1Avx2(Vector256<short> row01, Vector256<short> row23, out Vector256<int> out01, out Vector256<int> out32)
+    {
+        Vector256<short> shuf01_p = Avx2.ShuffleHigh(row01, MmShuffle2301);
+        Vector256<short> shuf32_p = Avx2.ShuffleHigh(row23, MmShuffle2301);
+
+        Vector256<long> s01 = Avx2.UnpackLow(shuf01_p.AsInt64(), shuf32_p.AsInt64());
+        Vector256<long> s32 = Avx2.UnpackHigh(shuf01_p.AsInt64(), shuf32_p.AsInt64());
+
+        Vector256<short> a01 = Avx2.Add(s01.AsInt16(), s32.AsInt16());
+        Vector256<short> a32 = Avx2.Subtract(s01.AsInt16(), s32.AsInt16());
+
+        Vector256<int> tmp0 = Avx2.MultiplyAddAdjacent(a01, K88pVec256);
+        Vector256<int> tmp2 = Avx2.MultiplyAddAdjacent(a01, K88mVec256);
+        Vector256<int> tmp11 = Avx2.MultiplyAddAdjacent(a32, K5352_2217pVec256);
+        Vector256<int> tmp31 = Avx2.MultiplyAddAdjacent(a32, K5352_2217mVec256);
+        Vector256<int> tmp12 = Avx2.Add(tmp11, K1812Vec256);
+        Vector256<int> tmp32 = Avx2.Add(tmp31, K937Vec256);
+        Vector256<int> tmp1 = Avx2.ShiftRightArithmetic(tmp12, 9);
+        Vector256<int> tmp3 = Avx2.ShiftRightArithmetic(tmp32, 9);
+        Vector256<short> s03 = Avx2.PackSignedSaturate(tmp0, tmp2);
+        Vector256<short> s12 = Avx2.PackSignedSaturate(tmp1, tmp3);
+        Vector256<short> slo = Avx2.UnpackLow(s03, s12);
+        Vector256<short> shi = Avx2.UnpackHigh(s03, s12);
+        Vector256<int> v23 = Avx2.UnpackHigh(slo.AsInt32(), shi.AsInt32());
+        out01 = Avx2.UnpackLow(slo.AsInt32(), shi.AsInt32());
+        out32 = Avx2.Shuffle(v23, MmShuffle1032);
+    }
+
+    // FTransformPass2SSE2 applied to each 128-bit lane; returns the two halves each lane would store.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static void FTransformPass2Avx2(Vector256<int> v01, Vector256<int> v32, out Vector256<short> d0g1, out Vector256<short> d2f3)
+    {
+        Vector256<short> a32 = Avx2.Subtract(v01.AsInt16(), v32.AsInt16());
+        Vector256<long> a22 = Avx2.UnpackHigh(a32.AsInt64(), a32.AsInt64());
+
+        Vector256<short> b23 = Avx2.UnpackLow(a22.AsInt16(), a32);
+        Vector256<int> c1 = Avx2.MultiplyAddAdjacent(b23, K5352_2217Vec256);
+        Vector256<int> c3 = Avx2.MultiplyAddAdjacent(b23, K2217_5352Vec256);
+        Vector256<int> d1 = Avx2.Add(c1, K12000PlusOneVec256);
+        Vector256<int> d3 = Avx2.Add(c3, K51000Vec256);
+        Vector256<int> e1 = Avx2.ShiftRightArithmetic(d1, 16);
+        Vector256<int> e3 = Avx2.ShiftRightArithmetic(d3, 16);
+
+        Vector256<short> f1 = Avx2.PackSignedSaturate(e1, e1);
+        Vector256<short> f3 = Avx2.PackSignedSaturate(e3, e3);
+
+        Vector256<short> g1 = Avx2.Add(f1, Avx2.CompareEqual(a32, Vector256<short>.Zero));
+
+        Vector256<short> a01 = Avx2.Add(v01.AsInt16(), v32.AsInt16());
+        Vector256<short> a01Plus7 = Avx2.Add(a01, SevenVec256);
+        Vector256<short> a11 = Avx2.UnpackHigh(a01.AsInt64(), a01.AsInt64()).AsInt16();
+        Vector256<short> c0 = Avx2.Add(a01Plus7, a11);
+        Vector256<short> c2 = Avx2.Subtract(a01Plus7, a11);
+
+        Vector256<short> d0 = Avx2.ShiftRightArithmetic(c0, 4);
+        Vector256<short> d2 = Avx2.ShiftRightArithmetic(c2, 4);
+
+        d0g1 = Avx2.UnpackLow(d0.AsInt64(), g1.AsInt64()).AsInt16();
+        d2f3 = Avx2.UnpackLow(d2.AsInt64(), f3.AsInt64()).AsInt16();
     }
 #endif
 
