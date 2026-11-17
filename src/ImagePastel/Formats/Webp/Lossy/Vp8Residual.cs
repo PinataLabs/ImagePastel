@@ -47,7 +47,6 @@ internal class Vp8Residual
         this.Prob = prob.Coeffs[this.CoeffType];
         this.Stats = prob.Stats[this.CoeffType];
         this.Costs = prob.RemappedCosts[this.CoeffType];
-        this.Coeffs.AsSpan().Clear();
     }
 
     public void SetCoeffs(Span<short> coeffs)

@@ -367,7 +367,6 @@ internal class Vp8Encoder : IDisposable
             do
             {
                 bool dontUseSkip = !this.Proba.UseSkipProba;
-                info.Clear();
                 it.Import(y, u, v, yStride, uvStride, width, height, false);
 
                 // Warning! order is important: first call VP8Decimate() and
@@ -508,7 +507,6 @@ internal class Vp8Encoder : IDisposable
         var residual = new Vp8Residual();
         do
         {
-            info.Clear();
             it.Import(y, u, v, yStride, uvStride, width, height, false);
             if (this.Decimate(it, ref info, rdOpt))
             {
