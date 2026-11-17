@@ -151,26 +151,35 @@ internal static unsafe class QuantEnc
         Vp8ModeScore rdTmp = it.ModeScoreScratch3;
         Vp8Residual res = it.ResidualScratch;
         res.Init(0, 3, proba);
-        Span<short> tmpLevels = stackalloc short[16];
+        Span<short> pairLevels = stackalloc short[32];
+        Span<byte> pairDst = it.Scratch.AsSpan();
         do
         {
             int numBlocks = 1;
             int ctx = it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2];
-            int mode;
             int bestMode = -1;
+            int pairNz = 0;
             Span<byte> src = src0.Slice(WebpLookupTables.Vp8Scan[it.I4]);
             short[] modeCosts = it.GetCostModeI4(rd.ModesI4);
             Span<byte> bestBlock = bestBlocks.Slice(WebpLookupTables.Vp8Scan[it.I4]);
-            Span<byte> tmpDst = it.Scratch.AsSpan();
 
             int srcTransform = tlambda != 0 ? LossyUtils.TTransform(src, WeightY, scratch) : 0;
 
             rdi4.InitScore();
             it.MakeIntra4Preds();
-            for (mode = 0; mode < WebpConstants.NumBModes; ++mode)
+
+            // The predictors of modes 2k and 2k + 1 sit side by side, so each pair is reconstructed in one go.
+            for (int mode = 0; mode < WebpConstants.NumBModes; ++mode)
             {
-                // Reconstruct.
-                rdTmp.Nz = (uint)ReconstructIntra4(it, dqm, tmpLevels, src, tmpDst, mode);
+                int second = mode & 1;
+                if (second == 0)
+                {
+                    pairNz = ReconstructIntra4Pair(it, dqm, pairLevels, src, pairDst, mode);
+                }
+
+                Span<byte> tmpDst = pairDst.Slice(4 * second);
+                Span<short> tmpLevels = pairLevels.Slice(16 * second, 16);
+                rdTmp.Nz = (uint)((pairNz >> second) & 1);
 
                 // Compute RD-score.
                 rdTmp.D = LossyUtils.Vp8_Sse4X4(src, tmpDst);
@@ -202,9 +211,7 @@ internal static unsafe class QuantEnc
                 {
                     rdi4.CopyScore(rdTmp);
                     bestMode = mode;
-                    Span<byte> tmp = tmpDst;
-                    tmpDst = bestBlock;
-                    bestBlock = tmp;
+                    LossyUtils.Vp8Copy4X4(tmpDst, bestBlock);
                     tmpLevels.CopyTo(rdBest.YAcLevels.AsSpan(it.I4 * 16, 16));
                 }
             }
@@ -221,9 +228,6 @@ internal static unsafe class QuantEnc
             {
                 return false;
             }
-
-            // Copy selected samples to the right place.
-            LossyUtils.Vp8Copy4X4(bestBlock, bestBlocks.Slice(WebpLookupTables.Vp8Scan[it.I4]));
 
             rd.ModesI4[it.I4] = (byte)bestMode;
             it.TopNz[it.I4 & 3] = it.LeftNz[it.I4 >> 2] = rdi4.Nz != 0 ? 1 : 0;
@@ -351,6 +355,34 @@ internal static unsafe class QuantEnc
         Vp8Encoding.ITransformOne(reference, tmp, yuvOut, scratch);
 
         return nz;
+    }
+
+    /// <summary>
+    /// Reconstructs the intra-4 candidates <paramref name="mode"/> and <paramref name="mode"/> + 1 of one source block,
+    /// whose predictors sit side by side. Gives the same result as <see cref="ReconstructIntra4"/> on each:
+    /// <paramref name="levels"/> receives 16 levels per candidate, <paramref name="yuvOut"/> the two blocks side by side,
+    /// and the return value the two non-zero flags in bits 0 and 1.
+    /// </summary>
+    public static int ReconstructIntra4Pair(Vp8EncIterator it, Vp8SegmentInfo dqm, Span<short> levels, Span<byte> src, Span<byte> yuvOut, int mode)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            _ = levels[31];
+            Span<byte> reference = it.YuvP.AsSpan(Vp8Encoding.Vp8I4ModeOffsets[mode]);
+            Vp8Encoding.FTransformPair(src, reference, out Vector128<short> a0, out Vector128<short> a8, out Vector128<short> b0, out Vector128<short> b8);
+
+            ref short levelsRef = ref MemoryMarshal.GetReference(levels);
+            int nz = QuantizeBlockAvx2(Vector256.Create(a0, a8), ref dqm.Y1, out Vector256<short> a, out Unsafe.As<short, Vector256<short>>(ref levelsRef));
+            nz |= QuantizeBlockAvx2(Vector256.Create(b0, b8), ref dqm.Y1, out Vector256<short> b, out Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref levelsRef, 16))) << 1;
+
+            Vp8Encoding.ITransformPair(a.GetLower(), a.GetUpper(), b.GetLower(), b.GetUpper(), reference, yuvOut);
+            return nz;
+        }
+#endif
+
+        return ReconstructIntra4(it, dqm, levels.Slice(0, 16), src, yuvOut, mode)
+            | (ReconstructIntra4(it, dqm, levels.Slice(16, 16), src, yuvOut.Slice(4), mode + 1) << 1);
     }
 
     public static int ReconstructUv(Vp8EncIterator it, Vp8SegmentInfo dqm, Vp8ModeScore rd, Span<byte> yuvOut, int mode)
@@ -537,66 +569,11 @@ internal static unsafe class QuantEnc
 #if NETCOREAPP3_0_OR_GREATER
         if (Avx2.IsSupported)
         {
-            // Load all inputs.
-            Vector256<short> input0 = Unsafe.As<short, Vector256<short>>(ref MemoryMarshal.GetReference(input));
-            Vector256<ushort> iq0 = Unsafe.As<ushort, Vector256<ushort>>(ref mtx.IQ[0]);
-            Vector256<ushort> q0 = Unsafe.As<ushort, Vector256<ushort>>(ref mtx.Q[0]);
-
-            // coeff = abs(in)
-            Vector256<ushort> coeff0 = Avx2.Abs(input0);
-
-            // coeff = abs(in) + sharpen
-            Vector256<short> sharpen0 = Unsafe.As<short, Vector256<short>>(ref mtx.Sharpen[0]);
-            Avx2.Add(coeff0.AsInt16(), sharpen0);
-
-            // out = (coeff * iQ + B) >> QFIX
-            // doing calculations with 32b precision (QFIX=17)
-            // out = (coeff * iQ)
-            Vector256<ushort> coeffiQ0H = Avx2.MultiplyHigh(coeff0, iq0);
-            Vector256<ushort> coeffiQ0L = Avx2.MultiplyLow(coeff0, iq0);
-            Vector256<ushort> out00 = Avx2.UnpackLow(coeffiQ0L, coeffiQ0H);
-            Vector256<ushort> out08 = Avx2.UnpackHigh(coeffiQ0L, coeffiQ0H);
-
-            // out = (coeff * iQ + B)
-            Vector256<uint> bias00 = Unsafe.As<uint, Vector256<uint>>(ref mtx.Bias[0]);
-            Vector256<uint> bias08 = Unsafe.As<uint, Vector256<uint>>(ref mtx.Bias[8]);
-            out00 = Avx2.Add(out00.AsInt32(), bias00.AsInt32()).AsUInt16();
-            out08 = Avx2.Add(out08.AsInt32(), bias08.AsInt32()).AsUInt16();
-
-            // out = QUANTDIV(coeff, iQ, B, QFIX)
-            out00 = Avx2.ShiftRightArithmetic(out00.AsInt32(), WebpConstants.QFix).AsUInt16();
-            out08 = Avx2.ShiftRightArithmetic(out08.AsInt32(), WebpConstants.QFix).AsUInt16();
-
-            // Pack result as 16b.
-            Vector256<short> out0 = Avx2.PackSignedSaturate(out00.AsInt32(), out08.AsInt32());
-
-            // if (coeff > 2047) coeff = 2047
-            out0 = Avx2.Min(out0, MaxCoeff2047Vec256);
-
-            // Put the sign back.
-            out0 = Avx2.Sign(out0, input0);
-
-            // in = out * Q
-            input0 = Avx2.MultiplyLow(out0, q0.AsInt16());
             ref short inputRef = ref MemoryMarshal.GetReference(input);
-            Unsafe.As<short, Vector256<short>>(ref inputRef) = input0;
-
-            // zigzag the output before storing it.
-            Vector256<byte> tmp256 = Avx2.Shuffle(out0.AsByte(), Cst256);
-            Vector256<byte> tmp78 = Avx2.Shuffle(out0.AsByte(), Cst78);
-
-            // Reverse the order of the 16-byte lanes.
-            Vector256<byte> tmp87 = Avx2.Permute2x128(tmp78, tmp78, 1);
-            Vector256<short> outZ = Avx2.Or(tmp256, tmp87).AsInt16();
-
-            ref short outputRef = ref MemoryMarshal.GetReference(output);
-            Unsafe.As<short, Vector256<short>>(ref outputRef) = outZ;
-
-            Vector256<sbyte> packedOutput = Avx2.PackSignedSaturate(outZ, outZ);
-
-            // Detect if all 'out' values are zeros or not.
-            Vector256<sbyte> cmpeq = Avx2.CompareEqual(packedOutput, Vector256<sbyte>.Zero);
-            return Avx2.MoveMask(cmpeq) != -1 ? 1 : 0;
+            int nz = QuantizeBlockAvx2(Unsafe.As<short, Vector256<short>>(ref inputRef), ref mtx, out Vector256<short> dequantized, out Vector256<short> levels);
+            Unsafe.As<short, Vector256<short>>(ref inputRef) = dequantized;
+            Unsafe.As<short, Vector256<short>>(ref MemoryMarshal.GetReference(output)) = levels;
+            return nz;
         }
         else if (Sse41.IsSupported)
         {
@@ -733,6 +710,68 @@ internal static unsafe class QuantEnc
             return last >= 0 ? 1 : 0;
         }
     }
+
+#if NETCOREAPP3_0_OR_GREATER
+    // Quantizes 16 coefficients held in a register. Returns the zigzagged levels and the dequantized coefficients
+    // in registers too, so a caller can chain transforms without going through memory.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static int QuantizeBlockAvx2(Vector256<short> input0, ref Vp8Matrix mtx, out Vector256<short> dequantized, out Vector256<short> levels)
+    {
+        Vector256<ushort> iq0 = Unsafe.As<ushort, Vector256<ushort>>(ref mtx.IQ[0]);
+        Vector256<ushort> q0 = Unsafe.As<ushort, Vector256<ushort>>(ref mtx.Q[0]);
+
+        // coeff = abs(in)
+        Vector256<ushort> coeff0 = Avx2.Abs(input0);
+
+        // coeff = abs(in) + sharpen
+        Vector256<short> sharpen0 = Unsafe.As<short, Vector256<short>>(ref mtx.Sharpen[0]);
+        Avx2.Add(coeff0.AsInt16(), sharpen0);
+
+        // out = (coeff * iQ + B) >> QFIX
+        // doing calculations with 32b precision (QFIX=17)
+        // out = (coeff * iQ)
+        Vector256<ushort> coeffiQ0H = Avx2.MultiplyHigh(coeff0, iq0);
+        Vector256<ushort> coeffiQ0L = Avx2.MultiplyLow(coeff0, iq0);
+        Vector256<ushort> out00 = Avx2.UnpackLow(coeffiQ0L, coeffiQ0H);
+        Vector256<ushort> out08 = Avx2.UnpackHigh(coeffiQ0L, coeffiQ0H);
+
+        // out = (coeff * iQ + B)
+        Vector256<uint> bias00 = Unsafe.As<uint, Vector256<uint>>(ref mtx.Bias[0]);
+        Vector256<uint> bias08 = Unsafe.As<uint, Vector256<uint>>(ref mtx.Bias[8]);
+        out00 = Avx2.Add(out00.AsInt32(), bias00.AsInt32()).AsUInt16();
+        out08 = Avx2.Add(out08.AsInt32(), bias08.AsInt32()).AsUInt16();
+
+        // out = QUANTDIV(coeff, iQ, B, QFIX)
+        out00 = Avx2.ShiftRightArithmetic(out00.AsInt32(), WebpConstants.QFix).AsUInt16();
+        out08 = Avx2.ShiftRightArithmetic(out08.AsInt32(), WebpConstants.QFix).AsUInt16();
+
+        // Pack result as 16b.
+        Vector256<short> out0 = Avx2.PackSignedSaturate(out00.AsInt32(), out08.AsInt32());
+
+        // if (coeff > 2047) coeff = 2047
+        out0 = Avx2.Min(out0, MaxCoeff2047Vec256);
+
+        // Put the sign back.
+        out0 = Avx2.Sign(out0, input0);
+
+        // in = out * Q
+        dequantized = Avx2.MultiplyLow(out0, q0.AsInt16());
+
+        // zigzag the output before storing it.
+        Vector256<byte> tmp256 = Avx2.Shuffle(out0.AsByte(), Cst256);
+        Vector256<byte> tmp78 = Avx2.Shuffle(out0.AsByte(), Cst78);
+
+        // Reverse the order of the 16-byte lanes.
+        Vector256<byte> tmp87 = Avx2.Permute2x128(tmp78, tmp78, 1);
+        levels = Avx2.Or(tmp256, tmp87).AsInt16();
+
+        Vector256<sbyte> packedOutput = Avx2.PackSignedSaturate(levels, levels);
+
+        // Detect if all 'out' values are zeros or not.
+        Vector256<sbyte> cmpeq = Avx2.CompareEqual(packedOutput, Vector256<sbyte>.Zero);
+        return Avx2.MoveMask(cmpeq) != -1 ? 1 : 0;
+    }
+#endif
 
     // Quantize as usual, but also compute and return the quantization error.
     // Error is already divided by DSHIFT.

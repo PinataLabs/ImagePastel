@@ -189,59 +189,7 @@ internal static unsafe class Vp8Encoding
             // a01 a11 a21 a31   b01 b11 b21 b31
             // a02 a12 a22 a32   b02 b12 b22 b32
             // a03 a13 a23 a33   b03 b13 b23 b33
-
-            // Vertical pass and subsequent transpose.
-            // First pass, c and d calculations are longer because of the "trick" multiplications.
-            InverseTransformVerticalPass(in0, in2, in1, in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3);
-
-            // Transpose the two 4x4.
-            LossyUtils.Vp8Transpose_2_4x4_16b(tmp0, tmp1, tmp2, tmp3, out Vector128<long> t0, out Vector128<long> t1, out Vector128<long> t2, out Vector128<long> t3);
-
-            // Horizontal pass and subsequent transpose.
-            // First pass, c and d calculations are longer because of the "trick" multiplications.
-            InverseTransformHorizontalPass(t0, t2, t1, t3, out Vector128<short> shifted0, out Vector128<short> shifted1, out Vector128<short> shifted2, out Vector128<short> shifted3);
-
-            // Transpose the two 4x4.
-            LossyUtils.Vp8Transpose_2_4x4_16b(shifted0, shifted1, shifted2, shifted3, out t0, out t1, out t2, out t3);
-
-            // Add inverse transform to 'ref' and store.
-            // Load the reference(s).
-            Vector128<byte> ref0 = Vector128<byte>.Zero;
-            Vector128<byte> ref1 = Vector128<byte>.Zero;
-            Vector128<byte> ref2 = Vector128<byte>.Zero;
-            Vector128<byte> ref3 = Vector128<byte>.Zero;
-            ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
-
-            // Load eight bytes/pixels per line.
-            ref0 = Vector128.Create(Unsafe.As<byte, long>(ref referenceRef), 0).AsByte();
-            ref1 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps)), 0).AsByte();
-            ref2 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2)), 0).AsByte();
-            ref3 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3)), 0).AsByte();
-
-            // Convert to 16b.
-            ref0 = Sse2.UnpackLow(ref0, Vector128<byte>.Zero);
-            ref1 = Sse2.UnpackLow(ref1, Vector128<byte>.Zero);
-            ref2 = Sse2.UnpackLow(ref2, Vector128<byte>.Zero);
-            ref3 = Sse2.UnpackLow(ref3, Vector128<byte>.Zero);
-
-            // Add the inverse transform(s).
-            Vector128<short> ref0InvAdded = Sse2.Add(ref0.AsInt16(), t0.AsInt16());
-            Vector128<short> ref1InvAdded = Sse2.Add(ref1.AsInt16(), t1.AsInt16());
-            Vector128<short> ref2InvAdded = Sse2.Add(ref2.AsInt16(), t2.AsInt16());
-            Vector128<short> ref3InvAdded = Sse2.Add(ref3.AsInt16(), t3.AsInt16());
-
-            // Unsigned saturate to 8b.
-            ref0 = Sse2.PackUnsignedSaturate(ref0InvAdded, ref0InvAdded);
-            ref1 = Sse2.PackUnsignedSaturate(ref1InvAdded, ref1InvAdded);
-            ref2 = Sse2.PackUnsignedSaturate(ref2InvAdded, ref2InvAdded);
-            ref3 = Sse2.PackUnsignedSaturate(ref3InvAdded, ref3InvAdded);
-
-            // Store eight bytes/pixels per line.
-            ref byte outputRef = ref MemoryMarshal.GetReference(dst);
-            Unsafe.As<byte, Vector64<byte>>(ref outputRef) = ref0.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps)) = ref1.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2)) = ref2.GetLower();
-            Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3)) = ref3.GetLower();
+            InverseTransformTwo(in0, in1, in2, in3, ref MemoryMarshal.GetReference(reference), ref MemoryMarshal.GetReference(dst));
         }
         else
 #endif
@@ -478,6 +426,79 @@ internal static unsafe class Vp8Encoding
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    /// <summary>
+    /// Inverse transforms two blocks of coefficients held in registers, <paramref name="a0"/>/<paramref name="a8"/> and
+    /// <paramref name="b0"/>/<paramref name="b8"/>, onto two predictors that sit side by side in <paramref name="reference"/>.
+    /// Gives the same samples as <see cref="ITransformTwo"/>.
+    /// </summary>
+    public static void ITransformPair(Vector128<short> a0, Vector128<short> a8, Vector128<short> b0, Vector128<short> b8, Span<byte> reference, Span<byte> dst)
+    {
+        _ = reference[(3 * WebpConstants.Bps) + 7];
+        _ = dst[(3 * WebpConstants.Bps) + 7];
+        InverseTransformTwo(
+            Sse2.UnpackLow(a0.AsInt64(), b0.AsInt64()),
+            Sse2.UnpackHigh(a0.AsInt64(), b0.AsInt64()),
+            Sse2.UnpackLow(a8.AsInt64(), b8.AsInt64()),
+            Sse2.UnpackHigh(a8.AsInt64(), b8.AsInt64()),
+            ref MemoryMarshal.GetReference(reference),
+            ref MemoryMarshal.GetReference(dst));
+    }
+
+    // Each of in0..in3 holds one row of four coefficients for each of the two blocks.
+    private static void InverseTransformTwo(Vector128<long> in0, Vector128<long> in1, Vector128<long> in2, Vector128<long> in3, ref byte referenceRef, ref byte outputRef)
+    {
+        // Vertical pass and subsequent transpose.
+        // First pass, c and d calculations are longer because of the "trick" multiplications.
+        InverseTransformVerticalPass(in0, in2, in1, in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3);
+
+        // Transpose the two 4x4.
+        LossyUtils.Vp8Transpose_2_4x4_16b(tmp0, tmp1, tmp2, tmp3, out Vector128<long> t0, out Vector128<long> t1, out Vector128<long> t2, out Vector128<long> t3);
+
+        // Horizontal pass and subsequent transpose.
+        // First pass, c and d calculations are longer because of the "trick" multiplications.
+        InverseTransformHorizontalPass(t0, t2, t1, t3, out Vector128<short> shifted0, out Vector128<short> shifted1, out Vector128<short> shifted2, out Vector128<short> shifted3);
+
+        // Transpose the two 4x4.
+        LossyUtils.Vp8Transpose_2_4x4_16b(shifted0, shifted1, shifted2, shifted3, out t0, out t1, out t2, out t3);
+
+        // Add inverse transform to 'ref' and store.
+        // Load the reference(s).
+        Vector128<byte> ref0 = Vector128<byte>.Zero;
+        Vector128<byte> ref1 = Vector128<byte>.Zero;
+        Vector128<byte> ref2 = Vector128<byte>.Zero;
+        Vector128<byte> ref3 = Vector128<byte>.Zero;
+
+        // Load eight bytes/pixels per line.
+        ref0 = Vector128.Create(Unsafe.As<byte, long>(ref referenceRef), 0).AsByte();
+        ref1 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps)), 0).AsByte();
+        ref2 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2)), 0).AsByte();
+        ref3 = Vector128.Create(Unsafe.As<byte, long>(ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3)), 0).AsByte();
+
+        // Convert to 16b.
+        ref0 = Sse2.UnpackLow(ref0, Vector128<byte>.Zero);
+        ref1 = Sse2.UnpackLow(ref1, Vector128<byte>.Zero);
+        ref2 = Sse2.UnpackLow(ref2, Vector128<byte>.Zero);
+        ref3 = Sse2.UnpackLow(ref3, Vector128<byte>.Zero);
+
+        // Add the inverse transform(s).
+        Vector128<short> ref0InvAdded = Sse2.Add(ref0.AsInt16(), t0.AsInt16());
+        Vector128<short> ref1InvAdded = Sse2.Add(ref1.AsInt16(), t1.AsInt16());
+        Vector128<short> ref2InvAdded = Sse2.Add(ref2.AsInt16(), t2.AsInt16());
+        Vector128<short> ref3InvAdded = Sse2.Add(ref3.AsInt16(), t3.AsInt16());
+
+        // Unsigned saturate to 8b.
+        ref0 = Sse2.PackUnsignedSaturate(ref0InvAdded, ref0InvAdded);
+        ref1 = Sse2.PackUnsignedSaturate(ref1InvAdded, ref1InvAdded);
+        ref2 = Sse2.PackUnsignedSaturate(ref2InvAdded, ref2InvAdded);
+        ref3 = Sse2.PackUnsignedSaturate(ref3InvAdded, ref3InvAdded);
+
+        // Store eight bytes/pixels per line.
+        Unsafe.As<byte, Vector64<byte>>(ref outputRef) = ref0.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps)) = ref1.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 2)) = ref2.GetLower();
+        Unsafe.As<byte, Vector64<byte>>(ref Unsafe.Add(ref outputRef, WebpConstants.Bps * 3)) = ref3.GetLower();
+    }
+
     private static void InverseTransformVerticalPass(Vector128<long> in0, Vector128<long> in2, Vector128<long> in1, Vector128<long> in3, out Vector128<short> tmp0, out Vector128<short> tmp1, out Vector128<short> tmp2, out Vector128<short> tmp3)
     {
         Vector128<short> a = Sse2.Add(in0.AsInt16(), in2.AsInt16());
@@ -738,6 +759,45 @@ internal static unsafe class Vp8Encoding
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    /// <summary>
+    /// Forward transforms one source block against two predictors that sit side by side in <paramref name="reference"/>.
+    /// Gives the same coefficients as <see cref="FTransform"/> on each predictor, as rows 0-1 and rows 2-3 of each block.
+    /// </summary>
+    public static void FTransformPair(Span<byte> src, Span<byte> reference, out Vector128<short> a0, out Vector128<short> a8, out Vector128<short> b0, out Vector128<short> b8)
+    {
+        _ = src[(3 * WebpConstants.Bps) + 3];
+        _ = reference[(3 * WebpConstants.Bps) + 7];
+        ref byte srcRef = ref MemoryMarshal.GetReference(src);
+        ref byte referenceRef = ref MemoryMarshal.GetReference(reference);
+
+        Vector128<short> diff0 = FTransformPairDiff(ref srcRef, ref referenceRef);
+        Vector128<short> diff1 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps));
+        Vector128<short> diff2 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 2), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 2));
+        Vector128<short> diff3 = FTransformPairDiff(ref Unsafe.Add(ref srcRef, WebpConstants.Bps * 3), ref Unsafe.Add(ref referenceRef, WebpConstants.Bps * 3));
+
+        Vector128<int> shuf01l = Sse2.UnpackLow(diff0.AsInt32(), diff1.AsInt32());
+        Vector128<int> shuf23l = Sse2.UnpackLow(diff2.AsInt32(), diff3.AsInt32());
+        Vector128<int> shuf01h = Sse2.UnpackHigh(diff0.AsInt32(), diff1.AsInt32());
+        Vector128<int> shuf23h = Sse2.UnpackHigh(diff2.AsInt32(), diff3.AsInt32());
+
+        FTransformPass1SSE2(shuf01l.AsInt16(), shuf23l.AsInt16(), out Vector128<int> v01l, out Vector128<int> v32l);
+        FTransformPass1SSE2(shuf01h.AsInt16(), shuf23h.AsInt16(), out Vector128<int> v01h, out Vector128<int> v32h);
+
+        FTransformPass2SSE2(v01l, v32l, out a0, out a8);
+        FTransformPass2SSE2(v01h, v32h, out b0, out b8);
+    }
+
+    // One row of four source samples minus the same row of each of the two predictors.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector128<short> FTransformPairDiff(ref byte srcRef, ref byte referenceRef)
+    {
+        Vector128<byte> src = Vector128.Create(Unsafe.ReadUnaligned<uint>(ref srcRef)).AsByte();
+        Vector128<byte> reference = Vector128.CreateScalarUnsafe(Unsafe.ReadUnaligned<ulong>(ref referenceRef)).AsByte();
+        return Sse2.Subtract(
+            Sse2.UnpackLow(src, Vector128<byte>.Zero).AsInt16(),
+            Sse2.UnpackLow(reference, Vector128<byte>.Zero).AsInt16());
+    }
+
     public static void FTransformPass1SSE2(Vector128<short> row01, Vector128<short> row23, out Vector128<int> out01, out Vector128<int> out32)
     {
         // *in01 = 00 01 10 11 02 03 12 13
@@ -775,6 +835,15 @@ internal static unsafe class Vp8Encoding
     }
 
     public static void FTransformPass2SSE2(Vector128<int> v01, Vector128<int> v32, Span<short> output)
+    {
+        FTransformPass2SSE2(v01, v32, out Vector128<short> out0, out Vector128<short> out8);
+
+        ref short outputRef = ref MemoryMarshal.GetReference(output);
+        Unsafe.As<short, Vector128<short>>(ref outputRef) = out0;
+        Unsafe.As<short, Vector128<short>>(ref Unsafe.Add(ref outputRef, 8)) = out8;
+    }
+
+    public static void FTransformPass2SSE2(Vector128<int> v01, Vector128<int> v32, out Vector128<short> out0, out Vector128<short> out8)
     {
         // Same operations are done on the (0,3) and (1,2) pairs.
         // a3 = v0 - v3
@@ -814,12 +883,8 @@ internal static unsafe class Vp8Encoding
         Vector128<short> d0 = Sse2.ShiftRightArithmetic(c0, 4);
         Vector128<short> d2 = Sse2.ShiftRightArithmetic(c2, 4);
 
-        Vector128<long> d0g1 = Sse2.UnpackLow(d0.AsInt64(), g1.AsInt64());
-        Vector128<long> d2f3 = Sse2.UnpackLow(d2.AsInt64(), f3.AsInt64());
-
-        ref short outputRef = ref MemoryMarshal.GetReference(output);
-        Unsafe.As<short, Vector128<short>>(ref outputRef) = d0g1.AsInt16();
-        Unsafe.As<short, Vector128<short>>(ref Unsafe.Add(ref outputRef, 8)) = d2f3.AsInt16();
+        out0 = Sse2.UnpackLow(d0.AsInt64(), g1.AsInt64()).AsInt16();
+        out8 = Sse2.UnpackLow(d2.AsInt64(), f3.AsInt64()).AsInt16();
     }
 
     [MethodImpl(InliningOptions.ShortMethod)]
