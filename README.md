@@ -7,15 +7,9 @@
 PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
 It decodes, processes, and encodes BMP, GIF, JPEG, JPEG XL, PBM, PNG, TGA, TIFF, and WebP images.
 
-> [!IMPORTANT]
-> This fork exists to fix security issues and uplift in the ImageSharp v2 line and to keep that line under the Apache License 2.0.
-> Pinata Labs does not offer support for this package.
-> For a supported version, please use the official [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp/) package from [Six Labors](https://github.com/SixLabors/ImageSharp).
-
 ## Security
 
 This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
-
 To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImagePastel/blob/main/SECURITY.md).
 
 ## Install
@@ -34,22 +28,6 @@ You do not have to change your code.
 1. Remove the `SixLabors.ImageSharp` package reference.
 2. Add the `PinataLabs.ImagePastel` package reference.
 3. Build and test your application.
-
-Do not reference both packages in one application.
-The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
-
-## Move from PinataLabs.ImageSharp 2.1.14
-
-Version 2.1.14 of this fork was published as `PinataLabs.ImageSharp`.
-That package gets no more releases. Later versions are published as `PinataLabs.ImagePastel`.
-The public API and the `SixLabors.ImageSharp` namespace do not change.
-
-1. Remove the `PinataLabs.ImageSharp` package reference.
-2. Add the `PinataLabs.ImagePastel` package reference.
-3. Build and test your application.
-
-The assembly name changes from `PinataLabs.ImageSharp` to `PinataLabs.ImagePastel`.
-If your code or configuration names the assembly (for example, in reflection, `InternalsVisibleTo`, or binding redirects), change it to the new name.
 
 Do not reference both packages in one application.
 The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
@@ -77,7 +55,6 @@ The package does not support .NET Framework.
 Versions continue the 2.x line and start at 2.2.0. The project uses [semantic versioning](https://semver.org/).
 
 Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImagePastel/).
-A maintainer starts each one by hand. A push to `main` does not publish a package.
 
 ## Documentation
 
@@ -104,6 +81,10 @@ Read the [contribution guide](https://github.com/PinataLabs/ImagePastel/blob/mai
 
 This project uses the code of conduct of the [Contributor Covenant](https://contributor-covenant.org/).
 For more information, read the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
+
+## History
+
+Forked from SixLabors.ImageSharp last Apache 2.0 release.
 
 ## License
 
