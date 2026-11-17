@@ -89,7 +89,6 @@ internal class Vp8EncIterator
         this.TopNz = new int[9];
         this.LeftNz = new int[9];
         this.I4Boundary = new byte[37];
-        this.BitCount = new long[4, 3];
         this.Scratch = new byte[WebpConstants.Bps * 16];
         this.Scratch2 = new short[17 * 16];
         this.Scratch3 = new int[16];
@@ -212,21 +211,6 @@ internal class Vp8EncIterator
     public int[] LeftNz { get; }
 
     /// <summary>
-    /// Gets or sets the macroblock bit-cost for luma.
-    /// </summary>
-    public long LumaBits { get; set; }
-
-    /// <summary>
-    /// Gets the bit counters for coded levels.
-    /// </summary>
-    public long[,] BitCount { get; }
-
-    /// <summary>
-    /// Gets or sets the macroblock bit-cost for chroma.
-    /// </summary>
-    public long UvBits { get; set; }
-
-    /// <summary>
     /// Gets or sets the number of mb still to be processed.
     /// </summary>
     public int CountDown { get; set; }
@@ -272,11 +256,6 @@ internal class Vp8EncIterator
     private Vp8MacroBlockInfo[] Mb { get; }
 
     public void Init() => this.Reset();
-
-    public void InitFilter()
-    {
-        // TODO: add support for autofilter
-    }
 
     public void StartI4()
     {
@@ -907,8 +886,6 @@ internal class Vp8EncIterator
         this.SetRow(0);
         this.SetCountDown(this.mbw * this.mbh);
         this.InitTop();
-
-        Array.Clear(this.BitCount, 0, this.BitCount.Length);
     }
 
     /// <summary>

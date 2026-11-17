@@ -282,6 +282,41 @@ public class WebpEncoderTests
         Assert.True(memStream.ToArray().AsSpan().IndexOf("ALPH"u8) < 0, "An opaque image has an ALPH chunk.");
     }
 
+    [Theory]
+    [InlineData(WebpEncodingMethod.Level0)]
+    [InlineData(WebpEncodingMethod.Level3)]
+    [InlineData(WebpEncodingMethod.Level4)]
+    [InlineData(WebpEncodingMethod.Level6)]
+    public void Encode_Lossy_WithMostlyFlatImage_DecodesCodedBlocksAfterSkippedBlocks(WebpEncodingMethod method)
+    {
+        const byte gray = 128;
+        using var image = new Image<Rgb24>(256, 256, new Rgb24(gray, gray, gray));
+        var random = new Random(7);
+        foreach ((int left, int top) in new[] { (16, 16), (144, 96), (48, 160), (208, 224) })
+        {
+            for (int y = top; y < top + 24; y++)
+            {
+                for (int x = left; x < left + 24; x++)
+                {
+                    byte v = (byte)random.Next(256);
+                    image[x, y] = new Rgb24(v, (byte)(255 - v), (byte)(v / 2));
+                }
+            }
+        }
+
+        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Method = method };
+        using var memStream = new MemoryStream();
+        image.SaveAsWebp(memStream, encoder);
+        memStream.Position = 0;
+        using Image<Rgb24> decoded = Image.Load<Rgb24>(memStream);
+
+        Rgb24 corner = decoded[255, 255];
+        Assert.InRange(corner.R, gray - 4, gray + 4);
+        Assert.InRange(corner.G, gray - 4, gray + 4);
+        Assert.InRange(corner.B, gray - 4, gray + 4);
+        ImageComparer.Tolerant(0.05f).VerifySimilarity(image, decoded);
+    }
+
     [Fact]
     public void Encode_Lossy_WithNoisyImage_AllocatesInProportionToImageSize()
     {
