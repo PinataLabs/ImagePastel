@@ -144,6 +144,7 @@ jobs:
           path: |
             artifacts/coverage/**/coverage.info
             artifacts/coverage/**/coverage.cobertura.xml
+            artifacts/coverage/**/coverage.opencover.xml
             artifacts/coverage/report/
 
       - name: Upload failed test output
