@@ -9,7 +9,6 @@ It decodes, processes, and encodes BMP, GIF, JPEG, JPEG XL, PBM, PNG, TGA, TIFF,
 
 ## Security
 
-This fork starts from the Six Labors `release/2.1.x` branch at commit `14efb84e8` (2026-03-18).
 To report a security problem in this fork, read [SECURITY.md](https://github.com/PinataLabs/ImagePastel/blob/main/SECURITY.md).
 
 ## Install
