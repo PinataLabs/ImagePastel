@@ -61,6 +61,12 @@ internal static unsafe class QuantEnc
         Vp8ModeScore rdBest = rd;
         int mode;
         bool isFlat = IsFlatSource16(src);
+        Span<int> srcTransforms = stackalloc int[numBlocks];
+        if (tlambda != 0)
+        {
+            LossyUtils.TTransform16X16(src, WeightY, srcTransforms, scratch);
+        }
+
         rd.ModeI16 = -1;
         for (mode = 0; mode < WebpConstants.NumPredModes; ++mode)
         {
@@ -73,7 +79,7 @@ internal static unsafe class QuantEnc
 
             // Measure RD-score.
             rdCur.D = LossyUtils.Vp8_Sse16X16(src, tmpDst);
-            rdCur.SD = tlambda != 0 ? Mult8B(tlambda, LossyUtils.Vp8Disto16X16(src, tmpDst, WeightY, scratch)) : 0;
+            rdCur.SD = tlambda != 0 ? Mult8B(tlambda, LossyUtils.Vp8Disto16X16(srcTransforms, tmpDst, WeightY, scratch)) : 0;
             rdCur.H = WebpConstants.Vp8FixedCostsI16[mode];
             rdCur.R = it.GetCostLuma16(rdCur, proba, res);
 

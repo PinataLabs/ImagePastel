@@ -276,21 +276,24 @@ public class LossyUtilsTests
         int expected = 2;
 
         // act
-        int actual = LossyUtils.Vp8Disto4X4(a, b, w, new int[16]);
+        int[] scratch = new int[16];
+        int actual = LossyUtils.Vp8Disto4X4(LossyUtils.TTransform(a, w, scratch), b, w, scratch);
 
         // assert
         Assert.Equal(expected, actual);
     }
 
-    private static void RunDisto4X4WithTransformedSourceTest()
+    private static void RunDisto16X16Test()
     {
         ushort[] w = { 38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2 };
+        int[] expected = { 77520, 77520, 0, 6103, 8068, 9819, 7051, 8837 };
         int[] scratch = new int[16];
-        byte[] a = new byte[4 * WebpConstants.Bps];
-        byte[] b = new byte[4 * WebpConstants.Bps];
+        int[] aSums = new int[16];
+        byte[] a = new byte[16 * WebpConstants.Bps];
+        byte[] b = new byte[16 * WebpConstants.Bps];
         Random random = new(42);
 
-        for (int i = 0; i < 2000; i++)
+        for (int i = 0; i < expected.Length; i++)
         {
             switch (i)
             {
@@ -316,10 +319,10 @@ public class LossyUtilsTests
                     break;
             }
 
-            int expected = LossyUtils.Vp8Disto4X4(a, b, w, scratch);
-            int actual = LossyUtils.Vp8Disto4X4(LossyUtils.TTransform(a, w, scratch), b, w, scratch);
+            LossyUtils.TTransform16X16(a, w, aSums, scratch);
+            int actual = LossyUtils.Vp8Disto16X16(aSums, b, w, scratch);
 
-            Assert.Equal(expected, actual);
+            Assert.Equal(expected[i], actual);
         }
     }
 
@@ -396,14 +399,14 @@ public class LossyUtilsTests
     public void HadamardTransform_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunHadamardTransformTest, HwIntrinsics.DisableHWIntrinsic);
 
     [Fact]
-    public void Disto4X4_WithTransformedSource_MatchesDisto4X4() => RunDisto4X4WithTransformedSourceTest();
+    public void Disto16X16_Works() => RunDisto16X16Test();
 
     [Fact]
-    public void Disto4X4_WithTransformedSource_WithHardwareIntrinsics_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.AllowAll);
+    public void Disto16X16_WithHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.AllowAll);
 
     [Fact]
-    public void Disto4X4_WithTransformedSource_WithoutSSE41_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.DisableSSE41);
+    public void Disto16X16_WithoutSSE41_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.DisableSSE41);
 
     [Fact]
-    public void Disto4X4_WithTransformedSource_WithoutHardwareIntrinsics_MatchesDisto4X4() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto4X4WithTransformedSourceTest, HwIntrinsics.DisableHWIntrinsic);
+    public void Disto16X16_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunDisto16X16Test, HwIntrinsics.DisableHWIntrinsic);
 }
