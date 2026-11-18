@@ -16,6 +16,8 @@ namespace PinataLabs.ImagePastel.Formats.Webp.Lossy;
 /// </summary>
 internal class Vp8Residual
 {
+    private const uint HalveStatsAtOrAbove = 0xfffe0000u;
+
 #if NETCOREAPP3_0_OR_GREATER
     private static readonly Vector128<byte> Cst2 = Vector128.Create((byte)2);
 
@@ -67,7 +69,7 @@ internal class Vp8Residual
         while (n <= this.Last)
         {
             int v;
-            RecordStats(1, ref s);  // order of record doesn't matter
+            RecordStats(1, ref s);
             while ((v = this.Coeffs[n++]) == 0)
             {
                 RecordStats(0, ref Unsafe.Add(ref s, 1));
@@ -234,11 +236,9 @@ internal class Vp8Residual
     {
         uint s = stats;
 
-        // An overflow is inbound. Note we handle this at 0xfffe0000u instead of
-        // 0xffff0000u to make sure s + 1u does not overflow.
-        if (s >= 0xfffe0000u)
+        if (s >= HalveStatsAtOrAbove)
         {
-            s = ((s + 1u) >> 1) & 0x7fff7fffu;  // -> divide the stats by 2.
+            s = ((s + 1u) >> 1) & 0x7fff7fffu;
         }
 
         // Record bit count (lower 16 bits) and increment total count (upper 16 bits).

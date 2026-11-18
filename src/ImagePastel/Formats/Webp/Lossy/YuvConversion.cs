@@ -23,6 +23,14 @@ internal static class YuvConversion
 
     private const int YuvHalf = 1 << (YuvFix - 1);
 
+    private const int LumaRedWeight = 16839;
+
+    private const int LumaGreenWeight = 33059;
+
+    private const int LumaBlueWeight = 6420;
+
+    private const byte KeepFourthSampleOfEachBlock = 0b1000_1000;
+
 #if NETCOREAPP3_0_OR_GREATER
     private static readonly Vector128<byte> One = Vector128.Create((byte)1);
 
@@ -566,7 +574,6 @@ internal static class YuvConversion
     }
 
 #if NETCOREAPP3_0_OR_GREATER
-    // Returns the number of pixels converted.
     private static int ConvertRgbaToYAvx2(Span<Bgra32> rowSpan, Span<byte> y, int width)
     {
         Vector256<int> order = Vector256.Create(0, 4, 1, 5, 2, 6, 3, 7);
@@ -589,18 +596,16 @@ internal static class YuvConversion
     [MethodImpl(InliningOptions.ShortMethod)]
     private static Vector256<int> RgbToYAvx2(Vector256<byte> bgra)
     {
-        // 33059 does not fit a signed 16-bit weight, so g is weighted as 16530 * g + 16529 * g.
         Vector256<byte> blueRed = Vector256.Create((byte)0, 0x80, 2, 0x80, 4, 0x80, 6, 0x80, 8, 0x80, 10, 0x80, 12, 0x80, 14, 0x80, 0, 0x80, 2, 0x80, 4, 0x80, 6, 0x80, 8, 0x80, 10, 0x80, 12, 0x80, 14, 0x80);
         Vector256<byte> greenGreen = Vector256.Create((byte)1, 0x80, 1, 0x80, 5, 0x80, 5, 0x80, 9, 0x80, 9, 0x80, 13, 0x80, 13, 0x80, 1, 0x80, 1, 0x80, 5, 0x80, 5, 0x80, 9, 0x80, 9, 0x80, 13, 0x80, 13, 0x80);
-        Vector256<short> blueRedWeights = Vector256.Create(6420 | (16839 << 16)).AsInt16();
-        Vector256<short> greenWeights = Vector256.Create(16530 | (16529 << 16)).AsInt16();
+        Vector256<short> blueRedWeights = Vector256.Create(LumaBlueWeight | (LumaRedWeight << 16)).AsInt16();
+        Vector256<short> greenWeights = Vector256.Create(((LumaGreenWeight + 1) / 2) | ((LumaGreenWeight / 2) << 16)).AsInt16();
         Vector256<int> luma = Avx2.Add(
             Avx2.MultiplyAddAdjacent(Avx2.Shuffle(bgra, blueRed).AsInt16(), blueRedWeights),
             Avx2.MultiplyAddAdjacent(Avx2.Shuffle(bgra, greenGreen).AsInt16(), greenWeights));
         return Avx2.ShiftRightLogical(Avx2.Add(luma, Vector256.Create(YuvHalf + (16 << YuvFix))), YuvFix);
     }
 
-    // Returns the number of U/V samples converted.
     private static int ConvertRgbaToUvAvx2(Span<ushort> rgb, Span<byte> u, Span<byte> v, int width)
     {
         Vector256<short> uWeights = Vector256.Create(-9719, -19081, 28800, 0, -9719, -19081, 28800, 0, -9719, -19081, 28800, 0, -9719, -19081, 28800, 0);
@@ -620,7 +625,7 @@ internal static class YuvConversion
             uu = Avx2.ShiftRightArithmetic(Avx2.Add(uu, rounding), YuvFix + 2);
             vv = Avx2.ShiftRightArithmetic(Avx2.Add(vv, rounding), YuvFix + 2);
 
-            // The horizontal adds leave samples in lane order [0 1 4 5 | 2 3 6 7]; the saturating packs clip to [0, 255] like ClipUv.
+            // The horizontal adds leave samples in lane order [0 1 4 5 | 2 3 6 7].
             Vector256<short> uv = Avx2.PermuteVar8x32(Avx2.PackSignedSaturate(uu, vv).AsInt32(), order).AsInt16();
             Vector128<ulong> packed = Sse2.PackUnsignedSaturate(uv.GetLower(), uv.GetUpper()).AsUInt64();
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref uRef, i), packed.ToScalar());
@@ -630,8 +635,6 @@ internal static class YuvConversion
         return i;
     }
 
-    // Returns the number of 2x2 blocks accumulated. The gamma-to-linear lookups stay scalar
-    // because AVX2 gathers are slower than scalar loads for them.
     private static int AccumulateRgbAvx2(Span<Bgra32> rowSpan, Span<Bgra32> nextRowSpan, Span<ushort> dst, int blocks)
     {
         Span<int> sums = stackalloc int[24];
@@ -660,11 +663,10 @@ internal static class YuvConversion
             Vector256<int> b = LinearToGammaAvx2(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref sumsRef, 16)), ref toGamma);
             Vector256<int> rg = Avx2.Or(r, Avx2.ShiftLeftLogical(g, 16));
 
-            // The fourth slot of each block is not written by the scalar path either.
             ref Vector256<short> out0 = ref Unsafe.As<ushort, Vector256<short>>(ref Unsafe.Add(ref dstRef, 4 * i));
             ref Vector256<short> out1 = ref Unsafe.As<ushort, Vector256<short>>(ref Unsafe.Add(ref dstRef, (4 * i) + 16));
-            out0 = Avx2.Blend(Avx2.UnpackLow(rg, b).AsInt16(), out0, 0b1000_1000);
-            out1 = Avx2.Blend(Avx2.UnpackHigh(rg, b).AsInt16(), out1, 0b1000_1000);
+            out0 = Avx2.Blend(Avx2.UnpackLow(rg, b).AsInt16(), out0, KeepFourthSampleOfEachBlock);
+            out1 = Avx2.Blend(Avx2.UnpackHigh(rg, b).AsInt16(), out1, KeepFourthSampleOfEachBlock);
         }
 
         return i;
@@ -675,7 +677,6 @@ internal static class YuvConversion
         Unsafe.Add(ref table, top) + Unsafe.Add(ref table, Unsafe.Add(ref top, 4)) +
         Unsafe.Add(ref table, bottom) + Unsafe.Add(ref table, Unsafe.Add(ref bottom, 4));
 
-    // Vector form of LinearToGamma(sum, 0) for sums of four linear values.
     [MethodImpl(InliningOptions.ShortMethod)]
     private static Vector256<int> LinearToGammaAvx2(Vector256<int> sum, ref int table)
     {
@@ -741,7 +742,7 @@ internal static class YuvConversion
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int RgbToY(byte r, byte g, byte b, int rounding)
     {
-        int luma = (16839 * r) + (33059 * g) + (6420 * b);
+        int luma = (LumaRedWeight * r) + (LumaGreenWeight * g) + (LumaBlueWeight * b);
         return (luma + rounding + (16 << YuvFix)) >> YuvFix;  // No need to clip.
     }
 

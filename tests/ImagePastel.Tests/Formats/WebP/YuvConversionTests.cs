@@ -20,6 +20,8 @@ namespace PinataLabs.ImagePastel.Tests.Formats.Webp;
 [Trait("Format", "Webp")]
 public class YuvConversionTests
 {
+    private const int MaxAccumulatedSample = 4 * 255;
+
     private static WebpDecoder WebpDecoder => new();
 
     private static MagickReferenceDecoder ReferenceDecoder => new();
@@ -75,7 +77,7 @@ public class YuvConversionTests
     private static void RunConvertRgbaToYTest()
     {
         Random random = new(42);
-        foreach (Bgra32[] row in RandomRows(random))
+        foreach (Bgra32[] row in TestRowsOfEveryWidth(random))
         {
             int width = row.Length;
             byte[] actual = new byte[width];
@@ -99,8 +101,7 @@ public class YuvConversionTests
                 ushort[] rgb = new ushort[4 * width];
                 for (int i = 0; i < rgb.Length; i++)
                 {
-                    // Accumulated samples are at most 4 * 255; the fourth slot is alpha or stale and is ignored.
-                    rgb[i] = (ushort)(pass switch { 0 => 0, 1 => 1020, _ => random.Next(1021) });
+                    rgb[i] = (ushort)(pass switch { 0 => 0, 1 => MaxAccumulatedSample, _ => random.Next(MaxAccumulatedSample + 1) });
                 }
 
                 byte[] u = new byte[width];
@@ -122,7 +123,7 @@ public class YuvConversionTests
     private static void RunAccumulateRgbTest()
     {
         Random random = new(42);
-        foreach (Bgra32[] row in RandomRows(random))
+        foreach (Bgra32[] row in TestRowsOfEveryWidth(random))
         {
             int width = row.Length;
             Bgra32[] nextRow = RandomRow(random, width);
@@ -159,8 +160,7 @@ public class YuvConversionTests
         }
     }
 
-    // Rows of every width up to 80 with random, all-black and all-white pixels, so both the vector body and the scalar tail run.
-    private static IEnumerable<Bgra32[]> RandomRows(Random random)
+    private static IEnumerable<Bgra32[]> TestRowsOfEveryWidth(Random random)
     {
         for (int width = 0; width <= 80; width++)
         {

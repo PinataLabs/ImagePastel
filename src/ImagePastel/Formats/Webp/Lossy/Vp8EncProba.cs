@@ -83,10 +83,6 @@ internal class Vp8EncProba
 
     public Vp8BandProbas[][] Coeffs { get; }
 
-    /// <summary>
-    /// Gets the token statistics, indexed [type][band][ctx][proba]. Each entry holds the count of 1 bits
-    /// in its low 16 bits and the total count in its high 16 bits.
-    /// </summary>
     public uint[] Stats { get; }
 
     /// <summary>
