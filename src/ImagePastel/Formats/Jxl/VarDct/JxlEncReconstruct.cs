@@ -5,7 +5,6 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
-using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
@@ -72,6 +71,7 @@ internal static class JxlEncReconstruct
         for (long groupIndex = 0; groupIndex < frameDim.NumGroups; groupIndex++)
         {
             // The groups are independent: this loop is where libjxl reconstructs them in parallel.
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlVarDctGroup.DecodeGroupForRoundtrip(frameHeader, coeffs, groupIndex, state, groupDecCache, pipeline);
         }
 
@@ -80,7 +80,7 @@ internal static class JxlEncReconstruct
         IJxlNeighbourStage[] loopFilters = JxlLoopFilterStages.Create(new JxlLoopFilterContext(frameHeader.LoopFilter, frameDim, state));
         IJxlColorStage[] colorStages = JxlColorStages.Create(frameHeader, displayEncoded: false);
         DebugGuard.IsTrue(colorStages.Length == 0, "A frame without a colour transform has no colour stages");
-        using JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), null, null, upsampling.AfterPatches, null, colorStages, null, null, CancellationToken.None);
+        using JxlReferenceFrame saved = pipeline.Finish(frameHeader, upsampling.WithLoopFilters(loopFilters), null, null, upsampling.AfterPatches, null, colorStages, null, null, encState.CancellationToken);
         return pipeline.TakeFinishedPlanes();
     }
 

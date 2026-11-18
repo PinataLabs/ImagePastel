@@ -7,6 +7,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 using PinataLabs.ImagePastel.Formats.Jxl.Headers;
@@ -34,12 +35,13 @@ internal static partial class JxlFrameEncoder
     /// <param name="speedTier">The speed tier, which the effort sets.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, MemoryAllocator allocator, JxlBitWriter writer)
+    /// <param name="cancellationToken">The token that cancels the encode.</param>
+    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, MemoryAllocator allocator, JxlBitWriter writer, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         JxlFrameHeader frameHeader = MakeFrameHeader(image.Width, image.Height, metadata);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
+        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator, cancellationToken);
         List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular);
 
         WriteFrameHeader(frameHeader, writer);

@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
@@ -91,7 +92,8 @@ internal static partial class JxlFrameEncoder
     /// <param name="testHooks">The encoder's hooks for tests (<see cref="JxlEncoderTestHooks"/>), or <see langword="null"/>.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer)
+    /// <param name="cancellationToken">The token that cancels the encode.</param>
+    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances. libjxl then keeps a copy as
@@ -105,8 +107,8 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator) { NaturalCoeffOrders = testHooks?.NaturalCoeffOrders ?? false };
-        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator, cancellationToken) { NaturalCoeffOrders = testHooks?.NaturalCoeffOrders ?? false };
+        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator, cancellationToken);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, testHooks, allocator);
 
         WriteFrameHeader(frameHeader, writer);
@@ -234,6 +236,7 @@ internal static partial class JxlFrameEncoder
         for (long groupIndex = 0; groupIndex < frameDim.NumGroups; groupIndex++)
         {
             // The groups are independent: this loop is where libjxl tokenizes them in parallel.
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlAcTokenizer.TokenizeCoefficients(encState, groupIndex);
         }
 
@@ -431,7 +434,7 @@ internal static partial class JxlFrameEncoder
 
     // libjxl's InitializePassesEncoder for one pass and no DC frame: the X and B multipliers, the
     // coefficients of every group, then the DC streams of every LF group.
-    private static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
+    internal static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
     {
         // Exact powers of 1.25 for the scales the encoder writes.
         encState.XQmMultiplier = MathF.Pow(1.25f, frameHeader.XQmScale - 2.0f);
@@ -449,11 +452,13 @@ internal static partial class JxlFrameEncoder
         for (long groupIdx = 0; groupIdx < frameDim.NumGroups; groupIdx++)
         {
             // The groups are independent: this loop is where libjxl computes them in parallel.
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlEncGroup.ComputeCoefficients(groupIdx, encState, opsin, dc);
         }
 
         for (long groupIndex = 0; groupIndex < frameDim.NumDcGroups; groupIndex++)
         {
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlRect r = frameDim.DcGroupRect(groupIndex);
             encModular.AddVarDctDc(frameHeader, dc, r, groupIndex, encState);
         }

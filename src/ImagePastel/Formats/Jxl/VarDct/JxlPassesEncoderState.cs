@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
@@ -29,9 +30,11 @@ internal sealed class JxlPassesEncoderState : IDisposable
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="distance">The butteraugli distance, after libjxl's clamps.</param>
     /// <param name="allocator">The allocator of the encoder's copy of the DC.</param>
-    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance, MemoryAllocator allocator)
+    /// <param name="cancellationToken">The token that cancels the encode.</param>
+    public JxlPassesEncoderState(JxlFrameDimensions frameDim, JxlSpeedTier speedTier, float distance, MemoryAllocator allocator, CancellationToken cancellationToken)
     {
         this.FrameDim = frameDim;
+        this.CancellationToken = cancellationToken;
         this.SpeedTier = speedTier;
         this.Distance = distance;
         this.XSizeBlocks = (int)frameDim.XSizeBlocks;
@@ -61,6 +64,9 @@ internal sealed class JxlPassesEncoderState : IDisposable
 
     /// <summary>Gets the frame dimensions.</summary>
     public JxlFrameDimensions FrameDim { get; }
+
+    /// <summary>Gets the token that cancels the encode; each stage checks it once per group or tile.</summary>
+    public CancellationToken CancellationToken { get; }
 
     /// <summary>Gets the speed tier, libjxl's <c>cparams.speed_tier</c>.</summary>
     public JxlSpeedTier SpeedTier { get; }

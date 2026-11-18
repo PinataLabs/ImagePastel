@@ -118,7 +118,7 @@ internal static class JxlEncHeuristics
                 butteraugliDistanceForIqf *= 0.62f;
             }
 
-            encState.InitialQuantField = JxlEncAdaptiveQuantization.InitialQuantField(butteraugliDistanceForIqf, opsin, 1.0f, allocator, out Buffer2D<float> mask1x1);
+            encState.InitialQuantField = JxlEncAdaptiveQuantization.InitialQuantField(butteraugliDistanceForIqf, opsin, 1.0f, allocator, encState.CancellationToken, out Buffer2D<float> mask1x1);
             encState.InitialQuantMasking1x1 = mask1x1;
             float q = (float)(0.39 / encState.Distance);
             encState.Quantizer.ComputeGlobalScaleAndQuant(quantDc, q, 0);
@@ -148,6 +148,7 @@ internal static class JxlEncHeuristics
         int numTiles = numTilesX * (int)JxlBits.DivCeil(encState.YSizeBlocks, EncTileDimInBlocks);
         for (int tid = 0; tid < numTiles; tid++)
         {
+            encState.CancellationToken.ThrowIfCancellationRequested();
             int tx = tid % numTilesX;
             int ty = tid / numTilesX;
             int by0 = ty * EncTileDimInBlocks;

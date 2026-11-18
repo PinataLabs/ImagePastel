@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
@@ -139,8 +140,9 @@ internal static class JxlModularEncoder
     /// <param name="start">The first stream.</param>
     /// <param name="stop">The stream after the last.</param>
     /// <param name="multiplierInfo">The multiplier boxes of quantised channels; empty for lossless.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per stream.</param>
     /// <returns>The tree, before <see cref="TokenizeTree"/>.</returns>
-    public static List<JxlPropertyDecisionNode> LearnTree(JxlModularImage[] images, JxlModularOptions[] options, int start, int stop, List<JxlModularMultiplierInfo> multiplierInfo)
+    public static List<JxlPropertyDecisionNode> LearnTree(JxlModularImage[] images, JxlModularOptions[] options, int start, int stop, List<JxlModularMultiplierInfo> multiplierInfo, CancellationToken cancellationToken)
     {
         JxlTreeSamples treeSamples = new();
         treeSamples.SetPredictor(options[start].Predictor, options[start].WpTreeMode);
@@ -182,6 +184,7 @@ internal static class JxlModularEncoder
 
         for (int i = start; i < stop; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             JxlModularImage image = images[i];
             int nbChannels = image.Channel.Count;
 
@@ -220,7 +223,7 @@ internal static class JxlModularEncoder
         }
 
         // TODO(veluca): parallelize more.
-        return LearnTree(treeSamples, totalPixels, options[start], multiplierInfo, range);
+        return LearnTree(treeSamples, totalPixels, options[start], multiplierInfo, range, cancellationToken);
     }
 
     /// <summary>
@@ -426,7 +429,7 @@ internal static class JxlModularEncoder
 
     // Learns the tree from the gathered samples. A split must save more bits than the node threshold,
     // scaled by the fraction of the pixels that were sampled.
-    private static List<JxlPropertyDecisionNode> LearnTree(JxlTreeSamples treeSamples, long totalPixels, JxlModularOptions options, List<JxlModularMultiplierInfo> multiplierInfo, JxlStaticPropRange staticPropRange)
+    private static List<JxlPropertyDecisionNode> LearnTree(JxlTreeSamples treeSamples, long totalPixels, JxlModularOptions options, List<JxlModularMultiplierInfo> multiplierInfo, JxlStaticPropRange staticPropRange, CancellationToken cancellationToken)
     {
         for (int i = 0; i < JxlModularPredict.NumStaticProperties; i++)
         {
@@ -444,7 +447,7 @@ internal static class JxlModularEncoder
         float pixelFraction = treeSamples.NumSamples * 1.0f / totalPixels;
         float requiredCost = (float)((pixelFraction * 0.9) + 0.1);
         treeSamples.AllSamplesDone();
-        return JxlTreeLearner.ComputeBestTree(treeSamples, options.SplittingHeuristicsNodeThreshold * requiredCost, multiplierInfo, staticPropRange, options.FastDecodeMultiplier);
+        return JxlTreeLearner.ComputeBestTree(treeSamples, options.SplittingHeuristicsNodeThreshold * requiredCost, multiplierInfo, staticPropRange, options.FastDecodeMultiplier, cancellationToken);
     }
 
     // `cutoffs` must be sorted.

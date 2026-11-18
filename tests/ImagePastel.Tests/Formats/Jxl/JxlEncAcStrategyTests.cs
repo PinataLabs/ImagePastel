@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using PinataLabs.ImagePastel.Formats.Jxl;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
@@ -239,7 +240,7 @@ public class JxlEncAcStrategyTests
         try
         {
             // LossyFrameHeuristics above d0.5: the field from the pre-Gaborish opsin, then Gaborish's inverse.
-            using Buffer2D<float> quantField = JxlEncAdaptiveQuantization.InitialQuantField(distance, opsin, 1.0f, allocator, out Buffer2D<float> mask1x1);
+            using Buffer2D<float> quantField = JxlEncAdaptiveQuantization.InitialQuantField(distance, opsin, 1.0f, allocator, CancellationToken.None, out Buffer2D<float> mask1x1);
             using Buffer2D<float> masking = mask1x1;
             JxlEncGaborish.GaborishInverse(opsin, new[] { 1.0f, 1.0f, 1.0f }, allocator);
             JxlAcsConfig config = JxlEncAcStrategy.Init(JxlSpeedTier.Squirrel, distance, opsin, quantField, masking, new JxlDequantMatrices());

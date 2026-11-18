@@ -4,6 +4,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
@@ -245,7 +246,7 @@ public class JxlEncAdaptiveQuantizationTests
         try
         {
             float distanceForIqf = gaborish ? distance : distance * 0.62f;
-            return JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, out mask1x1);
+            return JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, CancellationToken.None, out mask1x1);
         }
         finally
         {
@@ -265,7 +266,7 @@ public class JxlEncAdaptiveQuantizationTests
         Buffer2D<float>[] opsin = CreateOpsin(image);
         try
         {
-            using Buffer2D<float> field = JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, out Buffer2D<float> mask1x1);
+            using Buffer2D<float> field = JxlEncAdaptiveQuantization.InitialQuantField(distanceForIqf, opsin, 1.0f, Configuration.Default.MemoryAllocator, CancellationToken.None, out Buffer2D<float> mask1x1);
             mask1x1.Dispose();
             if (acStrategy != null)
             {

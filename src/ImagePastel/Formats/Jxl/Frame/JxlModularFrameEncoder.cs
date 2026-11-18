@@ -9,6 +9,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
@@ -70,6 +71,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     private readonly MemoryAllocator allocator;
     private readonly JxlFrameDimensions frameDim;
     private readonly JxlSpeedTier speedTier;
+    private readonly CancellationToken cancellationToken;
     private readonly JxlModularImage[] streamImages;
     private readonly JxlModularOptions[] streamOptions;
     private readonly JxlModularOptions baseOptions;
@@ -101,10 +103,12 @@ internal sealed class JxlModularFrameEncoder : IDisposable
     /// <param name="frameHeader">The frame header; a VarDCT frame is libjxl's <c>modular_mode == false</c>.</param>
     /// <param name="speedTier">The speed tier.</param>
     /// <param name="allocator">The allocator.</param>
-    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, JxlSpeedTier speedTier, MemoryAllocator allocator)
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per stream.</param>
+    public JxlModularFrameEncoder(JxlFrameHeader frameHeader, JxlSpeedTier speedTier, MemoryAllocator allocator, CancellationToken cancellationToken)
     {
         this.allocator = allocator;
         this.speedTier = speedTier;
+        this.cancellationToken = cancellationToken;
         this.frameDim = frameHeader.ToFrameDimensions();
         this.modularMode = frameHeader.Encoding == JxlFrameEncoding.Modular;
 
@@ -345,7 +349,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
                 if (this.streamOptions[start].Kind == JxlModularOptions.TreeKind.Learn)
                 {
-                    trees[chunk] = JxlModularEncoder.LearnTree(this.streamImages, this.streamOptions, start, stop, multiplierInfo);
+                    trees[chunk] = JxlModularEncoder.LearnTree(this.streamImages, this.streamOptions, start, stop, multiplierInfo, this.cancellationToken);
                 }
                 else
                 {
@@ -601,6 +605,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         this.imageWidths = new int[numStreams];
         for (int streamId = 0; streamId < numStreams; streamId++)
         {
+            this.cancellationToken.ThrowIfCancellationRequested();
             this.streamHeaders[streamId] = new JxlGroupHeader();
             this.tokens[streamId] = new List<JxlToken>();
 
@@ -731,6 +736,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // The streams are independent: this loop is where libjxl prepares them in parallel.
         foreach (StreamParams stream in this.streamParams)
         {
+            this.cancellationToken.ThrowIfCancellationRequested();
             if (stream.Id != 0)
             {
                 this.streamOptions[stream.Id] = this.streamOptions[0].Clone();

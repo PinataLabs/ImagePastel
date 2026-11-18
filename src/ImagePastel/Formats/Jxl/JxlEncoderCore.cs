@@ -103,11 +103,11 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
 
         if (lossy)
         {
-            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.testHooks, this.memoryAllocator, writer);
+            JxlFrameEncoder.EncodeLossyFrame(metadata, image, ToSpeedTier(this.effort), this.distance, this.testHooks, this.memoryAllocator, writer, cancellationToken);
         }
         else
         {
-            JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer);
+            JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer, cancellationToken);
         }
 
         JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes, level);
