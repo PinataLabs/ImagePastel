@@ -53,7 +53,51 @@ public class QuantEncTests
     [Fact]
     public void QuantizeBlock_WithoutAVX2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunQuantizeBlockTest, HwIntrinsics.DisableAVX2);
 
-    // Compares within one instruction set: the paths differ from each other across sets (issue #354).
+    private static unsafe void RunQuantizeBlockMatchesScalarTest()
+    {
+        var rng = new Random(354);
+        Vp8Matrix mtx = default;
+        short[] input = new short[16];
+        short[] output = new short[16];
+        short[] scalarInput = new short[16];
+        short[] scalarOutput = new short[16];
+        bool sharpened = false;
+
+        for (int i = 0; i < 6000; i++)
+        {
+            mtx.Q[0] = (ushort)rng.Next(4, 158);
+            mtx.Q[1] = (ushort)rng.Next(4, 158);
+
+            // Only matrix type 0 (luma AC) sharpens.
+            mtx.Expand(i % 3);
+
+            // Half the blocks stay near the zero threshold, where sharpening decides the level.
+            int range = (i & 1) == 0 ? 2048 : 2 * mtx.Q[1];
+            for (int j = 0; j < 16; j++)
+            {
+                input[j] = (short)rng.Next(-range, range + 1);
+                sharpened |= mtx.Sharpen[j] != 0;
+            }
+
+            input.CopyTo(scalarInput, 0);
+
+            int nz = QuantEnc.QuantizeBlock(input, output, ref mtx);
+            int scalarNz = QuantEnc.QuantizeBlockScalar(scalarInput, scalarOutput, ref mtx);
+
+            Assert.Equal(scalarNz, nz);
+            Assert.Equal(scalarOutput, output);
+            Assert.Equal(scalarInput, input);
+        }
+
+        Assert.True(sharpened);
+    }
+
+    [Theory]
+    [InlineData(HwIntrinsics.AllowAll)]
+    [InlineData(HwIntrinsics.DisableAVX2)]
+    [InlineData(HwIntrinsics.DisableHWIntrinsic)]
+    public void QuantizeBlock_MatchesScalar(HwIntrinsics intrinsics) => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunQuantizeBlockMatchesScalarTest, intrinsics);
+
     private static unsafe void RunReconstructIntra4PairTest()
     {
         var rng = new Random(354);

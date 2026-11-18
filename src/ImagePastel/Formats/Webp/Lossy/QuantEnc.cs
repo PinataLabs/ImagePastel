@@ -584,8 +584,8 @@ internal static unsafe class QuantEnc
             // coeff = abs(in) + sharpen
             Vector128<short> sharpen0 = Unsafe.As<short, Vector128<short>>(ref mtx.Sharpen[0]);
             Vector128<short> sharpen8 = Unsafe.As<short, Vector128<short>>(ref mtx.Sharpen[8]);
-            Sse2.Add(coeff0.AsInt16(), sharpen0);
-            Sse2.Add(coeff8.AsInt16(), sharpen8);
+            coeff0 = Sse2.Add(coeff0.AsInt16(), sharpen0).AsUInt16();
+            coeff8 = Sse2.Add(coeff8.AsInt16(), sharpen8).AsUInt16();
 
             // out = (coeff * iQ + B) >> QFIX
             // doing calculations with 32b precision (QFIX=17)
@@ -662,45 +662,50 @@ internal static unsafe class QuantEnc
         else
 #endif
         {
-            int last = -1;
-            int n;
-            for (n = 0; n < 16; ++n)
+            return QuantizeBlockScalar(input, output, ref mtx);
+        }
+    }
+
+    internal static int QuantizeBlockScalar(Span<short> input, Span<short> output, ref Vp8Matrix mtx)
+    {
+        int last = -1;
+        int n;
+        for (n = 0; n < 16; ++n)
+        {
+            int j = Zigzag[n];
+            bool sign = input[j] < 0;
+            uint coeff = (uint)((sign ? -input[j] : input[j]) + mtx.Sharpen[j]);
+            if (coeff > mtx.ZThresh[j])
             {
-                int j = Zigzag[n];
-                bool sign = input[j] < 0;
-                uint coeff = (uint)((sign ? -input[j] : input[j]) + mtx.Sharpen[j]);
-                if (coeff > mtx.ZThresh[j])
+                uint q = mtx.Q[j];
+                uint iQ = mtx.IQ[j];
+                uint b = mtx.Bias[j];
+                int level = QuantDiv(coeff, iQ, b);
+                if (level > MaxLevel)
                 {
-                    uint q = mtx.Q[j];
-                    uint iQ = mtx.IQ[j];
-                    uint b = mtx.Bias[j];
-                    int level = QuantDiv(coeff, iQ, b);
-                    if (level > MaxLevel)
-                    {
-                        level = MaxLevel;
-                    }
-
-                    if (sign)
-                    {
-                        level = -level;
-                    }
-
-                    input[j] = (short)(level * (int)q);
-                    output[n] = (short)level;
-                    if (level != 0)
-                    {
-                        last = n;
-                    }
+                    level = MaxLevel;
                 }
-                else
+
+                if (sign)
                 {
-                    output[n] = 0;
-                    input[j] = 0;
+                    level = -level;
+                }
+
+                input[j] = (short)(level * (int)q);
+                output[n] = (short)level;
+                if (level != 0)
+                {
+                    last = n;
                 }
             }
-
-            return last >= 0 ? 1 : 0;
+            else
+            {
+                output[n] = 0;
+                input[j] = 0;
+            }
         }
+
+        return last >= 0 ? 1 : 0;
     }
 
 #if NETCOREAPP3_0_OR_GREATER
@@ -713,7 +718,7 @@ internal static unsafe class QuantEnc
         Vector256<ushort> coeff0 = Avx2.Abs(input0);
 
         Vector256<short> sharpen0 = Unsafe.As<short, Vector256<short>>(ref mtx.Sharpen[0]);
-        Avx2.Add(coeff0.AsInt16(), sharpen0);
+        coeff0 = Avx2.Add(coeff0.AsInt16(), sharpen0).AsUInt16();
 
         Vector256<ushort> coeffiQ0H = Avx2.MultiplyHigh(coeff0, iq0);
         Vector256<ushort> coeffiQ0L = Avx2.MultiplyLow(coeff0, iq0);

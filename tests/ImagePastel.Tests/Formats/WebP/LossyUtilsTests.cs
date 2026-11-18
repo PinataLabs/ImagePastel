@@ -228,6 +228,30 @@ public class LossyUtilsTests
         Assert.Equal(expected, actual);
     }
 
+    private static void RunVp8SseMatchesScalarTest()
+    {
+        var rng = new Random(354);
+        byte[] a = new byte[WebpConstants.Bps * 16];
+        byte[] b = new byte[WebpConstants.Bps * 16];
+
+        // The second buffer is brighter everywhere, so every difference is negative.
+        a.AsSpan().Fill(10);
+        b.AsSpan().Fill(20);
+        Assert.Equal(1600, LossyUtils.Vp8_Sse4X4(a, b));
+        Assert.Equal(25600, LossyUtils.Vp8_Sse16X16(a, b));
+        Assert.Equal(12800, LossyUtils.Vp8_Sse16X8(a, b));
+
+        for (int i = 0; i < 2000; i++)
+        {
+            rng.NextBytes(a);
+            rng.NextBytes(b);
+
+            Assert.Equal(LossyUtils.Vp8_SseNxN(a, b, 4, 4), LossyUtils.Vp8_Sse4X4(a, b));
+            Assert.Equal(LossyUtils.Vp8_SseNxN(a, b, 16, 16), LossyUtils.Vp8_Sse16X16(a, b));
+            Assert.Equal(LossyUtils.Vp8_SseNxN(a, b, 16, 8), LossyUtils.Vp8_Sse16X8(a, b));
+        }
+    }
+
     private static void RunMean16x4Test()
     {
         // arrange
@@ -385,6 +409,12 @@ public class LossyUtilsTests
 
     [Fact]
     public void Vp8Sse4X4_WithoutAVX2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunVp8Sse4X4Test, HwIntrinsics.DisableAVX2);
+
+    [Theory]
+    [InlineData(HwIntrinsics.AllowAll)]
+    [InlineData(HwIntrinsics.DisableAVX2)]
+    [InlineData(HwIntrinsics.DisableHWIntrinsic)]
+    public void Vp8Sse_MatchesScalar(HwIntrinsics intrinsics) => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunVp8SseMatchesScalarTest, intrinsics);
 
     [Fact]
     public void Mean16x4_WithHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunMean16x4Test, HwIntrinsics.AllowAll);
