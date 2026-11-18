@@ -506,19 +506,19 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   - A stream that ends the block of a category with one block type throws. Such a block is as long as the largest meta-block (2^24), so only a corrupt stream gets there. The C source reads nothing there and has no error code for it.
   - The lookup tables of a meta-block reuse the arrays of the meta-block before, where the C decoder allocates again.
 - **Memory.** The decoder holds its ring buffer, which is at most the window (16 MiB for the largest), and about 3 MiB of tables at most. The ring buffer starts small and is replaced as the output grows, so the allocations add up to twice the window at most.
-- **Tests.** `BrotliDecoder` is the oracle, on net10.0 and net11.0.
+- **Tests.** `BrotliDecoder` is the oracle, on net10.0 and net11.0. The library builds the decoder for netstandard2.1 only, so `ImagePastel.Tests.csproj` compiles the same source files (`Compression/Brotli/` and `JxlManagedBrotliDecoder.cs`) into the test assembly. `tests/coverlet.runsettings` includes those types, so their coverage is reported against the files under `src/`.
   - Streams of `BrotliEncoder` at every quality (0 to 11) and every window size (10 to 24), for empty, random, text, repetitive and mixed input; input longer than the window, for every window size; flushed streams; the empty stream; hand-made streams with a metadata meta-block and with block switches; and the `brob` boxes of the test files. The managed decoder gives the output of `BrotliDecoder` and consumes the same number of bytes.
   - 8,000 mutated streams (bit flips, truncations, removed and overwritten bytes, random bytes). For each, the managed decoder throws `InvalidImageContentException` where `BrotliDecoder` reports an error, and gives the same output where it does not. No other exception escapes, and no stream makes it allocate 40 MiB. A run with 448,000 mutated streams, done once and not kept in the suite, gave the same result.
   - `JxlBrotliBoxTests` reads containers with each decoder. `exif_xmp_brob.jxl` gives the Exif and XMP of `exif_xmp.jxl`. 1,000 mutated boxes read the same with both. With the managed decoder, a box that expands past 64 MiB throws after less than 16 MiB of allocation.
   - Two tests load the netstandard2.1 build from the build output into its own `AssemblyLoadContext` and call its `Image.Identify`: `exif_xmp_brob.jxl` gives the profiles that the net10.0 build gives for `exif_xmp.jxl`. No test project targets netstandard2.1, and the test project does not build that target, so these two tests skip when that build is missing or older than the build under test. CI builds the solution first, so they run there.
-- **Size.** The decoder is compiled into every target, so that the tests can run it next to `BrotliDecoder`. Release builds, before and after:
+- **Size.** The decoder is compiled into the netstandard2.1 target only. net10.0 and net11.0 get only the seam. Release builds, before and after:
 
   | Target | Before | After | Added |
   |---|---|---|---|
-  | net10.0 and net11.0 | 2,389,504 bytes | 2,539,520 bytes | 150,016 bytes (6.3 %) |
+  | net10.0 and net11.0 | 2,389,504 bytes | 2,390,016 bytes | 512 bytes |
   | netstandard2.1 | 2,288,128 bytes | 2,438,656 bytes | 150,528 bytes (6.6 %) |
 
-  122,784 of those bytes are the dictionary. On net10.0 and net11.0 no shipped code path names `JxlManagedBrotliDecoder`, so the trimmer removes the decoder: a trimmed net10.0 console program that calls `Image.Identify` keeps `JxlSystemBrotliDecoder` and has no `ManagedBrotliDecoder`.
+  122,784 of the netstandard2.1 bytes are the dictionary.
 - **Speed.** There is no target: a metadata box is a few kilobytes. Measured in Release on net10.0, Windows x64 (Ryzen 9 5950X), one thread, 8 MiB of input, the median of 9 decodes into one buffer after 3 warm-up decodes, with the two decoders in turn. Each decode's output was compared with the input.
 
   | Input | Compression | Managed | `BrotliDecoder` | Managed time / `BrotliDecoder` time |

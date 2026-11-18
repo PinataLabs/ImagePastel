@@ -29,6 +29,15 @@
 
   <Import Project="..\..\gen\ImagePastel.SourceGenerators.props" />
 
+  <!--
+    The library builds its managed Brotli decoder for netstandard2.1 only. The tests compile the
+    same files to check the decoder against BrotliDecoder on the .NET targets.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\src\ImagePastel\Compression\Brotli\**\*.cs" Link="Compression\Brotli\Source\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\ImagePastel\Formats\Jxl\JxlManagedBrotliDecoder.cs" Link="Formats\Jxl\Source\JxlManagedBrotliDecoder.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
