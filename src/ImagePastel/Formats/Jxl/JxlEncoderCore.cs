@@ -107,7 +107,7 @@ internal sealed class JxlEncoderCore : IImageEncoderInternals
         }
         else
         {
-            JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.memoryAllocator, writer, cancellationToken);
+            JxlFrameEncoder.EncodeFrame(metadata, image, ToSpeedTier(this.effort), this.testHooks, this.memoryAllocator, writer, cancellationToken);
         }
 
         JxlContainerWriter.Write(stream, writer.GetSpan(), headerSize, boxes, level);

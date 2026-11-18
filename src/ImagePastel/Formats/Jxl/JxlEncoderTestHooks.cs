@@ -28,4 +28,11 @@ internal sealed class JxlEncoderTestHooks
     /// (<see cref="JxlEncReconstruct.ReconstructImage"/>), as the dynamic EPF search does.
     /// </summary>
     public Action<JxlFrameHeader, JxlPassesEncoderState> ArHeuristicsProbe { get; set; }
+
+    /// <summary>
+    /// Gets or sets a callback that a frame, lossless or lossy, runs after its last token pass, right before
+    /// <c>EncodeGroups</c> builds the histograms and writes the sections, or <see langword="null"/>. Tests
+    /// use it to cancel an encode in that last stage.
+    /// </summary>
+    public Action EncodeGroupsProbe { get; set; }
 }

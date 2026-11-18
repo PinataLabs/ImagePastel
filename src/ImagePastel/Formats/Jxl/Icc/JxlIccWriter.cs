@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
@@ -61,7 +62,7 @@ internal static class JxlIccWriter
         };
 
         JxlEntropyEncodingData code = new();
-        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, NumIccContexts, tokens, code, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, NumIccContexts, tokens, code, writer, CancellationToken.None);
         JxlEntropyEncoder.WriteTokens(tokens[0], code, 0, writer);
     }
 

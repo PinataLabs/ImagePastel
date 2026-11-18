@@ -229,7 +229,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
 
         if (doColor)
         {
-            JxlEncoderInput<TPixel>.CopyColorChannels(image, metadata.BitDepth, gi);
+            JxlEncoderInput<TPixel>.CopyColorChannels(image, metadata.BitDepth, gi, this.cancellationToken);
         }
 
         // The extra channels follow the colour channels. A pixel type has at most one, its alpha, and
@@ -239,7 +239,7 @@ internal sealed class JxlModularFrameEncoder : IDisposable
             JxlExtraChannelInfo eci = metadata.ExtraChannelInfo[ec];
             bool ecFp = eci.BitDepth.FloatingPointSample;
             maxBitdepth = Math.Max(maxBitdepth, (int)eci.BitDepth.BitsPerSample + (ecFp ? 0 : 1));
-            JxlEncoderInput<TPixel>.CopyAlphaChannel(image, eci, gi, c);
+            JxlEncoderInput<TPixel>.CopyAlphaChannel(image, eci, gi, c, this.cancellationToken);
         }
 
         if (maxBitdepth > LevelMaxBitdepth)
@@ -634,19 +634,23 @@ internal sealed class JxlModularFrameEncoder : IDisposable
         // both the tree's and the streams' histograms choose the hybrid uint configuration (kFast).
         JxlHistogramParams parameters = JxlHistogramParams.ForModular(this.speedTier, this.modularMode, this.baseOptions.Predictor, this.ExtraDcPrecision);
         JxlEntropyEncodingData treeCode = new();
-        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlMaTree.NumTreeContexts, this.treeTokens, treeCode, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlMaTree.NumTreeContexts, this.treeTokens, treeCode, writer, this.cancellationToken);
         JxlEntropyEncoder.WriteTokens(this.treeTokens[0], treeCode, 0, writer);
 
         // Write histograms.
         parameters.ImageWidths = this.imageWidths;
-        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, (this.tree.Count + 1) / 2, this.tokens, this.code, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, (this.tree.Count + 1) / 2, this.tokens, this.code, writer, this.cancellationToken);
     }
 
-    /// <summary>Writes the Modular stream <paramref name="streamId"/>: nothing if it has no channels.</summary>
+    /// <summary>
+    /// Writes the Modular stream <paramref name="streamId"/>: nothing if it has no channels. It checks the
+    /// token first, so writing the sections checks it once per stream.
+    /// </summary>
     /// <param name="writer">The writer.</param>
     /// <param name="streamId">The stream id.</param>
     public void EncodeStream(JxlBitWriter writer, long streamId)
     {
+        this.cancellationToken.ThrowIfCancellationRequested();
         if (this.streamImages[streamId].Channel.Count == 0)
         {
             // Image with no channels, header never gets decoded.

@@ -204,7 +204,7 @@ public class JxlEncAdaptiveQuantizationTests
             planes[c] = Configuration.Default.MemoryAllocator.Allocate2D<float>(xsize, ysize, AllocationOptions.Clean);
         }
 
-        JxlEncoderInput<Rgb24>.CopyColorPlanes(image, planes);
+        JxlEncoderInput<Rgb24>.CopyColorPlanes(image, planes, CancellationToken.None);
         float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(255.0f);
         for (int y = 0; y < image.Height; y++)
         {

@@ -6,6 +6,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
@@ -55,8 +56,8 @@ internal static class JxlContextMapEncoder
             Lz77 = JxlHistogramParams.Lz77Method.None,
         };
 
-        long ansCost = JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, tokens, new JxlEntropyEncodingData(), null);
-        long mtfCost = JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, mtfTokens, new JxlEntropyEncodingData(), null);
+        long ansCost = JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, tokens, new JxlEntropyEncodingData(), null, CancellationToken.None);
+        long mtfCost = JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, mtfTokens, new JxlEntropyEncodingData(), null, CancellationToken.None);
         bool useMtf = mtfCost < ansCost;
 
         // Rebuild token list.
@@ -84,7 +85,7 @@ internal static class JxlContextMapEncoder
             // Use/don't use MTF.
             writer.Write(1, useMtf ? 1UL : 0UL);
             JxlEntropyEncodingData codes = new();
-            JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, tokens, codes, writer);
+            JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, tokens, codes, writer, CancellationToken.None);
             JxlEntropyEncoder.WriteTokens(tokens[0], codes, 0, writer);
         }
     }

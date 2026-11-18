@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
@@ -45,8 +46,9 @@ internal sealed class JxlEntropyEncodingData
     /// <param name="tokens">The token streams that <paramref name="builder"/> counts.</param>
     /// <param name="builder">The histogram of each context.</param>
     /// <param name="writer">The writer, or <see langword="null"/> to estimate the cost only.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per stream and per histogram.</param>
     /// <returns>The cost in bits: exact for the headers, estimated for the data.</returns>
-    public long BuildAndStoreEntropyCodes(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, IReadOnlyList<JxlHistogram> builder, JxlBitWriter writer)
+    public long BuildAndStoreEntropyCodes(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, IReadOnlyList<JxlHistogram> builder, JxlBitWriter writer, CancellationToken cancellationToken)
     {
         // libjxl can extend the codes of an earlier stream here (prev_histograms); only its streaming
         // mode does, so the port always starts from none.
@@ -76,7 +78,7 @@ internal sealed class JxlEntropyEncodingData
             clusteredHistograms.Add(builder[0]);
         }
 
-        this.ChooseUintConfigs(parameters, tokens, clusteredHistograms);
+        this.ChooseUintConfigs(parameters, tokens, clusteredHistograms, cancellationToken);
 
         // Used if writer == nullptr to estimate costs.
         JxlSizeWriter sizeWriter = new();
@@ -184,7 +186,7 @@ internal sealed class JxlEntropyEncodingData
 
     // Chooses the hybrid uint configuration of each clustered histogram, re-tokenizes the histogram
     // with it, and sets the alphabet size from the largest token.
-    private void ChooseUintConfigs(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, List<JxlHistogram> clusteredHistograms)
+    private void ChooseUintConfigs(JxlHistogramParams parameters, IReadOnlyList<List<JxlToken>> tokens, List<JxlHistogram> clusteredHistograms, CancellationToken cancellationToken)
     {
         // Set sane default `log_alpha_size`. libjxl's streaming mode uses 8 too; it is not ported.
         if (this.UsePrefixCode)
@@ -236,6 +238,7 @@ internal sealed class JxlEntropyEncodingData
         // TODO(veluca): do not ignore lz77 commands.
         foreach (List<JxlToken> stream in tokens)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (JxlToken token in stream)
             {
                 int histo = this.ContextMap[(int)token.Context] + (token.IsLz77Length ? numHisto : 0);
@@ -248,6 +251,7 @@ internal sealed class JxlEntropyEncodingData
         const uint maxAlpha = JxlAnsParams.AnsMaxAlphabetSize;
         for (int h = 0; h < numHisto; h++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             float bestCost = float.MaxValue;
             foreach (JxlHybridUintConfig cfg in configs)
             {

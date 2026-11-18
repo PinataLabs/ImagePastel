@@ -183,9 +183,9 @@ internal static partial class JxlFrameEncoder
 
             // A grey image fills all three planes with its grey, as libjxl's CopyColorChannels does, so
             // every colour space below takes three planes.
-            JxlEncoderInput<TPixel>.CopyColorPlanes(image, color);
+            JxlEncoderInput<TPixel>.CopyColorPlanes(image, color, encState.CancellationToken);
 
-            ToXyb(metadata.M.ColorEncoding, metadata.M.ToneMapping.IntensityTarget, color, image.Width, image.Height);
+            ToXyb(metadata.M.ColorEncoding, metadata.M.ToneMapping.IntensityTarget, color, image.Width, image.Height, encState.CancellationToken);
 
             // libjxl simplifies the invisible pixels of straight alpha in a regular frame, unless
             // keep_invisible is set (by default it is set only for lossless), the extra channels are
@@ -249,6 +249,7 @@ internal static partial class JxlFrameEncoder
 
         encModular.ComputeTree();
         encModular.ComputeTokens();
+        testHooks?.EncodeGroupsProbe?.Invoke();
         return EncodeVarDctGroups(frameHeader, frameDim, encState, encModular);
     }
 
@@ -257,7 +258,7 @@ internal static partial class JxlFrameEncoder
     // so a grey image, whose grey is in all three planes, takes the same branches). Any other encoding is
     // converted to linear sRGB, or linear grey (JxlLinearSrgbTransform), then goes through the opsin
     // matrix. libjxl keeps a linear copy from Kitten down, for its butteraugli search; Falcon does not.
-    private static void ToXyb(JxlColorEncodingHeader c, float intensityTarget, Buffer2D<float>[] color, int width, int height)
+    internal static void ToXyb(JxlColorEncodingHeader c, float intensityTarget, Buffer2D<float>[] color, int width, int height, CancellationToken cancellationToken)
     {
         float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(intensityTarget);
         bool srgbSpace = c.WhitePoint == JxlWhitePoint.D65 && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
@@ -266,6 +267,7 @@ internal static partial class JxlFrameEncoder
         JxlLinearSrgbTransform transform = linearSrgb || srgb ? null : new JxlLinearSrgbTransform(c, intensityTarget);
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<float> row0 = color[0].DangerousGetRowSpan(y).Slice(0, width);
             Span<float> row1 = color[1].DangerousGetRowSpan(y).Slice(0, width);
             Span<float> row2 = color[2].DangerousGetRowSpan(y).Slice(0, width);
@@ -585,7 +587,7 @@ internal static partial class JxlFrameEncoder
         // Encode histograms. libjxl caps them at 6 from decoding speed tier 1, which the encoder has no
         // option for.
         JxlHistogramParams histParams = JxlHistogramParams.ForAc(encState.SpeedTier);
-        JxlEntropyEncoder.BuildAndEncodeHistograms(histParams, encState.NumHistograms * encState.BlockCtxMap.NumAcContexts, encState.AcTokens, encState.Codes, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(histParams, encState.NumHistograms * encState.BlockCtxMap.NumAcContexts, encState.AcTokens, encState.Codes, writer, encState.CancellationToken);
     }
 
     private static void EncodeGroupTokenizedCoefficients(long groupIdx, JxlPassesEncoderState encState, JxlBitWriter writer)

@@ -302,7 +302,7 @@ public class JxlResourceCapsTests
 
         JxlHistogramParams parameters = new() { Lz77 = JxlHistogramParams.Lz77Method.None, ForceHuffman = true };
         JxlEntropyEncodingData code = new();
-        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlIccCodecCommon.NumIccContexts, tokens, code, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, JxlIccCodecCommon.NumIccContexts, tokens, code, writer, CancellationToken.None);
         JxlEntropyEncoder.WriteTokens(tokens[0], code, 0, writer);
     }
 }

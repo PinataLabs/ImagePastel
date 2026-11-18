@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
@@ -92,7 +93,7 @@ public class JxlEntropyCoderTests
         List<JxlToken>[] streams = { new(tokens) };
         JxlEntropyEncodingData codes = new();
         JxlBitWriter writer = new();
-        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, streams, codes, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(parameters, 1, streams, codes, writer, CancellationToken.None);
         JxlEntropyEncoder.WriteTokens(streams[0], codes, 0, writer);
         writer.ZeroPadToByte();
         byte[] encoded = writer.ToArray();

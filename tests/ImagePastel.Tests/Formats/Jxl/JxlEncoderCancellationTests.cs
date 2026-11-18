@@ -6,7 +6,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using PinataLabs.ImagePastel.Formats.Jxl;
+using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
+using PinataLabs.ImagePastel.Formats.Jxl.Headers;
+using PinataLabs.ImagePastel.Formats.Jxl.Modular;
 using PinataLabs.ImagePastel.Formats.Jxl.RenderPipeline;
 using PinataLabs.ImagePastel.Formats.Jxl.VarDct;
 using PinataLabs.ImagePastel.Memory;
@@ -54,6 +57,100 @@ public class JxlEncoderCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsJxlAsync(stream, encoder, source.Token));
         Assert.True(probed);
         Assert.Equal(0, stream.Length);
+    }
+
+    // The token is cancelled after the last token pass, so the encode is in its last stage when it is
+    // cancelled: the histograms of every stream, then the sections. Fastest and Default build the histograms
+    // differently (Fastest lossy has no LZ77 and fewer clusters), so both are covered.
+    [Theory]
+    [InlineData(0f, JxlEffort.Fastest)]
+    [InlineData(0f, JxlEffort.Default)]
+    [InlineData(1f, JxlEffort.Fastest)]
+    [InlineData(1f, JxlEffort.Default)]
+    public async Task SaveAsJxlAsync_CancelledBeforeTheSections_ThrowsAndWritesNothing(float distance, JxlEffort effort)
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Size, Size);
+        using CancellationTokenSource source = new();
+        bool probed = false;
+        JxlEncoder encoder = new()
+        {
+            Distance = distance,
+            Effort = effort,
+            TestHooks = new()
+            {
+                EncodeGroupsProbe = () =>
+                {
+                    probed = true;
+                    source.Cancel();
+                },
+            },
+        };
+        using MemoryStream stream = new();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsJxlAsync(stream, encoder, source.Token));
+        Assert.True(probed);
+        Assert.Equal(0, stream.Length);
+    }
+
+    // The histograms of the tree and of every stream: LZ77, the counts and the hybrid uint search.
+    [Fact]
+    public void ModularHistograms_CancelledToken_Throws()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Size, Size);
+        JxlFrameHeader frameHeader = ReadLosslessFrameHeader(image);
+        using CancellationTokenSource source = new();
+        using JxlModularFrameEncoder encoder = new(frameHeader, JxlSpeedTier.Squirrel, Allocator, source.Token);
+        encoder.ComputeEncodingData(frameHeader, frameHeader.NonserializedMetadata.M, image, doColor: true);
+        encoder.ComputeTree();
+        encoder.ComputeTokens();
+
+        source.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => encoder.EncodeGlobalInfo(new JxlBitWriter()));
+    }
+
+    // Each section writes its streams one at a time, after the histograms of all of them.
+    [Fact]
+    public void ModularSections_CancelledToken_Throws()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Size, Size);
+        JxlFrameHeader frameHeader = ReadLosslessFrameHeader(image);
+        using CancellationTokenSource source = new();
+        using JxlModularFrameEncoder encoder = new(frameHeader, JxlSpeedTier.Squirrel, Allocator, source.Token);
+        encoder.ComputeEncodingData(frameHeader, frameHeader.NonserializedMetadata.M, image, doColor: true);
+        encoder.ComputeTree();
+        encoder.ComputeTokens();
+        JxlBitWriter writer = new();
+        encoder.EncodeGlobalInfo(writer);
+
+        source.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => encoder.EncodeStream(writer, 0));
+    }
+
+    // The colour copy of a lossless frame, before its transforms.
+    [Fact]
+    public void LosslessColorCopy_CancelledToken_Throws()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Size, Size);
+        using JxlModularImage gi = JxlModularImage.Create(Allocator, Size, Size, 8, 3);
+
+        Assert.ThrowsAny<OperationCanceledException>(() => JxlEncoderInput<Rgb24>.CopyColorChannels(image, new JxlBitDepth(), gi, Cancelled()));
+    }
+
+    // The colour copy and the XYB conversion of a lossy frame, before its first tile.
+    [Fact]
+    public void LossyColorCopy_CancelledToken_Throws()
+    {
+        using Image<Rgb24> image = JxlEncoderRoundTrip.CreateImage<Rgb24>("noise", Size, Size);
+        Buffer2D<float>[] color = AllocatePlanes(Size, Size);
+        try
+        {
+            Assert.ThrowsAny<OperationCanceledException>(() => JxlEncoderInput<Rgb24>.CopyColorPlanes(image, color, Cancelled()));
+            Assert.ThrowsAny<OperationCanceledException>(() => JxlFrameEncoder.ToXyb(new JxlColorEncodingHeader(), 255f, color, Size, Size, Cancelled()));
+        }
+        finally
+        {
+            JxlPlanes.DisposeAll(color);
+        }
     }
 
     // The per-group transforms of a lossless frame: Default tries the palettes and RCTs of each group.

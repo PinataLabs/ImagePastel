@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl.Entropy;
@@ -24,25 +25,27 @@ internal static class JxlLz77Encoder
     /// <param name="numContexts">The number of contexts.</param>
     /// <param name="tokens">The token streams.</param>
     /// <param name="lz77">The LZ77 parameters.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per stream.</param>
     /// <returns>The new token streams, or <see langword="null"/>.</returns>
-    public static List<JxlToken>[] ApplyLz77(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77)
+    public static List<JxlToken>[] ApplyLz77(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77, CancellationToken cancellationToken)
         => parameters.Lz77 switch
         {
-            JxlHistogramParams.Lz77Method.Rle => ApplyLz77Rle(parameters, numContexts, tokens, lz77),
+            JxlHistogramParams.Lz77Method.Rle => ApplyLz77Rle(parameters, numContexts, tokens, lz77, cancellationToken),
             _ => null,
         };
 
-    private static List<JxlToken>[] ApplyLz77Rle(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77)
+    private static List<JxlToken>[] ApplyLz77Rle(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77, CancellationToken cancellationToken)
     {
         List<JxlToken>[] tokensLz77 = new List<JxlToken>[tokens.Count];
 
         // TODO(veluca): tune heuristics here.
-        SymbolCostEstimator sce = new(numContexts, parameters.ForceHuffman, tokens, lz77);
+        SymbolCostEstimator sce = new(numContexts, parameters.ForceHuffman, tokens, lz77, cancellationToken);
         float bitDecrease = 0;
         long totalSymbols = 0;
         JxlHybridUintConfig uintConfig = new(4, 2, 0);
         for (int stream = 0; stream < tokens.Count; stream++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int distanceMultiplier = parameters.ImageWidths.Count > stream ? parameters.ImageWidths[stream] : 0;
             List<JxlToken> input = tokens[stream];
             List<JxlToken> output = new(input.Count);
@@ -125,7 +128,7 @@ internal static class JxlLz77Encoder
         private readonly int maxAlphabetSize;
         private readonly float[] bits;
 
-        public SymbolCostEstimator(int numContexts, bool forceHuffman, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77)
+        public SymbolCostEstimator(int numContexts, bool forceHuffman, IReadOnlyList<List<JxlToken>> tokens, JxlLz77Params lz77, CancellationToken cancellationToken)
         {
             JxlHistogram[] builder = new JxlHistogram[numContexts];
             for (int c = 0; c < numContexts; c++)
@@ -137,6 +140,7 @@ internal static class JxlLz77Encoder
             JxlHybridUintConfig uintConfig = new(4, 2, 0);
             foreach (List<JxlToken> stream in tokens)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 foreach (JxlToken token in stream)
                 {
                     (token.IsLz77Length ? lz77.LengthUintConfig : uintConfig).Encode(token.Value, out uint tok, out _, out _);
