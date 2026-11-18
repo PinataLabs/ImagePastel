@@ -2,7 +2,10 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using PinataLabs.ImagePastel.Advanced;
 using PinataLabs.ImagePastel.Formats.Webp;
 using PinataLabs.ImagePastel.Formats.Webp.Lossy;
@@ -41,6 +44,154 @@ public class YuvConversionTests
 
     [Fact]
     public void UpSampleYuvToRgb_WithoutSSE2_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunUpSampleYuvToRgbTest, HwIntrinsics.DisableSSE2);
+
+    [Fact]
+    public void ConvertRgbaToY_MatchesReference_WithHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToYTest, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void ConvertRgbaToY_MatchesReference_WithoutAvx2() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToYTest, HwIntrinsics.DisableAVX2);
+
+    [Fact]
+    public void ConvertRgbaToY_MatchesReference_WithoutHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToYTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Fact]
+    public void ConvertRgbaToUv_MatchesReference_WithHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToUvTest, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void ConvertRgbaToUv_MatchesReference_WithoutAvx2() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToUvTest, HwIntrinsics.DisableAVX2);
+
+    [Fact]
+    public void ConvertRgbaToUv_MatchesReference_WithoutHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunConvertRgbaToUvTest, HwIntrinsics.DisableHWIntrinsic);
+
+    [Fact]
+    public void AccumulateRgb_MatchesReference_WithHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunAccumulateRgbTest, HwIntrinsics.AllowAll);
+
+    [Fact]
+    public void AccumulateRgb_MatchesReference_WithoutAvx2() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunAccumulateRgbTest, HwIntrinsics.DisableAVX2);
+
+    [Fact]
+    public void AccumulateRgb_MatchesReference_WithoutHardwareIntrinsics() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunAccumulateRgbTest, HwIntrinsics.DisableHWIntrinsic);
+
+    private static void RunConvertRgbaToYTest()
+    {
+        Random random = new(42);
+        foreach (Bgra32[] row in RandomRows(random))
+        {
+            int width = row.Length;
+            byte[] actual = new byte[width];
+            YuvConversion.ConvertRgbaToY(row, actual, width);
+
+            for (int x = 0; x < width; x++)
+            {
+                int expected = ((16839 * row[x].R) + (33059 * row[x].G) + (6420 * row[x].B) + (1 << 15) + (16 << 16)) >> 16;
+                Assert.True(expected == actual[x], $"width {width}, x {x}: expected {expected}, got {actual[x]}");
+            }
+        }
+    }
+
+    private static void RunConvertRgbaToUvTest()
+    {
+        Random random = new(42);
+        for (int width = 0; width <= 80; width++)
+        {
+            for (int pass = 0; pass < 4; pass++)
+            {
+                ushort[] rgb = new ushort[4 * width];
+                for (int i = 0; i < rgb.Length; i++)
+                {
+                    // Accumulated samples are at most 4 * 255; the fourth slot is alpha or stale and is ignored.
+                    rgb[i] = (ushort)(pass switch { 0 => 0, 1 => 1020, _ => random.Next(1021) });
+                }
+
+                byte[] u = new byte[width];
+                byte[] v = new byte[width];
+                YuvConversion.ConvertRgbaToUv(rgb, u, v, width);
+
+                for (int i = 0; i < width; i++)
+                {
+                    int r = rgb[4 * i], g = rgb[(4 * i) + 1], b = rgb[(4 * i) + 2];
+                    int expectedU = ReferenceClipUv((-9719 * r) - (19081 * g) + (28800 * b));
+                    int expectedV = ReferenceClipUv((28800 * r) - (24116 * g) - (4684 * b));
+                    Assert.True(expectedU == u[i], $"width {width}, i {i}: expected u {expectedU}, got {u[i]}");
+                    Assert.True(expectedV == v[i], $"width {width}, i {i}: expected v {expectedV}, got {v[i]}");
+                }
+            }
+        }
+    }
+
+    private static void RunAccumulateRgbTest()
+    {
+        Random random = new(42);
+        foreach (Bgra32[] row in RandomRows(random))
+        {
+            int width = row.Length;
+            Bgra32[] nextRow = RandomRow(random, width);
+            ushort[] dst = new ushort[4 * ((width + 1) >> 1)];
+            for (int i = 0; i < dst.Length; i++)
+            {
+                dst[i] = (ushort)random.Next(65536);
+            }
+
+            ushort[] expected = (ushort[])dst.Clone();
+            for (int i = 0; i < width >> 1; i++)
+            {
+                Bgra32 a = row[2 * i], b = row[(2 * i) + 1], c = nextRow[2 * i], d = nextRow[(2 * i) + 1];
+                expected[4 * i] = ReferenceLinearToGamma(ReferenceToLinear(a.R) + ReferenceToLinear(b.R) + ReferenceToLinear(c.R) + ReferenceToLinear(d.R));
+                expected[(4 * i) + 1] = ReferenceLinearToGamma(ReferenceToLinear(a.G) + ReferenceToLinear(b.G) + ReferenceToLinear(c.G) + ReferenceToLinear(d.G));
+                expected[(4 * i) + 2] = ReferenceLinearToGamma(ReferenceToLinear(a.B) + ReferenceToLinear(b.B) + ReferenceToLinear(c.B) + ReferenceToLinear(d.B));
+            }
+
+            if ((width & 1) != 0)
+            {
+                int i = width >> 1;
+                Bgra32 a = row[2 * i], c = nextRow[2 * i];
+                expected[4 * i] = ReferenceLinearToGamma(2 * (ReferenceToLinear(a.R) + ReferenceToLinear(c.R)));
+                expected[(4 * i) + 1] = ReferenceLinearToGamma(2 * (ReferenceToLinear(a.G) + ReferenceToLinear(c.G)));
+                expected[(4 * i) + 2] = ReferenceLinearToGamma(2 * (ReferenceToLinear(a.B) + ReferenceToLinear(c.B)));
+            }
+
+            YuvConversion.AccumulateRgb(row, nextRow, dst, width);
+
+            for (int i = 0; i < dst.Length; i++)
+            {
+                Assert.True(expected[i] == dst[i], $"width {width}, index {i}: expected {expected[i]}, got {dst[i]}");
+            }
+        }
+    }
+
+    // Rows of every width up to 80 with random, all-black and all-white pixels, so both the vector body and the scalar tail run.
+    private static IEnumerable<Bgra32[]> RandomRows(Random random)
+    {
+        for (int width = 0; width <= 80; width++)
+        {
+            yield return RandomRow(random, width);
+            yield return Enumerable.Repeat(new Bgra32(0, 0, 0, 255), width).ToArray();
+            yield return Enumerable.Repeat(new Bgra32(255, 255, 255, 255), width).ToArray();
+        }
+    }
+
+    private static Bgra32[] RandomRow(Random random, int width)
+    {
+        byte[] bytes = new byte[4 * width];
+        random.NextBytes(bytes);
+        return MemoryMarshal.Cast<byte, Bgra32>(bytes).ToArray();
+    }
+
+    private static int ReferenceToLinear(byte value) => WebpLookupTables.GammaToLinearTab[value];
+
+    private static ushort ReferenceLinearToGamma(int linear)
+    {
+        int tabPos = linear >> 9;
+        int x = linear & 511;
+        int interpolated = (WebpLookupTables.LinearToGammaTab[tabPos + 1] * x) + (WebpLookupTables.LinearToGammaTab[tabPos] * (512 - x));
+        return (ushort)((interpolated + 64) >> 7);
+    }
+
+    private static int ReferenceClipUv(int uv)
+    {
+        uv = (uv + (1 << 17) + (128 << 18)) >> 18;
+        return Math.Clamp(uv, 0, 255);
+    }
 
     [Theory]
     [WithFile(TestImages.Webp.Yuv, PixelTypes.Rgba32)]
