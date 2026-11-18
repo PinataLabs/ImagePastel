@@ -49,7 +49,18 @@ public class TestEnvironmentTests
         string expected = TestEnvironment.GetReferenceOutputFileName(actual);
 
         this.Output.WriteLine(expected);
-        Assert.Contains(TestEnvironment.ReferenceOutputDirectoryFullPath, expected);
+        Assert.Equal(Path.Combine(TestEnvironment.ReferenceOutputDirectoryFullPath, "foo", "bar", "lol.jpeg"), expected);
+    }
+
+    [Fact]
+    public void ActualOutputDirectoryFullPath_IsSeparatePerTargetFramework()
+    {
+        string targetFramework = new DirectoryInfo(AppContext.BaseDirectory).Name;
+        string actualOutput = TestEnvironment.ActualOutputDirectoryFullPath;
+
+        this.Output.WriteLine(actualOutput);
+        Assert.StartsWith("net", targetFramework);
+        Assert.Equal(targetFramework, Path.GetFileName(actualOutput));
     }
 
     [Theory]
