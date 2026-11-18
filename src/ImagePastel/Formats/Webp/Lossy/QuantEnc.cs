@@ -584,8 +584,8 @@ internal static unsafe class QuantEnc
             // coeff = abs(in) + sharpen
             Vector128<short> sharpen0 = Unsafe.As<short, Vector128<short>>(ref mtx.Sharpen[0]);
             Vector128<short> sharpen8 = Unsafe.As<short, Vector128<short>>(ref mtx.Sharpen[8]);
-            Sse2.Add(coeff0.AsInt16(), sharpen0);
-            Sse2.Add(coeff8.AsInt16(), sharpen8);
+            coeff0 = Sse2.Add(coeff0.AsInt16(), sharpen0).AsUInt16();
+            coeff8 = Sse2.Add(coeff8.AsInt16(), sharpen8).AsUInt16();
 
             // out = (coeff * iQ + B) >> QFIX
             // doing calculations with 32b precision (QFIX=17)
@@ -718,7 +718,7 @@ internal static unsafe class QuantEnc
         Vector256<ushort> coeff0 = Avx2.Abs(input0);
 
         Vector256<short> sharpen0 = Unsafe.As<short, Vector256<short>>(ref mtx.Sharpen[0]);
-        Avx2.Add(coeff0.AsInt16(), sharpen0);
+        coeff0 = Avx2.Add(coeff0.AsInt16(), sharpen0).AsUInt16();
 
         Vector256<ushort> coeffiQ0H = Avx2.MultiplyHigh(coeff0, iq0);
         Vector256<ushort> coeffiQ0L = Avx2.MultiplyLow(coeff0, iq0);
