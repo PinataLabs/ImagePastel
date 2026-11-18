@@ -22,7 +22,8 @@ public class JxlCodestreamLevelTests
     // Stands for "throws ImageFormatException", where Level5 and Level10 are the levels themselves.
     private const int Throws = 0;
 
-    // 2^28 + 1 has no factor pair with both factors at most 2^18, so the pixel rows go one row or column over.
+    // 2^28 + 1 and 2^40 + 1 have no factor pair within the side limits. 1026 x 261633 = 2^28 + 2 and
+    // 2731 x 402604038 = 2^40 + 2 are the closest reachable areas past each pixel limit.
     [Theory]
     [InlineData(1UL, 1UL, JxlCodestreamLevel.Level5)]
     [InlineData(Side18, 1UL, JxlCodestreamLevel.Level5)]
@@ -36,6 +37,7 @@ public class JxlCodestreamLevelTests
     [InlineData(1UL << 14, (1UL << 14) + 1, JxlCodestreamLevel.Level10)]
     [InlineData(Side18, (1UL << 10) + 1, JxlCodestreamLevel.Level10)]
     [InlineData(Side18, Side18, JxlCodestreamLevel.Level10)]
+    [InlineData(1026UL, 261633UL, JxlCodestreamLevel.Level10)]
     [InlineData(Side30, 1UL, JxlCodestreamLevel.Level10)]
     [InlineData(1UL, Side30, JxlCodestreamLevel.Level10)]
     [InlineData(Side30 + 1, 1UL, Throws)]
@@ -45,6 +47,7 @@ public class JxlCodestreamLevelTests
     [InlineData((1UL << 20) + 1, 1UL << 20, Throws)]
     [InlineData(1UL << 20, (1UL << 20) + 1, Throws)]
     [InlineData(Side30, (1UL << 10) + 1, Throws)]
+    [InlineData(2731UL, 402604038UL, Throws)]
     public void Verify_Dimensions(ulong width, ulong height, int expected)
         => AssertVerify(CreateMetadata(width, height), null, expected);
 
