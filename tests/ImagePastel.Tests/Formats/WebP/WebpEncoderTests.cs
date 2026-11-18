@@ -583,33 +583,68 @@ public class WebpEncoderTests
     [Fact]
     public void RunEncodeLossy_WithPeakImage_WithoutHardwareIntrinsics_Works() => FeatureTestRunner.RunWithHwIntrinsicsFeature(RunEncodeLossy_WithPeakImage, HwIntrinsics.DisableHWIntrinsic);
 
-    private static string GetIntrinsicsOutputPath(string intrinsics)
-        => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(WebpEncoderTests)), $"Encode_Lossy_IsTheSameWithAndWithoutAvx2_{intrinsics}.webp");
+    // PNG sources: the JPEG decoder's output depends on the instruction set (#363), which would change the encoder's input.
+    private static readonly string[] IntrinsicsParityImages = { TestImages.Png.Bike, TestImages.Png.CalliphoraPartial };
 
-    private static void RunEncodeLossy_ToFile(string intrinsics)
+    private static string GetIntrinsicsOutputPath(string intrinsics, int image, int method)
+        => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(WebpEncoderTests)), $"Encode_Lossy_IsTheSameWithAndWithoutHardwareIntrinsics_{intrinsics}_{image}_m{method}.webp");
+
+    private static void RunEncodeLossy_AllMethods_ToFile(string intrinsics)
     {
-        using var image = Image.Load<Rgba32>(TestImageLossyFullPath);
-        var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy };
-        image.Save(GetIntrinsicsOutputPath(intrinsics), encoder);
+        for (int i = 0; i < IntrinsicsParityImages.Length; i++)
+        {
+            using var image = Image.Load<Rgb24>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, IntrinsicsParityImages[i]));
+            for (int method = 0; method <= 6; method++)
+            {
+                var encoder = new WebpEncoder() { FileFormat = WebpFileFormatType.Lossy, Method = (WebpEncodingMethod)method };
+                image.Save(GetIntrinsicsOutputPath(intrinsics, i, method), encoder);
+            }
+        }
     }
 
     [Fact]
-    public void Encode_Lossy_IsTheSameWithAndWithoutAvx2()
+    public void Encode_Lossy_IsTheSameWithAndWithoutHardwareIntrinsics()
     {
-        string withAvx2 = GetIntrinsicsOutputPath(nameof(HwIntrinsics.AllowAll));
-        string withoutAvx2 = GetIntrinsicsOutputPath(nameof(HwIntrinsics.DisableAVX2));
-        File.Delete(withAvx2);
-        File.Delete(withoutAvx2);
+        HwIntrinsics[] reduced = { HwIntrinsics.DisableAVX2, HwIntrinsics.DisableSSE42, HwIntrinsics.DisableHWIntrinsic };
+        foreach (HwIntrinsics intrinsics in reduced.Append(HwIntrinsics.AllowAll))
+        {
+            for (int i = 0; i < IntrinsicsParityImages.Length; i++)
+            {
+                for (int method = 0; method <= 6; method++)
+                {
+                    File.Delete(GetIntrinsicsOutputPath(intrinsics.ToString(), i, method));
+                }
+            }
+        }
 
-        FeatureTestRunner.RunWithHwIntrinsicsFeature(RunEncodeLossy_ToFile, HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2);
+        FeatureTestRunner.RunWithHwIntrinsicsFeature(
+            RunEncodeLossy_AllMethods_ToFile,
+            HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2 | HwIntrinsics.DisableSSE42 | HwIntrinsics.DisableHWIntrinsic);
 
-        if (!File.Exists(withAvx2))
+        if (!File.Exists(GetIntrinsicsOutputPath(nameof(HwIntrinsics.AllowAll), 0, 0)))
         {
             // Remote execution is not supported on this platform.
             return;
         }
 
-        Assert.Equal(File.ReadAllBytes(withAvx2), File.ReadAllBytes(withoutAvx2));
+        var mismatches = new System.Collections.Generic.List<string>();
+        for (int i = 0; i < IntrinsicsParityImages.Length; i++)
+        {
+            for (int method = 0; method <= 6; method++)
+            {
+                byte[] expected = File.ReadAllBytes(GetIntrinsicsOutputPath(nameof(HwIntrinsics.AllowAll), i, method));
+                foreach (HwIntrinsics intrinsics in reduced)
+                {
+                    byte[] actual = File.ReadAllBytes(GetIntrinsicsOutputPath(intrinsics.ToString(), i, method));
+                    if (!expected.AsSpan().SequenceEqual(actual))
+                    {
+                        mismatches.Add($"{IntrinsicsParityImages[i]} method {method}: AllowAll {expected.Length} bytes, {intrinsics} {actual.Length} bytes");
+                    }
+                }
+            }
+        }
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
     }
 
     [Fact]

@@ -662,45 +662,50 @@ internal static unsafe class QuantEnc
         else
 #endif
         {
-            int last = -1;
-            int n;
-            for (n = 0; n < 16; ++n)
+            return QuantizeBlockScalar(input, output, ref mtx);
+        }
+    }
+
+    internal static int QuantizeBlockScalar(Span<short> input, Span<short> output, ref Vp8Matrix mtx)
+    {
+        int last = -1;
+        int n;
+        for (n = 0; n < 16; ++n)
+        {
+            int j = Zigzag[n];
+            bool sign = input[j] < 0;
+            uint coeff = (uint)((sign ? -input[j] : input[j]) + mtx.Sharpen[j]);
+            if (coeff > mtx.ZThresh[j])
             {
-                int j = Zigzag[n];
-                bool sign = input[j] < 0;
-                uint coeff = (uint)((sign ? -input[j] : input[j]) + mtx.Sharpen[j]);
-                if (coeff > mtx.ZThresh[j])
+                uint q = mtx.Q[j];
+                uint iQ = mtx.IQ[j];
+                uint b = mtx.Bias[j];
+                int level = QuantDiv(coeff, iQ, b);
+                if (level > MaxLevel)
                 {
-                    uint q = mtx.Q[j];
-                    uint iQ = mtx.IQ[j];
-                    uint b = mtx.Bias[j];
-                    int level = QuantDiv(coeff, iQ, b);
-                    if (level > MaxLevel)
-                    {
-                        level = MaxLevel;
-                    }
-
-                    if (sign)
-                    {
-                        level = -level;
-                    }
-
-                    input[j] = (short)(level * (int)q);
-                    output[n] = (short)level;
-                    if (level != 0)
-                    {
-                        last = n;
-                    }
+                    level = MaxLevel;
                 }
-                else
+
+                if (sign)
                 {
-                    output[n] = 0;
-                    input[j] = 0;
+                    level = -level;
+                }
+
+                input[j] = (short)(level * (int)q);
+                output[n] = (short)level;
+                if (level != 0)
+                {
+                    last = n;
                 }
             }
-
-            return last >= 0 ? 1 : 0;
+            else
+            {
+                output[n] = 0;
+                input[j] = 0;
+            }
         }
+
+        return last >= 0 ? 1 : 0;
     }
 
 #if NETCOREAPP3_0_OR_GREATER
