@@ -23,6 +23,14 @@ internal static class YuvConversion
 
     private const int YuvHalf = 1 << (YuvFix - 1);
 
+    private const int LumaRedWeight = 16839;
+
+    private const int LumaGreenWeight = 33059;
+
+    private const int LumaBlueWeight = 6420;
+
+    private const byte KeepFourthSampleOfEachBlock = 0b1000_1000;
+
 #if NETCOREAPP3_0_OR_GREATER
     private static readonly Vector128<byte> One = Vector128.Create((byte)1);
 
@@ -399,7 +407,15 @@ internal static class YuvConversion
     [MethodImpl(InliningOptions.ShortMethod)]
     public static void ConvertRgbaToY(Span<Bgra32> rowSpan, Span<byte> y, int width)
     {
-        for (int x = 0; x < width; x++)
+        int x = 0;
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            x = ConvertRgbaToYAvx2(rowSpan, y, Math.Min(width, Math.Min(rowSpan.Length, y.Length)));
+        }
+#endif
+
+        for (; x < width; x++)
         {
             y[x] = (byte)RgbToY(rowSpan[x].R, rowSpan[x].G, rowSpan[x].B, YuvHalf);
         }
@@ -414,8 +430,15 @@ internal static class YuvConversion
     /// <param name="width">The width.</param>
     public static void ConvertRgbaToUv(Span<ushort> rgb, Span<byte> u, Span<byte> v, int width)
     {
-        int rgbIdx = 0;
-        for (int i = 0; i < width; i += 1, rgbIdx += 4)
+        int i = 0;
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            i = ConvertRgbaToUvAvx2(rgb, u, v, Math.Min(width, Math.Min(rgb.Length >> 2, Math.Min(u.Length, v.Length))));
+        }
+#endif
+
+        for (int rgbIdx = 4 * i; i < width; i += 1, rgbIdx += 4)
         {
             int r = rgb[rgbIdx], g = rgb[rgbIdx + 1], b = rgb[rgbIdx + 2];
             u[i] = (byte)RgbToU(r, g, b, YuvHalf << 2);
@@ -427,9 +450,18 @@ internal static class YuvConversion
     {
         Bgra32 bgra0;
         Bgra32 bgra1;
-        int i, j;
-        int dstIdx = 0;
-        for (i = 0, j = 0; i < (width >> 1); i += 1, j += 2, dstIdx += 4)
+        int i = 0;
+#if NETCOREAPP3_0_OR_GREATER
+        if (Avx2.IsSupported)
+        {
+            int blocks = Math.Min(width, Math.Min(rowSpan.Length, nextRowSpan.Length)) >> 1;
+            i = AccumulateRgbAvx2(rowSpan, nextRowSpan, dst, Math.Min(blocks, dst.Length >> 2));
+        }
+#endif
+
+        int j = 2 * i;
+        int dstIdx = 4 * i;
+        for (; i < (width >> 1); i += 1, j += 2, dstIdx += 4)
         {
             bgra0 = rowSpan[j];
             bgra1 = rowSpan[j + 1];
@@ -541,6 +573,141 @@ internal static class YuvConversion
         }
     }
 
+#if NETCOREAPP3_0_OR_GREATER
+    private static int ConvertRgbaToYAvx2(Span<Bgra32> rowSpan, Span<byte> y, int width)
+    {
+        Vector256<int> order = Vector256.Create(0, 4, 1, 5, 2, 6, 3, 7);
+        ref uint srcRef = ref Unsafe.As<Bgra32, uint>(ref MemoryMarshal.GetReference(rowSpan));
+        ref byte dstRef = ref MemoryMarshal.GetReference(y);
+        int x = 0;
+        for (; x <= width - 32; x += 32)
+        {
+            Vector256<int> y0 = RgbToYAvx2(Unsafe.As<uint, Vector256<byte>>(ref Unsafe.Add(ref srcRef, x)));
+            Vector256<int> y1 = RgbToYAvx2(Unsafe.As<uint, Vector256<byte>>(ref Unsafe.Add(ref srcRef, x + 8)));
+            Vector256<int> y2 = RgbToYAvx2(Unsafe.As<uint, Vector256<byte>>(ref Unsafe.Add(ref srcRef, x + 16)));
+            Vector256<int> y3 = RgbToYAvx2(Unsafe.As<uint, Vector256<byte>>(ref Unsafe.Add(ref srcRef, x + 24)));
+            Vector256<byte> packed = Avx2.PackUnsignedSaturate(Avx2.PackSignedSaturate(y0, y1), Avx2.PackSignedSaturate(y2, y3));
+            Unsafe.As<byte, Vector256<byte>>(ref Unsafe.Add(ref dstRef, x)) = Avx2.PermuteVar8x32(packed.AsInt32(), order).AsByte();
+        }
+
+        return x;
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector256<int> RgbToYAvx2(Vector256<byte> bgra)
+    {
+        Vector256<byte> blueRed = Vector256.Create((byte)0, 0x80, 2, 0x80, 4, 0x80, 6, 0x80, 8, 0x80, 10, 0x80, 12, 0x80, 14, 0x80, 0, 0x80, 2, 0x80, 4, 0x80, 6, 0x80, 8, 0x80, 10, 0x80, 12, 0x80, 14, 0x80);
+        Vector256<byte> greenGreen = Vector256.Create((byte)1, 0x80, 1, 0x80, 5, 0x80, 5, 0x80, 9, 0x80, 9, 0x80, 13, 0x80, 13, 0x80, 1, 0x80, 1, 0x80, 5, 0x80, 5, 0x80, 9, 0x80, 9, 0x80, 13, 0x80, 13, 0x80);
+        Vector256<short> blueRedWeights = Vector256.Create(LumaBlueWeight | (LumaRedWeight << 16)).AsInt16();
+        Vector256<short> greenWeights = Vector256.Create(((LumaGreenWeight + 1) / 2) | ((LumaGreenWeight / 2) << 16)).AsInt16();
+        Vector256<int> luma = Avx2.Add(
+            Avx2.MultiplyAddAdjacent(Avx2.Shuffle(bgra, blueRed).AsInt16(), blueRedWeights),
+            Avx2.MultiplyAddAdjacent(Avx2.Shuffle(bgra, greenGreen).AsInt16(), greenWeights));
+        return Avx2.ShiftRightLogical(Avx2.Add(luma, Vector256.Create(YuvHalf + (16 << YuvFix))), YuvFix);
+    }
+
+    private static int ConvertRgbaToUvAvx2(Span<ushort> rgb, Span<byte> u, Span<byte> v, int width)
+    {
+        Vector256<short> uWeights = Vector256.Create(-9719, -19081, 28800, 0, -9719, -19081, 28800, 0, -9719, -19081, 28800, 0, -9719, -19081, 28800, 0);
+        Vector256<short> vWeights = Vector256.Create(28800, -24116, -4684, 0, 28800, -24116, -4684, 0, 28800, -24116, -4684, 0, 28800, -24116, -4684, 0);
+        Vector256<int> rounding = Vector256.Create((YuvHalf << 2) + (128 << (YuvFix + 2)));
+        Vector256<int> order = Vector256.Create(0, 4, 1, 5, 2, 6, 3, 7);
+        ref short srcRef = ref Unsafe.As<ushort, short>(ref MemoryMarshal.GetReference(rgb));
+        ref byte uRef = ref MemoryMarshal.GetReference(u);
+        ref byte vRef = ref MemoryMarshal.GetReference(v);
+        int i = 0;
+        for (; i <= width - 8; i += 8)
+        {
+            Vector256<short> rgb0 = Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref srcRef, 4 * i));
+            Vector256<short> rgb1 = Unsafe.As<short, Vector256<short>>(ref Unsafe.Add(ref srcRef, (4 * i) + 16));
+            Vector256<int> uu = Avx2.HorizontalAdd(Avx2.MultiplyAddAdjacent(rgb0, uWeights), Avx2.MultiplyAddAdjacent(rgb1, uWeights));
+            Vector256<int> vv = Avx2.HorizontalAdd(Avx2.MultiplyAddAdjacent(rgb0, vWeights), Avx2.MultiplyAddAdjacent(rgb1, vWeights));
+            uu = Avx2.ShiftRightArithmetic(Avx2.Add(uu, rounding), YuvFix + 2);
+            vv = Avx2.ShiftRightArithmetic(Avx2.Add(vv, rounding), YuvFix + 2);
+
+            // The horizontal adds leave samples in lane order [0 1 4 5 | 2 3 6 7].
+            Vector256<short> uv = Avx2.PermuteVar8x32(Avx2.PackSignedSaturate(uu, vv).AsInt32(), order).AsInt16();
+            Vector128<ulong> packed = Sse2.PackUnsignedSaturate(uv.GetLower(), uv.GetUpper()).AsUInt64();
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref uRef, i), packed.ToScalar());
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref vRef, i), packed.GetElement(1));
+        }
+
+        return i;
+    }
+
+    private static int AccumulateRgbAvx2(Span<Bgra32> rowSpan, Span<Bgra32> nextRowSpan, Span<ushort> dst, int blocks)
+    {
+        Span<int> sums = stackalloc int[24];
+        ref int sumsRef = ref MemoryMarshal.GetReference(sums);
+        ref ushort toLinear = ref MemoryMarshal.GetReference(WebpLookupTables.GammaToLinearTab.AsSpan());
+        ref int toGamma = ref MemoryMarshal.GetReference(WebpLookupTables.LinearToGammaTab.AsSpan());
+        ref byte rowRef = ref Unsafe.As<Bgra32, byte>(ref MemoryMarshal.GetReference(rowSpan));
+        ref byte nextRowRef = ref Unsafe.As<Bgra32, byte>(ref MemoryMarshal.GetReference(nextRowSpan));
+        ref ushort dstRef = ref MemoryMarshal.GetReference(dst);
+        int i = 0;
+        for (; i <= blocks - 8; i += 8)
+        {
+            for (int k = 0; k < 8; k++)
+            {
+                // Block k goes to slot [0 1 4 5 2 3 6 7][k] so the in-lane 32-bit unpacks below emit blocks in order.
+                int slot = (k & 1) | ((k & 2) << 1) | ((k & 4) >> 1);
+                ref byte top = ref Unsafe.Add(ref rowRef, 8 * (i + k));
+                ref byte bottom = ref Unsafe.Add(ref nextRowRef, 8 * (i + k));
+                Unsafe.Add(ref sumsRef, slot) = SumGammaToLinear(ref toLinear, ref Unsafe.Add(ref top, 2), ref Unsafe.Add(ref bottom, 2));
+                Unsafe.Add(ref sumsRef, slot + 8) = SumGammaToLinear(ref toLinear, ref Unsafe.Add(ref top, 1), ref Unsafe.Add(ref bottom, 1));
+                Unsafe.Add(ref sumsRef, slot + 16) = SumGammaToLinear(ref toLinear, ref top, ref bottom);
+            }
+
+            Vector256<int> r = LinearToGammaAvx2(Unsafe.As<int, Vector256<int>>(ref sumsRef), ref toGamma);
+            Vector256<int> g = LinearToGammaAvx2(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref sumsRef, 8)), ref toGamma);
+            Vector256<int> b = LinearToGammaAvx2(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref sumsRef, 16)), ref toGamma);
+            Vector256<int> rg = Avx2.Or(r, Avx2.ShiftLeftLogical(g, 16));
+
+            ref Vector256<short> out0 = ref Unsafe.As<ushort, Vector256<short>>(ref Unsafe.Add(ref dstRef, 4 * i));
+            ref Vector256<short> out1 = ref Unsafe.As<ushort, Vector256<short>>(ref Unsafe.Add(ref dstRef, (4 * i) + 16));
+            out0 = Avx2.Blend(Avx2.UnpackLow(rg, b).AsInt16(), out0, KeepFourthSampleOfEachBlock);
+            out1 = Avx2.Blend(Avx2.UnpackHigh(rg, b).AsInt16(), out1, KeepFourthSampleOfEachBlock);
+        }
+
+        return i;
+    }
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static int SumGammaToLinear(ref ushort table, ref byte top, ref byte bottom) =>
+        Unsafe.Add(ref table, top) + Unsafe.Add(ref table, Unsafe.Add(ref top, 4)) +
+        Unsafe.Add(ref table, bottom) + Unsafe.Add(ref table, Unsafe.Add(ref bottom, 4));
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector256<int> LinearToGammaAvx2(Vector256<int> sum, ref int table)
+    {
+        Vector256<int> tabPos = Avx2.ShiftRightLogical(sum, WebpConstants.GammaTabFix + 2);
+        Vector256<int> x = Avx2.And(sum, Vector256.Create((WebpConstants.GammaTabScale << 2) - 1));
+        Vector256<int> v0 = Lookup32Avx2(ref table, tabPos);
+        Vector256<int> v1 = Lookup32Avx2(ref Unsafe.Add(ref table, 1), tabPos);
+        Vector256<int> y = Avx2.Add(
+            Avx2.MultiplyLow(v1, x),
+            Avx2.MultiplyLow(v0, Avx2.Subtract(Vector256.Create(WebpConstants.GammaTabScale << 2), x)));
+        return Avx2.ShiftRightArithmetic(Avx2.Add(y, Vector256.Create(WebpConstants.GammaTabRounder)), WebpConstants.GammaTabFix);
+    }
+
+    // table[index] for index in [0, 31]: permutes pick within each run of 8, and bits 3 and 4 of the index, moved to the sign bit, pick the run.
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static Vector256<int> Lookup32Avx2(ref int table, Vector256<int> index)
+    {
+        Vector256<float> bit3 = Avx2.ShiftLeftLogical(index, 28).AsSingle();
+        Vector256<float> bit4 = Avx2.ShiftLeftLogical(index, 27).AsSingle();
+        Vector256<float> low = Avx.BlendVariable(
+            Avx2.PermuteVar8x32(Unsafe.As<int, Vector256<int>>(ref table), index).AsSingle(),
+            Avx2.PermuteVar8x32(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref table, 8)), index).AsSingle(),
+            bit3);
+        Vector256<float> high = Avx.BlendVariable(
+            Avx2.PermuteVar8x32(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref table, 16)), index).AsSingle(),
+            Avx2.PermuteVar8x32(Unsafe.As<int, Vector256<int>>(ref Unsafe.Add(ref table, 24)), index).AsSingle(),
+            bit3);
+        return Avx.BlendVariable(low, high, bit4).AsInt32();
+    }
+#endif
+
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int LinearToGammaWeighted(byte rgb0, byte rgb1, byte rgb2, byte rgb3, byte a0, byte a1, byte a2, byte a3, uint totalA)
     {
@@ -575,7 +742,7 @@ internal static class YuvConversion
     [MethodImpl(InliningOptions.ShortMethod)]
     private static int RgbToY(byte r, byte g, byte b, int rounding)
     {
-        int luma = (16839 * r) + (33059 * g) + (6420 * b);
+        int luma = (LumaRedWeight * r) + (LumaGreenWeight * g) + (LumaBlueWeight * b);
         return (luma + rounding + (16 << YuvFix)) >> YuvFix;  // No need to clip.
     }
 

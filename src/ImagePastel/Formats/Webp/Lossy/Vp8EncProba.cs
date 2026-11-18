@@ -13,6 +13,10 @@ internal class Vp8EncProba
 
     public const int LevelCostsPerType = 16 * LevelCostsPerPosition;
 
+    public const int StatsPerBand = WebpConstants.NumCtx * WebpConstants.NumProbas;
+
+    public const int StatsPerType = WebpConstants.NumBands * StatsPerBand;
+
     /// <summary>
     /// Last (inclusive) level with variable cost.
     /// </summary>
@@ -41,16 +45,7 @@ internal class Vp8EncProba
             }
         }
 
-        this.Stats = new Vp8Stats[WebpConstants.NumTypes][];
-        for (int i = 0; i < this.Coeffs.Length; i++)
-        {
-            this.Stats[i] = new Vp8Stats[WebpConstants.NumBands];
-            for (int j = 0; j < this.Stats[i].Length; j++)
-            {
-                this.Stats[i][j] = new Vp8Stats();
-            }
-        }
-
+        this.Stats = new uint[WebpConstants.NumTypes * StatsPerType];
         this.LevelCosts = new ushort[WebpConstants.NumTypes * LevelCostsPerType];
 
         // Initialize with default probabilities.
@@ -88,7 +83,7 @@ internal class Vp8EncProba
 
     public Vp8BandProbas[][] Coeffs { get; }
 
-    public Vp8Stats[][] Stats { get; }
+    public uint[] Stats { get; }
 
     /// <summary>
     /// Gets the level costs. The costs for ctx 1 and 2 include the cost of the not-end-of-block bit,
@@ -150,6 +145,7 @@ internal class Vp8EncProba
     public int FinalizeTokenProbas()
     {
         int size = 0;
+        int statsIndex = 0;
         for (int t = 0; t < WebpConstants.NumTypes; ++t)
         {
             for (int b = 0; b < WebpConstants.NumBands; ++b)
@@ -158,7 +154,7 @@ internal class Vp8EncProba
                 {
                     for (int p = 0; p < WebpConstants.NumProbas; ++p)
                     {
-                        uint stats = this.Stats[t][b].Stats[c].Stats[p];
+                        uint stats = this.Stats[statsIndex++];
                         int nb = (int)((stats >> 0) & 0xffff);
                         int total = (int)((stats >> 16) & 0xffff);
                         int updateProba = WebpLookupTables.CoeffsUpdateProba[t, b, c, p];
@@ -203,22 +199,7 @@ internal class Vp8EncProba
         return size;
     }
 
-    public void ResetTokenStats()
-    {
-        for (int t = 0; t < WebpConstants.NumTypes; ++t)
-        {
-            for (int b = 0; b < WebpConstants.NumBands; ++b)
-            {
-                for (int c = 0; c < WebpConstants.NumCtx; ++c)
-                {
-                    for (int p = 0; p < WebpConstants.NumProbas; ++p)
-                    {
-                        this.Stats[t][b].Stats[c].Stats[p] = 0;
-                    }
-                }
-            }
-        }
-    }
+    public void ResetTokenStats() => this.Stats.AsSpan().Clear();
 
     private static int CalcSkipProba(long nb, long total) => (int)(total != 0 ? (total - nb) * 255 / total : 255);
 
