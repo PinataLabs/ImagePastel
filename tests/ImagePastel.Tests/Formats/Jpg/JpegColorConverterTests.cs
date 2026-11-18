@@ -298,7 +298,9 @@ public class JpegColorConverterTests
             {
                 for (int i = 0; i < expected[c].Length; i++)
                 {
-                    if (BitConverter.SingleToInt32Bits(expected[c][i]) != BitConverter.SingleToInt32Bits(actual[c][i]))
+                    // Compared by value: Arm64 vector max returns +0 where x64 and scalar keep -0,
+                    // and the sign of zero cannot reach a decoded pixel.
+                    if (expected[c][i] != actual[c][i])
                     {
                         count++;
                         first ??= $"channel {c} at ({planes[0][i]}, {planes[1][i]}, {planes[2][i]}): scalar {expected[c][i]:R}, simd {actual[c][i]:R}";
