@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.DotNet.RemoteExecutor;
 using PinataLabs.ImagePastel.Memory;
 using PinataLabs.ImagePastel.Memory.Internals;
 using PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
@@ -277,21 +278,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
     [InlineData(1200)] // Group of two UniformUnmanagedMemoryPool buffers
     public void AllocateMemoryGroup_Finalization_ReturnsToPool(int length)
     {
-        if (TestEnvironment.IsMacOS)
-        {
-            // Skip on macOS: https://github.com/SixLabors/ImageSharp/issues/1887
-            return;
-        }
-
-        if (!TestEnvironment.RunsOnCI)
-        {
-            // This may fail in local runs resulting in high memory load.
-            // Remove the condition for local debugging!
-            return;
-        }
-
-        // RunTest(length.ToString());
-        RemoteExecutorRunner.Invoke(RunTest, length.ToString()).Dispose();
+        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), HighMemoryLoadOptions()).Dispose();
 
         static void RunTest(string lengthStr)
         {
@@ -313,6 +300,15 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
             using MemoryGroup<byte> g = allocator.AllocateGroup<byte>(lengthInner, 100);
             Assert.Equal(42, g.First().Span[0]);
         }
+    }
+
+    // A 1% high memory load threshold makes the GC report high memory load on any machine,
+    // the state a CI runner can reach mid-suite.
+    private static RemoteInvokeOptions HighMemoryLoadOptions()
+    {
+        RemoteInvokeOptions options = new();
+        options.StartInfo.Environment["DOTNET_GCHighMemPercent"] = "1";
+        return options;
     }
 
     private static void AllocateGroupAndForget(UniformUnmanagedMemoryPoolMemoryAllocator allocator, int length, bool check = false)
@@ -339,21 +335,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
     [InlineData(600)] // Group of single UniformUnmanagedMemoryPool buffer
     public void AllocateSingleMemoryOwner_Finalization_ReturnsToPool(int length)
     {
-        if (TestEnvironment.IsMacOS)
-        {
-            // Skip on macOS: https://github.com/SixLabors/ImageSharp/issues/1887
-            return;
-        }
-
-        if (!TestEnvironment.RunsOnCI)
-        {
-            // This may fail in local runs resulting in high memory load.
-            // Remove the condition for local debugging!
-            return;
-        }
-
-        // RunTest(length.ToString());
-        RemoteExecutorRunner.Invoke(RunTest, length.ToString()).Dispose();
+        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), HighMemoryLoadOptions()).Dispose();
 
         static void RunTest(string lengthStr)
         {
