@@ -298,8 +298,8 @@ public class JpegColorConverterTests
             {
                 for (int i = 0; i < expected[c].Length; i++)
                 {
-                    // Compared by value: Arm64 vector max returns +0 where x64 and scalar keep -0,
-                    // and the sign of zero cannot reach a decoded pixel.
+                    // Compared by value: without AVX2, SimdUtils.FastRound rounds a small negative value to +0
+                    // where MathF.Round gives -0, and the sign of zero cannot reach a decoded pixel.
                     if (expected[c][i] != actual[c][i])
                     {
                         count++;
