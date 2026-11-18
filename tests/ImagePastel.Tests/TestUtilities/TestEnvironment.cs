@@ -95,9 +95,15 @@ public static partial class TestEnvironment
     internal static string InputImagesDirectoryFullPath => GetFullPath(InputImagesRelativePath);
 
     /// <summary>
-    /// Gets the correct full path to the Actual Output directory. (To be written to by the test cases.)
+    /// Gets the correct full path to the Actual Output directory of the running target framework,
+    /// such as tests/Images/ActualOutput/net10.0. (To be written to by the test cases.)
     /// </summary>
-    internal static string ActualOutputDirectoryFullPath => GetFullPath(ActualOutputDirectoryRelativePath);
+    /// <remarks>
+    /// <c>dotnet test</c> runs the host for each target framework at the same time,
+    /// so a directory shared between frameworks lets two hosts open the same file at once.
+    /// </remarks>
+    internal static string ActualOutputDirectoryFullPath =>
+        Path.Combine(GetFullPath(ActualOutputDirectoryRelativePath), TargetFrameworkMoniker);
 
     /// <summary>
     /// Gets the correct full path to the Expected Output directory. (To compare the test results to.)
@@ -107,7 +113,20 @@ public static partial class TestEnvironment
     internal static string ToolsDirectoryFullPath => GetFullPath(ToolsDirectoryRelativePath);
 
     internal static string GetReferenceOutputFileName(string actualOutputFileName) =>
-        actualOutputFileName.Replace("ActualOutput", @"External\ReferenceOutput").Replace('\\', Path.DirectorySeparatorChar);
+        Path.Combine(
+            ReferenceOutputDirectoryFullPath,
+            Path.GetRelativePath(ActualOutputDirectoryFullPath, actualOutputFileName))
+        .Replace('\\', Path.DirectorySeparatorChar);
+
+    private static string TargetFrameworkMoniker
+    {
+        get
+        {
+            string frameworkName = typeof(TestEnvironment).Assembly.GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName;
+            Version version = new FrameworkName(frameworkName).Version;
+            return $"net{version.Major}.{version.Minor}";
+        }
+    }
 
     internal static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
