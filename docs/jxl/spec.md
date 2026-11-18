@@ -18,6 +18,7 @@ Correctness comes first. There is no performance target.
 ### Source and licensing
 
 - Port closely from libjxl (BSD-3-Clause, royalty-free patent grant), with attribution in file headers and `THIRD-PARTY-NOTICES.TXT`. See [ADR 0001](../adr/0001-port-jpeg-xl-from-libjxl.md).
+- The Brotli decoder for `brob` boxes on netstandard2.1 is ported from google/brotli (MIT), with the same attribution. See the [managed Brotli decoder notes](#managed-brotli-decoder-notes).
 - Never read SixLabors/ImageSharp upstream code (`CLAUDE.md`).
 - Write new xUnit tests in this repo's style. Copy libjxl test *data* with attribution; never translate its gtest files.
 
@@ -253,7 +254,7 @@ Before D14, 10 decodes and 8 identifies threw `NotSupportedException`: 8 inputs 
   - One departure stays: a slot saved after blending holds one grey plane, where libjxl keeps three. Patches cannot read such a slot ("Patches cannot use frames saved post color transforms"). Blending, the save after it and the output each work on one colour channel at a time, so only libjxl's first channel is ever read from it. The output does not change.
 - **Resource caps (D14c, [#291](https://github.com/PinataLabs/ImageSharp/issues/291)).** Each cap is a commented departure from libjxl.
   - ICC: the decoded size is at most 2^22 bytes, #112's Level 5 tightening of libjxl's 2^28. The cap also applies to the encoder: `JxlIccWriter` refuses a larger profile with `ImageFormatException`, so it never writes what this decoder will not read.
-  - Exif and XMP boxes: at most 64 MiB, plain or Brotli-compressed, else `InvalidImageContentException`. A `brob` box is measured before it is decompressed, so an oversized one is never held. On netstandard2.1, which has no `BrotliDecoder`, `brob` boxes are still dropped at any size ([#165](https://github.com/PinataLabs/ImageSharp/issues/165)). With `IgnoreMetadata`, boxes are not read, so there is no cap.
+  - Exif and XMP boxes: at most 64 MiB, plain or Brotli-compressed, else `InvalidImageContentException`. A `brob` box is measured before it is decompressed, so an oversized one is never held. netstandard2.1 has no `BrotliDecoder`, so a managed decoder reads `brob` boxes there, with the same cap ([#317](https://github.com/PinataLabs/ImagePastel/issues/317), the [managed Brotli decoder notes](#managed-brotli-decoder-notes)). With `IgnoreMetadata`, boxes are not read, so there is no cap.
   - Modular channels: at most 2^14 after the squeezes ([#161](https://github.com/PinataLabs/ImageSharp/issues/161)); libjxl has no bound. The cap is 2^14, not 2^16, for speed: each squeeze step inserts its channels into a list, so filling the cap costs about C²/2 moves. In Debug, the #161 stream throws in about 0.3 s at 2^14, against 1.09 s at 2^16. The largest channel count in the test corpus (the conformance vectors, the generated files, the libjxl files and the OSS-Fuzz inputs) is 56, and libjxl's encoder cannot pass about 6,700 under the pixel cap.
 - **Sample budget (D14d, [#292](https://github.com/PinataLabs/ImageSharp/issues/292)).** A frame's pixels × (colour + extra channels) must not exceed 2^30 samples, the 2^28 pixel cap × 4. Colour planes count at the upsampled frame size. Each extra channel counts at its own size, after its `dim_shift` and upsampling. It throws `InvalidMemoryOperationException`. This is a departure: libjxl has no such cap, but #112 allows only three exceptions to escape, and 256 extra channels would otherwise let `OutOfMemoryException` escape.
   - The budget is checked per frame, before any allocation. It is also checked on the image header, before the output image is allocated, as the pixel cap is. The ticket asked only for the check per frame; without the header check, `Image.Load` would allocate the output image before the first frame failed the budget. `Identify` does not enforce the budget.
@@ -318,7 +319,7 @@ D15 ([#307](https://github.com/PinataLabs/ImageSharp/issues/307)) passed its don
   - The other features of #101's list already had tests: the preview (`preview_noise`, D14a), `jxlp` (`JxlContainerTests`), `brob` (`JxlMetadataTests`, `JxlContainerTests`) and HLG (D11). Non-coalesced output is out of scope (#108).
 - **Left recorded, by decision on 2026-10-23.** These stay as the D14 notes describe them:
   - The total sample budget across frames, which libjxl does not have, is now in place: 2^34 samples, since [#316](https://github.com/PinataLabs/ImageSharp/issues/316) (see the D14 notes).
-  - `brob` boxes are dropped on netstandard2.1, which has no `BrotliDecoder`. Decoding them there needs a managed Brotli port.
+  - netstandard2.1 now reads `brob` boxes, with a managed Brotli decoder, since [#317](https://github.com/PinataLabs/ImagePastel/issues/317) (the [managed Brotli decoder notes](#managed-brotli-decoder-notes)).
   - The scalar EPF is slow (the [D13 notes](#d13-done-check-notes)). Vectorising it is performance work for after D15. Done in [#315](https://github.com/PinataLabs/ImagePastel/issues/315) (the [EPF vectorisation notes](#epf-vectorisation-notes)).
   - The VarDCT coefficients stay `int`, where libjxl can keep them as `int16` and wrap on a crafted stream.
 - **Test counts.** The JPEG XL suite has 4371 tests on net10.0. With `JXL_CONFORMANCE=1` and the tools, all of them pass and none skip, locally (Windows x64, Debug) and in `jxl-oracle` (Release). D15 adds 13 tests through `Configuration.Default` (`JxlDefaultConfigurationTests`), 15 for the colour description (`JxlColorEncodingDescriptionTests`), 25 for the Magick cross-check (5 older ones folded in), and 37 parse-only tests. It removes `DefaultConfiguration_HasNoJxlFormat`, whose opposite now holds. The D15 review fixes add 2 rows for a negative bit depth, so the suite has 4373 tests; all of them pass locally with `JXL_CONFORMANCE=1` and the tools, and none skip. The netstandard2.1 and net10.0 Release builds have 0 warnings, and `ci-apicompat.ps1` finds no breaking change on either leg.
@@ -340,7 +341,7 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   - the done-check ran `-d 0` and `-d 1` at `-e 1`, opaque and with alpha, each with Exif, orientation 6, XMP and a Display P3 profile.
 
   In each case cjxl gives the same box types in the same order, the same `ftyp` and `jxlp` indexes, and the same `Exif` and `xml ` contents. For level 10, `-d 0 -e 1` on a 16-bit L16 and Rgba64 PNG gives the same box types, `ftyp` and `jxll` contents (E6c). `jxlinfo` lists our boxes with their sizes, and `djxl` decodes every E6 output.
-- **The `brob` departure.** Exif and XMP are always plain boxes. netstandard2.1 has no `BrotliEncoder`, so the bytes would depend on the target, and our netstandard2.1 decoder drops `brob` ([#317](https://github.com/PinataLabs/ImageSharp/issues/317)). This departs from cjxl's default (`--compress_boxes=1`), not from libjxl, which leaves compression to the caller (`JxlEncoderAddBox`'s `compress_box`).
+- **The `brob` departure.** Exif and XMP are always plain boxes. netstandard2.1 has no `BrotliEncoder`, so the bytes would depend on the target. This departs from cjxl's default (`--compress_boxes=1`), not from libjxl, which leaves compression to the caller (`JxlEncoderAddBox`'s `compress_box`).
 - **The orientation rule** (E6d, [#334](https://github.com/PinataLabs/ImageSharp/issues/334)). The encoder follows cjxl's `InterpretExif` (`exif.h:69-86`): a SHORT Exif orientation from 1 to 8 becomes the codestream orientation. The pixels and the Exif box are written as they are stored, so the two stay in sync, as `encode.h` asks. Our decoder applies the orientation and resets the Exif orientation to 1. `SyncProfiles` rewrites the tag as a SHORT, or drops it when its value does not fit. So on a malformed JPEG, cjxl (which copies the Exif blob) and this encoder can differ, but each keeps its codestream in sync with the Exif it writes.
   - **Mutation check:** with the codestream orientation left at 1, the 12 round-trip cases through our decoder, `djxl` and `jxlinfo` fail. The Magick and cjxl rows still pass, because they read the Exif.
 - **The metadata round trip** (`JxlEncoderMetadataRoundTripTests`, 20 cases). It covers lossless and lossy, with and without alpha.
@@ -491,6 +492,45 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   | OSS-Fuzz `6748486320652288` | 2.08 s | 0.47 s | 4.4× | 79 % (87 %) | 48 % (57 %) |
 
   The profiles ran with tiered compilation and dynamic PGO off (`DOTNET_TieredCompilation=0`, `DOTNET_TieredPGO=0`). With dynamic PGO on, the JIT inlines the stage calls into `RunNeighbourStages`, so the passes no longer show as frames. Two profiles of each input agree within about 2 points. Pass 0 does most of the EPF work that is left: 12 SADs per pixel, each over 5 pixel pairs in 3 channels, as in libjxl. A neighbouring pixel's SADs reuse many of the same absolute differences, so sharing them could cut that work without changing the output. That is not done here. `progressive`'s decode is now led by the VarDCT group decode.
+
+### Managed Brotli decoder notes
+
+[#317](https://github.com/PinataLabs/ImagePastel/issues/317) adds a Brotli decoder in managed code. netstandard2.1 has no `System.IO.Compression.BrotliDecoder`, so until then a Brotli-compressed (`brob`) Exif or XMP box was dropped there and the image loaded without that metadata. Now netstandard2.1 reads these boxes as net10.0 does. The library still has no package dependency for it.
+
+- **Source.** `src/ImagePastel/Compression/Brotli` is a port of the C decoder of [google/brotli](https://github.com/google/brotli) at tag v1.2.0 (commit `028fb5a23661f123017c060daa546b55cf4bde29`, MIT): `c/dec` and `c/common`, with the RFC 7932 static dictionary (the 122,784 bytes of `c/common/dictionary.bin`) and its 121 transforms. Each file names its C sources, and `THIRD-PARTY-NOTICES.TXT` has the licence. No other Brotli port was read.
+- **The seam.** `JxlContainer` takes its Brotli decoder as a type argument, a struct that implements `IJxlBrotliDecoder`. Its one method has the shape of `BrotliDecoder.Decompress`. `JxlSystemBrotliDecoder` wraps `BrotliDecoder`, for net10.0 and net11.0. `JxlManagedBrotliDecoder` wraps the port, for netstandard2.1. A `using` alias at the top of `JxlContainer.cs` picks one per target, and that is the only `#if` there.
+- **The rules are shared.** The 64 MiB cap, the cancellation check per 64 KiB of output and the two passes (measure, then decompress into an array of that size) are in the code of `JxlContainer` that both decoders run. A box that cannot be read is dropped and the image still loads, with either decoder: `ManagedBrotliDecoder` throws `InvalidImageContentException` for a corrupt or truncated stream, and `JxlManagedBrotliDecoder` turns that into the `InvalidData` status that `BrotliDecoder` gives. A box that decompresses to no bytes is dropped too. That was the result with `BrotliDecoder`, which does not run with an empty output buffer, and an explicit check now keeps it the same with both.
+- **Departures from the C decoder.** Each has a comment in the code.
+  - The input must hold the rest of the stream, which a box in memory does. The C decoder can stop where its input ends and continue with more input. The port has no state for that and no "safe" variant of each read: a peek past the end reads zeros, and taking bits that the input does not have throws. The decoder still stops where its output buffer is full.
+  - No large window, no attached dictionary and no metadata callbacks. `BrotliDecoder` uses none of them.
+  - A stream that ends the block of a category with one block type throws. Such a block is as long as the largest meta-block (2^24), so only a corrupt stream gets there. The C source reads nothing there and has no error code for it.
+  - The lookup tables of a meta-block reuse the arrays of the meta-block before, where the C decoder allocates again.
+- **Memory.** The decoder holds its ring buffer, which is at most the window (16 MiB for the largest), and about 3 MiB of tables at most. The ring buffer starts small and is replaced as the output grows, so the allocations add up to twice the window at most.
+- **Tests.** `BrotliDecoder` is the oracle, on net10.0 and net11.0.
+  - Streams of `BrotliEncoder` at every quality (0 to 11) and every window size (10 to 24), for empty, random, text, repetitive and mixed input; input longer than the window, for every window size; flushed streams; the empty stream; hand-made streams with a metadata meta-block and with block switches; and the `brob` boxes of the test files. The managed decoder gives the output of `BrotliDecoder` and consumes the same number of bytes.
+  - 8,000 mutated streams (bit flips, truncations, removed and overwritten bytes, random bytes). For each, the managed decoder throws `InvalidImageContentException` where `BrotliDecoder` reports an error, and gives the same output where it does not. No other exception escapes, and no stream makes it allocate 40 MiB. A run with 448,000 mutated streams, done once and not kept in the suite, gave the same result.
+  - `JxlBrotliBoxTests` reads containers with each decoder. `exif_xmp_brob.jxl` gives the Exif and XMP of `exif_xmp.jxl`. 1,000 mutated boxes read the same with both. With the managed decoder, a box that expands past 64 MiB throws after less than 16 MiB of allocation.
+  - Two tests load the netstandard2.1 build from the build output into its own `AssemblyLoadContext` and call its `Image.Identify`: `exif_xmp_brob.jxl` gives the profiles that the net10.0 build gives for `exif_xmp.jxl`. No test project targets netstandard2.1, and the test project does not build that target, so these two tests skip when that build is missing or older than the build under test. CI builds the solution first, so they run there.
+- **Size.** The decoder is compiled into every target, so that the tests can run it next to `BrotliDecoder`. Release builds, before and after:
+
+  | Target | Before | After | Added |
+  |---|---|---|---|
+  | net10.0 and net11.0 | 2,389,504 bytes | 2,539,520 bytes | 150,016 bytes (6.3 %) |
+  | netstandard2.1 | 2,288,128 bytes | 2,438,656 bytes | 150,528 bytes (6.6 %) |
+
+  122,784 of those bytes are the dictionary. On net10.0 and net11.0 no shipped code path names `JxlManagedBrotliDecoder`, so the trimmer removes the decoder: a trimmed net10.0 console program that calls `Image.Identify` keeps `JxlSystemBrotliDecoder` and has no `ManagedBrotliDecoder`.
+- **Speed.** There is no target: a metadata box is a few kilobytes. Measured in Release on net10.0, Windows x64 (Ryzen 9 5950X), one thread, 8 MiB of input, the median of 9 decodes into one buffer after 3 warm-up decodes, with the two decoders in turn. Each decode's output was compared with the input.
+
+  | Input | Compression | Managed | `BrotliDecoder` | Managed time / `BrotliDecoder` time |
+  |---|---|---|---|---|
+  | Text of dictionary words, quality 5, window 22 | 4.1× | 353 MiB/s | 540 MiB/s | 1.53 |
+  | The same, quality 11, window 24 | 4.8× | 443 MiB/s | 670 MiB/s | 1.51 |
+  | Mixed, quality 5, window 22 | 4.3× | 576 MiB/s | 734 MiB/s | 1.27 |
+  | Mixed, quality 9, window 24 | 4.5× | 587 MiB/s | 768 MiB/s | 1.31 |
+  | Repetitive, quality 5, window 22 | 17.2× | 1,317 MiB/s | 1,233 MiB/s | 0.94 |
+  | Random (stored), quality 5, window 22 | 1.0× | 3,725 MiB/s | 5,920 MiB/s | 1.59 |
+
+  `JxlContainer.Read` of `exif_xmp_brob.jxl` (two `brob` boxes, 260 bytes of Exif and 3,447 of XMP) takes 37 to 40 µs with the managed decoder and 29 to 33 µs with `BrotliDecoder`. It allocates 268 KB and 139 KB. The two 64 KiB buffers that measure the boxes are 131 KB of each.
 
 ## Slices
 
