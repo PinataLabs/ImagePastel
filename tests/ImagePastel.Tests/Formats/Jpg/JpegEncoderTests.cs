@@ -1,8 +1,11 @@
 // Copyright (c) Six Labors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using PinataLabs.ImagePastel.Formats.Jpeg;
@@ -423,5 +426,85 @@ public partial class JpegEncoderTests
             var encoder = new JpegEncoder() { ColorType = colorType };
             await image.SaveAsync(pausedStream, encoder, cts.Token);
         });
+    }
+
+    private static readonly string[] IntrinsicsParityImages =
+    {
+        TestImages.Png.Bike,
+        TestImages.Png.BikeSmall,
+        TestImages.Png.BikeGrayscale,
+        TestImages.Png.CalliphoraPartial,
+        TestImages.Png.SnakeGame,
+    };
+
+    private static readonly JpegColorType[] IntrinsicsParityColorTypes =
+    {
+        JpegColorType.YCbCrRatio420,
+        JpegColorType.YCbCrRatio444,
+        JpegColorType.Luminance,
+        JpegColorType.Rgb,
+    };
+
+    private static readonly int[] IntrinsicsParityQualities = { 50, 75, 90, 100 };
+
+    private static string GetIntrinsicsParityPath(string intrinsics)
+        => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(JpegEncoderTests)), $"Encode_IsTheSameWithAndWithoutHardwareIntrinsics_{intrinsics}.txt");
+
+    private static void EncodeParityImagesToHashFile(string intrinsics)
+    {
+        var lines = new List<string>();
+        foreach (string path in IntrinsicsParityImages)
+        {
+            using Image<Rgb24> image = Image.Load<Rgb24>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, path));
+            foreach (JpegColorType colorType in IntrinsicsParityColorTypes)
+            {
+                foreach (int quality in IntrinsicsParityQualities)
+                {
+                    using var stream = new MemoryStream();
+                    image.SaveAsJpeg(stream, new JpegEncoder { ColorType = colorType, Quality = quality });
+                    lines.Add($"{path} {colorType} Q{quality} {Convert.ToHexString(SHA256.HashData(stream.ToArray()))}");
+                }
+            }
+        }
+
+        File.WriteAllLines(GetIntrinsicsParityPath(intrinsics), lines);
+    }
+
+    [Fact]
+    public void Encode_IsTheSameWithAndWithoutHardwareIntrinsics()
+    {
+        // DisableFMA uses the same runtime knob as DisableAVX2, so it adds no separate setting.
+        HwIntrinsics[] reduced = { HwIntrinsics.DisableAVX2, HwIntrinsics.DisableAVX, HwIntrinsics.DisableHWIntrinsic };
+        foreach (HwIntrinsics intrinsics in reduced.Append(HwIntrinsics.AllowAll))
+        {
+            File.Delete(GetIntrinsicsParityPath(intrinsics.ToString()));
+        }
+
+        FeatureTestRunner.RunWithHwIntrinsicsFeature(
+            EncodeParityImagesToHashFile,
+            HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2 | HwIntrinsics.DisableAVX | HwIntrinsics.DisableHWIntrinsic);
+
+        if (!File.Exists(GetIntrinsicsParityPath(nameof(HwIntrinsics.AllowAll))))
+        {
+            // Remote execution is not supported on this platform.
+            return;
+        }
+
+        string[] expected = File.ReadAllLines(GetIntrinsicsParityPath(nameof(HwIntrinsics.AllowAll)));
+        var mismatches = new List<string>();
+        foreach (HwIntrinsics intrinsics in reduced)
+        {
+            string[] actual = File.ReadAllLines(GetIntrinsicsParityPath(intrinsics.ToString()));
+            for (int i = 0; i < expected.Length; i++)
+            {
+                if (expected[i] != actual[i])
+                {
+                    string label = expected[i][..expected[i].LastIndexOf(' ')];
+                    mismatches.Add($"{label}: AllowAll {expected[i][^64..][..8]}, {intrinsics} {actual[i][^64..][..8]}");
+                }
+            }
+        }
+
+        Assert.True(mismatches.Count == 0, $"{mismatches.Count} of {expected.Length * reduced.Length} encodings differ from AllowAll:{Environment.NewLine}{string.Join(Environment.NewLine, mismatches)}");
     }
 }

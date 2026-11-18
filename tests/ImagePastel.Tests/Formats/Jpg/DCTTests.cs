@@ -205,5 +205,38 @@ public static class DCTTests
                 seed,
                 HwIntrinsics.AllowAll | HwIntrinsics.DisableFMA | HwIntrinsics.DisableAVX | HwIntrinsics.DisableSIMD);
         }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void TransformFDCT_MatchesVector4Exactly(int seed)
+        {
+            // Fractional input, as the encoder's colour conversion produces.
+            var random = new Random(seed);
+            int count = 0;
+            string first = null;
+            for (int n = 0; n < 1000; n++)
+            {
+                Block8x8F expected = default;
+                for (int i = 0; i < Block8x8F.Size; i++)
+                {
+                    expected[i] = (random.NextSingle() * 255F) - 128F;
+                }
+
+                Block8x8F actual = expected;
+                FastFloatingPointDCT.FDCT_Vector4(ref expected);
+                FastFloatingPointDCT.TransformFDCT(ref actual);
+                for (int i = 0; i < Block8x8F.Size; i++)
+                {
+                    if (expected[i] != actual[i])
+                    {
+                        count++;
+                        first ??= $"block {n} index {i}: Vector4 {expected[i]:R}, TransformFDCT {actual[i]:R}";
+                    }
+                }
+            }
+
+            Assert.True(count == 0, $"{count} coefficients differ, first {first}");
+        }
     }
 }
