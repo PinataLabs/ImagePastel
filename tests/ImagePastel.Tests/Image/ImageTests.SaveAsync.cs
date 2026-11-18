@@ -23,7 +23,7 @@ public partial class ImageTests
         [Fact]
         public async Task DetectedEncoding()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(SaveAsync));
             string file = Path.Combine(dir, "DetectedEncodingAsync.png");
 
             using (var image = new Image<Rgba32>(10, 10))
@@ -40,7 +40,7 @@ public partial class ImageTests
         [Fact]
         public async Task WhenExtensionIsUnknown_Throws()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(SaveAsync));
             string file = Path.Combine(dir, "UnknownExtensionsEncoding_Throws.tmp");
 
             await Assert.ThrowsAsync<NotSupportedException>(
@@ -56,7 +56,7 @@ public partial class ImageTests
         [Fact]
         public async Task SetEncoding()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(SaveAsync));
             string file = Path.Combine(dir, "SetEncoding.dat");
 
             using (var image = new Image<Rgba32>(10, 10))

@@ -21,7 +21,7 @@ public partial class ImageTests
         [Fact]
         public void DetectedEncoding()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(Save));
             string file = Path.Combine(dir, "DetectedEncoding.png");
 
             using (var image = new Image<Rgba32>(10, 10))
@@ -38,7 +38,7 @@ public partial class ImageTests
         [Fact]
         public void WhenExtensionIsUnknown_Throws()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(Save));
             string file = Path.Combine(dir, "UnknownExtensionsEncoding_Throws.tmp");
 
             Assert.Throws<NotSupportedException>(
@@ -54,7 +54,7 @@ public partial class ImageTests
         [Fact]
         public void SetEncoding()
         {
-            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests));
+            string dir = TestEnvironment.CreateOutputDirectory(nameof(ImageTests), nameof(Save));
             string file = Path.Combine(dir, "SetEncoding.dat");
 
             using (var image = new Image<Rgba32>(10, 10))
