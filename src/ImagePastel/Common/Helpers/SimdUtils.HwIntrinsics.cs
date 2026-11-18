@@ -532,30 +532,6 @@ internal static partial class SimdUtils
         }
 
         /// <summary>
-        /// Performs a multiplication and an addition of the <see cref="Vector256{T}"/>.
-        /// </summary>
-        /// <remarks>ret = (vm0 * vm1) + va</remarks>
-        /// <param name="va">The vector to add to the intermediate result.</param>
-        /// <param name="vm0">The first vector to multiply.</param>
-        /// <param name="vm1">The second vector to multiply.</param>
-        /// <returns>The <see cref="Vector256{T}"/>.</returns>
-        [MethodImpl(InliningOptions.AlwaysInline)]
-        public static Vector256<float> MultiplyAdd(
-            in Vector256<float> va,
-            in Vector256<float> vm0,
-            in Vector256<float> vm1)
-        {
-            if (Fma.IsSupported)
-            {
-                return Fma.MultiplyAdd(vm1, vm0, va);
-            }
-            else
-            {
-                return Avx.Add(Avx.Multiply(vm0, vm1), va);
-            }
-        }
-
-        /// <summary>
         /// <see cref="ByteToNormalizedFloat"/> as many elements as possible, slicing them down (keeping the remainder).
         /// </summary>
         [MethodImpl(InliningOptions.ShortMethod)]

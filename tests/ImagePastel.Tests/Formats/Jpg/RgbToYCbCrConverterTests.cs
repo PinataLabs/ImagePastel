@@ -26,17 +26,16 @@ public class RgbToYCbCrConverterTests
     private ITestOutputHelper Output { get; }
 
     [Fact]
-    public void TestConverterLut444()
+    public void TestConverterScalar444()
     {
         int dataSize = 8 * 8;
         Rgb24[] data = CreateTestData(dataSize);
-        var target = RgbToYCbCrConverterLut.Create();
 
         Block8x8F y = default;
         Block8x8F cb = default;
         Block8x8F cr = default;
 
-        target.Convert444(data.AsSpan(), ref y, ref cb, ref cr);
+        RgbToYCbCrConverterScalar.Convert444(data.AsSpan(), ref y, ref cb, ref cr);
 
         Verify444(data, ref y, ref cb, ref cr, new ApproximateColorSpaceComparer(1F));
     }
@@ -63,18 +62,17 @@ public class RgbToYCbCrConverterTests
     }
 
     [Fact]
-    public void TestConverterLut420()
+    public void TestConverterScalar420()
     {
         int dataSize = 16 * 16;
         Span<Rgb24> data = CreateTestData(dataSize).AsSpan();
-        var target = RgbToYCbCrConverterLut.Create();
 
         var yBlocks = new Block8x8F[4];
         var cb = default(Block8x8F);
         var cr = default(Block8x8F);
 
-        target.Convert420(data, ref yBlocks[0], ref yBlocks[1], ref cb, ref cr, 0);
-        target.Convert420(data.Slice(16 * 8), ref yBlocks[2], ref yBlocks[3], ref cb, ref cr, 1);
+        RgbToYCbCrConverterScalar.Convert420(data, ref yBlocks[0], ref yBlocks[1], ref cb, ref cr, 0);
+        RgbToYCbCrConverterScalar.Convert420(data.Slice(16 * 8), ref yBlocks[2], ref yBlocks[3], ref cb, ref cr, 1);
 
         Verify420(data, yBlocks, ref cb, ref cr, new ApproximateFloatComparer(1F));
     }
@@ -109,7 +107,6 @@ public class RgbToYCbCrConverterTests
             return;
         }
 
-        var scalar = RgbToYCbCrConverterLut.Create();
         var mismatches = new ConverterMismatches();
 
         // Every 24-bit colour, 64 at a time. The vectorized converter reads 8 bytes past the 64 pixels.
@@ -124,7 +121,7 @@ public class RgbToYCbCrConverterTests
 
             Block8x8F y = default, cb = default, cr = default;
             Block8x8F yVector = default, cbVector = default, crVector = default;
-            scalar.Convert444(data.AsSpan(0, 64), ref y, ref cb, ref cr);
+            RgbToYCbCrConverterScalar.Convert444(data.AsSpan(0, 64), ref y, ref cb, ref cr);
             RgbToYCbCrConverterVectorized.Convert444(data, ref yVector, ref cbVector, ref crVector);
             mismatches.Compare("Y", ref y, ref yVector, start);
             mismatches.Compare("Cb", ref cb, ref cbVector, start);
@@ -142,7 +139,6 @@ public class RgbToYCbCrConverterTests
             return;
         }
 
-        var scalar = RgbToYCbCrConverterLut.Create();
         var mismatches = new ConverterMismatches();
         var random = new Random(42);
 
@@ -157,7 +153,7 @@ public class RgbToYCbCrConverterTests
             {
                 Span<Rgb24> strip = data.Slice(row * 16 * 8);
                 Block8x8F yLeft = default, yRight = default, yLeftVector = default, yRightVector = default;
-                scalar.Convert420(strip, ref yLeft, ref yRight, ref cb, ref cr, row);
+                RgbToYCbCrConverterScalar.Convert420(strip, ref yLeft, ref yRight, ref cb, ref cr, row);
                 RgbToYCbCrConverterVectorized.Convert420(strip, ref yLeftVector, ref yRightVector, ref cbVector, ref crVector, row);
                 mismatches.Compare("Y left", ref yLeft, ref yLeftVector, n);
                 mismatches.Compare("Y right", ref yRight, ref yRightVector, n);

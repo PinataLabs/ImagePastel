@@ -11,14 +11,11 @@ namespace PinataLabs.ImagePastel.Benchmarks.Format.Jpeg.Components.Encoder;
 
 public class YCbCrForwardConverterBenchmark
 {
-    private RgbToYCbCrConverterLut converter;
     private Rgb24[] data;
 
     [GlobalSetup]
     public void Setup()
     {
-        this.converter = RgbToYCbCrConverterLut.Create();
-
         var r = new Random(42);
         this.data = new Rgb24[64];
 
@@ -31,13 +28,13 @@ public class YCbCrForwardConverterBenchmark
     }
 
     [Benchmark(Baseline = true)]
-    public void ConvertLut()
+    public void ConvertScalar()
     {
         Block8x8F y = default;
         Block8x8F cb = default;
         Block8x8F cr = default;
 
-        this.converter.Convert444(this.data.AsSpan(), ref y, ref cb, ref cr);
+        RgbToYCbCrConverterScalar.Convert444(this.data.AsSpan(), ref y, ref cb, ref cr);
     }
 
     [Benchmark]

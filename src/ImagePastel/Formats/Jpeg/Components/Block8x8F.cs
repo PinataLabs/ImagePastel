@@ -303,10 +303,9 @@ internal partial struct Block8x8F : IEquatable<Block8x8F>
         {
             for (int i = 0; i < Size; i++)
             {
+                // Ties to even, as the SIMD conversion to int32 rounds.
                 int idx = ZigZag.TransposingOrder[i];
-                float quantizedVal = block[idx] * qt[idx];
-                quantizedVal += quantizedVal < 0 ? -0.5f : 0.5f;
-                dest[i] = (short)quantizedVal;
+                dest[i] = (short)MathF.Round(block[idx] * qt[idx], MidpointRounding.ToEven);
             }
         }
     }
