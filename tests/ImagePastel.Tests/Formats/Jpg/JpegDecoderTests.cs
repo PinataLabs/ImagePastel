@@ -2,8 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using PinataLabs.ImagePastel.Formats.Jpeg;
@@ -403,5 +406,76 @@ public partial class JpegDecoderTests
         using Image<TPixel> image = provider.GetImage(JpegDecoder);
         Assert.Equal(65503, image.Width);
         Assert.Equal(65503, image.Height);
+    }
+
+    private static readonly string[] IntrinsicsParityImages =
+    {
+        TestImages.Jpeg.Baseline.Calliphora,
+        TestImages.Jpeg.Baseline.Jpeg420Exif,
+        TestImages.Jpeg.Baseline.Jpeg420Small,
+        TestImages.Jpeg.Baseline.Jpeg444,
+        TestImages.Jpeg.Baseline.Testorig420,
+        TestImages.Jpeg.Baseline.Lake,
+        TestImages.Jpeg.Baseline.GammaDalaiLamaGray,
+        TestImages.Jpeg.Baseline.Cmyk,
+        TestImages.Jpeg.Baseline.Ycck,
+        TestImages.Jpeg.Baseline.Testorig12bit,
+        TestImages.Jpeg.Progressive.Fb,
+        TestImages.Jpeg.Progressive.Progress,
+    };
+
+    private static string GetIntrinsicsParityPath(string intrinsics)
+        => Path.Combine(TestEnvironment.CreateOutputDirectory(nameof(JpegDecoderTests)), $"Decode_IsTheSameWithAndWithoutHardwareIntrinsics_{intrinsics}.txt");
+
+    private static void DecodeParityImagesToHashFile(string intrinsics)
+    {
+        string[] lines = new string[IntrinsicsParityImages.Length];
+        for (int i = 0; i < IntrinsicsParityImages.Length; i++)
+        {
+            using var image = Image.Load<Rgb48>(Path.Combine(TestEnvironment.InputImagesDirectoryFullPath, IntrinsicsParityImages[i]));
+            var pixels = new Rgb48[image.Width * image.Height];
+            image.CopyPixelDataTo(pixels);
+            byte[] hash = SHA256.HashData(MemoryMarshal.AsBytes(pixels.AsSpan()));
+            lines[i] = Convert.ToHexString(hash);
+        }
+
+        File.WriteAllLines(GetIntrinsicsParityPath(intrinsics), lines);
+    }
+
+    [Fact]
+    public void Decode_IsTheSameWithAndWithoutHardwareIntrinsics()
+    {
+        // DisableFMA uses the same runtime knob as DisableAVX2, so it adds no separate setting.
+        HwIntrinsics[] reduced = { HwIntrinsics.DisableAVX2, HwIntrinsics.DisableAVX, HwIntrinsics.DisableHWIntrinsic };
+        foreach (HwIntrinsics intrinsics in reduced.Append(HwIntrinsics.AllowAll))
+        {
+            File.Delete(GetIntrinsicsParityPath(intrinsics.ToString()));
+        }
+
+        FeatureTestRunner.RunWithHwIntrinsicsFeature(
+            DecodeParityImagesToHashFile,
+            HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2 | HwIntrinsics.DisableAVX | HwIntrinsics.DisableHWIntrinsic);
+
+        if (!File.Exists(GetIntrinsicsParityPath(nameof(HwIntrinsics.AllowAll))))
+        {
+            // Remote execution is not supported on this platform.
+            return;
+        }
+
+        string[] expected = File.ReadAllLines(GetIntrinsicsParityPath(nameof(HwIntrinsics.AllowAll)));
+        var mismatches = new List<string>();
+        foreach (HwIntrinsics intrinsics in reduced)
+        {
+            string[] actual = File.ReadAllLines(GetIntrinsicsParityPath(intrinsics.ToString()));
+            for (int i = 0; i < IntrinsicsParityImages.Length; i++)
+            {
+                if (expected[i] != actual[i])
+                {
+                    mismatches.Add($"{IntrinsicsParityImages[i]}: AllowAll {expected[i][..8]}, {intrinsics} {actual[i][..8]}");
+                }
+            }
+        }
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
     }
 }
