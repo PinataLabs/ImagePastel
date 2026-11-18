@@ -282,7 +282,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
 
         static void RunTest(string lengthStr)
         {
-            var allocator = new UniformUnmanagedMemoryPoolMemoryAllocator(512, 1024, 16 * 1024, 1024);
+            UniformUnmanagedMemoryPoolMemoryAllocator allocator = CreateNonTrimmingAllocator();
             int lengthInner = int.Parse(lengthStr);
 
             AllocateGroupAndForget(allocator, lengthInner);
@@ -301,6 +301,11 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
             Assert.Equal(42, g.First().Span[0]);
         }
     }
+
+    // The finalization tests force gen-2 GCs, and under high memory load the pool's gen-2 trim
+    // frees every retained buffer. Pool trimming has its own tests, so it is off here.
+    private static UniformUnmanagedMemoryPoolMemoryAllocator CreateNonTrimmingAllocator() =>
+        new(512, 1024, 16 * 1024, 1024, new UniformUnmanagedMemoryPool.TrimSettings { Rate = 0 });
 
     // A 1% high memory load threshold makes the GC report high memory load on any machine,
     // the state a CI runner can reach mid-suite.
@@ -339,7 +344,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
 
         static void RunTest(string lengthStr)
         {
-            var allocator = new UniformUnmanagedMemoryPoolMemoryAllocator(512, 1024, 16 * 1024, 1024);
+            UniformUnmanagedMemoryPoolMemoryAllocator allocator = CreateNonTrimmingAllocator();
             int lengthInner = int.Parse(lengthStr);
 
             AllocateSingleAndForget(allocator, lengthInner);
