@@ -91,7 +91,7 @@ internal abstract partial class JpegColorConverterBase
 
         private void ReadYccK(in ComponentValues values, int start, Span<Vector4> inks)
         {
-            // The same YCbCr-to-RGB transform, rounding and range limit as FromYccKScalar and libjpeg.
+            // The same YCbCr-to-RGB transform, rounding and range limit as libjpeg.
             float max = this.MaximumValue;
             float half = this.HalfValue;
             float scale = 1F / max;

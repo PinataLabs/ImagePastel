@@ -484,11 +484,11 @@ public class JpegColorConverterTests
         float cr = values.Component2[i] - 128F;
         float k = values.Component3[i] / 255F;
 
-        float r = (255F - (float)Math.Round(y + (1.402F * cr), MidpointRounding.AwayFromZero)) * k;
+        float r = (255F - (float)Math.Round(y + (1.402F * cr), MidpointRounding.ToEven)) * k;
         float g = (255F - (float)Math.Round(
             y - (0.344136F * cb) - (0.714136F * cr),
-            MidpointRounding.AwayFromZero)) * k;
-        float b = (255F - (float)Math.Round(y + (1.772F * cb), MidpointRounding.AwayFromZero)) * k;
+            MidpointRounding.ToEven)) * k;
+        float b = (255F - (float)Math.Round(y + (1.772F * cb), MidpointRounding.ToEven)) * k;
 
         r /= MaxColorChannelValue;
         g /= MaxColorChannelValue;

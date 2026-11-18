@@ -6,7 +6,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using static PinataLabs.ImagePastel.SimdUtils;
 
 namespace PinataLabs.ImagePastel.Formats.Jpeg.Components.Decoder.ColorConverters;
 
@@ -58,10 +57,11 @@ internal abstract partial class JpegColorConverterBase
                 // r = y + (1.402F * cr);
                 // g = y - (0.344136F * cb) - (0.714136F * cr);
                 // b = y + (1.772F * cb);
-                Vector256<float> r = HwIntrinsics.MultiplyAdd(y, cr, rCrMult);
+                // Not FMA: a fused multiply-add rounds once, so the result would depend on the CPU.
+                Vector256<float> r = Avx.Add(Avx.Multiply(cr, rCrMult), y);
                 Vector256<float> g =
-                    HwIntrinsics.MultiplyAdd(HwIntrinsics.MultiplyAdd(y, cb, gCbMult), cr, gCrMult);
-                Vector256<float> b = HwIntrinsics.MultiplyAdd(y, cb, bCbMult);
+                    Avx.Add(Avx.Multiply(cr, gCrMult), Avx.Add(Avx.Multiply(cb, gCbMult), y));
+                Vector256<float> b = Avx.Add(Avx.Multiply(cb, bCbMult), y);
 
                 r = Avx.Subtract(max, Avx.RoundToNearestInteger(r));
                 g = Avx.Subtract(max, Avx.RoundToNearestInteger(g));

@@ -96,7 +96,8 @@ internal static partial class FastFloatingPointDCT
         transposedBlock.TransposeInplace();
         IDCT8x8_1D_Avx(ref transposedBlock);
 
-        // Applies 1D floating point FDCT inplace
+        // Applies 1D floating point IDCT inplace.
+        // Not FMA: a fused multiply-add rounds once, so the decoded pixels would depend on the CPU.
         static void IDCT8x8_1D_Avx(ref Block8x8F block)
         {
             // Even part
@@ -110,7 +111,7 @@ internal static partial class FastFloatingPointDCT
             Vector256<float> tmp11 = Avx.Subtract(z5, tmp2);
 
             Vector256<float> tmp13 = Avx.Add(tmp1, tmp3);
-            Vector256<float> tmp12 = SimdUtils.HwIntrinsics.MultiplySubstract(tmp13, Avx.Subtract(tmp1, tmp3), mm256_F_1_4142);
+            Vector256<float> tmp12 = Avx.Subtract(Avx.Multiply(Avx.Subtract(tmp1, tmp3), mm256_F_1_4142), tmp13);
 
             tmp0 = Avx.Add(tmp10, tmp13);
             tmp3 = Avx.Subtract(tmp10, tmp13);
@@ -133,8 +134,8 @@ internal static partial class FastFloatingPointDCT
 
             z5 = Avx.Multiply(Avx.Add(z10, z12), mm256_F_1_8477);
 
-            tmp10 = SimdUtils.HwIntrinsics.MultiplyAdd(z5, z12, mm256_F_n1_0823);
-            tmp12 = SimdUtils.HwIntrinsics.MultiplyAdd(z5, z10, mm256_F_n2_6131);
+            tmp10 = Avx.Add(Avx.Multiply(z12, mm256_F_n1_0823), z5);
+            tmp12 = Avx.Add(Avx.Multiply(z10, mm256_F_n2_6131), z5);
 
             tmp6 = Avx.Subtract(tmp12, tmp7);
             tmp5 = Avx.Subtract(tmp11, tmp6);
