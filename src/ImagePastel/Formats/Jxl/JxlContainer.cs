@@ -54,15 +54,6 @@ internal static class JxlContainer
     public static JxlContainerContents Read(byte[] data, bool readMetadata, CancellationToken cancellationToken)
         => Read<JxlDefaultBrotliDecoder>(data, readMetadata, cancellationToken);
 
-    /// <summary>
-    /// Reads as <see cref="Read(byte[], bool, CancellationToken)"/> does, with the Brotli decoder
-    /// <typeparamref name="TBrotliDecoder"/>. Internal for the tests, which read with each decoder.
-    /// </summary>
-    /// <typeparam name="TBrotliDecoder">The decoder for the <c>brob</c> boxes.</typeparam>
-    /// <param name="data">The file.</param>
-    /// <param name="readMetadata">Whether to read the Exif and XMP boxes.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The contents.</returns>
     internal static JxlContainerContents Read<TBrotliDecoder>(byte[] data, bool readMetadata, CancellationToken cancellationToken)
         where TBrotliDecoder : struct, IJxlBrotliDecoder
     {
@@ -315,7 +306,7 @@ internal static class JxlContainer
     }
 
     // Decompresses the contents of a brob box after its type, as JxlBoxContentDecoder does. Returns
-    // null for a stream that cannot be read: libjxl fails the decode there, but ImageSharp drops
+    // null for a stream that cannot be read: libjxl fails the decode there, but this decoder drops
     // unreadable metadata. Throws for a box that decompresses to more than the cap.
     private static byte[] Decompress<TBrotliDecoder>(ReadOnlyMemory<byte> compressed, string kind, CancellationToken cancellationToken)
         where TBrotliDecoder : struct, IJxlBrotliDecoder
@@ -325,9 +316,8 @@ internal static class JxlContainer
         // measuring first means a box over the cap is never held, and a box under it allocates its size.
         long size = MeasureDecompressedSize<TBrotliDecoder>(compressed.Span, kind, cancellationToken);
 
-        // A box that decompresses to nothing is dropped too. BrotliDecoder does not run with an empty
-        // output buffer, so that was the result before there was a managed decoder; the check keeps it
-        // the same with both.
+        // A box that decompresses to nothing is dropped. BrotliDecoder.Decompress never runs the native
+        // decoder into an empty buffer, so it cannot read such a box; this keeps both decoders the same.
         if (size <= 0)
         {
             return null;

@@ -7,10 +7,6 @@ using PinataLabs.ImagePastel.Compression.Brotli;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl;
 
-/// <summary>
-/// Reads <c>brob</c> boxes with <see cref="ManagedBrotliDecoder"/>: on netstandard2.1, which has no
-/// <c>System.IO.Compression.BrotliDecoder</c>, and in the tests on every target.
-/// </summary>
 internal struct JxlManagedBrotliDecoder : IJxlBrotliDecoder
 {
     private ManagedBrotliDecoder decoder;
@@ -25,7 +21,6 @@ internal struct JxlManagedBrotliDecoder : IJxlBrotliDecoder
         }
         catch (InvalidImageContentException)
         {
-            // The container drops a box that cannot be read, so it wants a status here, as BrotliDecoder gives.
             bytesConsumed = 0;
             bytesWritten = 0;
             return OperationStatus.InvalidData;

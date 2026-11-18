@@ -18,12 +18,6 @@ using Xunit;
 
 namespace PinataLabs.ImagePastel.Tests.Formats.Jxl;
 
-/// <summary>
-/// Checks that a container's <c>brob</c> boxes read the same with the managed Brotli decoder, which
-/// netstandard2.1 uses, as with <c>System.IO.Compression.BrotliDecoder</c>. The tests run the managed
-/// decoder on the test targets through <see cref="JxlContainer.Read{TBrotliDecoder}"/>, and through
-/// <c>Image.Identify</c> of the netstandard2.1 build when the build output has it.
-/// </summary>
 [Trait("Format", "Jxl")]
 public class JxlBrotliBoxTests
 {
@@ -106,9 +100,6 @@ public class JxlBrotliBoxTests
         Assert.NotEmpty(alone.Codestream);
     }
 
-    // The managed decoder allocates its ring buffer as it grows to the window: 8 MiB in all for this
-    // stream, and 32 MiB for the largest window. BrotliDecoder holds native memory, which this does
-    // not count.
     [Theory]
     [InlineData("Exif")]
     [InlineData("xml ")]
@@ -135,7 +126,6 @@ public class JxlBrotliBoxTests
         Assert.True(contents.Xmp.AsSpan().IndexOfAnyExcept((byte)0) < 0);
     }
 
-    // 4 groups of 250 mutated boxes. A box that cannot be read is dropped, with either decoder.
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -203,17 +193,13 @@ public class JxlBrotliBoxTests
     private static (byte[] Exif, byte[] Xmp) Profiles(ImageMetadata metadata)
         => (metadata.ExifProfile?.ToByteArray(), metadata.XmpProfile?.ToByteArray());
 
-    // Loads the netstandard2.1 build of the library next to the one under test, and calls its
-    // Image.Identify. The test project does not build it: a build of the solution does, as CI runs.
     private static (byte[] Exif, byte[] Xmp) IdentifyWithTheNetStandardBuild(byte[] file)
     {
-        // artifacts/bin/tests/ImagePastel.Tests/<configuration>/<target framework>
         DirectoryInfo output = new(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         string library = Path.Combine(output.Parent.Parent.Parent.Parent.FullName, "src", "ImagePastel", output.Parent.Name);
         string path = Path.Combine(library, "netstandard2.1", "PinataLabs.ImagePastel.dll");
         Assert.SkipUnless(File.Exists(path), $"The netstandard2.1 build is not at {path}. Build the solution to run this test.");
 
-        // A build of the test project alone leaves an older netstandard2.1 build as it is.
         DateTime current = File.GetLastWriteTimeUtc(Path.Combine(library, output.Name, "PinataLabs.ImagePastel.dll"));
         Assert.SkipWhen(
             File.GetLastWriteTimeUtc(path) < current - TimeSpan.FromMinutes(10),
@@ -225,7 +211,6 @@ public class JxlBrotliBoxTests
             Assembly assembly = context.LoadFromAssemblyPath(path);
             Assert.Equal(".NETStandard,Version=v2.1", assembly.GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
 
-            // The library ships with no dependency that brings a Brotli decoder.
             Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name.Contains("Brotli", StringComparison.OrdinalIgnoreCase));
 
             MethodInfo identify = assembly.GetType("PinataLabs.ImagePastel.Image", throwOnError: true).GetMethod("Identify", new[] { typeof(byte[]) });
@@ -242,7 +227,6 @@ public class JxlBrotliBoxTests
 
     private static byte[] ToByteArray(object profile) => (byte[])profile?.GetType().GetMethod("ToByteArray").Invoke(profile, null);
 
-    // The codestream of exif_xmp.jxl in a container, with the boxes before it.
     private static byte[] WithBoxes(params byte[][] boxes)
     {
         byte[] ftyp = new byte[12];

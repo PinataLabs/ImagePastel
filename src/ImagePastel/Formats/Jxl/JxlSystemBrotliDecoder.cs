@@ -8,9 +8,6 @@ using System.IO.Compression;
 
 namespace PinataLabs.ImagePastel.Formats.Jxl;
 
-/// <summary>
-/// Reads <c>brob</c> boxes with <see cref="BrotliDecoder"/>, on the targets that have it.
-/// </summary>
 internal struct JxlSystemBrotliDecoder : IJxlBrotliDecoder
 {
     private BrotliDecoder decoder;

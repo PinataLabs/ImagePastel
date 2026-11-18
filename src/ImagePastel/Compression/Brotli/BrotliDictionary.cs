@@ -13,10 +13,8 @@ namespace PinataLabs.ImagePastel.Compression.Brotli;
 /// </summary>
 internal static partial class BrotliDictionary
 {
-    /// <summary>The shortest word.</summary>
     public const int MinWordLength = 4;
 
-    /// <summary>The longest word.</summary>
     public const int MaxWordLength = 24;
 
     /// <summary>
@@ -31,7 +29,6 @@ internal static partial class BrotliDictionary
         5, 0, 0, 0, 0, 0, 0, 0,
     };
 
-    /// <summary>Gets the offset in <see cref="Data"/> of the first word of each length.</summary>
     public static int[] OffsetsByLength { get; } =
     {
         0, 0, 0, 0, 0, 4096, 9216, 21504,

@@ -13,10 +13,8 @@ namespace PinataLabs.ImagePastel.Compression.Brotli;
 /// </summary>
 internal static class BrotliContext
 {
-    /// <summary>The number of bits of a literal context ID.</summary>
     public const int LiteralContextBits = 6;
 
-    /// <summary>The number of bits of a distance context ID.</summary>
     public const int DistanceContextBits = 2;
 
     /// <summary>

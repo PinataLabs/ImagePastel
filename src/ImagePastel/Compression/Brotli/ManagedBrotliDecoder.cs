@@ -35,8 +35,6 @@ internal sealed partial class ManagedBrotliDecoder
 {
     private const int HuffmanTableBits = 8;
 
-    // The slack after the ring buffer, for a copy that runs over its end and for a transformed
-    // dictionary word (kRingBufferWriteAheadSlack).
     private const int RingBufferWriteAheadSlack = 542;
 
     private const int NumDistanceShortCodes = 16;
@@ -44,18 +42,12 @@ internal sealed partial class ManagedBrotliDecoder
     private const int NumLiteralSymbols = 256;
     private const int MaxContextMapSymbols = 256 + 16;
 
-    // BROTLI_MAX_ALLOWED_DISTANCE
     private const int MaxAllowedDistance = 0x7FFFFFFC;
 
-    // BROTLI_WINDOW_GAP
     private const int WindowGap = 16;
 
-    // BROTLI_BLOCK_SIZE_CAP: the block length when there is no block switching, which is also the
-    // largest meta-block.
     private const int BlockSizeCap = 1 << 24;
 
-    // The most entries of the lookup table of a code, above the size of its alphabet
-    // (BrotliDecoderHuffmanTreeGroupInit).
     private const int MaxTableSizeOverAlphabet = 376;
 
     private readonly int[] distRb = { 16, 15, 11, 4 };
@@ -69,7 +61,6 @@ internal sealed partial class ManagedBrotliDecoder
     private readonly HuffmanTreeGroup insertCopyGroup = new();
     private readonly HuffmanTreeGroup distanceGroup = new();
 
-    // BrotliMetablockHeaderArena
     private readonly BrotliHuffmanCode[] codeLengthTable = new BrotliHuffmanCode[32];
     private readonly ushort[] symbolLists = new ushort[BrotliHuffman.SymbolListsBase + BrotliPrefix.NumCommandSymbols];
     private readonly int[] nextSymbol = new int[BrotliHuffman.MaxCodeLength + 1];
@@ -78,16 +69,13 @@ internal sealed partial class ManagedBrotliDecoder
     private readonly BrotliHuffmanCode[] contextMapTable = new BrotliHuffmanCode[BrotliHuffman.MaxSize272];
     private readonly ushort[] simpleSymbols = new ushort[4];
 
-    // BrotliMetablockBodyArena
     private readonly byte[] distExtraBits = new byte[544];
     private readonly int[] distOffset = new int[544];
 
     private State state = State.Uninited;
 
-    // Set while a call runs, so it stays set after a call that throws.
     private bool failed;
 
-    // The bits of a byte that is partly read, between calls.
     private uint heldBits;
     private int heldBitCount;
 
@@ -103,7 +91,6 @@ internal sealed partial class ManagedBrotliDecoder
     private byte[] ringbuffer;
     private bool shouldWrapRingbuffer;
 
-    // How many times the output went around the ring buffer, and how much output the caller has.
     private long rbRoundtrips;
     private long partialPosOut;
 
@@ -119,8 +106,6 @@ internal sealed partial class ManagedBrotliDecoder
     private byte[] contextMap;
     private byte[] distContextMap;
 
-    // Offsets: of the command tree and the literal tree in the codes of their groups, of the context
-    // mode in BrotliContext.Lookup, and of the block type's part of each context map.
     private int htreeCommand;
     private int literalHtree;
     private int contextLookup;
@@ -152,26 +137,10 @@ internal sealed partial class ManagedBrotliDecoder
 
     private static ReadOnlySpan<byte> CodeLengthCodeOrder => new byte[] { 1, 2, 3, 4, 0, 5, 17, 6, 16, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
-    // The static prefix code for the code length code lengths.
     private static ReadOnlySpan<byte> CodeLengthPrefixLength => new byte[] { 2, 2, 2, 3, 2, 2, 2, 4, 2, 2, 2, 3, 2, 2, 2, 4 };
 
     private static ReadOnlySpan<byte> CodeLengthPrefixValue => new byte[] { 0, 4, 3, 2, 0, 4, 3, 1, 0, 4, 3, 2, 0, 4, 3, 5 };
 
-    /// <summary>
-    /// Decodes into <paramref name="destination"/> (<c>BrotliDecoderDecompressStream</c>).
-    /// </summary>
-    /// <param name="source">
-    /// The rest of the stream: all of it on the first call, and then what is left after the bytes that
-    /// the calls before consumed.
-    /// </param>
-    /// <param name="destination">The buffer for the next output.</param>
-    /// <param name="bytesConsumed">The number of bytes of <paramref name="source"/> that are used.</param>
-    /// <param name="bytesWritten">The number of bytes written to <paramref name="destination"/>.</param>
-    /// <returns>
-    /// <see cref="OperationStatus.Done"/> when the stream has ended and all its output is written, or
-    /// <see cref="OperationStatus.DestinationTooSmall"/> when there is more output.
-    /// </returns>
-    /// <exception cref="InvalidImageContentException">The stream is corrupt or truncated.</exception>
     public OperationStatus Decompress(ReadOnlySpan<byte> source, Span<byte> destination, out int bytesConsumed, out int bytesWritten)
     {
         if (this.failed)
@@ -189,7 +158,6 @@ internal sealed partial class ManagedBrotliDecoder
         return status;
     }
 
-    // Decodes a block length by reading 3..39 bits.
     private static int ReadBlockLength(BrotliHuffmanCode[] table, int offset, ref BrotliBitReader br)
     {
         int code = br.ReadSymbol(table, offset);
@@ -205,7 +173,7 @@ internal sealed partial class ManagedBrotliDecoder
                 case State.Uninited:
                     this.DecodeWindowBits(ref br);
 
-                    // Maximum distance, see section 9.1. of the spec.
+                    // RFC 7932, section 9.1: the window is (1 << WBITS) - 16 bytes.
                     this.maxBackwardDistance = (1 << this.windowBits) - WindowGap;
                     this.state = State.MetablockBegin;
                     break;
@@ -294,7 +262,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Decodes WBITS by reading 1 - 7 bits.
     private void DecodeWindowBits(ref BrotliBitReader br)
     {
         if (br.ReadBits(1) == 0)
@@ -320,8 +287,6 @@ internal sealed partial class ManagedBrotliDecoder
         this.windowBits = n != 0 ? 8 + n : 17;
     }
 
-    // Decodes a block type and length, and updates the ring buffer of block types. Reads 3..54 bits.
-    // Returns false, and reads nothing, when the category has one block type.
     private bool DecodeBlockTypeAndLength(int treeType, ref BrotliBitReader br)
     {
         int maxBlockType = this.numBlockTypes[treeType];
@@ -405,15 +370,12 @@ internal sealed partial class ManagedBrotliDecoder
         this.distHtreeIndex = this.distContextMap[this.distContextMapSlice + this.distanceContext];
     }
 
-    // Returns how much of the ring buffer the caller does not have yet.
     private long UnwrittenBytes()
     {
         int end = this.pos > this.ringbufferSize ? this.ringbufferSize : this.pos;
         return (this.rbRoundtrips * this.ringbufferSize) + end - this.partialPosOut;
     }
 
-    // Writes output. Returns false only if there is more output to write and either the ring buffer is
-    // as big as the window, or force is set.
     private bool WriteRingBuffer(Span<byte> destination, ref int written, bool force)
     {
         int start = (int)(this.partialPosOut & this.ringbufferMask);
@@ -432,7 +394,6 @@ internal sealed partial class ManagedBrotliDecoder
             return !(this.ringbufferSize == 1 << this.windowBits || force);
         }
 
-        // Wrap the ring buffer only if it has reached its maximal size.
         if (this.ringbufferSize == 1 << this.windowBits && this.pos >= this.ringbufferSize)
         {
             this.pos -= this.ringbufferSize;
@@ -452,8 +413,8 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Allocates the ring buffer, of the size that CalculateRingBufferSize found. Its last two bytes are
-    // zero, so the context of the first two positions is calculated as for all others.
+    // A new array is zeroed, so its last two bytes, which give the context of the first two
+    // positions, are zero. The C code sets them.
     private void EnsureRingBuffer()
     {
         if (this.ringbufferSize == this.newRingbufferSize)
@@ -472,17 +433,13 @@ internal sealed partial class ManagedBrotliDecoder
         this.ringbufferMask = this.newRingbufferSize - 1;
     }
 
-    // Calculates the smallest feasible ring buffer: if the data is known to be small, the ring buffer is
-    // smaller than the window. The meta-block size and flags are decoded when this is called.
     private void CalculateRingBufferSize()
     {
         int windowSize = 1 << this.windowBits;
         int size = windowSize;
 
-        // At least 2 bytes of ring buffer are needed, to get the last two bytes for the context from there.
         int minSize = this.ringbufferSize != 0 ? this.ringbufferSize : 1024;
 
-        // If the maximum is already reached, there is nothing to extend.
         if (this.ringbufferSize == windowSize)
         {
             return;
@@ -498,7 +455,6 @@ internal sealed partial class ManagedBrotliDecoder
         this.newRingbufferSize = size;
     }
 
-    // Returns false when the output is full.
     private bool CopyUncompressedBlockToOutput(ref BrotliBitReader br, Span<byte> destination, ref int written)
     {
         for (; ;)
@@ -543,7 +499,6 @@ internal sealed partial class ManagedBrotliDecoder
         int offset = this.distanceCode - 3;
         if (this.distanceCode <= 3)
         {
-            // Compensate double distance-ring-buffer roll for dictionary items.
             this.distanceContext = 1 >> this.distanceCode;
             this.distanceCode = this.distRb[(this.distRbIdx - offset) & 3];
             this.distRbIdx -= this.distanceContext;
@@ -561,12 +516,10 @@ internal sealed partial class ManagedBrotliDecoder
                 indexDelta = 2;
             }
 
-            // Unpack one of six 4-bit values.
             int delta = ((0x605142 >> (4 * @base)) & 0xF) - 3;
             this.distanceCode = this.distRb[(this.distRbIdx + indexDelta) & 0x3] + delta;
             if (this.distanceCode <= 0)
             {
-                // A huge distance will cause a failure soon. This is a little faster than failing here.
                 this.distanceCode = 0x7FFFFFFF;
             }
         }
@@ -577,7 +530,6 @@ internal sealed partial class ManagedBrotliDecoder
         int code = br.ReadSymbol(this.distanceGroup.Codes, this.distanceGroup.Htrees[this.distHtreeIndex]);
         --this.blockLength[2];
 
-        // Convert the distance code to the actual distance by possibly looking up past distances.
         this.distanceContext = 0;
         if ((code & ~0xF) == 0)
         {
@@ -590,9 +542,7 @@ internal sealed partial class ManagedBrotliDecoder
         this.distanceCode = this.distOffset[code] + (bits << this.distancePostfixBits);
     }
 
-    // ProcessCommandsInternal: the commands of a compressed meta-block, each an insert of literals and
-    // a copy. It returns to write output, with the state that says where to go on, and when the
-    // meta-block is done.
+    // ProcessCommandsInternal.
     private void ProcessCommands(ref BrotliBitReader br)
     {
         int pos = this.pos;
@@ -638,8 +588,8 @@ internal sealed partial class ManagedBrotliDecoder
 
     CommandInner:
 
-        // Read the literals in the command. The C code has a faster loop for the literals that need no
-        // check; here every literal takes the checked path.
+        // The C code has a faster loop for the literals that need no check; here every literal takes the
+        // checked path.
         if (this.trivialLiteralContext)
         {
             BrotliHuffmanCode[] codes = this.literalGroup.Codes;
@@ -705,14 +655,12 @@ internal sealed partial class ManagedBrotliDecoder
     CommandPostDecodeLiterals:
         if (this.distanceCode >= 0)
         {
-            // Implicit distance case.
             this.distanceContext = this.distanceCode != 0 ? 0 : 1;
             --this.distRbIdx;
             this.distanceCode = this.distRb[this.distRbIdx & 3];
         }
         else
         {
-            // Read the distance code in the command, unless it was implicitly zero.
             if (this.blockLength[2] == 0)
             {
                 this.DecodeDistanceBlockSwitch(ref br);
@@ -728,12 +676,9 @@ internal sealed partial class ManagedBrotliDecoder
 
         i = this.copyLength;
 
-        // Apply the copy of an LZ77 back-reference, or of a static dictionary reference if the distance
-        // is larger than the max LZ77 distance.
+        // RFC 7932: a distance beyond the largest backward distance refers to the static dictionary (section 8).
         if (this.distanceCode > this.maxDistance)
         {
-            // With this limit, no signed overflow can occur after decoding a special distance code
-            // (e.g., after adding 3 to the last distance).
             if (this.distanceCode > MaxAllowedDistance)
             {
                 BrotliThrowHelper.ThrowCorrupt("a distance is too large");
@@ -749,7 +694,6 @@ internal sealed partial class ManagedBrotliDecoder
             int wordIdx = address & ((1 << shift) - 1);
             int transformIdx = address >> shift;
 
-            // Compensate double distance-ring-buffer roll.
             this.distRbIdx += this.distanceContext;
             if (transformIdx >= BrotliTransform.NumTransforms)
             {
@@ -785,7 +729,6 @@ internal sealed partial class ManagedBrotliDecoder
             int dstEnd = pos + i;
             int srcEnd = srcStart + i;
 
-            // Update the recent distances cache.
             this.distRb[this.distRbIdx & 3] = this.distanceCode;
             ++this.distRbIdx;
             this.metaBlockRemainingLen -= i;
@@ -794,7 +737,6 @@ internal sealed partial class ManagedBrotliDecoder
             // the whole length gives the same bytes.
             if ((srcEnd > pos && dstEnd > srcStart) || dstEnd >= ringbufferSize || srcEnd >= ringbufferSize)
             {
-                // The regions intersect, or at least one wraps.
                 goto CommandPostWrapCopy;
             }
 
@@ -804,7 +746,6 @@ internal sealed partial class ManagedBrotliDecoder
 
         if (this.metaBlockRemainingLen <= 0)
         {
-            // Next meta-block, if any.
             this.state = State.MetablockDone;
             goto SaveStateAndReturn;
         }
@@ -829,7 +770,6 @@ internal sealed partial class ManagedBrotliDecoder
 
         if (this.metaBlockRemainingLen <= 0)
         {
-            // Next meta-block, if any.
             this.state = State.MetablockDone;
             goto SaveStateAndReturn;
         }
@@ -841,12 +781,10 @@ internal sealed partial class ManagedBrotliDecoder
         this.loopCounter = i;
     }
 
-    // A collection of Huffman trees with the same alphabet size (HuffmanTreeGroup).
     private sealed class HuffmanTreeGroup
     {
         public BrotliHuffmanCode[] Codes { get; private set; } = Array.Empty<BrotliHuffmanCode>();
 
-        // The offset of each tree in Codes.
         public int[] Htrees { get; private set; } = Array.Empty<int>();
 
         public int AlphabetSizeMax { get; private set; }

@@ -17,7 +17,6 @@ public class BrotliHuffmanTests
 {
     private const int RootBits = 8;
 
-    // The table of a code starts at this index, as the tables of a tree group do.
     private const int TableOffset = 37;
 
     public static TheoryData<int, int, int> Codes()
@@ -54,7 +53,6 @@ public class BrotliHuffmanTests
     [Fact]
     public void BuildHuffmanTable_OfTheLongestCodes_ReadsBackTheSymbols()
     {
-        // One symbol of each length 1 to 14, and two of length 15.
         byte[] lengths = Enumerable.Range(1, 15).Select(i => (byte)i).Append((byte)15).ToArray();
         BrotliHuffmanCode[] table = new BrotliHuffmanCode[TableOffset + lengths.Length + 376];
 
@@ -128,7 +126,6 @@ public class BrotliHuffmanTests
                 continue;
             }
 
-            // The table is indexed with the next 5 bits of the stream; the bits after the code can be anything.
             int first = ReverseBits(codes[symbol].Code, codes[symbol].Length);
             for (int rest = 0; rest < 32 >> lengths[symbol]; rest++)
             {
@@ -138,7 +135,6 @@ public class BrotliHuffmanTests
         }
     }
 
-    // Links the symbols of each code length into a chain, as the decoder does when it reads the lengths.
     private static ushort[] SymbolLists(byte[] lengths, out ushort[] count)
     {
         ushort[] lists = new ushort[BrotliHuffman.SymbolListsBase + lengths.Length];
@@ -164,7 +160,6 @@ public class BrotliHuffmanTests
         return lists;
     }
 
-    // Splits leaves of a full binary tree until it has the wanted number, so the code is complete.
     private static byte[] RandomCompleteCode(int alphabetSize, int usedSymbols, Random random)
     {
         List<byte> leaves = new() { 1, 1 };
@@ -226,7 +221,6 @@ public class BrotliHuffmanTests
         (int Code, int Length)[] codes = CanonicalCodes(lengths);
         int[] used = Enumerable.Range(0, lengths.Length).Where(s => lengths[s] != 0).ToArray();
 
-        // Every symbol once, then a random run.
         int[] symbols = used.Concat(Enumerable.Range(0, 2000).Select(_ => used[random.Next(used.Length)])).ToArray();
         List<byte> stream = new();
         int bitCount = 0;

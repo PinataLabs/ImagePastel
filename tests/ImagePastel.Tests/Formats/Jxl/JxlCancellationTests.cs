@@ -148,7 +148,6 @@ public class JxlCancellationTests
         Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.MeasureDecompressedSize<JxlSystemBrotliDecoder>(compressed, "XMP", Cancelled()));
     }
 
-    // The same with the managed Brotli decoder, which netstandard2.1 uses.
     [Fact]
     public void BrotliMeasure_ManagedDecoder_CancelledToken_Throws()
     {

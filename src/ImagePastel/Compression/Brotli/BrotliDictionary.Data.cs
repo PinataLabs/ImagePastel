@@ -8,13 +8,8 @@ using System;
 
 namespace PinataLabs.ImagePastel.Compression.Brotli;
 
-/// <content>
-/// The words of the static dictionary: 122,784 bytes, with SHA-256
-/// 20e42eb1b511c21806d4d227d07e5dd06877d8ce7b3a817f378f313653f35c70.
-/// </content>
 internal static partial class BrotliDictionary
 {
-    /// <summary>Gets the words, grouped by length.</summary>
     public static ReadOnlySpan<byte> Data => new byte[]
     {
         116, 105, 109, 101, 100, 111, 119, 110, 108, 105, 102, 101, 108, 101, 102, 116, 98, 97, 99, 107, 99, 111, 100, 101, 100, 97, 116, 97, 115, 104, 111, 119,

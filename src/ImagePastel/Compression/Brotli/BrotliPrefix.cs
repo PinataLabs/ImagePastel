@@ -8,28 +8,19 @@ using System;
 
 namespace PinataLabs.ImagePastel.Compression.Brotli;
 
-/// <summary>
-/// The tables that map prefix codes to value ranges: block lengths, and the insert and copy lengths of
-/// a command.
-/// </summary>
 internal static class BrotliPrefix
 {
-    /// <summary>The size of the block length alphabet.</summary>
     public const int NumBlockLengthSymbols = 26;
 
-    /// <summary>The size of the insert-and-copy length alphabet.</summary>
     public const int NumCommandSymbols = 704;
 
-    /// <summary>Gets the command that each insert-and-copy length symbol stands for (<c>kCmdLut</c>).</summary>
     public static BrotliCommand[] Commands { get; } = CreateCommands();
 
-    /// <summary>Gets the first block length of each block length symbol.</summary>
     public static ushort[] BlockLengthOffset { get; } =
     {
         1, 5, 9, 13, 17, 25, 33, 41, 49, 65, 81, 97, 113, 145, 177, 209, 241, 305, 369, 497, 753, 1265, 2289, 4337, 8433, 16625,
     };
 
-    /// <summary>Gets the number of extra bits of each block length symbol.</summary>
     public static ReadOnlySpan<byte> BlockLengthBits => new byte[]
     {
         2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 24,

@@ -26,7 +26,6 @@ internal sealed partial class ManagedBrotliDecoder
         return result;
     }
 
-    // Decodes a number in the range [0..255], by reading 1 - 11 bits.
     private static int DecodeVarLenUint8(ref BrotliBitReader br)
     {
         if (br.ReadBits(1) == 0)
@@ -107,7 +106,6 @@ internal sealed partial class ManagedBrotliDecoder
 
         for (int i = 0; i < 3; i++)
         {
-            // Reads 1..11 bits.
             this.numBlockTypes[i] = DecodeVarLenUint8(ref br) + 1;
             if (this.numBlockTypes[i] < 2)
             {
@@ -124,7 +122,6 @@ internal sealed partial class ManagedBrotliDecoder
         this.distancePostfixBits = bits & 3;
         this.numDirectDistanceCodes = (bits >> 2) << this.distancePostfixBits;
 
-        // Reads 1..256 2-bit context modes.
         this.contextModes = new byte[this.numBlockTypes[0]];
         for (int i = 0; i < this.contextModes.Length; i++)
         {
@@ -136,7 +133,6 @@ internal sealed partial class ManagedBrotliDecoder
 
         this.distContextMap = this.DecodeContextMap(this.numBlockTypes[2] << BrotliContext.DistanceContextBits, out int numDistHtrees, ref br);
 
-        // BROTLI_DISTANCE_ALPHABET_SIZE
         int distanceAlphabetSize = NumDistanceShortCodes + this.numDirectDistanceCodes + (MaxDistanceBits << (this.distancePostfixBits + 1));
         this.literalGroup.Init(NumLiteralSymbols, NumLiteralSymbols, numLiteralHtrees);
         this.insertCopyGroup.Init(BrotliPrefix.NumCommandSymbols, BrotliPrefix.NumCommandSymbols, this.numBlockTypes[1]);
@@ -153,7 +149,6 @@ internal sealed partial class ManagedBrotliDecoder
         this.state = State.CommandBegin;
     }
 
-    // Decodes a meta-block length and flags by reading 2 - 31 bits.
     private void DecodeMetaBlockLength(ref BrotliBitReader br)
     {
         this.isLastMetablock = br.ReadBits(1) != 0;
@@ -162,7 +157,6 @@ internal sealed partial class ManagedBrotliDecoder
         this.isMetadata = false;
         if (this.isLastMetablock && br.ReadBits(1) != 0)
         {
-            // The last meta-block is empty.
             return;
         }
 
@@ -216,21 +210,12 @@ internal sealed partial class ManagedBrotliDecoder
         ++this.metaBlockRemainingLen;
     }
 
-    // Decodes the Huffman tables.
-    // There are 2 scenarios:
-    //  A) The code has only few symbols (1..4). Those symbols are read directly; their code lengths are
-    //     defined by the number of symbols.
-    //  B) 2-phase decoding:
-    //  B.1) A small table is decoded; it is specified with code lengths encoded with a predefined code.
-    //  B.2) That table is used to decode the code lengths of the symbols of the resulting table.
-    // Returns the size of the table.
     private int ReadHuffmanCode(int alphabetSizeMax, int alphabetSizeLimit, BrotliHuffmanCode[] table, int offset, ref BrotliBitReader br)
     {
-        // 1 for a simple code; 0 for no skipping, 2 skips 2 code lengths, 3 skips 3 code lengths.
+        // HSKIP (RFC 7932, sections 3.4 and 3.5): 1 for a simple code, else the number of code lengths skipped.
         int skip = br.ReadBits(2);
         if (skip == 1)
         {
-            // Read symbols, codes and code lengths directly.
             int numSymbols = br.ReadBits(2);
             Span<ushort> symbols = this.simpleSymbols;
             this.ReadSimpleHuffmanSymbols(alphabetSizeMax, alphabetSizeLimit, numSymbols, symbols, ref br);
@@ -242,7 +227,6 @@ internal sealed partial class ManagedBrotliDecoder
             return BrotliHuffman.BuildSimpleHuffmanTable(table, offset, HuffmanTableBits, symbols, numSymbols);
         }
 
-        // Decode Huffman-coded code lengths.
         Span<ushort> histo = this.codeLengthHisto;
         histo.Clear();
         this.ReadCodeLengthCodeLengths(skip, ref br);
@@ -258,7 +242,6 @@ internal sealed partial class ManagedBrotliDecoder
         return BrotliHuffman.BuildHuffmanTable(table, offset, HuffmanTableBits, this.symbolLists, histo);
     }
 
-    // Reads numSymbols + 1 symbols: 1..4 symbols, 1..11 bits each. They must not contain duplicates.
     private void ReadSimpleHuffmanSymbols(int alphabetSizeMax, int alphabetSizeLimit, int numSymbols, Span<ushort> symbols, ref BrotliBitReader br)
     {
         int maxBits = Log2Floor(alphabetSizeMax - 1);
@@ -285,7 +268,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Reads and decodes 15..18 codes using a static prefix code. Each code is 2..4 bits long.
     private void ReadCodeLengthCodeLengths(int skip, ref BrotliBitReader br)
     {
         Span<byte> codeLengths = this.codeLengthCodeLengths;
@@ -316,8 +298,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Reads and decodes the code lengths of the symbols. The symbols of each code length are linked into
-    // a chain in symbolLists, and counted in codeLengthHisto.
     private void ReadSymbolCodeLengths(int alphabetSize, ref BrotliBitReader br)
     {
         const int repeatPreviousCodeLength = 16;
@@ -328,7 +308,6 @@ internal sealed partial class ManagedBrotliDecoder
         int repeat = 0;
         int repeatCodeLen = 0;
 
-        // The part of the code space that is free, in units of a code of 15 bits.
         int space = 32768;
         Span<ushort> lists = this.symbolLists;
         Span<ushort> histo = this.codeLengthHisto;
@@ -408,7 +387,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Decodes a series of Huffman tables.
     private void HuffmanTreeGroupDecode(HuffmanTreeGroup group, ref BrotliBitReader br)
     {
         int next = 0;
@@ -419,11 +397,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Decodes a context map.
-    //  1) Read auxiliary information (6..16 bits). A trivial context map is finished here.
-    //  2) Decode the Huffman table that the context map items are read with.
-    //  3) Read the context map items; "0" values can be run-length encoded.
-    //  4) Optionally, apply the inverse move-to-front transform to the resulting map.
     private byte[] DecodeContextMap(int contextMapSize, out int numHtrees, ref BrotliBitReader br)
     {
         numHtrees = DecodeVarLenUint8(ref br) + 1;
@@ -437,7 +410,6 @@ internal sealed partial class ManagedBrotliDecoder
         int bits = br.PeekBits(5);
         if ((bits & 1) != 0)
         {
-            // Use RLE for zeros.
             maxRunLengthPrefix = (bits >> 1) + 1;
             br.DropBits(5);
         }
@@ -465,7 +437,7 @@ internal sealed partial class ManagedBrotliDecoder
                 continue;
             }
 
-            // RLE sub-stage. The array is new, so its zeros are already there.
+            // The array is new, so the zeros of the run are already there.
             int reps = br.ReadBits(code) + (1 << code);
             if (contextIndex + reps > contextMapSize)
             {
@@ -502,8 +474,6 @@ internal sealed partial class ManagedBrotliDecoder
         }
     }
 
-    // Calculates the lookup table of the distance codes: the number of extra bits of each, and the
-    // distance that its extra bits add to.
     private void CalculateDistanceLut()
     {
         int npostfix = this.distancePostfixBits;
@@ -513,10 +483,8 @@ internal sealed partial class ManagedBrotliDecoder
         int bits = 1;
         int half = 0;
 
-        // Skip short codes.
         int i = NumDistanceShortCodes;
 
-        // Fill direct codes.
         for (int j = 0; j < ndirect; ++j)
         {
             this.distExtraBits[i] = 0;
@@ -524,12 +492,10 @@ internal sealed partial class ManagedBrotliDecoder
             ++i;
         }
 
-        // Fill regular distance codes.
         while (i < alphabetSizeLimit)
         {
             int @base = ndirect + ((((2 + half) << bits) - 4) << npostfix) + 1;
 
-            // Always fill the complete group.
             for (int j = 0; j < postfix; ++j)
             {
                 this.distExtraBits[i] = (byte)bits;

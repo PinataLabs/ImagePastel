@@ -15,11 +15,6 @@ using static PinataLabs.ImagePastel.Tests.Compression.Brotli.BrotliTestStreams;
 
 namespace PinataLabs.ImagePastel.Tests.Compression.Brotli;
 
-/// <summary>
-/// Checks <see cref="ManagedBrotliDecoder"/> against <see cref="BrotliDecoder"/>: the same output for
-/// the streams that <see cref="BrotliEncoder"/> writes, and the same verdict on streams that are
-/// corrupt.
-/// </summary>
 public class ManagedBrotliDecoderTests
 {
     private const int MinWindow = 10;
@@ -31,7 +26,6 @@ public class ManagedBrotliDecoderTests
     [MemberData(nameof(Qualities))]
     public void Decompress_StreamsOfEveryWindowSize_GiveTheOutputOfBrotliDecoder(int quality)
     {
-        // "mixed" is longer than the windows up to 2^18, and has several meta-blocks.
         (string Kind, int Length)[] inputs = { ("random", 0), ("random", 5000), ("text", 20000), ("repetitive", 60000), ("mixed", 300000) };
         for (int window = MinWindow; window <= MaxWindow; window++)
         {
@@ -74,7 +68,6 @@ public class ManagedBrotliDecoderTests
         }
     }
 
-    // A stream longer than its window makes the decoder go around its ring buffer.
     [Theory]
     [InlineData(19)]
     [InlineData(20)]
@@ -149,7 +142,6 @@ public class ManagedBrotliDecoderTests
     {
         byte[] stream = Compress(Input(kind, length, seed: 3), quality, 18, flushEvery: length / 3);
 
-        // Every cut of a short stream, and 300 cuts of a long one.
         int step = Math.Max(1, stream.Length / 300);
         for (int cut = 0; cut < stream.Length; cut += step)
         {
@@ -329,7 +321,6 @@ public class ManagedBrotliDecoderTests
 
     public static TheoryData<int> MutationGroups() => new(Enumerable.Range(0, 8));
 
-    // 8 groups of 6 streams, each with 150 mutations: 7,200 streams, plus 800 of random bytes.
     [Theory]
     [MemberData(nameof(MutationGroups))]
     public void Decompress_MutatedStreams_ThrowInvalidImageContentOrGiveTheOutputOfBrotliDecoder(int group)
@@ -368,7 +359,6 @@ public class ManagedBrotliDecoderTests
             total++;
         }
 
-        // The mutations do find the error paths, and some leave a stream that still decodes.
         Assert.InRange(unreadable, total / 4, total - 1);
     }
 
@@ -388,11 +378,9 @@ public class ManagedBrotliDecoderTests
             }
         }
 
-        // The Exif and the XMP box of exif_xmp_brob.jxl.
         Assert.True(readable >= 2, $"{readable} brob boxes");
     }
 
-    // A metadata meta-block header, up to the byte boundary before its data.
     private static void WriteMetadataHeader(BitWriter writer, int skipBytes, int length)
     {
         writer.Write(0, 1); // ISLAST
@@ -421,7 +409,6 @@ public class ManagedBrotliDecoderTests
         {
             case 0:
             case 1:
-                // One to three bit flips.
                 for (int flips = 1 + random.Next(3); flips > 0; flips--)
                 {
                     mutated[random.Next(mutated.Length)] ^= (byte)(1 << random.Next(8));
@@ -434,20 +421,16 @@ public class ManagedBrotliDecoderTests
                 mutated[random.Next(mutated.Length)] = (byte)random.Next(256);
                 return mutated;
             case 4:
-                // A run of bytes is removed.
                 int start = random.Next(mutated.Length);
                 int count = 1 + random.Next(Math.Min(8, mutated.Length - start));
                 return mutated.AsSpan(0, start).ToArray().Concat(mutated.Skip(start + count)).ToArray();
             default:
-                // A run of bytes is overwritten.
                 int from = random.Next(mutated.Length);
                 random.NextBytes(mutated.AsSpan(from, Math.Min(1 + random.Next(16), mutated.Length - from)));
                 return mutated;
         }
     }
 
-    // The decoder holds its ring buffer, at most the largest window, and its tables. It is far below
-    // the 64 MiB that a metadata box may have.
     private static void AssertBoundedAllocation(byte[] stream, string because)
     {
         ManagedBrotliDecoder decoder = new();
@@ -471,7 +454,6 @@ public class ManagedBrotliDecoderTests
         Assert.True(allocated < 40 << 20, $"{because}: allocated {allocated} bytes");
     }
 
-    // The brob boxes of a container. It stops at a box that the file does not hold in full.
     private static IEnumerable<byte[]> BrobBoxes(byte[] file)
     {
         ReadOnlySpan<byte> signature = new byte[] { 0, 0, 0, 0xC, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 0xD, 0xA, 0x87, 0xA };

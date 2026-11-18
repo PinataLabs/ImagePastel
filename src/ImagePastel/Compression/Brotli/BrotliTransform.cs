@@ -13,10 +13,8 @@ namespace PinataLabs.ImagePastel.Compression.Brotli;
 /// </summary>
 internal static class BrotliTransform
 {
-    /// <summary>The number of transforms.</summary>
     public const int NumTransforms = 121;
 
-    /// <summary>The transform that copies the word as it is.</summary>
     public const int Identity = 0;
 
     private const int OmitLast9 = 9;
@@ -25,7 +23,6 @@ internal static class BrotliTransform
     private const int OmitFirst1 = 12;
     private const int OmitFirst9 = 20;
 
-    // kPrefixSuffix: strings, each after its length.
     private static ReadOnlySpan<byte> PrefixSuffix => new byte[]
     {
         1, 32, 2, 44, 32, 8, 32, 111, 102, 32, 116, 104, 101, 32, 4, 32, 111, 102, 32, 2, 115, 32, 1, 46,
@@ -40,14 +37,12 @@ internal static class BrotliTransform
         0,
     };
 
-    // kPrefixSuffixMap: the offset of each string in PrefixSuffix.
     private static ReadOnlySpan<byte> PrefixSuffixMap => new byte[]
     {
         0, 2, 5, 14, 19, 22, 24, 30, 35, 37, 42, 45, 47, 50, 52, 58, 62, 69, 71, 78, 85, 90, 92, 99, 104,
         109, 114, 119, 122, 124, 128, 131, 136, 140, 142, 145, 151, 159, 165, 169, 173, 178, 183, 189, 194, 199, 202, 207, 213, 216,
     };
 
-    // kTransformsData: a [prefix ID, type, suffix ID] triplet for each transform.
     private static ReadOnlySpan<byte> Transforms => new byte[]
     {
         49, 0, 49, 49, 0, 0, 0, 0, 0, 49, 12, 49, 49, 10, 0, 49, 0, 47, 0, 0, 49, 4, 0, 0, 49, 0, 3, 49, 10, 49,
@@ -65,14 +60,6 @@ internal static class BrotliTransform
         0, 10, 34,
     };
 
-    /// <summary>
-    /// Writes a transformed dictionary word to <paramref name="dst"/>, which has room for the longest
-    /// prefix, word and suffix, and two bytes more.
-    /// </summary>
-    /// <param name="dst">The destination.</param>
-    /// <param name="word">The dictionary word.</param>
-    /// <param name="transformIdx">The transform, below <see cref="NumTransforms"/>.</param>
-    /// <returns>The number of bytes written.</returns>
     public static int TransformDictionaryWord(Span<byte> dst, ReadOnlySpan<byte> word, int transformIdx)
     {
         int idx = 0;
@@ -142,14 +129,13 @@ internal static class BrotliTransform
             return 1;
         }
 
-        // An overly simplified uppercasing model for UTF-8.
+        // RFC 7932, section 8, defines this uppercasing, which only approximates UTF-8.
         if (p[0] < 0xE0)
         {
             p[1] ^= 32;
             return 2;
         }
 
-        // An arbitrary transform for three byte characters.
         p[2] ^= 5;
         return 3;
     }
