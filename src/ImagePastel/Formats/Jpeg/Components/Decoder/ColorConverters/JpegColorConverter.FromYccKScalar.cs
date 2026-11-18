@@ -33,9 +33,9 @@ internal abstract partial class JpegColorConverterBase
                 float cr = c2[i] - halfValue;
                 float scaledK = c3[i] * scale;
 
-                c0[i] = (maxValue - MathF.Round(y + (1.402F * cr), MidpointRounding.AwayFromZero)) * scaledK;
-                c1[i] = (maxValue - MathF.Round(y - (0.344136F * cb) - (0.714136F * cr), MidpointRounding.AwayFromZero)) * scaledK;
-                c2[i] = (maxValue - MathF.Round(y + (1.772F * cb), MidpointRounding.AwayFromZero)) * scaledK;
+                c0[i] = (maxValue - MathF.Round(y + (FromYCbCrScalar.RCrMult * cr), MidpointRounding.ToEven)) * scaledK;
+                c1[i] = (maxValue - MathF.Round(y - (FromYCbCrScalar.GCbMult * cb) - (FromYCbCrScalar.GCrMult * cr), MidpointRounding.ToEven)) * scaledK;
+                c2[i] = (maxValue - MathF.Round(y + (FromYCbCrScalar.BCbMult * cb), MidpointRounding.ToEven)) * scaledK;
             }
         }
     }

@@ -40,9 +40,9 @@ internal abstract partial class JpegColorConverterBase
                 // r = y + (1.402F * cr);
                 // g = y - (0.344136F * cb) - (0.714136F * cr);
                 // b = y + (1.772F * cb);
-                c0[i] = MathF.Round(y + (RCrMult * cr), MidpointRounding.AwayFromZero) * scale;
-                c1[i] = MathF.Round(y - (GCbMult * cb) - (GCrMult * cr), MidpointRounding.AwayFromZero) * scale;
-                c2[i] = MathF.Round(y + (BCbMult * cb), MidpointRounding.AwayFromZero) * scale;
+                c0[i] = MathF.Round(y + (RCrMult * cr), MidpointRounding.ToEven) * scale;
+                c1[i] = MathF.Round(y - (GCbMult * cb) - (GCrMult * cr), MidpointRounding.ToEven) * scale;
+                c2[i] = MathF.Round(y + (BCbMult * cb), MidpointRounding.ToEven) * scale;
             }
         }
     }

@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using PinataLabs.ImagePastel.ColorSpaces;
 using PinataLabs.ImagePastel.ColorSpaces.Conversion;
@@ -262,6 +264,113 @@ public class JpegColorConverterTests
     public void FromYccKAvx2(int seed) =>
         this.TestConverter(new JpegColorConverterBase.FromYccKAvx(8), 4, seed);
 
+    [Theory]
+    [InlineData(JpegColorSpace.YCbCr, 8)]
+    [InlineData(JpegColorSpace.YCbCr, 12)]
+    [InlineData(JpegColorSpace.Ycck, 8)]
+    [InlineData(JpegColorSpace.Ycck, 12)]
+    internal void SimdConvertersMatchScalarExactly(JpegColorSpace colorSpace, int precision)
+    {
+        JpegColorConverterBase[] converters = colorSpace == JpegColorSpace.YCbCr
+            ? new JpegColorConverterBase[]
+            {
+                new JpegColorConverterBase.FromYCbCrScalar(precision),
+                new JpegColorConverterBase.FromYCbCrVector(precision),
+                new JpegColorConverterBase.FromYCbCrAvx(precision),
+            }
+            : new JpegColorConverterBase[]
+            {
+                new JpegColorConverterBase.FromYccKScalar(precision),
+                new JpegColorConverterBase.FromYccKVector(precision),
+                new JpegColorConverterBase.FromYccKAvx(precision),
+            };
+
+        float[][] planes = CreateIntegerPlanes(colorSpace == JpegColorSpace.YCbCr ? 3 : 4, precision);
+        float[][] expected = ConvertCopy(converters[0], planes);
+
+        var mismatches = new List<string>();
+        foreach (JpegColorConverterBase converter in converters.Skip(1).Where(c => c.IsAvailable))
+        {
+            float[][] actual = ConvertCopy(converter, planes);
+            int count = 0;
+            string first = null;
+            for (int c = 0; c < 3; c++)
+            {
+                for (int i = 0; i < expected[c].Length; i++)
+                {
+                    // Compared by value: without AVX2, SimdUtils.FastRound rounds a small negative value to +0
+                    // where MathF.Round gives -0, and the sign of zero cannot reach a decoded pixel.
+                    if (expected[c][i] != actual[c][i])
+                    {
+                        count++;
+                        first ??= $"channel {c} at ({planes[0][i]}, {planes[1][i]}, {planes[2][i]}): scalar {expected[c][i]:R}, simd {actual[c][i]:R}";
+                    }
+                }
+            }
+
+            if (count > 0)
+            {
+                mismatches.Add($"{converter.GetType().Name}: {count} values differ from {converters[0].GetType().Name}, first {first}");
+            }
+        }
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    // Integer samples, as the decoder hands them to the converters, so that results land exactly on .5.
+    private static float[][] CreateIntegerPlanes(int componentCount, int precision)
+    {
+        int max = (1 << precision) - 1;
+        int step = precision == 8 ? 1 : 15;
+        int[] lumas = { 0, max / 4, max / 2, max - (max / 4), max };
+
+        var samples = new List<(float Y, float Cb, float Cr)>();
+        foreach (int y in lumas)
+        {
+            for (int cb = 0; cb <= max; cb += step)
+            {
+                for (int cr = 0; cr <= max; cr += step)
+                {
+                    samples.Add((y, cb, cr));
+                }
+            }
+        }
+
+        // The AVX converters need a length that is a multiple of 8.
+        int length = (samples.Count + 7) & ~7;
+        float[][] planes = new float[componentCount][];
+        for (int c = 0; c < componentCount; c++)
+        {
+            planes[c] = new float[length];
+        }
+
+        for (int i = 0; i < samples.Count; i++)
+        {
+            planes[0][i] = samples[i].Y;
+            planes[1][i] = samples[i].Cb;
+            planes[2][i] = samples[i].Cr;
+            if (componentCount == 4)
+            {
+                planes[3][i] = (i * 37) % (max + 1);
+            }
+        }
+
+        return planes;
+    }
+
+    private static float[][] ConvertCopy(JpegColorConverterBase converter, float[][] planes)
+    {
+        float[][] copy = planes.Select(p => (float[])p.Clone()).ToArray();
+        var values = new JpegColorConverterBase.ComponentValues(
+            copy.Length,
+            copy[0],
+            copy[1],
+            copy[2],
+            copy.Length == 4 ? copy[3] : Span<float>.Empty);
+        converter.ConvertToRgbInplace(values);
+        return copy;
+    }
+
     private void TestConverter(
         JpegColorConverterBase converter,
         int componentCount,
@@ -377,11 +486,11 @@ public class JpegColorConverterTests
         float cr = values.Component2[i] - 128F;
         float k = values.Component3[i] / 255F;
 
-        float r = (255F - (float)Math.Round(y + (1.402F * cr), MidpointRounding.AwayFromZero)) * k;
+        float r = (255F - (float)Math.Round(y + (1.402F * cr), MidpointRounding.ToEven)) * k;
         float g = (255F - (float)Math.Round(
             y - (0.344136F * cb) - (0.714136F * cr),
-            MidpointRounding.AwayFromZero)) * k;
-        float b = (255F - (float)Math.Round(y + (1.772F * cb), MidpointRounding.AwayFromZero)) * k;
+            MidpointRounding.ToEven)) * k;
+        float b = (255F - (float)Math.Round(y + (1.772F * cb), MidpointRounding.ToEven)) * k;
 
         r /= MaxColorChannelValue;
         g /= MaxColorChannelValue;
