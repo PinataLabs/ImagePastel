@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+
+  <!--
+    Keeps xunit and the test SDK out of the benchmarks and out of the projects BenchmarkDotNet
+    generates under .bdn/ here. It also hides the benchmarks from dotnet test.
+  -->
+  <PropertyGroup>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props" />
+
+</Project>
