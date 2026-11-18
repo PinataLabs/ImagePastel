@@ -464,7 +464,7 @@ E6 ([#330](https://github.com/PinataLabs/ImageSharp/issues/330)) passed its done
   - **No IPTC, JUMBF or gain-map boxes.** No JPEG XL box carries IPTC-IIM, and ImageSharp 2.x has no profile for JUMBF or gain maps.
   - **The decoder's 2^28-pixel cap against level-10 writes.** The encoder writes an image over 2^28 pixels as a valid level-10 file, which libjxl reads, but this library's decoder refuses it. The `JxlEncoder` docs say so.
   - **Exif without a TIFF header** gives a bare codestream here, where cjxl writes a `jxlc` container for it (E6b).
-  - **Not covered by a unit test:** more than 2^28 pixels with both sides at most 2^18. The encode would read 268M pixels. The side checks cover the same branch of `Verify` (E6c).
+  - **Level limits tested directly** ([#338](https://github.com/PinataLabs/ImagePastel/issues/338)). `JxlCodestreamLevelTests` calls `JxlCodestreamLevel.Verify` with no pixels, at each limit and one past it: sides of 2^18 and 2^30, 2^28 and 2^40 pixels, ICC sizes of 2^22 and 2^28, more than 4 and more than 256 extra channels, a Black channel, and the 16-bit buffer. This covers what `SaveAsJxl` cannot reach (the encode would read 268M pixels, and the allocator refuses 2^40 pixels).
 - **Test counts.** The new E6 classes have these case counts:
   - `Formats/Jxl/ImageExtensionsTests`: 31;
   - `JxlEncoderMetadataTests`: 16;
