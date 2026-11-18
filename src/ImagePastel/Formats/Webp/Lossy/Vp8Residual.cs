@@ -24,6 +24,8 @@ internal class Vp8Residual
 
     private ushort[] levelCosts;
 
+    private uint[] stats;
+
     public int First { get; set; }
 
     public int Last { get; set; }
@@ -34,14 +36,12 @@ internal class Vp8Residual
 
     public Vp8BandProbas[] Prob { get; set; }
 
-    public Vp8Stats[] Stats { get; set; }
-
     public void Init(int first, int coeffType, Vp8EncProba prob)
     {
         this.First = first;
         this.CoeffType = coeffType;
         this.Prob = prob.Coeffs[this.CoeffType];
-        this.Stats = prob.Stats[this.CoeffType];
+        this.stats = prob.Stats;
         this.levelCosts = prob.LevelCosts;
     }
 
@@ -55,30 +55,31 @@ internal class Vp8Residual
     // Note: no need to record the fixed probas.
     public int RecordCoeffs(int ctx)
     {
+        ref uint typeStats = ref MemoryMarshal.GetReference(this.stats.AsSpan(this.CoeffType * Vp8EncProba.StatsPerType, Vp8EncProba.StatsPerType));
         int n = this.First;
-        Vp8StatsArray s = this.Stats[n].Stats[ctx];
+        ref uint s = ref ProbaStats(ref typeStats, WebpConstants.Vp8EncBands[n], ctx);
         if (this.Last < 0)
         {
-            this.RecordStats(0, s, 0);
+            RecordStats(0, ref s);
             return 0;
         }
 
         while (n <= this.Last)
         {
             int v;
-            this.RecordStats(1, s, 0);  // order of record doesn't matter
+            RecordStats(1, ref s);  // order of record doesn't matter
             while ((v = this.Coeffs[n++]) == 0)
             {
-                this.RecordStats(0, s, 1);
-                s = this.Stats[WebpConstants.Vp8EncBands[n]].Stats[0];
+                RecordStats(0, ref Unsafe.Add(ref s, 1));
+                s = ref ProbaStats(ref typeStats, WebpConstants.Vp8EncBands[n], 0);
             }
 
-            this.RecordStats(1, s, 1);
+            RecordStats(1, ref Unsafe.Add(ref s, 1));
             bool bit = (uint)(v + 1) > 2u;
-            if (this.RecordStats(bit ? 1 : 0, s, 2) == 0)
+            if (RecordStats(bit ? 1 : 0, ref Unsafe.Add(ref s, 2)) == 0)
             {
                 // v = -1 or 1
-                s = this.Stats[WebpConstants.Vp8EncBands[n]].Stats[1];
+                s = ref ProbaStats(ref typeStats, WebpConstants.Vp8EncBands[n], 1);
             }
             else
             {
@@ -96,17 +97,17 @@ internal class Vp8Residual
                     int mask = 2 << i;
                     if ((pattern & 1) != 0)
                     {
-                        this.RecordStats((bits & mask) != 0 ? 1 : 0, s, 3 + i);
+                        RecordStats((bits & mask) != 0 ? 1 : 0, ref Unsafe.Add(ref s, 3 + i));
                     }
                 }
 
-                s = this.Stats[WebpConstants.Vp8EncBands[n]].Stats[2];
+                s = ref ProbaStats(ref typeStats, WebpConstants.Vp8EncBands[n], 2);
             }
         }
 
         if (n < 16)
         {
-            this.RecordStats(0, s, 0);
+            RecordStats(0, ref s);
         }
 
         return 1;
@@ -224,17 +225,24 @@ internal class Vp8Residual
         return -1;
     }
 
-    private int RecordStats(int bit, Vp8StatsArray statsArr, int idx)
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static ref uint ProbaStats(ref uint typeStats, int band, int ctx)
+        => ref Unsafe.Add(ref typeStats, (band * Vp8EncProba.StatsPerBand) + (ctx * WebpConstants.NumProbas));
+
+    [MethodImpl(InliningOptions.ShortMethod)]
+    private static int RecordStats(int bit, ref uint stats)
     {
+        uint s = stats;
+
         // An overflow is inbound. Note we handle this at 0xfffe0000u instead of
-        // 0xffff0000u to make sure p + 1u does not overflow.
-        if (statsArr.Stats[idx] >= 0xfffe0000u)
+        // 0xffff0000u to make sure s + 1u does not overflow.
+        if (s >= 0xfffe0000u)
         {
-            statsArr.Stats[idx] = ((statsArr.Stats[idx] + 1u) >> 1) & 0x7fff7fffu;  // -> divide the stats by 2.
+            s = ((s + 1u) >> 1) & 0x7fff7fffu;  // -> divide the stats by 2.
         }
 
         // Record bit count (lower 16 bits) and increment total count (upper 16 bits).
-        statsArr.Stats[idx] += 0x00010000u + (uint)bit;
+        stats = s + 0x00010000u + (uint)bit;
 
         return bit;
     }
