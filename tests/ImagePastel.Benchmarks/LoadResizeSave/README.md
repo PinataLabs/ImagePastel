@@ -4,6 +4,6 @@
 ### Setup
 
 Download the [Bee Heads album](https://www.flickr.com/photos/usgsbiml/albums/72157633925491877) from the USGS Bee Inventory flickr
-  and extract to folder `<solution-dir>\tests\Images\ActualOutput\MemoryStress\`.
+  and extract to folder `<solution-dir>\tests\Images\Input\MemoryStress\`.
 
 

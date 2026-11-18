@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Microsoft.DotNet.RemoteExecutor;
 using PinataLabs.ImagePastel.Memory;
 using PinataLabs.ImagePastel.Memory.Internals;
 using PinataLabs.ImagePastel.Tests.Memory.DiscontiguousBuffers;
@@ -278,7 +277,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
     [InlineData(1200)] // Group of two UniformUnmanagedMemoryPool buffers
     public void AllocateMemoryGroup_Finalization_ReturnsToPool(int length)
     {
-        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), HighMemoryLoadOptions()).Dispose();
+        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), RemoteExecutorRunner.HighMemoryLoadOptions()).Dispose();
 
         static void RunTest(string lengthStr)
         {
@@ -307,15 +306,6 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
     private static UniformUnmanagedMemoryPoolMemoryAllocator CreateNonTrimmingAllocator() =>
         new(512, 1024, 16 * 1024, 1024, new UniformUnmanagedMemoryPool.TrimSettings { Rate = 0 });
 
-    // A 1% high memory load threshold makes the GC report high memory load on any machine,
-    // the state a CI runner can reach mid-suite.
-    private static RemoteInvokeOptions HighMemoryLoadOptions()
-    {
-        RemoteInvokeOptions options = new();
-        options.StartInfo.Environment["DOTNET_GCHighMemPercent"] = "1";
-        return options;
-    }
-
     private static void AllocateGroupAndForget(UniformUnmanagedMemoryPoolMemoryAllocator allocator, int length, bool check = false)
     {
         MemoryGroup<byte> g = allocator.AllocateGroup<byte>(length, 100);
@@ -340,7 +330,7 @@ public class UniformUnmanagedPoolMemoryAllocatorTests
     [InlineData(600)] // Group of single UniformUnmanagedMemoryPool buffer
     public void AllocateSingleMemoryOwner_Finalization_ReturnsToPool(int length)
     {
-        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), HighMemoryLoadOptions()).Dispose();
+        RemoteExecutorRunner.Invoke(RunTest, length.ToString(), RemoteExecutorRunner.HighMemoryLoadOptions()).Dispose();
 
         static void RunTest(string lengthStr)
         {

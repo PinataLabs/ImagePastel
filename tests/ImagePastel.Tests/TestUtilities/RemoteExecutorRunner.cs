@@ -45,6 +45,20 @@ internal static class RemoteExecutorRunner
         return new RemoteInvocation(RemoteExecutor.Invoke(method, arg1, arg2, arg3, options));
     }
 
+    /// <summary>
+    /// Gets options for a child process whose GC reports high memory load on any machine.
+    /// </summary>
+    /// <remarks>
+    /// A 1% high memory load threshold puts the child in the state a CI runner can reach mid-suite,
+    /// or that a pool trim test needs, without allocating memory to get there.
+    /// </remarks>
+    public static RemoteInvokeOptions HighMemoryLoadOptions()
+    {
+        RemoteInvokeOptions options = new();
+        options.StartInfo.Environment["DOTNET_GCHighMemPercent"] = "1";
+        return options;
+    }
+
     private static RemoteInvokeOptions Prepare(RemoteInvokeOptions options)
     {
         options ??= new RemoteInvokeOptions();

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -109,58 +108,35 @@ public partial class UniformUnmanagedMemoryPoolTests
             }
         }
 
-        public static bool Is32BitProcess => !Environment.Is64BitProcess;
-
-        private static readonly List<byte[]> PressureArrays = new();
-
-        [Fact(Skip = "Requires a 32-bit process.", SkipUnless = nameof(Is32BitProcess))]
+        [Fact]
         public static void GC_Collect_OnHighLoad_TrimsEntirePool()
         {
-            RemoteExecutorRunner.Invoke(RunTest).Dispose();
+            RemoteExecutorRunner.Invoke(RunTest, RemoteExecutorRunner.HighMemoryLoadOptions()).Dispose();
 
             static void RunTest()
             {
-                Assert.False(Environment.Is64BitProcess);
                 const int OneMb = 1 << 20;
+                var trimSettings = new UniformUnmanagedMemoryPool.TrimSettings();
 
-                var trimSettings = new UniformUnmanagedMemoryPool.TrimSettings { HighPressureThresholdRate = 0.2f };
-
-                GCMemoryInfo memInfo = GC.GetGCMemoryInfo();
-                int highLoadThreshold = (int)(memInfo.HighMemoryLoadThresholdBytes / OneMb);
-                highLoadThreshold = (int)(trimSettings.HighPressureThresholdRate * highLoadThreshold);
+                GC.Collect();
+                GCMemoryInfo memoryInfo = GC.GetGCMemoryInfo();
+                Assert.True(
+                    memoryInfo.MemoryLoadBytes >= memoryInfo.HighMemoryLoadThresholdBytes * trimSettings.HighPressureThresholdRate,
+                    $"Expected high memory load: MemoryLoadBytes={memoryInfo.MemoryLoadBytes}, HighMemoryLoadThresholdBytes={memoryInfo.HighMemoryLoadThresholdBytes}");
 
                 var pool = new UniformUnmanagedMemoryPool(OneMb, 16, trimSettings);
                 pool.Return(pool.Rent(16));
                 Assert.Equal(16, UnmanagedMemoryHandle.TotalOutstandingHandles);
 
-                for (int i = 0; i < highLoadThreshold; i++)
-                {
-                    byte[] array = new byte[OneMb];
-                    TouchPage(array);
-                    PressureArrays.Add(array);
-                }
-
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
-                GC.WaitForPendingFinalizers(); // The pool should be fully trimmed after this point
+                GC.WaitForPendingFinalizers();
 
                 Assert.Equal(0, UnmanagedMemoryHandle.TotalOutstandingHandles);
 
                 // Prevent eager collection of the pool:
                 GC.KeepAlive(pool);
-
-                static void TouchPage(byte[] b)
-                {
-                    uint size = (uint)b.Length;
-                    const uint pageSize = 4096;
-                    uint numPages = size / pageSize;
-
-                    for (uint i = 0; i < numPages; i++)
-                    {
-                        b[i * pageSize] = (byte)(i % 256);
-                    }
-                }
             }
         }
     }

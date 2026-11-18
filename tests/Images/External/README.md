@@ -1,5 +1,5 @@
 ### ReferenceOutput
-Contains images to validate against in ImageSharp tests. In most cases the file hierarchy follows the hierarchy of `ActualOutput`
+Contains images to validate against in ImageSharp tests. In most cases the file hierarchy follows the hierarchy of `ActualOutput/<target framework>`
 
 ### tools
 Various utilities to help dealing with images.

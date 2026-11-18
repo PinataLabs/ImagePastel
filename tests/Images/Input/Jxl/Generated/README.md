@@ -752,7 +752,7 @@ Hand-built codestreams of grey YCbCr frames that need three colour planes before
 - the image header and frame section of `greyscale.jxl` (64 x 64 8-bit grey) or `greyscale_alpha.jxl` (64 x 64 16-bit grey and alpha);
 - the `ColourA` section of `JxlTestLayers`, which codes Cb = 200, Y = 100, Cr = 50 and alpha 128 in a YCbCr frame.
 
-`JxlGreyYCbCrTests.CommittedFile_IsTheHandBuiltCodestream` checks that each file holds the bytes that `Build` writes. It also writes them to `tests/Images/ActualOutput/Jxl/JxlGreyYCbCrTests/`, from where they were copied.
+`JxlGreyYCbCrTests.CommittedFile_IsTheHandBuiltCodestream` checks that each file holds the bytes that `Build` writes. It also writes them to `tests/Images/ActualOutput/<target framework>/Jxl/JxlGreyYCbCrTests/` (for example `net10.0`), from where they were copied.
 
 | File | Why it is here | Reference |
 |---|---|---|
@@ -781,7 +781,7 @@ A codestream whose header has a preview (D14a). `cjxl` cannot write a preview, s
 
 ```sh
 # Run JxlPreviewTests.PreviewNoise_IsTheStreamPreviewNoiseBuilds, which writes the stream to
-# tests/Images/ActualOutput/Jxl/JxlPreviewTests/preview_noise.jxl, and copy that file here.
+# tests/Images/ActualOutput/net10.0/Jxl/JxlPreviewTests/preview_noise.jxl, and copy that file here.
 djxl preview_noise.jxl ../../../External/ReferenceOutput/JxlDecoderTests/preview_noise.npy
 ```
 
