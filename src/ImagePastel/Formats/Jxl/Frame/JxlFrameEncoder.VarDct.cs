@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
@@ -91,7 +92,8 @@ internal static partial class JxlFrameEncoder
     /// <param name="testHooks">The encoder's hooks for tests (<see cref="JxlEncoderTestHooks"/>), or <see langword="null"/>.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer)
+    /// <param name="cancellationToken">The token that cancels the encode.</param>
+    public static void EncodeLossyFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, float distance, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         // JxlEncoderSetFrameDistance and ParamsPostInit clamp small distances. libjxl then keeps a copy as
@@ -105,8 +107,8 @@ internal static partial class JxlFrameEncoder
 
         JxlFrameHeader frameHeader = MakeVarDctFrameHeader(image.Width, image.Height, metadata, speedTier, distance);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator) { NaturalCoeffOrders = testHooks?.NaturalCoeffOrders ?? false };
-        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
+        using JxlPassesEncoderState encState = new(frameDim, speedTier, distance, allocator, cancellationToken) { NaturalCoeffOrders = testHooks?.NaturalCoeffOrders ?? false };
+        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator, cancellationToken);
         List<JxlBitWriter> groupCodes = ComputeVarDctEncodingData(frameHeader, frameDim, metadata, image, encState, encModular, testHooks, allocator);
 
         WriteFrameHeader(frameHeader, writer);
@@ -181,9 +183,9 @@ internal static partial class JxlFrameEncoder
 
             // A grey image fills all three planes with its grey, as libjxl's CopyColorChannels does, so
             // every colour space below takes three planes.
-            JxlEncoderInput<TPixel>.CopyColorPlanes(image, color);
+            JxlEncoderInput<TPixel>.CopyColorPlanes(image, color, encState.CancellationToken);
 
-            ToXyb(metadata.M.ColorEncoding, metadata.M.ToneMapping.IntensityTarget, color, image.Width, image.Height);
+            ToXyb(metadata.M.ColorEncoding, metadata.M.ToneMapping.IntensityTarget, color, image.Width, image.Height, encState.CancellationToken);
 
             // libjxl simplifies the invisible pixels of straight alpha in a regular frame, unless
             // keep_invisible is set (by default it is set only for lossless), the extra channels are
@@ -234,6 +236,7 @@ internal static partial class JxlFrameEncoder
         for (long groupIndex = 0; groupIndex < frameDim.NumGroups; groupIndex++)
         {
             // The groups are independent: this loop is where libjxl tokenizes them in parallel.
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlAcTokenizer.TokenizeCoefficients(encState, groupIndex);
         }
 
@@ -246,6 +249,7 @@ internal static partial class JxlFrameEncoder
 
         encModular.ComputeTree();
         encModular.ComputeTokens();
+        testHooks?.EncodeGroupsProbe?.Invoke();
         return EncodeVarDctGroups(frameHeader, frameDim, encState, encModular);
     }
 
@@ -254,7 +258,7 @@ internal static partial class JxlFrameEncoder
     // so a grey image, whose grey is in all three planes, takes the same branches). Any other encoding is
     // converted to linear sRGB, or linear grey (JxlLinearSrgbTransform), then goes through the opsin
     // matrix. libjxl keeps a linear copy from Kitten down, for its butteraugli search; Falcon does not.
-    private static void ToXyb(JxlColorEncodingHeader c, float intensityTarget, Buffer2D<float>[] color, int width, int height)
+    internal static void ToXyb(JxlColorEncodingHeader c, float intensityTarget, Buffer2D<float>[] color, int width, int height, CancellationToken cancellationToken)
     {
         float[] premulAbsorb = JxlXybEncoder.ComputePremulAbsorb(intensityTarget);
         bool srgbSpace = c.WhitePoint == JxlWhitePoint.D65 && (c.IsGray || (c.ColorSpace == JxlColorSpace.Rgb && c.Primaries == JxlPrimaries.Srgb));
@@ -263,6 +267,7 @@ internal static partial class JxlFrameEncoder
         JxlLinearSrgbTransform transform = linearSrgb || srgb ? null : new JxlLinearSrgbTransform(c, intensityTarget);
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<float> row0 = color[0].DangerousGetRowSpan(y).Slice(0, width);
             Span<float> row1 = color[1].DangerousGetRowSpan(y).Slice(0, width);
             Span<float> row2 = color[2].DangerousGetRowSpan(y).Slice(0, width);
@@ -431,7 +436,7 @@ internal static partial class JxlFrameEncoder
 
     // libjxl's InitializePassesEncoder for one pass and no DC frame: the X and B multipliers, the
     // coefficients of every group, then the DC streams of every LF group.
-    private static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
+    internal static void InitializePassesEncoder(JxlFrameHeader frameHeader, Buffer2D<float>[] opsin, JxlPassesEncoderState encState, JxlModularFrameEncoder encModular, MemoryAllocator allocator)
     {
         // Exact powers of 1.25 for the scales the encoder writes.
         encState.XQmMultiplier = MathF.Pow(1.25f, frameHeader.XQmScale - 2.0f);
@@ -449,11 +454,13 @@ internal static partial class JxlFrameEncoder
         for (long groupIdx = 0; groupIdx < frameDim.NumGroups; groupIdx++)
         {
             // The groups are independent: this loop is where libjxl computes them in parallel.
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlEncGroup.ComputeCoefficients(groupIdx, encState, opsin, dc);
         }
 
         for (long groupIndex = 0; groupIndex < frameDim.NumDcGroups; groupIndex++)
         {
+            encState.CancellationToken.ThrowIfCancellationRequested();
             JxlRect r = frameDim.DcGroupRect(groupIndex);
             encModular.AddVarDctDc(frameHeader, dc, r, groupIndex, encState);
         }
@@ -580,7 +587,7 @@ internal static partial class JxlFrameEncoder
         // Encode histograms. libjxl caps them at 6 from decoding speed tier 1, which the encoder has no
         // option for.
         JxlHistogramParams histParams = JxlHistogramParams.ForAc(encState.SpeedTier);
-        JxlEntropyEncoder.BuildAndEncodeHistograms(histParams, encState.NumHistograms * encState.BlockCtxMap.NumAcContexts, encState.AcTokens, encState.Codes, writer);
+        JxlEntropyEncoder.BuildAndEncodeHistograms(histParams, encState.NumHistograms * encState.BlockCtxMap.NumAcContexts, encState.AcTokens, encState.Codes, writer, encState.CancellationToken);
     }
 
     private static void EncodeGroupTokenizedCoefficients(long groupIdx, JxlPassesEncoderState encState, JxlBitWriter writer)

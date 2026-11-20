@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
@@ -252,7 +253,7 @@ internal static class JxlEncCoeffOrder
             // clusters as kFast does and keeps the default uint configuration (see JxlHistogramClustering
             // and JxlEntropyEncodingData), so the codes are valid but may cost a few more bits.
             JxlEntropyEncodingData codes = new();
-            JxlEntropyEncoder.BuildAndEncodeHistograms(new JxlHistogramParams(), JxlCoeffOrder.PermutationContexts, tokens, codes, writer);
+            JxlEntropyEncoder.BuildAndEncodeHistograms(new JxlHistogramParams(), JxlCoeffOrder.PermutationContexts, tokens, codes, writer, CancellationToken.None);
             JxlEntropyEncoder.WriteTokens(tokens[0], codes, 0, writer);
         }
     }

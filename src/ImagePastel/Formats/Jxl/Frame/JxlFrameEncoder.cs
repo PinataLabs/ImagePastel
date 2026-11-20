@@ -7,6 +7,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 using PinataLabs.ImagePastel.Formats.Jxl.Headers;
@@ -32,15 +33,17 @@ internal static partial class JxlFrameEncoder
     /// <param name="metadata">The codestream headers.</param>
     /// <param name="image">The image.</param>
     /// <param name="speedTier">The speed tier, which the effort sets.</param>
+    /// <param name="testHooks">The encoder's hooks for tests (<see cref="JxlEncoderTestHooks"/>), or <see langword="null"/>.</param>
     /// <param name="allocator">The allocator.</param>
     /// <param name="writer">The writer, at a byte boundary.</param>
-    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, MemoryAllocator allocator, JxlBitWriter writer)
+    /// <param name="cancellationToken">The token that cancels the encode.</param>
+    public static void EncodeFrame<TPixel>(JxlCodecMetadata metadata, Image<TPixel> image, JxlSpeedTier speedTier, JxlEncoderTestHooks testHooks, MemoryAllocator allocator, JxlBitWriter writer, CancellationToken cancellationToken)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         JxlFrameHeader frameHeader = MakeFrameHeader(image.Width, image.Height, metadata);
         JxlFrameDimensions frameDim = frameHeader.ToFrameDimensions();
-        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator);
-        List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular);
+        using JxlModularFrameEncoder encModular = new(frameHeader, speedTier, allocator, cancellationToken);
+        List<JxlBitWriter> groupCodes = ComputeEncodingData(frameHeader, frameDim, metadata, image, encModular, testHooks);
 
         WriteFrameHeader(frameHeader, writer);
         WriteSections(groupCodes, writer);
@@ -138,12 +141,13 @@ internal static partial class JxlFrameEncoder
 
     // libjxl's frame-level ComputeEncodingData for a Modular frame: fill the Modular images, build the
     // tree and the tokens, then write the sections.
-    private static List<JxlBitWriter> ComputeEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlModularFrameEncoder encModular)
+    private static List<JxlBitWriter> ComputeEncodingData<TPixel>(JxlFrameHeader frameHeader, JxlFrameDimensions frameDim, JxlCodecMetadata metadata, Image<TPixel> image, JxlModularFrameEncoder encModular, JxlEncoderTestHooks testHooks)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         encModular.ComputeEncodingData(frameHeader, metadata.M, image, doColor: true);
         encModular.ComputeTree();
         encModular.ComputeTokens();
+        testHooks?.EncodeGroupsProbe?.Invoke();
         return EncodeGroups(frameHeader, frameDim, encModular);
     }
 

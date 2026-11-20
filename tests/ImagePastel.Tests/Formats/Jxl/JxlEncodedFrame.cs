@@ -116,7 +116,7 @@ internal static class JxlEncodedFrame
 
     // Reads the headers and the first frame's header and TOC: the section sizes, and where the first
     // section starts.
-    private static (JxlFrameHeader FrameHeader, uint[] Sizes, int SectionStart) ReadFrameHeader(byte[] codestream)
+    internal static (JxlFrameHeader FrameHeader, uint[] Sizes, int SectionStart) ReadFrameHeader(byte[] codestream)
     {
         Assert.Equal(JxlConstants.CodestreamSignature, codestream[..2]);
 

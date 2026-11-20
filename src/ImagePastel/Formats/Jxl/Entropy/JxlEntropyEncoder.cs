@@ -5,6 +5,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Fields;
 
@@ -67,13 +68,14 @@ internal static class JxlEntropyEncoder
     /// <param name="tokens">The token streams that share the codes; replaced when LZ77 is used.</param>
     /// <param name="codes">The codes to fill.</param>
     /// <param name="writer">The writer, or <see langword="null"/> to estimate the cost only.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per stream and per histogram.</param>
     /// <returns>The cost in bits.</returns>
-    public static long BuildAndEncodeHistograms(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlEntropyEncodingData codes, JxlBitWriter writer)
+    public static long BuildAndEncodeHistograms(JxlHistogramParams parameters, int numContexts, IReadOnlyList<List<JxlToken>> tokens, JxlEntropyEncodingData codes, JxlBitWriter writer, CancellationToken cancellationToken)
     {
         codes.Lz77.NonserializedDistanceContext = numContexts;
         codes.Lz77.MinSymbol = parameters.ForceHuffman ? 512u : 224u;
 
-        List<JxlToken>[] tokensLz77 = JxlLz77Encoder.ApplyLz77(parameters, numContexts, tokens, codes.Lz77);
+        List<JxlToken>[] tokensLz77 = JxlLz77Encoder.ApplyLz77(parameters, numContexts, tokens, codes.Lz77, cancellationToken);
         if (tokensLz77 != null)
         {
             codes.Lz77.Enabled = true;
@@ -125,6 +127,7 @@ internal static class JxlEntropyEncoder
         JxlHybridUintConfig uintConfig = parameters.UintConfig();
         foreach (List<JxlToken> stream in tokens)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (JxlToken token in stream)
             {
                 totalTokens++;
@@ -141,7 +144,7 @@ internal static class JxlEntropyEncoder
         }
 
         // Encode histograms.
-        cost += codes.BuildAndStoreEntropyCodes(parameters, tokens, builder, writer);
+        cost += codes.BuildAndStoreEntropyCodes(parameters, tokens, builder, writer, cancellationToken);
         return cost;
     }
 

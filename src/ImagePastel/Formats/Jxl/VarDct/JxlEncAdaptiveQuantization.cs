@@ -8,6 +8,7 @@
 // Copyright (c) the JPEG XL Project Authors. BSD 3-Clause License; see THIRD-PARTY-NOTICES.TXT.
 
 using System;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Frame;
 using PinataLabs.ImagePastel.Memory;
@@ -94,12 +95,13 @@ internal static class JxlEncAdaptiveQuantization
     /// <param name="opsin">The X, Y and B planes before the inverse Gaborish filter, padded to whole blocks.</param>
     /// <param name="rescale">The factor of the AC quant.</param>
     /// <param name="allocator">The allocator.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per 64x64 tile.</param>
     /// <param name="mask1x1">The masking image at full resolution, which the AC strategy search reads.</param>
     /// <returns>The quant field, one value per block.</returns>
-    public static Buffer2D<float> InitialQuantField(float butteraugliTarget, Buffer2D<float>[] opsin, float rescale, MemoryAllocator allocator, out Buffer2D<float> mask1x1)
+    public static Buffer2D<float> InitialQuantField(float butteraugliTarget, Buffer2D<float>[] opsin, float rescale, MemoryAllocator allocator, CancellationToken cancellationToken, out Buffer2D<float> mask1x1)
     {
         float quantAc = AcQuant / butteraugliTarget;
-        return AdaptiveQuantizationMap(butteraugliTarget, opsin, quantAc * rescale, allocator, out mask1x1);
+        return AdaptiveQuantizationMap(butteraugliTarget, opsin, quantAc * rescale, allocator, cancellationToken, out mask1x1);
     }
 
     /// <summary>
@@ -176,7 +178,7 @@ internal static class JxlEncAdaptiveQuantization
 
     // libjxl's AdaptiveQuantizationMap over the whole image (rect = the image): ComputeTile per 64x64 tile
     // in tile order, then the blur of the masking image.
-    private static Buffer2D<float> AdaptiveQuantizationMap(float butteraugliTarget, Buffer2D<float>[] xyb, float scale, MemoryAllocator allocator, out Buffer2D<float> mask1x1)
+    private static Buffer2D<float> AdaptiveQuantizationMap(float butteraugliTarget, Buffer2D<float>[] xyb, float scale, MemoryAllocator allocator, CancellationToken cancellationToken, out Buffer2D<float> mask1x1)
     {
         int xsize = xyb[0].Width;
         int ysize = xyb[0].Height;
@@ -196,6 +198,7 @@ internal static class JxlEncAdaptiveQuantization
             // The tiles are independent: this loop is where libjxl runs them in parallel.
             for (int tid = 0; tid < numTiles; tid++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int tx = tid % numTilesX;
                 int ty = tid / numTilesX;
                 int by0 = ty * EncTileDimInBlocks;

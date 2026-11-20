@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using PinataLabs.ImagePastel.Formats.Jxl.Base;
 using PinataLabs.ImagePastel.Formats.Jxl.Entropy;
 
@@ -36,8 +37,9 @@ internal static class JxlTreeLearner
     /// <param name="mulInfo">The multiplier boxes, which force splits.</param>
     /// <param name="staticPropRange">The channels and streams the tree covers.</param>
     /// <param name="fastDecodeMultiplier">How much costlier a split that is faster to decode may be.</param>
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per node.</param>
     /// <returns>The tree, with children indexed into it; leaf ids are set when it is tokenised.</returns>
-    public static List<JxlPropertyDecisionNode> ComputeBestTree(JxlTreeSamples treeSamples, float threshold, List<JxlModularMultiplierInfo> mulInfo, JxlStaticPropRange staticPropRange, float fastDecodeMultiplier)
+    public static List<JxlPropertyDecisionNode> ComputeBestTree(JxlTreeSamples treeSamples, float threshold, List<JxlModularMultiplierInfo> mulInfo, JxlStaticPropRange staticPropRange, float fastDecodeMultiplier, CancellationToken cancellationToken)
     {
         // TODO(veluca): take into account that different contexts can have different uint configs.
         // Initialize tree.
@@ -47,7 +49,7 @@ internal static class JxlTreeLearner
             JxlThrowHelper.ThrowImageFormatException("Too many properties to learn a tree");
         }
 
-        FindBestSplit(treeSamples, threshold, mulInfo, staticPropRange, fastDecodeMultiplier, tree);
+        FindBestSplit(treeSamples, threshold, mulInfo, staticPropRange, fastDecodeMultiplier, tree, cancellationToken);
         return tree;
     }
 
@@ -288,7 +290,7 @@ internal static class JxlTreeLearner
         }
     }
 
-    private static void FindBestSplit(JxlTreeSamples treeSamples, float threshold, List<JxlModularMultiplierInfo> mulInfo, JxlStaticPropRange initialStaticPropRange, float fastDecodeMultiplier, List<JxlPropertyDecisionNode> tree)
+    private static void FindBestSplit(JxlTreeSamples treeSamples, float threshold, List<JxlModularMultiplierInfo> mulInfo, JxlStaticPropRange initialStaticPropRange, float fastDecodeMultiplier, List<JxlPropertyDecisionNode> tree, CancellationToken cancellationToken)
     {
         List<NodeInfo> nodes = new() { new NodeInfo(0, 0, treeSamples.NumDistinctSamples, initialStaticPropRange) };
 
@@ -298,6 +300,7 @@ internal static class JxlTreeLearner
         // TODO(veluca): consider parallelizing the search (processing multiple nodes at a time).
         while (nodes.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             NodeInfo node = nodes[^1];
             nodes.RemoveAt(nodes.Count - 1);
             int pos = node.Pos;

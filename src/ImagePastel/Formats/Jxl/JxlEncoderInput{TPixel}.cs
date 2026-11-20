@@ -10,6 +10,7 @@
 using System;
 using System.Buffers;
 using System.Numerics;
+using System.Threading;
 using PinataLabs.ImagePastel.Advanced;
 using PinataLabs.ImagePastel.Formats.Jxl.Headers;
 using PinataLabs.ImagePastel.Formats.Jxl.Modular;
@@ -126,10 +127,11 @@ internal static class JxlEncoderInput<TPixel>
     /// <param name="image">The image.</param>
     /// <param name="bitDepth">The stored depth of the colour samples.</param>
     /// <param name="gi">The Modular image, with full-size channels.</param>
-    public static void CopyColorChannels(Image<TPixel> image, JxlBitDepth bitDepth, JxlModularImage gi)
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per row.</param>
+    public static void CopyColorChannels(Image<TPixel> image, JxlBitDepth bitDepth, JxlModularImage gi, CancellationToken cancellationToken)
     {
         int colorChannels = IsGray ? 1 : 3;
-        CopyChannels(image, 0, colorChannels, bitDepth, gi, 0);
+        CopyChannels(image, 0, colorChannels, bitDepth, gi, 0, cancellationToken);
     }
 
     /// <summary>
@@ -141,11 +143,13 @@ internal static class JxlEncoderInput<TPixel>
     /// </summary>
     /// <param name="image">The image.</param>
     /// <param name="planes">The three planes, at least the size of the image.</param>
-    public static void CopyColorPlanes(Image<TPixel> image, Buffer2D<float>[] planes)
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per row.</param>
+    public static void CopyColorPlanes(Image<TPixel> image, Buffer2D<float>[] planes, CancellationToken cancellationToken)
     {
         using RowReader reader = new(image);
         for (int y = 0; y < image.Height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             reader.Read(y);
             for (int c = 0; c < 3; c++)
             {
@@ -188,8 +192,9 @@ internal static class JxlEncoderInput<TPixel>
     /// <param name="eci">The alpha channel's description.</param>
     /// <param name="gi">The Modular image, with full-size channels.</param>
     /// <param name="c">The index of the alpha channel in <paramref name="gi"/>.</param>
-    public static void CopyAlphaChannel(Image<TPixel> image, JxlExtraChannelInfo eci, JxlModularImage gi, int c)
-        => CopyChannels(image, 3, 1, eci.BitDepth, gi, c);
+    /// <param name="cancellationToken">The token that cancels the encode, checked once per row.</param>
+    public static void CopyAlphaChannel(Image<TPixel> image, JxlExtraChannelInfo eci, JxlModularImage gi, int c, CancellationToken cancellationToken)
+        => CopyChannels(image, 3, 1, eci.BitDepth, gi, c, cancellationToken);
 
     /// <summary>
     /// Converts floats to stored samples of <paramref name="bits"/> bits, as libjxl's <c>float_to_int</c>:
@@ -407,7 +412,7 @@ internal static class JxlEncoderInput<TPixel>
 
     // Copies `count` components of each pixel, from component `first` (R, G, B, A; grey is R and its
     // alpha A), into the channels of gi from `c`.
-    private static void CopyChannels(Image<TPixel> image, int first, int count, JxlBitDepth bitDepth, JxlModularImage gi, int c)
+    private static void CopyChannels(Image<TPixel> image, int first, int count, JxlBitDepth bitDepth, JxlModularImage gi, int c, CancellationToken cancellationToken)
     {
         int bits = (int)bitDepth.BitsPerSample;
         int expBits = (int)bitDepth.ExponentBitsPerSample;
@@ -424,6 +429,7 @@ internal static class JxlEncoderInput<TPixel>
         Span<float> floats = reader.Floats;
         for (int y = 0; y < image.Height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             reader.Read(y);
             for (int i = 0; i < count; i++)
             {
