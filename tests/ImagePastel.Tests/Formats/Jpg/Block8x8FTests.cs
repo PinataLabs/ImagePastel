@@ -4,6 +4,8 @@
 // Uncomment this to turn unit tests into benchmarks:
 // #define BENCHMARKING
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Intrinsics.X86;
 using PinataLabs.ImagePastel.Formats.Jpeg.Components;
 using PinataLabs.ImagePastel.Tests.Formats.Jpg.Utils;
@@ -237,6 +239,49 @@ public partial class Block8x8FTests : JpegFixture
             srcSeed,
             qtSeed,
             HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX | HwIntrinsics.DisableSSE);
+    }
+
+    [Fact]
+    public void Quantize_RoundsHalfToEvenOnEveryInstructionSet()
+    {
+        static void RunTest()
+        {
+            Block8x8F ones = DCTTests.CreateBlockFromScalar(1F);
+            var mismatches = new List<string>();
+            for (int k = -40; k < 40; k++)
+            {
+                // Each run of three is a multiple of 0.5 and its two float neighbours.
+                Block8x8F source = default;
+                for (int i = 0; i < Block8x8F.Size; i++)
+                {
+                    float value = (k * 8) + ((i / 3) * 0.5F);
+                    source[i] = (i % 3) switch
+                    {
+                        0 => value,
+                        1 => MathF.BitDecrement(value),
+                        _ => MathF.BitIncrement(value),
+                    };
+                }
+
+                Block8x8 actual = default;
+                Block8x8F.Quantize(ref source, ref actual, ref ones);
+                for (int i = 0; i < Block8x8F.Size; i++)
+                {
+                    float value = source[ZigZag.TransposingOrder[i]];
+                    short expected = (short)MathF.Round(value, MidpointRounding.ToEven);
+                    if (actual[i] != expected)
+                    {
+                        mismatches.Add($"{value:R}: expected {expected}, got {actual[i]}");
+                    }
+                }
+            }
+
+            Assert.True(mismatches.Count == 0, $"{mismatches.Count} values rounded wrongly, first {string.Join(", ", mismatches.Take(4))}");
+        }
+
+        FeatureTestRunner.RunWithHwIntrinsicsFeature(
+            RunTest,
+            HwIntrinsics.AllowAll | HwIntrinsics.DisableAVX2 | HwIntrinsics.DisableHWIntrinsic);
     }
 
     [Fact]

@@ -86,15 +86,6 @@ internal static class RgbToYCbCrConverterVectorized
         Debug.Assert(IsSupported, "AVX2 is required to run this converter");
 
 #if NETCOREAPP3_0_OR_GREATER
-        var f0299 = Vector256.Create(0.299f);
-        var f0587 = Vector256.Create(0.587f);
-        var f0114 = Vector256.Create(0.114f);
-        var fn0168736 = Vector256.Create(-0.168736f);
-        var fn0331264 = Vector256.Create(-0.331264f);
-        var f128 = Vector256.Create(128f);
-        var fn0418688 = Vector256.Create(-0.418688f);
-        var fn0081312F = Vector256.Create(-0.081312F);
-        var f05 = Vector256.Create(0.5f);
         var zero = Vector256.Create(0).AsByte();
 
         ref Vector256<byte> rgbByteSpan = ref Unsafe.As<Rgb24, Vector256<byte>>(ref MemoryMarshal.GetReference(rgbSpan));
@@ -121,14 +112,9 @@ internal static class RgbToYCbCrConverterVectorized
             g = Avx.ConvertToVector256Single(Avx2.UnpackHigh(rg, zero).AsInt32());
             b = Avx.ConvertToVector256Single(Avx2.UnpackLow(bx, zero).AsInt32());
 
-            // (0.299F * r) + (0.587F * g) + (0.114F * b);
-            Unsafe.Add(ref destYRef, i) = SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(f0114, b), f0587, g), f0299, r);
-
-            // 128F + ((-0.168736F * r) - (0.331264F * g) + (0.5F * b))
-            Unsafe.Add(ref destCbRef, i) = Avx.Add(f128, SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(f05, b), fn0331264, g), fn0168736, r));
-
-            // 128F + ((0.5F * r) - (0.418688F * g) - (0.081312F * b))
-            Unsafe.Add(ref destCrRef, i) = Avx.Add(f128, SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(fn0081312F, b), fn0418688, g), f05, r));
+            Unsafe.Add(ref destYRef, i) = ToY(r, g, b);
+            Unsafe.Add(ref destCbRef, i) = ToCb(r, g, b);
+            Unsafe.Add(ref destCrRef, i) = ToCr(r, g, b);
         }
 #endif
     }
@@ -141,15 +127,6 @@ internal static class RgbToYCbCrConverterVectorized
         Debug.Assert(IsSupported, "AVX2 is required to run this converter");
 
 #if NETCOREAPP3_0_OR_GREATER
-        var f0299 = Vector256.Create(0.299f);
-        var f0587 = Vector256.Create(0.587f);
-        var f0114 = Vector256.Create(0.114f);
-        var fn0168736 = Vector256.Create(-0.168736f);
-        var fn0331264 = Vector256.Create(-0.331264f);
-        var f128 = Vector256.Create(128f);
-        var fn0418688 = Vector256.Create(-0.418688f);
-        var fn0081312F = Vector256.Create(-0.081312F);
-        var f05 = Vector256.Create(0.5f);
         var zero = Vector256.Create(0).AsByte();
 
         ref Vector256<byte> rgbByteSpan = ref Unsafe.As<Rgb24, Vector256<byte>>(ref MemoryMarshal.GetReference(rgbSpan));
@@ -188,8 +165,7 @@ internal static class RgbToYCbCrConverterVectorized
 
                 int yBlockVerticalOffset = (i * 2) + ((j & 2) >> 1);
 
-                // (0.299F * r) + (0.587F * g) + (0.114F * b);
-                Unsafe.Add(ref yBlockLeft.V0, yBlockVerticalOffset) = SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(f0114, b), f0587, g), f0299, r);
+                Unsafe.Add(ref yBlockLeft.V0, yBlockVerticalOffset) = ToY(r, g, b);
 
                 rDataLanes[j] = r;
                 gDataLanes[j] = g;
@@ -213,8 +189,7 @@ internal static class RgbToYCbCrConverterVectorized
 
                 int yBlockVerticalOffset = (i * 2) + ((j & 2) >> 1);
 
-                // (0.299F * r) + (0.587F * g) + (0.114F * b);
-                Unsafe.Add(ref yBlockRight.V0, yBlockVerticalOffset) = SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(f0114, b), f0587, g), f0299, r);
+                Unsafe.Add(ref yBlockRight.V0, yBlockVerticalOffset) = ToY(r, g, b);
 
                 rDataLanes[j] = r;
                 gDataLanes[j] = g;
@@ -225,16 +200,37 @@ internal static class RgbToYCbCrConverterVectorized
             g = Scale16x2_8x1(gDataLanes);
             b = Scale16x2_8x1(bDataLanes);
 
-            // 128F + ((-0.168736F * r) - (0.331264F * g) + (0.5F * b))
-            Unsafe.Add(ref destCbRef, i) = Avx.Add(f128, SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(f05, b), fn0331264, g), fn0168736, r));
-
-            // 128F + ((0.5F * r) - (0.418688F * g) - (0.081312F * b))
-            Unsafe.Add(ref destCrRef, i) = Avx.Add(f128, SimdUtils.HwIntrinsics.MultiplyAdd(SimdUtils.HwIntrinsics.MultiplyAdd(Avx.Multiply(fn0081312F, b), fn0418688, g), f05, r));
+            Unsafe.Add(ref destCbRef, i) = ToCb(r, g, b);
+            Unsafe.Add(ref destCrRef, i) = ToCr(r, g, b);
         }
 #endif
     }
 
 #if NETCOREAPP3_0_OR_GREATER
+    // The same operations, in the same order, as RgbToYCbCrConverterScalar.
+    // Not FMA: a fused multiply-add rounds once, so the encoded bytes would depend on the CPU.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<float> ToY(Vector256<float> r, Vector256<float> g, Vector256<float> b)
+        => Avx.Add(
+            Avx.Add(Avx.Multiply(Vector256.Create(0.299F), r), Avx.Multiply(Vector256.Create(0.587F), g)),
+            Avx.Multiply(Vector256.Create(0.114F), b));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<float> ToCb(Vector256<float> r, Vector256<float> g, Vector256<float> b)
+        => Avx.Add(
+            Vector256.Create(128F),
+            Avx.Add(
+                Avx.Subtract(Avx.Multiply(Vector256.Create(-0.168736F), r), Avx.Multiply(Vector256.Create(0.331264F), g)),
+                Avx.Multiply(Vector256.Create(0.5F), b)));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<float> ToCr(Vector256<float> r, Vector256<float> g, Vector256<float> b)
+        => Avx.Add(
+            Vector256.Create(128F),
+            Avx.Subtract(
+                Avx.Subtract(Avx.Multiply(Vector256.Create(0.5F), r), Avx.Multiply(Vector256.Create(0.418688F), g)),
+                Avx.Multiply(Vector256.Create(0.081312F), b)));
+
     /// <summary>
     /// Scales 16x2 matrix to 8x1 using 2x2 average
     /// </summary>

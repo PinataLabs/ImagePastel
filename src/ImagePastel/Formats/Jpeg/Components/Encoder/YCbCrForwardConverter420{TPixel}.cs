@@ -46,11 +46,6 @@ internal ref struct YCbCrForwardConverter420<TPixel>
     public Block8x8F Cr;
 
     /// <summary>
-    /// The color conversion tables
-    /// </summary>
-    private RgbToYCbCrConverterLut colorTables;
-
-    /// <summary>
     /// Temporal 16x8 block to hold TPixel data
     /// </summary>
     private readonly Span<TPixel> pixelSpan;
@@ -85,16 +80,6 @@ internal ref struct YCbCrForwardConverter420<TPixel>
         // frame data
         this.samplingAreaSize = new Size(frame.Width, frame.Height);
         this.config = frame.GetConfiguration();
-
-        // conversion vector fallback data
-        if (!RgbToYCbCrConverterVectorized.IsSupported)
-        {
-            this.colorTables = RgbToYCbCrConverterLut.Create();
-        }
-        else
-        {
-            this.colorTables = default;
-        }
     }
 
     /// <summary>
@@ -114,7 +99,7 @@ internal ref struct YCbCrForwardConverter420<TPixel>
         }
         else
         {
-            this.colorTables.Convert420(this.rgbSpan, ref this.YLeft, ref this.YRight, ref this.Cb, ref this.Cr, idx);
+            RgbToYCbCrConverterScalar.Convert420(this.rgbSpan, ref this.YLeft, ref this.YRight, ref this.Cb, ref this.Cr, idx);
         }
     }
 }
