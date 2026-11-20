@@ -13,8 +13,11 @@
                     <!--
                       The library, from ImagePastel.Tests, and the source generator, from
                       ImagePastel.SourceGenerators.Tests. Each test project loads only one of them.
+                      Also the library's managed Brotli decoder, which ImagePastel.Tests compiles
+                      itself because the library builds it for netstandard2.1 only.
                     -->
-                    <Include>[PinataLabs.ImagePastel]*,[ImagePastel.SourceGenerators]*</Include>
+                    <Include>[PinataLabs.ImagePastel]*,[ImagePastel.SourceGenerators]*,[PinataLabs.ImagePastel.Tests]PinataLabs.ImagePastel.Compression.Brotli.*,[PinataLabs.ImagePastel.Tests]PinataLabs.ImagePastel.Formats.Jxl.JxlManagedBrotliDecoder</Include>
+                    <IncludeTestAssembly>true</IncludeTestAssembly>
                     <!-- Output of gen/ImagePastel.SourceGenerators, written under obj/.../generated/. -->
                     <ExcludeByFile>**/generated/ImagePastel.SourceGenerators/**/*.cs</ExcludeByFile>
                     <!--

@@ -142,12 +142,26 @@ public class JxlCancellationTests
     [Fact]
     public void BrotliMeasure_CancelledToken_Throws()
     {
+        byte[] compressed = CompressedZeros();
+
+        Assert.Equal(1 << 20, JxlContainer.MeasureDecompressedSize<JxlSystemBrotliDecoder>(compressed, "XMP", CancellationToken.None));
+        Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.MeasureDecompressedSize<JxlSystemBrotliDecoder>(compressed, "XMP", Cancelled()));
+    }
+
+    [Fact]
+    public void BrotliMeasure_ManagedDecoder_CancelledToken_Throws()
+    {
+        byte[] compressed = CompressedZeros();
+
+        Assert.Equal(1 << 20, JxlContainer.MeasureDecompressedSize<JxlManagedBrotliDecoder>(compressed, "XMP", CancellationToken.None));
+        Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.MeasureDecompressedSize<JxlManagedBrotliDecoder>(compressed, "XMP", Cancelled()));
+    }
+
+    private static byte[] CompressedZeros()
+    {
         byte[] compressed = new byte[1024];
         Assert.True(BrotliEncoder.TryCompress(new byte[1 << 20], compressed, out int written));
-        compressed = compressed[..written];
-
-        Assert.Equal(1 << 20, JxlContainer.MeasureDecompressedSize(compressed, "XMP", CancellationToken.None));
-        Assert.ThrowsAny<OperationCanceledException>(() => JxlContainer.MeasureDecompressedSize(compressed, "XMP", Cancelled()));
+        return compressed[..written];
     }
 
     private static CancellationToken Cancelled() => new(canceled: true);

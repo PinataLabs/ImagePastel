@@ -84,8 +84,8 @@ internal static class JxlContainerWriter
         WriteJxlpBox(stream, jxlpCounter++, false, codestream.Slice(0, headerSize));
 
         // cjxl's order: Exif, then xml. Departure from cjxl, whose --compress_boxes defaults to 1: the boxes
-        // are never Brotli-compressed into brob boxes. netstandard2.1 has no BrotliEncoder, and this
-        // library's netstandard2.1 decoder drops brob boxes (#317). libjxl leaves compression to the caller.
+        // are never Brotli-compressed into brob boxes. netstandard2.1 has no BrotliEncoder, so the bytes
+        // would depend on the target. libjxl leaves compression to the caller.
         if (boxes.Exif is not null)
         {
             WriteBoxHeader(stream, "Exif"u8, ExifOffsetSize + boxes.Exif.Length);

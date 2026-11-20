@@ -117,7 +117,7 @@ public class JxlMetadataTests
     [InlineData(0x0B, 1)] // a Brotli stream cut off
     public void Identify_UnreadableBrotliBox_GivesNoProfileAndStillIdentifies(byte fill, int length)
     {
-        // As on netstandard2.1, where no Brotli decoder reads it at all, the box is dropped.
+        // libjxl fails the decode; this decoder drops the box.
         byte[] contents = new byte[4 + length];
         Encoding.ASCII.GetBytes("Exif").CopyTo(contents, 0);
         contents.AsSpan(4).Fill(fill);
