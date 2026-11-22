@@ -61,11 +61,13 @@ jobs:
       - name: Create LFS file list
         run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
 
+      # The fallback restores an older set, so git lfs pull downloads only the changed files.
       - name: Restore LFS cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .git/lfs
           key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}-v1
+          restore-keys: ${{ runner.os }}-lfs-
 
       - name: Pull LFS files
         run: git lfs pull
@@ -78,8 +80,11 @@ jobs:
           global-json-file: global.json
           dotnet-version: 10.0.x
 
+      # Only main saves this cache. A copy for each branch fills the repository's 10 GB
+      # cache quota and evicts the LFS cache, and every LFS cache miss uses LFS bandwidth.
       - name: Restore NuGet cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: nuget-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'nuget.config', 'global.json') }}
@@ -89,6 +94,13 @@ jobs:
       # net10.0 and net11.0.
       - name: Build
         run: dotnet build ImagePastel.slnx -c Release -p:codecov=${{ matrix.coverage == true }}
+
+      - name: Save NuGet cache
+        if: ${{ github.ref == 'refs/heads/main' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       # Compares the generator output with the expected files, so it runs on every OS.
       - name: Test source generator
@@ -184,6 +196,18 @@ jobs:
       # Only the JPEG XL test data is needed from LFS: the inputs, the djxl references, the PNG and
       # TIFF inputs of the encoder's lossless corpus, the ICC profiles that the encoder tests embed, and
       # the Exif-oriented JPEG that JxlEncoderOrientationTests encodes.
+      # The Linux build leg saves every LFS file under this key, so this job only restores it.
+      # Without the cache, each run downloads about 170 MB of LFS bandwidth.
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}-v1
+          restore-keys: ${{ runner.os }}-lfs-
+
       - name: Pull LFS JPEG XL test data
         run: git lfs pull --include "tests/Images/Input/Jxl/**,tests/Images/External/ReferenceOutput/JxlDecoderTests/**,tests/Images/Input/Png/**,tests/Images/Input/Tiff/**,tests/Images/Input/Icc/**,tests/Images/Input/Jpg/baseline/jpeg420exif.jpg"
 
@@ -193,7 +217,8 @@ jobs:
           global-json-file: global.json
 
       - name: Restore NuGet cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: nuget-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'nuget.config', 'global.json') }}
@@ -238,6 +263,13 @@ jobs:
 
       - name: Build
         run: dotnet build tests/ImagePastel.Tests/ImagePastel.Tests.csproj -c Release -f net11.0
+
+      - name: Save NuGet cache
+        if: ${{ github.ref == 'refs/heads/main' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       # JXL_CONFORMANCE=1 downloads missing data and turns a skip into a failure.
       - name: Test
