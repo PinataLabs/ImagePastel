@@ -44,6 +44,9 @@ jobs:
         include:
           - os: ubuntu-latest
             coverage: true
+        # macOS is off to save runner minutes. Delete this exclude to run it again.
+        exclude:
+          - os: macos-latest
 
     steps:
       - name: Configure Git
