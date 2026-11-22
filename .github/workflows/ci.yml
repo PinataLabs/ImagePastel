@@ -40,10 +40,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
             coverage: true
+        # macOS is off to save runner minutes. Delete this exclude to run it again.
+        exclude:
+          - os: macos-latest
 
     steps:
       - name: Configure Git
