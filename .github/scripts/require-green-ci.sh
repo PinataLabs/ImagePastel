@@ -5,7 +5,7 @@
 #
 # Release and pre-release workflows only pack and publish, so this check is what
 # keeps a package from shipping a commit that did not build, test, and keep the
-# public API on all three platforms.
+# public API on Linux and Windows.
 #
 # Usage: require-green-ci.sh <commit-sha>
 # Needs GH_TOKEN and GITHUB_REPOSITORY, and the job needs `actions: read`.
