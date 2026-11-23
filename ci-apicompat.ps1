@@ -14,7 +14,9 @@ $currentOutput = "$output/current"
 if (Test-Path $baselineSource) { Remove-Item -Recurse -Force $baselineSource }
 New-Item -ItemType Directory -Force $baselineSource | Out-Null
 $archive = "$output/baseline-source.tar"
-git -C $PSScriptRoot archive --format=tar -o $archive $baselineRef
+# The baseline build reads no LFS files. With the LFS filter off, the archive keeps
+# pointer files and CI does not download about 400 MB of LFS bandwidth on each run.
+git -C $PSScriptRoot -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false archive --format=tar -o $archive $baselineRef
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 tar -xf $archive -C $baselineSource
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
