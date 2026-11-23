@@ -45,7 +45,7 @@
 
                     var rgba = new Uint8Array(jpeg.width * jpeg.height * 4);
 
-                    for(i = 0, j = 0; i < d.length; i += 3, j +=4){
+                    for(var i = 0, j = 0; i < d.length; i += 3, j +=4){
                         rgba[j] = d[i];
                         rgba[j + 1] = d[i + 1];
                         rgba[j + 2] = d[i + 2];

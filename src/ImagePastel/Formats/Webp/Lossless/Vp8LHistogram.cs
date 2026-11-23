@@ -242,7 +242,7 @@ internal sealed class Vp8LHistogram : IDeepCloneable
 
         for (int i = 0; i < 5; i++)
         {
-            output.IsUsed[i] = this.IsUsed[i] | b.IsUsed[i];
+            output.IsUsed[i] = this.IsUsed[i] || b.IsUsed[i];
         }
 
         output.TrivialSymbol = this.TrivialSymbol == b.TrivialSymbol
