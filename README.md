@@ -19,18 +19,6 @@ Add the package to your project:
 dotnet add package PinataLabs.ImagePastel
 ```
 
-## Move from SixLabors.ImageSharp 2.1.x
-
-The public API and the `SixLabors.ImageSharp` namespace are the same as in SixLabors.ImageSharp 2.1.13.
-You do not have to change your code.
-
-1. Remove the `SixLabors.ImageSharp` package reference.
-2. Add the `PinataLabs.ImagePastel` package reference.
-3. Build and test your application.
-
-Do not reference both packages in one application.
-The two assemblies contain the same types, and the compiler cannot select between them (error CS0433).
-
 ## Target frameworks
 
 | Target | For |
@@ -41,7 +29,7 @@ The two assemblies contain the same types, and the compiler cannot select betwee
 
 The package does not support .NET Framework.
 
-## Differences from SixLabors.ImageSharp 2.1.13
+### Differences from SixLabors.ImageSharp 2.1.13
 
 - The package ID and the assembly name are `PinataLabs.ImagePastel`.
 - The strong-name key is different. The public key token is `4ebeb91ace1f6a56`.
