@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/PinataLabs.ImagePastel.svg)](https://www.nuget.org/packages/PinataLabs.ImagePastel/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/PinataLabs/ImagePastel/blob/main/LICENSE)
 
-PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.
+PinataLabs.ImagePastel is a fully managed, cross-platform 2D graphics library for .NET.  
 It decodes, processes, and encodes BMP, GIF, JPEG, JPEG XL, PBM, PNG, TGA, TIFF, and WebP images.
 
 ## Security
