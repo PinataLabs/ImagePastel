@@ -43,12 +43,6 @@ Versions continue the 2.x line and start at 2.2.0. The project uses [semantic ve
 
 Releases and pre-releases are on [nuget.org](https://www.nuget.org/packages/PinataLabs.ImagePastel/).
 
-## Documentation
-
-Documentation for SixLabors.ImageSharp 2.1.x applies to this package.
-The source of that version is on the [`release/2.1.x` branch](https://github.com/SixLabors/ImageSharp/tree/release/2.1.x) of the Six Labors repository.
-Later Six Labors versions have a different API, so their documentation does not always apply.
-
 ## Build from source
 
 You need the [.NET 11 SDK](https://dotnet.microsoft.com/download), the .NET 10 runtime, and [Git LFS](https://git-lfs.com/).
