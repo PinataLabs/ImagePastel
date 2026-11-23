@@ -49,6 +49,7 @@ public static class FeatureTestRunner
     /// </summary>
     /// <param name="action">The test action to run.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature(
         Action action,
         HwIntrinsics intrinsics)
@@ -90,6 +91,7 @@ public static class FeatureTestRunner
     /// The test action to run.
     /// The parameter passed will be a string representing the currently testing <see cref="HwIntrinsics"/>.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature(
         Action<string> action,
         HwIntrinsics intrinsics)
@@ -131,6 +133,7 @@ public static class FeatureTestRunner
     /// <param name="action">The test action to run.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
     /// <param name="serializable">The value to pass as a parameter to the test action.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature<T>(
         Action<string> action,
         HwIntrinsics intrinsics,
@@ -174,6 +177,7 @@ public static class FeatureTestRunner
     /// <param name="action">The test action to run.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
     /// <param name="serializable">The value to pass as a parameter to the test action.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature<T>(
         Action<string, string> action,
         HwIntrinsics intrinsics,
@@ -219,6 +223,7 @@ public static class FeatureTestRunner
     /// <param name="intrinsics">The intrinsics features.</param>
     /// <param name="arg1">The value to pass as a parameter to the test action.</param>
     /// <param name="arg2">The second value to pass as a parameter to the test action.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature<T, T2>(
         Action<string, string> action,
         HwIntrinsics intrinsics,
@@ -265,6 +270,7 @@ public static class FeatureTestRunner
     /// <param name="action">The test action to run.</param>
     /// <param name="serializable">The value to pass as a parameter to the test action.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature<T>(
         Action<string> action,
         T serializable,
@@ -309,6 +315,7 @@ public static class FeatureTestRunner
     /// <param name="arg0">The value to pass as a parameter #0 to the test action.</param>
     /// <param name="arg1">The value to pass as a parameter #1 to the test action.</param>
     /// <param name="intrinsics">The intrinsics features.</param>
+    [AssertionMethod]
     public static void RunWithHwIntrinsicsFeature<T>(
         Action<string, string> action,
         T arg0,

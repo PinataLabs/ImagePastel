@@ -18,6 +18,9 @@ internal sealed class JxlAcStrategyImage
     // A value that does not represent a valid combined AC strategy value. Used as a sentinel.
     private const byte Invalid = 0xFF;
 
+    // A DCT8 strategy covers one block, so every DCT8 block is the first of its strategy.
+    private static readonly byte Dct8Block = Pack(JxlAcStrategyType.Dct, isFirst: true);
+
     private readonly byte[] layers;
 
     /// <summary>Initializes a new instance of the <see cref="JxlAcStrategyImage"/> class.</summary>
@@ -40,7 +43,7 @@ internal sealed class JxlAcStrategyImage
     public void FillInvalid() => Array.Fill(this.layers, Invalid);
 
     /// <summary>Sets every block to DCT8, as the encoder's <c>FillDCT8</c> does for the whole image.</summary>
-    public void FillDct8() => Array.Fill(this.layers, (byte)(((int)JxlAcStrategyType.Dct << 1) | 1));
+    public void FillDct8() => Array.Fill(this.layers, Dct8Block);
 
     /// <summary>Sets every block of <paramref name="rect"/> to DCT8, as the encoder's <c>FillDCT8(rect)</c> does.</summary>
     /// <param name="rect">The blocks.</param>
@@ -48,7 +51,7 @@ internal sealed class JxlAcStrategyImage
     {
         for (long y = rect.Y0; y < rect.Y0 + rect.YSize; y++)
         {
-            Array.Fill(this.layers, (byte)(((int)JxlAcStrategyType.Dct << 1) | 1), (int)((y * this.XSize) + rect.X0), (int)rect.XSize);
+            Array.Fill(this.layers, Dct8Block, (int)((y * this.XSize) + rect.X0), (int)rect.XSize);
         }
     }
 
@@ -93,10 +96,12 @@ internal sealed class JxlAcStrategyImage
                     JxlThrowHelper.ThrowInvalidImageContentException("Invalid AC strategy: block overlap");
                 }
 
-                this.layers[pos] = (byte)(((int)type << 1) | ((iy | ix) == 0 ? 1 : 0));
+                this.layers[pos] = Pack(type, isFirst: (iy | ix) == 0);
             }
         }
     }
+
+    private static byte Pack(JxlAcStrategyType type, bool isFirst) => (byte)(((int)type << 1) | (isFirst ? 1 : 0));
 
     /// <summary>Returns whether block (<paramref name="x"/>, <paramref name="y"/>) has a strategy.</summary>
     /// <param name="x">The column.</param>

@@ -123,9 +123,9 @@ internal static unsafe class Vp8Encoding
 
     private static readonly Vector256<int> K51000Vec256 = Vector256.Create(51000);
 
-    private const byte MmShuffle2301 = (2 << 6) | (3 << 4) | (0 << 2) | 1;
+    private const byte MmShuffle2301 = 0b10_11_00_01;
 
-    private const byte MmShuffle1032 = (1 << 6) | (0 << 4) | (3 << 2) | 2;
+    private const byte MmShuffle1032 = 0b01_00_11_10;
 #pragma warning restore SA1310 // Field names should not contain underscore
 #endif
 

@@ -519,7 +519,7 @@ internal sealed class BmpEncoderCore : IImageEncoderInternals
 
             if (pixelRowSpan.Length % 2 != 0)
             {
-                stream.WriteByte((byte)((pixelRowSpan[pixelRowSpan.Length - 1] << 4) | 0));
+                stream.WriteByte((byte)(pixelRowSpan[pixelRowSpan.Length - 1] << 4));
             }
 
             for (int i = 0; i < rowPadding; i++)

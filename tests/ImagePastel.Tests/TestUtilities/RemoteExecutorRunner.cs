@@ -21,24 +21,28 @@ namespace PinataLabs.ImagePastel.Tests.TestUtilities;
 /// </remarks>
 internal static class RemoteExecutorRunner
 {
+    [AssertionMethod]
     public static RemoteInvocation Invoke(Action method, RemoteInvokeOptions options = null)
     {
         options = Prepare(options);
         return new RemoteInvocation(RemoteExecutor.Invoke(method, options));
     }
 
+    [AssertionMethod]
     public static RemoteInvocation Invoke(Action<string> method, string arg, RemoteInvokeOptions options = null)
     {
         options = Prepare(options);
         return new RemoteInvocation(RemoteExecutor.Invoke(method, arg, options));
     }
 
+    [AssertionMethod]
     public static RemoteInvocation Invoke(Action<string, string> method, string arg1, string arg2, RemoteInvokeOptions options = null)
     {
         options = Prepare(options);
         return new RemoteInvocation(RemoteExecutor.Invoke(method, arg1, arg2, options));
     }
 
+    [AssertionMethod]
     public static RemoteInvocation Invoke(Action<string, string, string> method, string arg1, string arg2, string arg3, RemoteInvokeOptions options = null)
     {
         options = Prepare(options);

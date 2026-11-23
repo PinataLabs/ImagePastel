@@ -720,9 +720,8 @@ internal class Vp8BitWriter : BitWriterBase
         int height = this.enc.Height;
         byte[] vp8FrameHeader = new byte[WebpConstants.Vp8FrameHeaderSize];
 
-        // Paragraph 9.1.
-        uint bits = 0 // keyframe (1b)
-                    | (profile << 1) // profile (3b)
+        // Paragraph 9.1. Bit 0 is the frame type, 0 for a key frame.
+        uint bits = (profile << 1) // profile (3b)
                     | (1 << 4) // visible (1b)
                     | (size0 << 5); // partition length (19b)
 
