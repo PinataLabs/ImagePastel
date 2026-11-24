@@ -3,8 +3,9 @@ name: Publish Release
 # One-click stable release:
 #
 #   1. checks the version and that CI passed on the head of main
-#   2. tags the head of main
-#   3. calls release.yml, which packs, publishes to nuget.org, and creates the GitHub Release
+#   2. rolls CHANGELOG.md's Unreleased section into a dated version heading
+#   3. commits that to main and tags it
+#   4. calls release.yml, which packs, publishes to nuget.org, and creates the GitHub Release
 #
 # Dry run is on by default: it checks everything and reports, but creates no tag.
 
@@ -88,6 +89,14 @@ jobs:
       - name: Require green CI
         run: bash .github/scripts/require-green-ci.sh "$(git rev-parse HEAD)"
 
+      - name: Roll changelog
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: bash .github/scripts/roll-changelog.sh "$TAG"
+
+      - name: Show changelog diff
+        run: git --no-pager diff -- CHANGELOG.md
+
       - name: Dry run summary
         if: ${{ inputs.dry-run }}
         env:
@@ -96,19 +105,24 @@ jobs:
           {
             echo "### Dry run - nothing was published"
             echo
-            echo "Would tag $(git rev-parse --short HEAD) as **$TAG** and publish it to nuget.org."
+            echo "Would roll CHANGELOG.md (diff in the job log), commit it on $(git rev-parse --short HEAD), tag that commit as **$TAG** and publish it to nuget.org."
             echo
             echo "Run again with **dry-run** unchecked to tag and publish."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Tag
+      # The tagged commit is the CI-checked head plus the changelog roll. CI skips
+      # Markdown-only commits, so the roll does not start a second run.
+      - name: Commit and tag
         if: ${{ !inputs.dry-run }}
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git commit -m "chore: roll changelog for $TAG"
           git tag -a "$TAG" -m "Release $TAG"
+          git push origin HEAD:main
           git push origin "$TAG"
 
   release:
